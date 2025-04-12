@@ -85,6 +85,11 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   const [mediaNotes, setMediaNotes] = useState<MediaNote[]>([]); // Local state for notes
   const notesById = useRef<Map<string, MediaNote>>(new Map()); // Track processed media IDs
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  
+  // State for player controls
+  const [isPlaying, setIsPlaying] = useState(true); // Assume autoplay initially
+  const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay policy
+  const videoRef = useRef<HTMLVideoElement>(null); // Ref for video element
 
   // --- Subscription Effect --- 
   useEffect(() => {
@@ -94,6 +99,7 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
         if (authors.length === 0) {
             setMediaNotes([]);
             notesById.current.clear();
+            setCurrentItemIndex(0); // Reset index
         }
         return;
     }
@@ -123,6 +129,10 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
               const combined = [...prevNotes, ...newNotes]; 
               // Sort using the correct createdAt property from MediaNote
               combined.sort((a: MediaNote, b: MediaNote) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+              // Ensure index stays valid if current item is removed by MAX_SLIDES limit (edge case)
+              if (currentItemIndex >= Math.min(combined.length, MAX_SLIDES)) {
+                  setCurrentItemIndex(0);
+              }
               return combined;
           });
       }
@@ -144,28 +154,66 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   // Re-run effect if NDK instance or authors list changes
   }, [ndk, authors]); 
 
+  // --- Control Handlers --- 
+  const cycleLength = Math.min(mediaNotes.length, MAX_SLIDES);
 
-  // --- Slideshow Timer Effect --- 
-  useEffect(() => {
-    // Use mediaNotes from state for timer logic
-    if (mediaNotes.length === 0) {
-      setCurrentItemIndex(0); // Reset index if notes disappear
-      return;
+  const handlePrevious = () => {
+    if (cycleLength === 0) return;
+    setCurrentItemIndex((prevIndex) => (prevIndex - 1 + cycleLength) % cycleLength);
+    setIsPlaying(true); // Assume autoplay on new item
+  };
+
+  const handleNext = () => {
+    if (cycleLength === 0) return;
+    setCurrentItemIndex((prevIndex) => (prevIndex + 1) % cycleLength);
+    setIsPlaying(true); // Assume autoplay on new item
+  };
+
+  const handlePlayPause = () => {
+    if (videoRef.current) {
+        if (isPlaying) {
+            videoRef.current.pause();
+        } else {
+            videoRef.current.play().catch(error => console.error("Video play failed:", error));
+        }
+        setIsPlaying(!isPlaying);
     }
+  };
 
-    // Determine the actual number of slides to cycle through (up to MAX_SLIDES)
-    const cycleLength = Math.min(mediaNotes.length, MAX_SLIDES);
-    if (cycleLength === 0) return; // Should not happen if mediaNotes.length > 0, but safe check
+  const handleMuteToggle = () => {
+    if (videoRef.current) {
+        videoRef.current.muted = !isMuted;
+        setIsMuted(!isMuted);
+    }
+  };
 
-    const timer = setInterval(() => {
-      // Cycle only through the items being displayed (up to MAX_SLIDES)
-      setCurrentItemIndex((prevIndex) => (prevIndex + 1) % cycleLength);
-    }, 3500); // Switch every 3.5 seconds
+  // --- Effect to control video playback based on state/currentItem --- 
+  useEffect(() => {
+    if (!videoRef.current) return;
 
-    return () => clearInterval(timer);
-  // Depend on the number of notes available (up to MAX_SLIDES)
-  }, [mediaNotes.length]); 
+    const currentItem = mediaNotes[currentItemIndex]; 
+    // Need mediaNotes defined earlier or calculate here
+    // Let's calculate mediaNotes here for safety
+    const safeCurrentItem = mediaNotes[currentItemIndex];
 
+    if (safeCurrentItem?.type === 'video') {
+        videoRef.current.muted = isMuted;
+        if (isPlaying) {
+            // Attempt to play, catch errors (e.g., user interaction needed)
+            videoRef.current.play().catch(error => {
+                console.error("Video autoplay failed:", error);
+                // Optionally set isPlaying to false if autoplay fails
+                // setIsPlaying(false);
+            });
+        } else {
+            videoRef.current.pause();
+        }
+    } else {
+        // If current item is not a video, ensure video is paused
+        videoRef.current.pause();
+    }
+    // Dependency on currentItem.id ensures this runs when the item changes
+  }, [currentItemIndex, isPlaying, isMuted, mediaNotes]); // Add mediaNotes here
 
   // --- Rendering Logic --- 
   // Get the items to actually display (latest MAX_SLIDES)
@@ -194,23 +242,111 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
       );
   }
 
+  const isCurrentVideo = currentItem.type === 'video';
+
   return (
-    <div className="relative w-full h-[60%] bg-black flex items-center justify-center overflow-hidden">
-      {/* Use a key derived from the item ID AND index to force re-render on item change */}
-      {currentItem.type === 'image' ? (
-        <img key={`${currentItem.id}-${currentItemIndex}`} src={currentItem.url} alt="Media content" className="object-contain max-h-full max-w-full" />
-      ) : (
-        <video key={`${currentItem.id}-${currentItemIndex}`} src={currentItem.url} autoPlay loop muted controls className="object-contain max-h-full max-w-full" />
-      )}
-      <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 z-10 bg-white p-1 rounded w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
-        <QRCode
-          value={`nostr:${currentItem.posterNpub}`}
-          size={256}
-          style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-          viewBox={`0 0 256 256`}
-          level="L"
-        />
-      </div>
+    <div className="relative w-full h-[60%] bg-black flex flex-col items-center justify-center overflow-hidden">
+        
+        {/* Media Display Area */}
+        <div className="w-full h-full flex items-center justify-center"> 
+            {/* Use CSS to show/hide instead of conditional rendering to keep video ref stable */}
+            <img 
+                key={`${currentItem.id}-img`} // Key for image changes
+                src={currentItem.type === 'image' ? currentItem.url : ''} // Only set src if image
+                alt="Media content" 
+                className={`object-contain max-h-full max-w-full ${currentItem.type === 'image' ? 'block' : 'hidden'}`} 
+            />
+            <video 
+                ref={videoRef} 
+                key={`${currentItem.id}-vid`} // Key needed if src changes aren't reliable enough
+                src={currentItem.type === 'video' ? currentItem.url : undefined} // Set src only if video
+                loop // Keep loop
+                // Removed autoPlay, muted, controls - managed by state/ref
+                className={`object-contain max-h-full max-w-full ${currentItem.type === 'video' ? 'block' : 'hidden'}`}
+                // Handle potential errors loading video source
+                onError={(e) => console.error("Video source error:", e)}
+            />
+        </div>
+
+        {/* QR Code (Bottom Right) */}
+        <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 bg-white p-1 rounded w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
+            <QRCode
+            value={`nostr:${currentItem.posterNpub}`}
+            size={256}
+            style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+            viewBox={`0 0 256 256`}
+            level="L"
+            />
+        </div>
+
+        {/* Video Controls (Bottom Center) - Play/Pause, Mute */}
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-4">
+            {isCurrentVideo && (
+                <>
+                    {/* Play/Pause Button - Enforced Minimal */}
+                    <button 
+                        onClick={handlePlayPause} 
+                        // Enforce no background/border. Change text color on hover/focus.
+                        className="p-1 bg-transparent border-none text-purple-400 hover:text-purple-200 focus:text-purple-200 focus:outline-none transition-colors duration-150"
+                        aria-label={isPlaying ? "Pause" : "Play"}
+                    >
+                        {/* SVG Icon */} 
+                         {isPlaying ? 
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> 
+                            : 
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        }
+                    </button>
+                    {/* Mute/Unmute Button - Enforced Minimal */}
+                    <button 
+                        onClick={handleMuteToggle} 
+                         // Enforce no background/border. Change text color on hover/focus.
+                        className="p-1 bg-transparent border-none text-purple-400 hover:text-purple-200 focus:text-purple-200 focus:outline-none transition-colors duration-150"
+                        aria-label={isMuted ? "Unmute" : "Mute"}
+                    >
+                        {/* SVG Icon */} 
+                          {isMuted ? 
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+                            : 
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                         }
+                    </button>
+                </>
+            )}
+        </div>
+
+        {/* Prev Button (Absolute Left Edge) */}
+        {cycleLength > 1 && (
+             <button 
+                onClick={handlePrevious} 
+                // Change text color to purple-600, hover/focus to purple-400
+                className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-transparent border-none text-purple-600 hover:text-purple-400 focus:text-purple-400 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150 m-0"
+                disabled={cycleLength <= 1}
+                aria-label="Previous Item"
+             >
+                 {/* SVG Icon - Add p-0 m-0 */}
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 p-0 m-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5 L 13 12 L 15 19" />
+                 </svg>
+             </button>
+        )}
+
+        {/* Next Button (Absolute Right Edge) */}
+        {cycleLength > 1 && (
+            <button 
+                onClick={handleNext} 
+                 // Change text color to purple-600, hover/focus to purple-400
+                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-transparent border-none text-purple-600 hover:text-purple-400 focus:text-purple-400 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150 m-0"
+                disabled={cycleLength <= 1}
+                aria-label="Next Item"
+            >
+                {/* SVG Icon - Add p-0 m-0 */}
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 p-0 m-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5 L 11 12 L 9 19" />
+                 </svg>
+            </button>
+        )}
+
     </div>
   );
 };

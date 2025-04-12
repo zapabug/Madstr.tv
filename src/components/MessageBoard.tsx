@@ -1,108 +1,242 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNdk, useProfile } from 'nostr-hooks';
-import { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
-import { MAIN_POST_CONTENT, MAIN_THREAD_EVENT_ID_HEX } from '../constants';
+import 'websocket-polyfill'; // Keep polyfill for now, though likely not needed for NDK
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import NDK, { NDKEvent, NDKFilter, NDKKind, NDKSubscription, NDKUserProfile } from '@nostr-dev-kit/ndk';
+import { nip19 } from 'nostr-tools'; // Import nip19 for decoding
 
-const MAX_MESSAGES_DISPLAY = 6;
+// Interface for storing profile data
+interface ProfileData {
+  name?: string;
+  picture?: string;
+  isLoading?: boolean; // Track loading state per profile
+}
 
-// Inner component to render a single message and fetch profile
-const MessageItem: React.FC<{ event: NDKEvent }> = ({ event }) => {
-  const pubkey = event.pubkey;
-  // Fetch profile metadata using useProfile - expect object { profile, status }
-  const { profile } = useProfile({ pubkey }); // Pass { pubkey }, destructure result
+// Define the props for the component
+interface MessageBoardProps {
+  ndk: NDK | null;
+  neventToFollow: string;
+  authors: string[]; // Add authors prop
+}
 
-  // Default avatar image
-  const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDIiIGhlaWdodD0iNDIiIHZpZXdCb3g9IjAgMCA0MiA0MiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjEiIGN5PSIyMSIgcj0iMjEiIGZpbGw9IiNDNEM0QzQiLz4KPHBhdGggZD0iTTIxIDIxQzIzLjQ4NTMgMjEgMjUuNSAxOS44MjgzIDI1LjUgMTcuNUMyNS41IDE1LjE3MTYgMjMuNDg1MyAxNCAyMSAxNEMxOC41MTQ3IDE0IDE2LjUgMTUuMTcxNiAxNi41IDE3LjUgMTYuNSAxOS44MjgzIDE4LjUxNDcgMjEgMjEgMjFaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNMjkuMzI1MiAzMS4yNzNDMjcuODE4MiAyOS43NDE1IDI1LjUxNzEgMjkgMjMgMjguOTk5OUMyMyAyOC45OTk5IDIxLjYwODEgMjkuNDU4NyAyMSAyOS40NTg3QzIwLjM5MTkgMjkuNDU4NyAxOSAyOC45OTk5IDE5IDI4Ljk5OTlDMTYuNDgyOSAyOSAxNC4xODIxIDI5Ljc0MTUgMTIuNjczMyAzMS4yNzMxQzExLjE2NDUgMzIuODAxMyAxMC41IDM1LjAwNDggMTAuNSAzNy4xMjVDMTAuNSA0MC4yMjMzIDE1LjczMTUgNDIgMjEgNDJDMjYuMjY4NSA0MiAzMS41IDQwLjIyMzMgMzEuNSAzNy4xMjVDMzEuNSAzNS4wMDQ4IDMwLjgyODYgMzIuODAxMyAyOS4zMjUyIDMxLjI3M1oiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=';
+const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, authors }) => {
+  const [messages, setMessages] = useState<NDKEvent[]>([]);
+  const [targetEventId, setTargetEventId] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for profiles
+  const subscription = useRef<NDKSubscription | null>(null);
+  const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
 
-  // Use profile directly (it can be null/undefined initially)
-  const displayName = profile?.displayName || profile?.name || pubkey.substring(0, 12) + '...';
-  const profileImage = profile?.image || defaultAvatar;
-
-  return (
-    <li className="flex items-center bg-gray-700 p-1.5 md:p-2 rounded space-x-2">
-      <img 
-        src={profileImage} 
-        alt={`${displayName}'s avatar`} 
-        className="w-8 h-8 md:w-10 md:h-10 rounded-full flex-shrink-0 object-cover bg-gray-500"
-        onError={(e) => { (e.target as HTMLImageElement).src = defaultAvatar; }} // Fallback if image fails
-      />
-      <div className="flex-grow min-w-0">
-        <p className="text-xs md:text-sm font-semibold text-gray-300 truncate">{displayName}</p>
-        <p className="text-sm md:text-base text-white break-words">{event.content}</p>
-      </div>
-    </li>
-  );
-};
-
-
-// Main MessageBoard component
-const MessageBoard: React.FC = () => {
-  const { ndk } = useNdk(); // Get NDK instance
-  const [events, setEvents] = useState<NDKEvent[]>([]); // Local state for events
-  const processedEventIds = useRef(new Set<string>()); // Track processed event IDs
-
+  // Effect to decode the nevent URI
   useEffect(() => {
-    if (!ndk) return; // Wait for NDK
-
-    console.log("MessageBoard: NDK available, creating subscription...");
-
-    const filter: NDKFilter = {
-      kinds: [1],
-      '#e': [MAIN_THREAD_EVENT_ID_HEX],
-      // limit: 50, // Removed limit to fetch all historical messages
-    };
-
-    // Close subscription after fetching historical events
-    const subscription: NDKSubscription | null = ndk.subscribe([filter], { closeOnEose: true });
-
-    subscription.on('event', (event: NDKEvent) => {
-      // Deduplicate based on ID
-      if (!processedEventIds.current.has(event.id)) {
-          processedEventIds.current.add(event.id);
-          console.log(`MessageBoard: Received event ${event.id.substring(0, 8)}`);
-          setEvents(prevEvents => {
-              const newEvents = [...prevEvents, event];
-              // Sort inside the state update
-              newEvents.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
-              return newEvents;
-          });
+    if (!neventToFollow) {
+      console.error('MessageBoard: neventToFollow prop is missing.');
+      setTargetEventId(null);
+      return;
+    }
+    try {
+      // Remove "nostr:" prefix if present before decoding
+      const cleanNevent = neventToFollow.startsWith('nostr:') 
+        ? neventToFollow.substring(6) 
+        : neventToFollow;
+        
+      const decoded = nip19.decode(cleanNevent); // Decode the cleaned string
+      if (decoded.type !== 'nevent' || !decoded.data.id) {
+        console.error('MessageBoard: Failed to decode nevent or extract ID:', cleanNevent);
+        setTargetEventId(null);
+      } else {
+        console.log('MessageBoard: Decoded nevent ID:', decoded.data.id);
+        setTargetEventId(decoded.data.id);
       }
-    });
+    } catch (error) {
+      console.error('MessageBoard: Error decoding nevent:', neventToFollow, error);
+      setTargetEventId(null);
+    }
+  }, [neventToFollow]);
 
-    subscription.on('eose', () => {
-        console.log("MessageBoard: Subscription EOSE received.");
-    });
+  // Effect to subscribe when NDK and targetEventId are available
+  useEffect(() => {
+    // Only proceed if we have NDK and a valid target event ID
+    if (!ndk || !targetEventId) {
+      console.log('MessageBoard: Waiting for NDK and/or targetEventId.');
+      setMessages([]); // Clear messages
+      setProfiles({}); // Clear profiles too
+      // Ensure any previous subscription is stopped if targetEventId becomes invalid
+      if (subscription.current) {
+          subscription.current.stop();
+          subscription.current = null;
+      }
+      return;
+    }
 
-    subscription.start();
-    console.log("MessageBoard: Subscription started.");
+    // Assuming the passed NDK instance handles its connection lifecycle.
+    console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId} from ${authors.length} authors...`);
+    subscribeToReplies(ndk, targetEventId, authors);
 
-    // Cleanup function to stop the subscription
+    // Cleanup function
     return () => {
-      console.log("MessageBoard: Cleaning up subscription.");
-      subscription.stop();
-      processedEventIds.current.clear(); // Clear tracked IDs on cleanup
+      console.log('MessageBoard: Cleaning up replies subscription...');
+      if (subscription.current) {
+        subscription.current.stop();
+        subscription.current = null;
+      }
+      setMessages([]);
+      setProfiles({}); // Clear profiles on cleanup
+      processingPubkeys.current.clear(); // Clear processing set
+    };
+    // Re-run the effect if ndk, targetEventId, or authors changes
+  }, [ndk, targetEventId, authors]);
+
+  // --- Function to fetch profiles, wrapped in useCallback ---
+  const fetchProfile = useCallback(async (pubkey: string) => {
+    if (!ndk || profiles[pubkey] || processingPubkeys.current.has(pubkey)) {
+      // Don't fetch if no NDK, profile already exists, or already fetching
+      return;
+    }
+
+    console.log(`MessageBoard: Fetching profile for ${pubkey.substring(0, 8)}...`);
+    processingPubkeys.current.add(pubkey); // Mark as fetching
+    setProfiles(prev => ({ ...prev, [pubkey]: { isLoading: true } })); // Set loading state
+
+    try {
+      const user = ndk.getUser({ pubkey });
+      const profileEvent = await user.fetchProfile(); // Fetches Kind 0
+
+      // Check if profileEvent exists and content is a string
+      if (profileEvent && typeof profileEvent.content === 'string') {
+        try { // Add try-catch for JSON.parse
+            const profileData: Partial<NDKUserProfile> = JSON.parse(profileEvent.content);
+            console.log(`MessageBoard: Received profile for ${pubkey.substring(0,8)}:`, profileData);
+
+            // Explicitly resolve name to string | undefined
+            const nameValue = profileData.name ?? profileData.display_name ?? profileData.displayName;
+            const resolvedName: string | undefined = typeof nameValue === 'string' ? nameValue : 
+                                                    (nameValue != null) ? String(nameValue) : undefined; // Simplified null check
+
+            // Explicitly resolve picture to string | undefined
+            const pictureValue = profileData.picture ?? profileData.image ?? profileData.avatar;
+            const resolvedPicture: string | undefined = typeof pictureValue === 'string' ? pictureValue : 
+                                                        (pictureValue != null) ? String(pictureValue) : undefined; // Simplified null check
+
+            setProfiles(prev => ({ 
+              ...prev, 
+              [pubkey]: { 
+                name: resolvedName, 
+                picture: resolvedPicture, 
+                isLoading: false
+              }
+            }));
+        } catch (parseError) {
+            console.error(`MessageBoard: Error parsing profile content for ${pubkey}:`, parseError, profileEvent.content);
+            // Mark as not loading even if parsing failed
+            setProfiles(prev => ({ ...prev, [pubkey]: { isLoading: false } })); 
+        }
+      } else {
+        console.log(`MessageBoard: No profile or invalid content found for ${pubkey.substring(0,8)}.`);
+        setProfiles(prev => ({ ...prev, [pubkey]: { isLoading: false } })); // Mark as not loading, no data found
+      }
+    } catch (error) {
+      console.error(`MessageBoard: Error fetching profile for ${pubkey}:`, error);
+      setProfiles(prev => ({ ...prev, [pubkey]: { isLoading: false } })); // Mark as not loading on error
+    } finally {
+        processingPubkeys.current.delete(pubkey); // Remove from processing set
+    }
+  }, [ndk, profiles]); // Dependency array includes ndk and profiles
+
+  // --- Effect to trigger profile fetches when messages update ---
+  useEffect(() => {
+    if (!ndk) return;
+    const authorsToFetch = new Set<string>();
+    messages.forEach(msg => {
+        if (!profiles[msg.pubkey] && !processingPubkeys.current.has(msg.pubkey)) {
+            authorsToFetch.add(msg.pubkey);
+        }
+    });
+    authorsToFetch.forEach(pubkey => fetchProfile(pubkey));
+
+  }, [messages, ndk, profiles, fetchProfile]); // Depend on messages, ndk, profiles, and the fetchProfile function
+
+  const subscribeToReplies = (ndkInstance: NDK, eventId: string, authorsToFilter: string[]) => {
+    // Prevent duplicate subscriptions
+    if (subscription.current) {
+      subscription.current.stop();
+    }
+
+    // Filter for kind 1 notes that tag the target event ID
+    const filter: NDKFilter = {
+      kinds: [NDKKind.Text],
+      '#e': [eventId],
+      authors: authorsToFilter, // Use authors prop in filter
+      limit: 50,
     };
 
-  }, [ndk]); // Re-run effect if NDK instance changes
+    console.log('NDK subscribing with reply filter:', filter);
+    subscription.current = ndkInstance.subscribe(
+        filter,
+        { closeOnEose: false }
+    );
 
+    subscription.current.on('event', (event: NDKEvent) => {
+        setMessages((prevMessages) => {
+            if (prevMessages.some(msg => msg.id === event.id)) {
+                return prevMessages;
+            }
+            // Prepend new message for chronological order (newest first)
+            const newMessages = [event, ...prevMessages]; 
+            // Optionally trim the list if it gets too long
+            // if (newMessages.length > 100) newMessages.length = 100;
+            return newMessages;
+        });
+    });
 
-  // Get the latest messages to display from local state
-  const latestEvents = events.slice(0, MAX_MESSAGES_DISPLAY);
+    subscription.current.on('eose', () => {
+        console.log(`NDK EOSE received for replies to ${eventId}`);
+    });
 
-  console.log(`MessageBoard has ${events.length} total events, displaying ${latestEvents.length}`);
+    subscription.current.start();
+  };
+
+  // Simplified status rendering
+  const renderStatus = () => {
+      if (!ndk) return 'Waiting for NDK...';
+      if (!targetEventId) return 'Invalid or missing nevent to follow.';
+      if (messages.length === 0) return 'Loading replies or none found...';
+      return null;
+  }
 
   return (
-    <div className="w-full h-[40%] bg-gray-800 p-2 md:p-4 flex flex-col overflow-hidden border-8 border-purple-600 rounded-lg">
-      <h2 className="text-lg md:text-xl font-bold mb-2 text-white flex-shrink-0">{MAIN_POST_CONTENT}</h2>
-      {latestEvents.length === 0 ? (
-        <p className="text-gray-400 flex-grow flex items-center justify-center text-center px-4 pt-4">
-          Waiting for replies...
-        </p>
-      ) : (
-        <ul className="space-y-1 md:space-y-2 overflow-y-auto flex-grow">
-          {latestEvents.map((event: NDKEvent) => (
-            <MessageItem key={event.id} event={event} />
-          ))}
+    <div className="message-board h-full overflow-y-auto">
+      {messages.length === 0 && !renderStatus() && (
+          <p className="text-gray-500 text-center mt-4">No replies yet...</p>
+      )}
+
+      {messages.length > 0 && (
+        <ul className="space-y-3">
+          {messages.map((msg) => {
+              const profile = profiles[msg.pubkey];
+              const displayName = profile?.name || msg.pubkey.substring(0, 10) + '...';
+              const pictureUrl = profile?.picture;
+              const isLoadingProfile = profile?.isLoading;
+
+              return (
+                <li key={msg.id} className="flex flex-row items-start space-x-2 py-1">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-600 overflow-hidden mt-1">
+                      {isLoadingProfile ? (
+                          <div className="w-full h-full animate-pulse bg-gray-500"></div>
+                      ) : pictureUrl ? (
+                          <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" />
+                      ) : (
+                          <span className="text-gray-400 text-xs flex items-center justify-center h-full">?</span>
+                      )}
+                  </div>
+                  <div className="flex-grow min-w-0 mt-1">
+                      <span className="font-medium text-gray-200 text-sm mr-1" title={profile?.name ? msg.pubkey : undefined}>
+                          {displayName}:
+                      </span>
+                      <span className="text-sm text-gray-400 break-words">
+                          {msg.content}
+                      </span>
+                  </div>
+                </li>
+              );
+          })}
         </ul>
       )}
     </div>

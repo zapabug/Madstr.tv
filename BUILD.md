@@ -10,6 +10,7 @@ Before starting a new build or development session, ensure the following compone
     *   The `mcp-code` server needs to be running.
     *   The path to the `mcp-code` executable should be correctly configured. The currently configured path is: `/home/jq/gitshit/usigfapi/mcp-code`.
     *   The MCP configuration is typically managed in the global Cursor settings (often `~/.cursor/mcp.json`) and should point to the correct executable path. See the example structure in the replication steps below.
+    *   **Note:** MCP is intended to facilitate certain Nostr development workflows (like managing keys, zaps, etc.), but integrating it effectively within the Cursor environment is currently proving difficult and may not be fully functional.
 
 2.  **Cursor Configuration Files:**
     *   The `.cursor` directory within this project root is required. It contains specific rules or configurations needed for the project. Ensure this directory and its contents are present.
@@ -43,6 +44,14 @@ To replicate this development environment from scratch, follow these steps:
     ```bash
     bun install
     ```
+    This will install all project dependencies, including:
+    *   React & Vite build tools.
+    *   TailwindCSS for styling.
+    *   Key Nostr libraries:
+        *   `@nostr-dev-kit/ndk`: Core Nostr Development Kit.
+        *   `nostr-hooks`: React hooks for NDK.
+        *   `nostr-tools`: Utilities for Nostr Improvement Proposals (NIPs).
+        *   `react-qr-code`: For displaying QR codes.
 
 3.  **Set up `mcp-code` Server:**
     *   Clone the `mcp-code` repository from its source (URL not provided here).

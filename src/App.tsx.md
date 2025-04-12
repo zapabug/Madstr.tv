@@ -186,7 +186,12 @@ function App() {
       {/* Message Board Container */}
       {/* Removing flex-col and inner title */}
       <div className="relative w-full flex-grow min-h-0 bg-gray-800 p-4 overflow-y-auto border-4 border-purple-600">
+          {/* Title removed from here */}
+          {/* <h2 className="text-lg font-semibold mb-2 text-center text-purple-800 flex-shrink-0">
+              📺 TV Feed Fun! 🎉
+          </h2> */}
           {/* MessageBoard rendering area (removed inner wrapper) */}
+          {/* <div className="flex-grow min-h-0 overflow-y-auto">  - Removed inner div */}
               {ndk ? (
                   <MessageBoard 
                     ndk={ndk} 
@@ -196,7 +201,9 @@ function App() {
               ) : (
                   <p className="text-gray-400">Initializing Nostr connection...</p> // Placeholder while ndk is null
               )}
+          </div>
       </div>
+
     </div>
     </>
   );
