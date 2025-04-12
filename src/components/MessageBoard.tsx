@@ -98,12 +98,13 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
     try {
       const user = ndk.getUser({ pubkey });
       const profileEvent = await user.fetchProfile(); // Fetches Kind 0
+      console.log(`MessageBoard: Raw profile event for ${pubkey.substring(0, 8)}:`, profileEvent);
 
       // Check if profileEvent exists and content is a string
       if (profileEvent && typeof profileEvent.content === 'string') {
         try { // Add try-catch for JSON.parse
             const profileData: Partial<NDKUserProfile> = JSON.parse(profileEvent.content);
-            console.log(`MessageBoard: Received profile for ${pubkey.substring(0,8)}:`, profileData);
+            console.log(`MessageBoard: Parsed profile data for ${pubkey.substring(0, 8)}:`, profileData);
 
             // Explicitly resolve name to string | undefined
             const nameValue = profileData.name ?? profileData.display_name ?? profileData.displayName;
@@ -114,6 +115,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
             const pictureValue = profileData.picture ?? profileData.image ?? profileData.avatar;
             const resolvedPicture: string | undefined = typeof pictureValue === 'string' ? pictureValue : 
                                                         (pictureValue != null) ? String(pictureValue) : undefined; // Simplified null check
+            console.log(`MessageBoard: Resolved picture URL for ${pubkey.substring(0, 8)}:`, resolvedPicture);
 
             setProfiles(prev => ({ 
               ...prev, 
@@ -129,7 +131,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
             setProfiles(prev => ({ ...prev, [pubkey]: { isLoading: false } })); 
         }
       } else {
-        console.log(`MessageBoard: No profile or invalid content found for ${pubkey.substring(0,8)}.`);
+        console.log(`MessageBoard: No profile or invalid content found for ${pubkey.substring(0,8)}. Reason: ${profileEvent ? 'Content is not a string' : 'Profile event is null'}. Full event:`, profileEvent);
         setProfiles(prev => ({ ...prev, [pubkey]: { isLoading: false } })); // Mark as not loading, no data found
       }
     } catch (error) {
@@ -140,17 +142,120 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
     }
   }, [ndk, profiles]); // Dependency array includes ndk and profiles
 
-  // --- Effect to trigger profile fetches when messages update ---
+  // Effect to fetch app's own profile (TV_PUBKEY_NPUB) and subscribe to updates
+  useEffect(() => {
+    if (!ndk) return;
+    // Hardcoded TV_PUBKEY_NPUB from App.tsx for now
+    const TV_PUBKEY_NPUB = 'npub1a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsfzzwnyc4s6a66d8';
+    let tvPubkeyHex = null;
+    try {
+      tvPubkeyHex = nip19.decode(TV_PUBKEY_NPUB).data;
+      console.log('MessageBoard: Decoded TV_PUBKEY_NPUB to hex:', tvPubkeyHex);
+    } catch (e) {
+      console.error('MessageBoard: Failed to decode TV_PUBKEY_NPUB:', e);
+      return;
+    }
+    if (tvPubkeyHex && typeof tvPubkeyHex === 'string') {
+      if (!profiles[tvPubkeyHex] && !processingPubkeys.current.has(tvPubkeyHex)) {
+        console.log('MessageBoard: App profile not in state, fetching...');
+        fetchProfile(tvPubkeyHex);
+      }
+      // Subscribe to Kind 0 profile events for the app to handle streaming updates
+      const profileFilter: NDKFilter = { kinds: [NDKKind.Metadata], authors: [tvPubkeyHex], limit: 1 };
+      console.log('MessageBoard: Subscribing to app profile updates with filter:', profileFilter);
+      const profileSub = ndk.subscribe(profileFilter, { closeOnEose: false });
+      profileSub.on('event', (profileEvent: NDKEvent) => {
+        console.log('MessageBoard: Received app profile update event:', profileEvent);
+        if (profileEvent && typeof profileEvent.content === 'string') {
+          try {
+            const profileData: Partial<NDKUserProfile> = JSON.parse(profileEvent.content);
+            console.log('MessageBoard: Parsed app profile data:', profileData);
+            const nameValue = profileData.name ?? profileData.display_name ?? profileData.displayName;
+            const resolvedName: string | undefined = typeof nameValue === 'string' ? nameValue : (nameValue != null) ? String(nameValue) : undefined;
+            const pictureValue = profileData.picture ?? profileData.image ?? profileData.avatar;
+            const resolvedPicture: string | undefined = typeof pictureValue === 'string' ? pictureValue : (pictureValue != null) ? String(pictureValue) : undefined;
+            console.log('MessageBoard: Resolved app picture URL:', resolvedPicture);
+            setProfiles(prev => ({ 
+              ...prev, 
+              [tvPubkeyHex]: { 
+                name: resolvedName, 
+                picture: resolvedPicture, 
+                isLoading: false
+              }
+            }));
+          } catch (parseError) {
+            console.error('MessageBoard: Error parsing app profile content:', parseError, profileEvent.content);
+          }
+        } else {
+          console.log('MessageBoard: App profile event invalid or no content:', profileEvent);
+        }
+      });
+      profileSub.on('eose', () => {
+        console.log('MessageBoard: EOSE received for app profile subscription.');
+      });
+      profileSub.start();
+      return () => {
+        console.log('MessageBoard: Cleaning up app profile subscription...');
+        profileSub.stop();
+      };
+    }
+  }, [ndk, profiles, fetchProfile]);
+
+  // --- Effect to trigger profile fetches and subscriptions when messages update ---
   useEffect(() => {
     if (!ndk) return;
     const authorsToFetch = new Set<string>();
+    const authorsToSubscribe = new Set<string>();
     messages.forEach(msg => {
         if (!profiles[msg.pubkey] && !processingPubkeys.current.has(msg.pubkey)) {
             authorsToFetch.add(msg.pubkey);
         }
+        // Subscribe to all authors regardless of fetch status to catch updates
+        authorsToSubscribe.add(msg.pubkey);
     });
     authorsToFetch.forEach(pubkey => fetchProfile(pubkey));
-
+    
+    // Subscribe to Kind 0 profile events for all message authors
+    if (authorsToSubscribe.size > 0) {
+      const authorsArray = Array.from(authorsToSubscribe);
+      const profileFilter: NDKFilter = { kinds: [NDKKind.Metadata], authors: authorsArray, limit: authorsArray.length };
+      console.log('MessageBoard: Subscribing to message authors profile updates with filter:', profileFilter);
+      const authorsProfileSub = ndk.subscribe(profileFilter, { closeOnEose: false });
+      authorsProfileSub.on('event', (profileEvent: NDKEvent) => {
+        console.log('MessageBoard: Received author profile update event:', profileEvent);
+        if (profileEvent && typeof profileEvent.content === 'string') {
+          try {
+            const profileData: Partial<NDKUserProfile> = JSON.parse(profileEvent.content);
+            console.log('MessageBoard: Parsed author profile data for', profileEvent.pubkey.substring(0, 8), ':', profileData);
+            const nameValue = profileData.name ?? profileData.display_name ?? profileData.displayName;
+            const resolvedName: string | undefined = typeof nameValue === 'string' ? nameValue : (nameValue != null) ? String(nameValue) : undefined;
+            const pictureValue = profileData.picture ?? profileData.image ?? profileData.avatar;
+            const resolvedPicture: string | undefined = typeof pictureValue === 'string' ? pictureValue : (pictureValue != null) ? String(pictureValue) : undefined;
+            console.log('MessageBoard: Resolved author picture URL for', profileEvent.pubkey.substring(0, 8), ':', resolvedPicture);
+            setProfiles(prev => ({ 
+              ...prev, 
+              [profileEvent.pubkey]: { 
+                name: resolvedName, 
+                picture: resolvedPicture, 
+                isLoading: false
+              }
+            }));
+          } catch (parseError) {
+            console.error('MessageBoard: Error parsing author profile content for', profileEvent.pubkey, ':', parseError, profileEvent.content);
+          }
+        } else {
+          console.log('MessageBoard: Author profile event invalid or no content for', profileEvent?.pubkey?.substring(0, 8) || 'unknown', ':', profileEvent);
+        }
+      });
+      authorsProfileSub.on('eose', () => {
+        console.log('MessageBoard: EOSE received for message authors profile subscription.');
+      });
+      authorsProfileSub.start();
+      return () => {
+        console.log('MessageBoard: Cleaning up message authors profile subscription...');
+        authorsProfileSub.stop();
+      };
+    }
   }, [messages, ndk, profiles, fetchProfile]); // Depend on messages, ndk, profiles, and the fetchProfile function
 
   const subscribeToReplies = (ndkInstance: NDK, eventId: string, authorsToFilter: string[]) => {
@@ -202,13 +307,13 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
   }
 
   return (
-    <div className="message-board h-full overflow-y-auto">
+    <div className="message-board h-full overflow-y-auto flex flex-col items-center">
       {messages.length === 0 && !renderStatus() && (
           <p className="text-gray-500 text-center mt-4">No replies yet...</p>
       )}
 
       {messages.length > 0 && (
-        <ul className="space-y-3">
+        <ul className="space-y-3 w-full max-w-md">
           {messages.map((msg) => {
               const profile = profiles[msg.pubkey];
               const displayName = profile?.name || msg.pubkey.substring(0, 10) + '...';
@@ -221,7 +326,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
                       {isLoadingProfile ? (
                           <div className="w-full h-full animate-pulse bg-gray-500"></div>
                       ) : pictureUrl ? (
-                          <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" />
+                          <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" onError={() => console.error(`MessageBoard: Failed to load image for ${displayName} at ${pictureUrl}`)} />
                       ) : (
                           <span className="text-gray-400 text-xs flex items-center justify-center h-full">?</span>
                       )}
