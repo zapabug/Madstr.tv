@@ -49,10 +49,11 @@ const MessageBoard: React.FC = () => {
     const filter: NDKFilter = {
       kinds: [1],
       '#e': [MAIN_THREAD_EVENT_ID_HEX],
-      limit: 50, // Fetch a bit more than needed initially
+      // limit: 50, // Removed limit to fetch all historical messages
     };
 
-    const subscription: NDKSubscription | null = ndk.subscribe([filter], { closeOnEose: false });
+    // Close subscription after fetching historical events
+    const subscription: NDKSubscription | null = ndk.subscribe([filter], { closeOnEose: true });
 
     subscription.on('event', (event: NDKEvent) => {
       // Deduplicate based on ID

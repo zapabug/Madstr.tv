@@ -200,7 +200,7 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
       {currentItem.type === 'image' ? (
         <img key={`${currentItem.id}-${currentItemIndex}`} src={currentItem.url} alt="Media content" className="object-contain max-h-full max-w-full" />
       ) : (
-        <video key={`${currentItem.id}-${currentItemIndex}`} src={currentItem.url} autoPlay loop controls className="object-contain max-h-full max-w-full" />
+        <video key={`${currentItem.id}-${currentItemIndex}`} src={currentItem.url} autoPlay loop muted controls className="object-contain max-h-full max-w-full" />
       )}
       <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 z-10 bg-white p-1 rounded w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
         <QRCode
