@@ -36,6 +36,9 @@ const DB_NAME = 'MediaFeedCache';
 const DB_VERSION = 1;
 const STORE_NAME = 'mediaNotes';
 
+// Increased cache limit
+const MAX_CACHED_NOTES = 500;
+
 async function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -59,6 +62,25 @@ async function saveToCache(notes: MediaNote[]): Promise<void> {
   });
 }
 
+// Fisher-Yates (Knuth) Shuffle algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  let currentIndex = array.length, randomIndex;
+
+  // While there remain elements to shuffle.
+  while (currentIndex !== 0) {
+
+    // Pick a remaining element.
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+
+    // And swap it with the current element.
+    [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex], array[currentIndex]];
+  }
+
+  return array;
+}
+
 async function getFromCache(): Promise<MediaNote[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -66,17 +88,17 @@ async function getFromCache(): Promise<MediaNote[]> {
     const store = transaction.objectStore(STORE_NAME);
     const request = store.getAll();
     request.onsuccess = () => {
-      const notes = request.result;
-      // Sort by createdAt descending (newest first)
+      let notes = request.result as MediaNote[]; // Explicit type
+      // Sort by createdAt descending (newest first) initially
       notes.sort((a: MediaNote, b: MediaNote) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-      // Limit to the most recent 100 items
-      if (notes.length > 100) {
-        const excessIds = notes.slice(100).map((n: MediaNote) => n.id);
+      // Limit to the most recent MAX_CACHED_NOTES items
+      if (notes.length > MAX_CACHED_NOTES) {
+        const excessIds = notes.slice(MAX_CACHED_NOTES).map((n: MediaNote) => n.id);
         deleteExcessFromCache(excessIds);
-        resolve(notes.slice(0, 100));
-      } else {
-        resolve(notes);
+        notes = notes.slice(0, MAX_CACHED_NOTES);
       }
+      // Shuffle the notes before resolving
+      resolve(shuffleArray(notes)); 
     };
     request.onerror = () => reject(request.error);
   });
@@ -111,22 +133,23 @@ const processEventsIntoMediaNotes = (events: NDKEvent[], notesByIdMap: Map<strin
 
             matchedUrls.forEach((url, index) => {
                 const mediaType = getMediaType(url);
-                // Only process if it's an image
+                // --- Keep this check to only include images --- 
                 if (mediaType === 'image') { 
                     const mediaItemId = `${event.id}-${index}`;
                     if (!notesByIdMap.has(mediaItemId)) {
                         const newNote: MediaNote = {
                             id: mediaItemId,
                             eventId: event.id,
-                            type: mediaType,
+                            type: mediaType, // Will always be 'image' here
                             url: url,
                             posterNpub: posterNpub!,
-                            createdAt: event.created_at ?? Math.floor(Date.now() / 1000), // Use NDKEvent's created_at
+                            createdAt: event.created_at ?? Math.floor(Date.now() / 1000), 
                         };
-                        notesByIdMap.set(mediaItemId, newNote); // Update the map directly
+                        notesByIdMap.set(mediaItemId, newNote);
                         newNotes.push(newNote);
                     }
                 }
+                // --- End Check --- 
             });
         }
     });
@@ -160,15 +183,14 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
 
   // Load from cache on component mount
   useEffect(() => {
-    getFromCache()
+    getFromCache() // This now returns shuffled notes up to MAX_CACHED_NOTES
       .then(cachedNotes => {
-        console.log(`MediaFeed: Loaded ${cachedNotes.length} items from cache.`);
-        setMediaNotes(cachedNotes);
+        console.log(`MediaFeed: Loaded and shuffled ${cachedNotes.length} items from cache (limit ${MAX_CACHED_NOTES}).`);
+        setMediaNotes(cachedNotes); // Set state with shuffled notes
         notesById.current = new Map(cachedNotes.map(note => [note.id, note]));
         setIsCacheLoaded(true);
-        if (cachedNotes.length > 0 && currentItemIndex >= cachedNotes.length) {
-          setCurrentItemIndex(0);
-        }
+        // Reset index after loading shuffled cache
+        setCurrentItemIndex(0); 
       })
       .catch(err => {
         console.error('MediaFeed: Failed to load from cache:', err);
@@ -205,20 +227,27 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
     const subscription: NDKSubscription = ndk.subscribe([filter], { closeOnEose: false });
 
     subscription.on('event', (event: NDKEvent) => {
-      // Process events and update map, returns only *new* notes
       const newNotes = processEventsIntoMediaNotes([event], notesById.current);
       if (newNotes.length > 0) {
-            console.log(`MediaFeed: Adding ${newNotes.length} new media notes from event ${event.id.substring(0,8)}.`);
-            // Add new notes and re-sort the whole list
+            console.log(`MediaFeed: Adding ${newNotes.length} new image notes from event ${event.id.substring(0,8)}.`);
+            // Add new notes and re-sort the whole list, then take the display slice
             setMediaNotes(prevNotes => {
-              const combined = [...prevNotes, ...newNotes]; 
-              // Sort using the correct createdAt property from MediaNote
+              // Add new notes
+              let combined = [...prevNotes, ...newNotes]; 
+              // Re-sort combined list by date initially to manage cache trimming
               combined.sort((a: MediaNote, b: MediaNote) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-              // Ensure index stays valid if current item is removed by MAX_SLIDES limit (edge case)
+              // Trim if over cache limit
+              if (combined.length > MAX_CACHED_NOTES) {
+                  combined = combined.slice(0, MAX_CACHED_NOTES);
+              }
+              // **Important:** We don't re-shuffle here. Shuffling only happens on initial load from cache.
+              // New items are typically added near the 'end' of the conceptual chronological list,
+              // but since the display list is shuffled on load, their appearance feels random.
+              // Ensure index stays valid 
               if (currentItemIndex >= Math.min(combined.length, MAX_SLIDES)) {
                   setCurrentItemIndex(0);
               }
-              return combined;
+              return combined; // Return the date-sorted, potentially trimmed list
           });
       }
     });

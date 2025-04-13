@@ -294,17 +294,22 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     };
     const subscription = ndk.subscribe(filter, { closeOnEose: false });
     subscription.on('event', (event: NDKEvent) => {
-      const newNotes = processEventsIntoPodcastNotes([event], notesById.current);
-      if (newNotes.length > 0) {
-        console.log(`PodcastPlayer: Adding ${newNotes.length} new podcast notes.`);
-        setPodcastNotes(prevNotes => {
-          const combined = [...newNotes, ...prevNotes]; 
-          combined.sort((a, b) => b.createdAt - a.createdAt);
-          const limitedNotes = combined.slice(0, 50);
-          savePodcastNotesToCache(newNotes).catch(err => console.error('PodcastPlayer: Failed to save new notes to cache:', err));
-          notesById.current = new Map(limitedNotes.map(n => [n.id, n]));
-          return limitedNotes;
-        });
+      // Check if the note content contains an audio URL
+      const audioUrlMatch = event.content?.match(podcastUrlRegex);
+
+      if (audioUrlMatch && audioUrlMatch[0]) {
+          const newNotes = processEventsIntoPodcastNotes([event], notesById.current);
+          if (newNotes.length > 0) {
+            console.log(`PodcastPlayer: Adding ${newNotes.length} new podcast notes.`);
+            setPodcastNotes(prevNotes => {
+              const combined = [...newNotes, ...prevNotes]; 
+              combined.sort((a, b) => b.createdAt - a.createdAt);
+              const limitedNotes = combined.slice(0, 50);
+              savePodcastNotesToCache(newNotes).catch(err => console.error('PodcastPlayer: Failed to save new notes to cache:', err));
+              notesById.current = new Map(limitedNotes.map(n => [n.id, n]));
+              return limitedNotes;
+            });
+          }
       }
     });
     subscription.on('eose', () => { console.log("PodcastPlayer: Subscription EOSE."); });
