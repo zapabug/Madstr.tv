@@ -10,7 +10,7 @@ import {
     parseProfileContent 
 } from '../utils/profileCache'; // Adjust path as needed
 
-// Updated interface to store pubkey directly
+// Updated interface to store pubkey directly and add content
 interface PodcastNote {
   id: string; // Unique ID: eventId-urlIndex
   eventId: string; // Original event ID
@@ -18,6 +18,7 @@ interface PodcastNote {
   url: string;
   posterPubkey: string; // Store hex pubkey
   createdAt: number;
+  content?: string; // Re-add optional content field
 }
 
 // Remove local ProfileData interface and podcast-specific profile cache functions
@@ -107,6 +108,7 @@ const processEventsIntoPodcastNotes = (events: NDKEvent[], notesByIdMap: Map<str
               url: url,
               posterPubkey: posterPubkey, // Store pubkey
               createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
+              content: content,
             };
             notesByIdMap.set(mediaItemId, newNote);
             newNotes.push(newNote);
@@ -318,7 +320,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   const isLoadingProfile = currentProfile?.isLoading;
 
   return (
-    <div className='relative w-full h-full bg-gray-900 flex flex-col items-center justify-between overflow-hidden p-4 text-white rounded-lg'>
+    <div className='relative w-full h-full bg-gray-900 flex flex-col overflow-hidden p-2 text-white rounded-lg'>
       {/* Updated Top Section with Profile Info */}
        <div className="w-full flex items-center justify-start p-2 mb-4 border-b border-gray-700">
            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-600 overflow-hidden mr-3">
@@ -338,28 +340,56 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
            </div>
        </div>
 
-      {/* Audio Player Area (Centered) */}
-      <div className="flex-grow flex items-center justify-center w-full flex-col">
-         {/* Optional: Display Title/Filename */}
-         <p className="text-lg font-semibold truncate w-full max-w-xs md:max-w-sm text-center mb-3" title={currentItem?.url}>{(currentItem?.url || '').split('/').pop() || 'Loading...'}</p>
-         {/* Audio Controls Wrapper */}
-         <div className="w-full max-w-md p-2 bg-black bg-opacity-30 rounded">
-            <audio ref={audioRef} controls className="w-full">
-              Your browser does not support the audio element.
-            </audio>
-         </div>
+      {/* Scrollable Podcast List: Takes up available space */}
+      <div className="flex-grow w-full overflow-y-auto pr-1 mb-2"> 
+        {podcastNotes.map((note, index) => {
+            const isSelected = index === currentItemIndex;
+            const itemBg = isSelected ? 'bg-purple-800 bg-opacity-60' : 'bg-gray-700 bg-opacity-50 hover:bg-gray-600 hover:bg-opacity-70';
+            const profile = profiles[note.posterPubkey];
+            const displayName = profile?.name || profile?.displayName || note.posterPubkey.substring(0, 10) + '...';
+            const pictureUrl = profile?.picture;
+            const isLoadingProfile = profile?.isLoading;
+
+            // Explicitly return the JSX element for each list item
+            return ( 
+                <div
+                    key={note.id}
+                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg}`}
+                    onClick={() => setCurrentItemIndex(index)}
+                    title={note.content || note.url} 
+                >
+                    {/* Number Circle */}
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center mr-2"> 
+                        <span className="text-xs font-semibold text-white">{index + 1}</span>
+                    </div>
+                    {/* Profile Picture */}
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-500 overflow-hidden mr-2">
+                        {isLoadingProfile ? (
+                            <div className="w-full h-full animate-pulse bg-gray-400"></div>
+                        ) : pictureUrl ? (
+                            <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" onError={() => console.error(`Podcastr: Failed profile img: ${pictureUrl}`)} />
+                        ) : (
+                            <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
+                                {displayName.substring(0, 1)}
+                            </span>
+                        )}
+                    </div>
+                    {/* Profile Name */}
+                    <p className="text-sm text-gray-200 truncate flex-grow" title={displayName}>
+                       {displayName} 
+                    </p>
+                </div>
+            );
+        })}
       </div>
-      
-       {/* Bottom Controls (Prev/Next) */}
-      <div className="w-full flex justify-between items-center mt-4 px-2">
-            <button onClick={handlePrevious} disabled={podcastNotes.length <= 1} className="text-purple-400 hover:text-purple-200 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded">
-                Prev
-            </button>
-            {/* Removed poster npub span */}
-            <button onClick={handleNext} disabled={podcastNotes.length <= 1} className="text-purple-400 hover:text-purple-200 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded">
-                Next
-            </button>
-        </div>
+
+      {/* Audio Player Controls: Pushed to bottom */}
+      <div className="w-full max-w-md p-1 mt-auto bg-black bg-opacity-40 rounded flex-shrink-0 mx-auto"> {/* Use mt-auto to push to bottom */}
+        <audio ref={audioRef} controls className="w-full">
+            Your browser does not support the audio element.
+        </audio>
+      </div>
+
     </div>
   );
 };

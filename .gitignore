@@ -23,6 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Capacitor/Native platform builds
+/android
+/ios
+
 # Environment and API keys
 .cursor-tools.env
 .nostr_keys
