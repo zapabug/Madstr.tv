@@ -139,6 +139,12 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
   // No need for separate profile cache loaded state, piggyback on note cache
 
+  // --- Add State for Playback Speed --- 
+  const [playbackRate, setPlaybackRate] = useState(1.0);
+  const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
+  const speedMenuRef = useRef<HTMLDivElement>(null); // Ref for menu container
+  const speedButtonRef = useRef<HTMLButtonElement>(null); // Ref for speed button
+
   // Load podcast notes from cache on mount
   useEffect(() => {
     getPodcastNotesFromCache() // Use note cache function
@@ -160,74 +166,114 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   }, []); 
 
    // --- Function to Fetch Profiles (Fix Dependency Loop) --- 
-  const fetchProfile = useCallback(async (pubkey: string) => {
+  const fetchPodcastAuthorProfile = useCallback(async (pubkey: string) => {
+    // ADD Log at the very beginning
+    console.log(`Podcastr: ENTER fetchPodcastAuthorProfile for ${pubkey?.substring(0,8)}`); 
+
     if (!ndk || !pubkey || processingPubkeys.current.has(pubkey)) {
-      // Don't fetch if no NDK, no pubkey, or already fetching
-      // We check cache *inside* after confirming we should fetch
+      console.log(`Podcastr: EXIT fetchPodcastAuthorProfile early (check 1) for ${pubkey?.substring(0,8)}: ndk=${!!ndk}, pubkey=${!!pubkey}, processing=${processingPubkeys.current.has(pubkey)}`);
       return;
     }
     
-    // Check if profile name *already exists* using functional update form to access latest state
-    let profileExists = false;
+    let profileExistsInState = false;
     setProfiles(prev => {
         if (prev[pubkey]?.name) {
-            profileExists = true; 
+            profileExistsInState = true; 
         }
-        return prev; // No state change here, just checking
+        return prev; 
     });
-    if (profileExists) return; // Exit if profile name found in state
+    if (profileExistsInState) { 
+        console.log(`Podcastr: EXIT fetchPodcastAuthorProfile early (check 2 - name already in state) for ${pubkey?.substring(0,8)}`);
+        return; 
+    }
 
+    console.log(`Podcastr: Checking cache for ${pubkey.substring(0,8)}...`);
     // Check shared cache first
     try {
       const cachedProfile = await getProfileFromCache(pubkey); 
-      if (cachedProfile && cachedProfile.name) { 
-        // Use functional update form for setProfiles
-        setProfiles(prev => ({
-           ...prev, 
-           [pubkey]: { ...cachedProfile, isLoading: false }
-        }));
-        return;
+      if (cachedProfile) {
+           console.log(`Podcastr: Found profile in cache for ${pubkey.substring(0,8)}:`, cachedProfile);
+           if (cachedProfile.name) { 
+                setProfiles(prev => ({ ...prev, [pubkey]: { ...cachedProfile, isLoading: false } }));
+                console.log(`Podcastr: Using named profile from cache for ${pubkey.substring(0,8)}, exiting fetch.`);
+                return;
+           } else {
+               console.log(`Podcastr: Profile in cache for ${pubkey.substring(0,8)} has no name, proceeding to fetch.`);
+           }
+      } else {
+           console.log(`Podcastr: No profile found in cache for ${pubkey.substring(0,8)}.`);
       }
     } catch (err) {
       console.error(`Podcastr: Error checking shared cache for ${pubkey.substring(0, 8)}:`, err);
     }
 
-    // console.log(`Podcastr: Fetching profile for ${pubkey.substring(0, 8)}...`);
+    console.log(`Podcastr: Initiating network fetch for ${pubkey.substring(0, 8)}...`);
     processingPubkeys.current.add(pubkey);
-    // Use functional update form for setProfiles
     setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: true } }));
 
     try {
       const user = ndk.getUser({ pubkey });
       const profileEvent = await user.fetchProfile();
+      console.log(`Podcastr: Network response for ${pubkey.substring(0,8)}: Event=`, profileEvent);
       
+      let profileDataToSave: Omit<ProfileData, 'cachedAt' | 'isLoading'> | null = null;
+
+      // --- Handle different possible structures for profile data --- 
       if (profileEvent && typeof profileEvent.content === 'string') {
-        const parsedProfileData = parseProfileContent(profileEvent.content, pubkey);
-        if (parsedProfileData) {
-            // Use functional update form for setProfiles
-            setProfiles(prev => ({ 
-              ...prev, 
-              [pubkey]: { ...parsedProfileData, isLoading: false }
-            }));
-            saveProfileToCache({ ...parsedProfileData, pubkey }).catch(err => 
-                console.error(`Podcastr: Failed to save profile to shared cache for ${pubkey.substring(0, 8)}:`, err)
-            );
-        } else {
-             // Use functional update form for setProfiles
-             setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: false } }));
+        // Standard case: Parse the content string
+        console.log(`Podcastr: Handling standard profile event with content string for ${pubkey.substring(0,8)}.`);
+        profileDataToSave = parseProfileContent(profileEvent.content, pubkey);
+        if (!profileDataToSave) {
+            console.error(`Podcastr: Failed to parse content string for ${pubkey.substring(0,8)}.`);
         }
+      } else if (profileEvent && (profileEvent.name || profileEvent.picture || profileEvent.displayName)) {
+         // Fallback case: NDK might have pre-parsed? Use direct properties.
+         console.log(`Podcastr: Handling profile event with direct properties (no content string) for ${pubkey.substring(0,8)}.`);
+         // Construct ProfileData manually from available properties
+         profileDataToSave = {
+             pubkey: pubkey,
+             name: typeof profileEvent.name === 'string' ? profileEvent.name : undefined,
+             picture: typeof profileEvent.picture === 'string' ? profileEvent.picture : undefined,
+             displayName: typeof profileEvent.displayName === 'string' ? profileEvent.displayName : undefined,
+             about: typeof profileEvent.about === 'string' ? profileEvent.about : undefined,
+             banner: typeof profileEvent.banner === 'string' ? profileEvent.banner : undefined,
+             lud16: typeof profileEvent.lud16 === 'string' ? profileEvent.lud16 : undefined,
+             nip05: typeof profileEvent.nip05 === 'string' ? profileEvent.nip05 : undefined,
+             // Add other relevant fields present in the logged object
+         };
+         // Basic validation: ensure we got at least something useful
+         if (!profileDataToSave.name && !profileDataToSave.picture && !profileDataToSave.displayName) {
+             console.warn(`Podcastr: Direct properties found for ${pubkey.substring(0,8)}, but missing key fields (name/picture/displayName).`);
+             profileDataToSave = null; // Treat as invalid if key fields missing
+         }
       } else {
-        // Use functional update form for setProfiles
-        setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: false } }));
+        // No usable profile data found
+        console.log(`Podcastr: No usable profile content or direct properties found for ${pubkey.substring(0,8)}.`);
       }
+      // --- End Structure Handling ---
+
+      if (profileDataToSave) {
+          console.log(`Podcastr: Successfully processed profile data for ${pubkey.substring(0,8)}:`, profileDataToSave);
+          setProfiles(prev => {
+              const newState = { ...prev, [pubkey]: { ...profileDataToSave!, isLoading: false } }; // Use ! because we checked profileDataToSave
+              return newState;
+          });
+          saveProfileToCache({ ...profileDataToSave, pubkey }).catch(err => 
+              console.error(`Podcastr: Failed to save profile to shared cache for ${pubkey.substring(0, 8)}:`, err)
+          );
+      } else {
+           // If profileDataToSave is still null after checks
+           console.log(`Podcastr: Marking fetch as complete (no valid data) for ${pubkey.substring(0,8)}.`);
+           setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: false } }));
+      }
+
     } catch (error) {
-      console.error(`Podcastr: Error fetching profile for ${pubkey}:`, error);
-      // Use functional update form for setProfiles
+      console.error(`Podcastr: Error during network fetch for ${pubkey}:`, error);
       setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: false } }));
     } finally {
+        // console.log(`Podcastr: Finished fetchProfile for ${pubkey.substring(0,8)}, removing from processing.`);
         processingPubkeys.current.delete(pubkey);
     }
-  // REMOVED profiles dependency to fix loop
   }, [ndk]); 
 
   // NDK Subscription Effect for Podcast Notes
@@ -269,25 +315,31 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     };
   }, [ndk, authors, isCacheLoaded]);
 
+  // --- Effect to fetch profiles for ALL notes in the list ---
+  useEffect(() => {
+    console.log(`Podcastr: useEffect [podcastNotes] triggered. Count: ${podcastNotes.length}`); // Log effect trigger
+    if (podcastNotes.length > 0) {
+        const uniquePubkeys = new Set(podcastNotes.map(note => note.posterPubkey));
+        console.log("Podcastr: Attempting profile fetch for unique pubkeys:", Array.from(uniquePubkeys)); 
+        uniquePubkeys.forEach(pubkey => {
+             // Log before calling fetchProfile for a specific pubkey
+            console.log(`Podcastr: Calling fetchPodcastAuthorProfile inside loop for ${pubkey?.substring(0,8)}`);
+            fetchPodcastAuthorProfile(pubkey); 
+        });
+    }
+  }, [podcastNotes, fetchPodcastAuthorProfile]);
+
   const currentItem = podcastNotes[currentItemIndex];
   const currentProfile = currentItem ? profiles[currentItem.posterPubkey] : null;
 
-  // --- Effect to fetch profile for the CURRENT item ---
+  // --- RE-ADD Effect to fetch profile for the CURRENT item ---
   useEffect(() => {
       if (currentItem && currentItem.posterPubkey) {
-          fetchProfile(currentItem.posterPubkey);
+          // console.log(`Podcastr: Triggering fetch for current item's profile: ${currentItem.posterPubkey.substring(0,8)}`);
+          fetchPodcastAuthorProfile(currentItem.posterPubkey);
       }
-  }, [currentItem, fetchProfile]); // Trigger when currentItem changes
-
-  const handleNext = () => {
-    if (podcastNotes.length === 0) return;
-    setCurrentItemIndex((prev) => (prev + 1) % podcastNotes.length);
-  };
-
-  const handlePrevious = () => {
-    if (podcastNotes.length === 0) return;
-    setCurrentItemIndex((prev) => (prev - 1 + podcastNotes.length) % podcastNotes.length);
-  };
+      // Ensure dependency array includes currentItem and fetchProfile
+  }, [currentItem, fetchPodcastAuthorProfile]); 
 
   // Effect to update audio source when currentItem changes
   useEffect(() => {
@@ -297,6 +349,36 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     }
   }, [currentItem]);
 
+  // Effect to apply playbackRate to audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
+
+  // Effect to close menu if clicked outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        isSpeedMenuOpen &&
+        speedMenuRef.current && 
+        !speedMenuRef.current.contains(event.target as Node) &&
+        speedButtonRef.current &&
+        !speedButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsSpeedMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isSpeedMenuOpen]); // Re-run when menu open state changes
+
+  const handleSpeedChange = (newRate: number) => {
+      setPlaybackRate(newRate);
+      setIsSpeedMenuOpen(false);
+  };
 
   if (!isCacheLoaded) {
     return (
@@ -336,7 +418,9 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
            </div>
            <div>
               <p className="text-sm font-semibold text-gray-200 truncate" title={displayName}>{displayName}</p>
-              <p className="text-xs text-gray-400">Now Playing (Item {currentItemIndex + 1} of {podcastNotes.length})</p>
+              <p className="text-xs text-gray-400">
+                Now Playing (Item {podcastNotes.length - currentItemIndex} of {podcastNotes.length})
+              </p>
            </div>
        </div>
 
@@ -346,48 +430,80 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
             const isSelected = index === currentItemIndex;
             const itemBg = isSelected ? 'bg-purple-800 bg-opacity-60' : 'bg-gray-700 bg-opacity-50 hover:bg-gray-600 hover:bg-opacity-70';
             const profile = profiles[note.posterPubkey];
-            const displayName = profile?.name || profile?.displayName || note.posterPubkey.substring(0, 10) + '...';
-            const pictureUrl = profile?.picture;
-            const isLoadingProfile = profile?.isLoading;
+            const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey.substring(0, 10) + '...';
+            const itemPictureUrl = profile?.picture;
+            const itemIsLoadingProfile = profile?.isLoading;
 
-            // Explicitly return the JSX element for each list item
             return ( 
                 <div
                     key={note.id}
-                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg}`}
+                    tabIndex={0}
+                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-purple-500`}
                     onClick={() => setCurrentItemIndex(index)}
                     title={note.content || note.url} 
                 >
-                    {/* Number Circle */}
+                    {/* Number Circle - Reverse numbering for display */}
                     <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center mr-2"> 
-                        <span className="text-xs font-semibold text-white">{index + 1}</span>
+                        <span className="text-xs font-semibold text-white">{podcastNotes.length - index}</span>
                     </div>
                     {/* Profile Picture */}
                     <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-500 overflow-hidden mr-2">
-                        {isLoadingProfile ? (
+                        {itemIsLoadingProfile ? (
                             <div className="w-full h-full animate-pulse bg-gray-400"></div>
-                        ) : pictureUrl ? (
-                            <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" onError={() => console.error(`Podcastr: Failed profile img: ${pictureUrl}`)} />
+                        ) : itemPictureUrl ? (
+                            <img src={itemPictureUrl} alt={itemDisplayName} className="w-full h-full object-cover" onError={() => console.error(`Podcastr: Failed profile img: ${itemPictureUrl}`)} />
                         ) : (
                             <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
-                                {displayName.substring(0, 1)}
+                                {itemDisplayName.substring(0, 1)}
                             </span>
                         )}
                     </div>
                     {/* Profile Name */}
-                    <p className="text-sm text-gray-200 truncate flex-grow" title={displayName}>
-                       {displayName} 
+                    <p className="text-sm text-gray-200 truncate flex-grow" title={itemDisplayName}>
+                       {itemDisplayName} 
                     </p>
                 </div>
             );
         })}
       </div>
 
-      {/* Audio Player Controls: Pushed to bottom */}
-      <div className="w-full max-w-md p-1 mt-auto bg-black bg-opacity-40 rounded flex-shrink-0 mx-auto"> {/* Use mt-auto to push to bottom */}
-        <audio ref={audioRef} controls className="w-full">
+      {/* Audio Player Controls Area */}
+      <div className="relative w-full max-w-md p-1 mt-auto bg-black bg-opacity-40 rounded flex-shrink-0 mx-auto flex items-center space-x-2"> 
+         {/* Audio Element */}
+        <audio ref={audioRef} controls className="w-full flex-grow">
             Your browser does not support the audio element.
         </audio>
+        
+        {/* Speed Control Button & Menu */}
+        <div className="relative flex-shrink-0">
+            <button 
+                ref={speedButtonRef}
+                onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
+                className="p-1 text-gray-400 hover:text-white focus:outline-none"
+                title="Playback Speed"
+             >
+                {/* Simple Text Button - can be replaced with icon */}
+                <span className="text-xs font-semibold">{playbackRate.toFixed(2)}x</span> 
+            </button>
+
+            {/* Speed Menu (Conditional Rendering) */}
+            {isSpeedMenuOpen && (
+                <div 
+                    ref={speedMenuRef}
+                    className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded-md shadow-lg z-10 overflow-hidden"
+                >
+                    {[0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((rate) => (
+                        <button
+                            key={rate}
+                            onClick={() => handleSpeedChange(rate)}
+                            className={`block w-full px-3 py-1 text-xs text-left ${playbackRate === rate ? 'bg-purple-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+                        >
+                            {rate.toFixed(2)}x
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
       </div>
 
     </div>

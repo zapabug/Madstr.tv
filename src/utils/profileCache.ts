@@ -18,20 +18,79 @@ export interface ProfileData {
 
 // IndexedDB setup for caching profile metadata
 const PROFILE_DB_NAME = 'ProfileCache'; // Unified DB Name
-const PROFILE_DB_VERSION = 1;
+const PROFILE_DB_VERSION = 2;
 const PROFILE_STORE_NAME = 'profiles';
 
+// --- Add Function to Delete Database ---
+async function deleteProfileDB(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        console.log(`Attempting to delete IndexedDB: ${PROFILE_DB_NAME}`);
+        const deleteRequest = indexedDB.deleteDatabase(PROFILE_DB_NAME);
+        deleteRequest.onerror = (event) => {
+            console.error(`Error deleting database ${PROFILE_DB_NAME}:`, (event.target as IDBOpenDBRequest).error);
+            reject((event.target as IDBOpenDBRequest).error);
+        };
+        deleteRequest.onsuccess = () => {
+            console.log(`Database ${PROFILE_DB_NAME} deleted successfully or did not exist.`);
+            resolve();
+        };
+        deleteRequest.onblocked = () => {
+            // This shouldn't usually happen unless another tab has the DB open
+            console.warn(`Database ${PROFILE_DB_NAME} deletion blocked. Please close other tabs/instances using this app.`);
+            reject(new Error('Database deletion blocked'));
+        };
+    });
+}
+
+// Flag to ensure delete is only attempted once per session/load
+let dbDeleteAttempted = false; 
+
 async function openProfileDB(): Promise<IDBDatabase> {
+    // Attempt deletion only once
+    if (!dbDeleteAttempted) {
+        dbDeleteAttempted = true; // Set flag immediately
+        try {
+            await deleteProfileDB();
+        } catch (deleteError) {
+            console.error("Database deletion failed, proceeding with open attempt anyway:", deleteError);
+            // Decide if you want to reject here or let the open proceed
+        }
+    }
+
   return new Promise((resolve, reject) => {
+    console.log(`Attempting to open DB: ${PROFILE_DB_NAME} version ${PROFILE_DB_VERSION}`);
     const request = indexedDB.open(PROFILE_DB_NAME, PROFILE_DB_VERSION);
-    request.onerror = (event) => reject((event.target as IDBOpenDBRequest).error);
-    request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
+    
+    request.onerror = (event) => {
+        console.error(`IndexedDB error opening ${PROFILE_DB_NAME}:`, (event.target as IDBOpenDBRequest).error);
+        reject((event.target as IDBOpenDBRequest).error);
+    }
+    request.onsuccess = (event) => {
+        console.log(`IndexedDB ${PROFILE_DB_NAME} opened successfully.`);
+        resolve((event.target as IDBOpenDBRequest).result);
+    }
     request.onupgradeneeded = (event) => {
-      console.log("Upgrading ProfileCache DB...");
+      console.log(`Upgrading IndexedDB ${PROFILE_DB_NAME} to version ${PROFILE_DB_VERSION}`);
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(PROFILE_STORE_NAME)) {
-         console.log(`Creating ${PROFILE_STORE_NAME} object store...`);
-         db.createObjectStore(PROFILE_STORE_NAME, { keyPath: 'pubkey' });
+         console.log(`Creating object store: ${PROFILE_STORE_NAME}`);
+         try {
+            db.createObjectStore(PROFILE_STORE_NAME, { keyPath: 'pubkey' });
+            console.log(`Object store ${PROFILE_STORE_NAME} created successfully.`);
+         } catch (e) {
+             console.error(`Error creating object store ${PROFILE_STORE_NAME}:`, e);
+             reject(e); 
+             if (event.target && (event.target as IDBOpenDBRequest).transaction) {
+                 try {
+                    (event.target as IDBOpenDBRequest).transaction?.abort();
+                 } catch (abortError) {
+                    console.error("Error aborting transaction during failed upgrade:", abortError);
+                 }
+             }
+             return; 
+         }
+      } else {
+          console.log(`Object store ${PROFILE_STORE_NAME} already exists.`);
       }
     };
   });
