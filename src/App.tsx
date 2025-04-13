@@ -48,6 +48,10 @@ function App() {
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]); 
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
 
+  // <<< Add state for Play/Pause button now in App >>>
+  const [appIsPlayingRequest, setAppIsPlayingRequest] = useState<boolean>(false); // What App wants the video to do
+  const [videoIsPlayingActual, setVideoIsPlayingActual] = useState<boolean>(false); // What VideoPlayer reports
+
   // Define handleVideoSelect first
   const handleVideoSelect = useCallback((url: string | null, npub: string | null, index: number) => {
     console.log(`App: Video selected - URL: ${url}, Npub: ${npub}, Index: ${index}`);
@@ -174,6 +178,27 @@ function App() {
   // Remove handleVideoSelect from dependencies
   }, [currentVideoIndex, selectedVideoUrl]);
 
+  // <<< Handler for VideoPlayer reporting its state >>>
+  const handleVideoPlayingStateChange = useCallback((isPlaying: boolean) => {
+      setVideoIsPlayingActual(isPlaying);
+      // Sync request state if actual state changes unexpectedly (e.g., video ends)
+      if (!isPlaying && appIsPlayingRequest) {
+          setAppIsPlayingRequest(false);
+      }
+  }, [appIsPlayingRequest]); // Dependency needed for sync logic
+
+  // <<< Handlers for Play/Pause button now in App >>>
+  const handleAppPlayPauseClick = useCallback(() => {
+      setAppIsPlayingRequest(prev => !prev);
+  }, []);
+
+  const handleAppPlayPauseKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+          setAppIsPlayingRequest(prev => !prev);
+          event.preventDefault();
+      }
+  }, []);
+
   // Prev/Next handlers (use centrally managed notes state)
   const handlePrevious = useCallback(() => {
     if (interactiveMode === 'podcast') {
@@ -284,9 +309,6 @@ function App() {
       <h2 className="absolute top-4 right-32 z-20 text-lg font-semibold text-purple-800 px-4 py-1 rounded">
         Mad⚡str.tv
       </h2>
-      <h2 className="absolute top-1/2 left-32 -translate-y-1/2 z-30 text-lg font-semibold text-purple-800 px-4 py-1 rounded">
-        📺 TV Feed 🎉
-      </h2>
 
       {/* --- Bottom Left Area (QR Code Only) --- */}
       <div className="absolute bottom-4 left-4 z-10 flex flex-col items-center">
@@ -321,15 +343,19 @@ function App() {
              <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
                  <p className="text-gray-400">Loading author list...</p>
              </div>
-         ) : selectedVideoUrl && interactiveMode === 'video' ? ( // Only show VideoPlayer if a video is selected AND in video mode
+         ) : selectedVideoUrl && interactiveMode === 'video' ? ( 
             <VideoPlayer 
               url={selectedVideoUrl} 
               posterNpub={selectedVideoNpub} 
-              onEnded={handleNext} // Trigger next video when current ends
+              onEnded={handleNext} 
+              interactiveMode={interactiveMode}
+              toggleInteractiveMode={toggleInteractiveMode}
+              appIsPlayingRequest={appIsPlayingRequest}
+              onVideoPlayingStateChange={handleVideoPlayingStateChange}
             />
          ) : (
             <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
-                 {/* ---> Pass handlers and state down to MediaFeed <-- */}
+                 {/* ---> Ensure toggle props ARE passed to MediaFeed <-- */}
                 <MediaFeed 
                     authors={mediaAuthors} 
                     handlePrevious={handlePrevious}
@@ -338,6 +364,8 @@ function App() {
                     currentImageIndex={currentImageIndex}
                     imageNotes={imageNotes}
                     onNotesLoaded={handleImageNotesLoaded}
+                    interactiveMode={interactiveMode}
+                    toggleInteractiveMode={toggleInteractiveMode}
                 />
             </div>
          )}
@@ -374,18 +402,34 @@ function App() {
         {/* Split Screen Container: Fixed Height, Flex Row */}
         <div className="relative w-full h-1/3 flex-shrink-0 flex flex-row overflow-hidden mt-1"> {/* Added small margin-top */}
             
-            {/* ---> ADD Toggle Button Here (Top Center of this section) <--- */}
-            <button 
-               onClick={toggleInteractiveMode}
-               // Position absolute relative to this container, top-center
-               className="absolute top-1 left-1/2 transform -translate-x-1/2 z-20 p-1 bg-black bg-opacity-60 rounded 
-                          text-purple-400 hover:text-purple-200 focus:text-purple-200 
-                          focus:outline-none transition-colors duration-150 text-xs font-semibold uppercase"
-               aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
-               title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
-            >
-                {interactiveMode === 'podcast' ? 'Videos' : 'Podcasts'}
-            </button>
+            {/* ---> Play/Pause Button (Keep as is) <--- */}
+             {interactiveMode === 'video' && (
+                  <button 
+                       // Conditionally apply background based on playing state
+                       className={`absolute top-1 left-1/2 transform -translate-x-1/2 z-20 
+                                flex-shrink-0 p-2 rounded-md text-white 
+                                focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black 
+                                transition-colors duration-150 
+                                ${!videoIsPlayingActual 
+                                  ? 'bg-purple-600 hover:bg-purple-500' 
+                                  : 'bg-transparent hover:bg-white/10' // Transparent background when playing
+                                }`}
+                       onClick={handleAppPlayPauseClick}
+                       onKeyDown={handleAppPlayPauseKeyDown}
+                       aria-label={videoIsPlayingActual ? "Pause Video" : "Play Video"}
+                       title={videoIsPlayingActual ? "Pause Video" : "Play Video"}
+                  >
+                      {videoIsPlayingActual ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                          </svg>
+                      ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                          </svg>
+                      )}
+                  </button>
+             )}
 
             {/* Message Board Container (Left Side - 2/3 width) */}
             <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900 rounded-lg"> {/* Width 2/3, Scroll */}

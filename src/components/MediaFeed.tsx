@@ -251,15 +251,62 @@ export interface MediaFeedProps {
   currentImageIndex: number;
   imageNotes: MediaNote[];
   onNotesLoaded: (notes: MediaNote[]) => void;
+  interactiveMode: 'podcast' | 'video';
+  toggleInteractiveMode: () => void;
 }
 
 const MAX_SLIDES = 30;
 
+// --- Funny Loading Messages ---
+const loadingMessages = [
+  "Waking up the hamsters...",
+  "Connecting to the Citadels...",
+  "Zapping relays for content...",
+  "Brewing cyber-coffee...",
+  "Untangling the timelines...",
+  "Asking Plebs for pictures...",
+  "Ignoring shitposts (mostly)...",
+  "Dusting off the memes...",
+  "Reticulating splines... Nostr style!",
+  "Don't trust, verify... images loading."
+];
+
 // Accept new props
-const MediaFeed: React.FC<MediaFeedProps> = ({ authors, handlePrevious, handleNext, mediaMode, currentImageIndex, imageNotes, onNotesLoaded }) => {
+const MediaFeed: React.FC<MediaFeedProps> = ({ 
+  authors, 
+  handlePrevious, 
+  handleNext, 
+  mediaMode, 
+  currentImageIndex, 
+  imageNotes, 
+  onNotesLoaded, 
+  interactiveMode,
+  toggleInteractiveMode
+}) => {
   const { ndk } = useNdk();
   const notesById = useRef<Map<string, MediaNote>>(new Map());
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  // Effect for cycling loading messages
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    if (!isCacheLoaded) {
+      // Start cycling messages
+      intervalId = setInterval(() => {
+        setLoadingMessageIndex(prevIndex => 
+          (prevIndex + 1) % loadingMessages.length
+        );
+      }, 2500); // Change message every 2.5 seconds
+    }
+
+    // Cleanup function
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isCacheLoaded]); // Re-run when cache loading state changes
 
   // Load from cache on component mount
   useEffect(() => {
@@ -346,16 +393,31 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors, handlePrevious, handleNe
   // Rendering logic for IMAGE MODE:
   const displayItems = imageNotes.slice(0, MAX_SLIDES);
 
-  if (!isCacheLoaded || displayItems.length === 0) {
+  // --- Updated Loading/Empty State Rendering ---
+  if (!isCacheLoaded) {
+    // Initial loading state: Show spinner and cycling message
+    return (
+      <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
+        {/* Simple SVG Spinner */}
+        <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-purple-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-gray-400 text-lg animate-pulse">
+          {loadingMessages[loadingMessageIndex]}
+        </p>
+      </div>
+    );
+  } else if (displayItems.length === 0) {
+    // Cache loaded, but no items to display
     return (
       <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
-        <p className="text-gray-400">
-          {isCacheLoaded ? 'No images found.' : 'Loading images...'}
-        </p>
+        <p className="text-gray-400 text-lg">No images found from followed zappers.</p>
       </div>
     );
   }
 
+  // --- Render actual content when loaded and available ---
   const currentItem = displayItems[currentImageIndex];
 
   if (!currentItem) {
@@ -415,6 +477,23 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors, handlePrevious, handleNe
               return null; 
           })()
       )}
+
+      {/* <<< RE-ADD Toggle Button Here (Bottom Right, offset from QR) >>> */}
+      <div 
+          // Position to the left of the QR code
+          className={`absolute bottom-4 right-24 md:right-28 lg:right-32 z-20 flex items-center`}
+      > 
+          <button 
+              onClick={toggleInteractiveMode}
+              className="p-1 bg-black bg-opacity-60 rounded 
+                         text-purple-400 hover:text-purple-200 focus:text-purple-200 
+                         focus:outline-none transition-colors duration-150 text-xs font-semibold uppercase"
+              aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
+              title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
+          >
+              {interactiveMode === 'podcast' ? 'Videos' : 'Podcasts'}
+          </button>
+      </div>
 
     </div>
   );

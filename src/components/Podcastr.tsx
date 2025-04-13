@@ -72,7 +72,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     function handleClickOutside(event: MouseEvent) {
       if (
         isSpeedMenuOpen &&
-        speedMenuRef.current &&
+        speedMenuRef.current && 
         !speedMenuRef.current.contains(event.target as Node) &&
         speedButtonRef.current &&
         !speedButtonRef.current.contains(event.target as Node)
@@ -200,7 +200,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
           ref={scrollableListRef}
           tabIndex={0}
           onKeyDown={handleListKeyDown}
-          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded"
+          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded" 
           aria-activedescendant={notes[focusedItemIndex]?.id}
           aria-label="Podcast List"
           role="listbox"
@@ -313,7 +313,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
 
         {/* Speed Control Button & Menu (Uses state/handler from hook) */}
         <div className="relative flex-shrink-0">
-            <button
+            <button 
                 ref={speedButtonRef}
                 onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
                 className="p-1 text-xs font-semibold w-10 h-10 flex items-center justify-center rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
@@ -321,11 +321,11 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
                 aria-haspopup="true"
                 aria-expanded={isSpeedMenuOpen}
                 tabIndex={0}
-            >
+             >
                 <span>{playbackRate.toFixed(1)}x</span>
             </button>
             {isSpeedMenuOpen && (
-                <div
+                <div 
                     ref={speedMenuRef}
                     className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded shadow-lg py-1 z-10"
                     role="menu"
@@ -352,4 +352,4 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   );
 };
 
-export default Podcastr;
+export default Podcastr; 

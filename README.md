@@ -1,91 +1,100 @@
-# React + Vite
+# Nostr TV App Interface
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![React](https://img.shields.io/badge/React-^18-blue?logo=react)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-^5-blue?logo=vite)](https://vitejs.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-^5-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-^3-blue?logo=tailwindcss)](https://tailwindcss.com/)
+[![Nostr](https://img.shields.io/badge/Nostr-purple?logo=nostr)](https://nostr.com/)
 
-Currently, two official plugins are available:
+A web-based TV interface for browsing and playing media content (podcasts, videos) shared on the Nostr network. Designed with TV navigation and usability in mind.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+*   **Media Feeds:** Displays feeds of video and podcast content fetched from specified Nostr authors.
+*   **Podcast Player (`Podcastr`):**
+    *   Fetches Kind 1 notes with podcast audio URLs (`.mp3`, `.m4a`, `.wav`).
+    *   Scrollable list of podcasts with author profile pictures and names.
+    *   Keyboard/Remote navigation (Up/Down/Enter/Space).
+    *   Custom playback controls (Play/Pause, Progress Bar, Time Display).
+    *   Playback speed adjustment.
+    *   Playback position saving (resumes from last position via localStorage).
+    *   Inactivity fade-out for controls.
+*   **Video Player (`VideoPlayer`):**
+    *   Plays video URLs found in Nostr notes.
+    *   Basic Play/Pause controls.
+    *   Displays QR code for the poster's `npub`.
+    *   Inactivity fade-out for controls.
+*   **Nostr Integration:**
+    *   Uses `@nostr-dev-kit/ndk` and `nostr-hooks` for interaction with relays.
+    *   Fetches Kind 0 profile data.
+    *   Fetches Kind 1 notes based on authors.
+    *   Robust profile and note caching using IndexedDB and utility functions.
+*   **TV-Friendly UI:**
+    *   Focus management for keyboard/remote navigation.
+    *   Layouts suitable for larger screens.
+    *   Tailwind CSS for styling.
 
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Tech Stack
 
----
+*   **Framework:** React 18+
+*   **Build Tool:** Vite
+*   **Language:** TypeScript
+*   **Styling:** Tailwind CSS
+*   **Nostr:** `@nostr-dev-kit/ndk`, `nostr-hooks`, `nostr-tools`
+*   **State Management:** React Hooks (`useState`, `useEffect`, `useRef`, `useCallback`), Custom Hooks
+*   **Other:** `react-qr-code`
 
-# TugaTV Nostr Display Application
+## Getting Started
 
-This application is designed to run on a display (like a TV) and show content from the Nostr network, including media slideshows, podcast episodes, and message boards.
+### Prerequisites
 
-## Key Components
+*   Node.js (v18 or later recommended)
+*   npm, yarn, or pnpm
 
-### `App.tsx`
-- Initializes the Nostr Development Kit (NDK) using `nostr-hooks` and connects to specified relays (`src/constants.ts`).
-- Fetches the Kind 3 contact list (follows) for the TV's public key (`TV_PUBKEY_NPUB`).
-- Passes the list of followed public keys (hex format) to the `MediaFeed` and `Podcastr` components.
-- Renders the overall layout, including `MediaFeed`, `Podcastr`, and `MessageBoard`.
-- Displays a QR code linking to the main chat thread (`MAIN_THREAD_NEVENT_URI`).
+### Installation
 
-### `MediaFeed.tsx` (`src/components/MediaFeed.tsx`)
-- **Purpose:** Displays a slideshow of recent images found in Nostr notes (Kind 1) posted by a specific list of authors.
-- **Data Source:** Subscribes to Kind 1 notes from the hex public keys provided in the `authors` prop.
-- **Media Extraction:** Scans the `content` of incoming notes for URLs ending in common image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) extensions.
-- **Caching:** Caches metadata for up to **500** recent image notes in IndexedDB (`MediaFeedCache`).
-- **Display:**
-    - On load, **shuffles** the cached notes to provide variety.
-    - Shows up to `MAX_SLIDES` (currently 30) unique images from the shuffled set, cycling automatically.
-    - Includes navigation controls (Previous/Next).
-    - Shows the poster's Nostr profile QR code.
-    - _Note: Video display/playback logic exists but is currently disabled (only images are processed)._
-- **Dependencies:** `useNdk`, `react-qr-code`.
+1.  Clone the repository:
+    ```bash
+    git clone <your-repository-url>
+    cd <repository-directory>
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    # or
+    yarn install
+    # or
+    pnpm install
+    ```
 
-### `Podcastr.tsx` (`src/components/Podcastr.tsx`)
-- **Purpose:** Discovers, lists, and plays podcast episodes shared via Nostr notes (Kind 1).
-- **Data Source:** Subscribes to Kind 1 notes from the hex public keys provided in the `authors` prop.
-- **Podcast Discovery:** Scans the `content` of incoming notes for URLs ending in common audio formats (`.mp3`, `.m4a`, `.wav`).
-- **Profile Fetching:** Fetches author profile information (Kind 0) using NDK. Handles variations in how NDK returns profile data (from `.content` string or direct properties).
-- **Caching:**
-    - Caches discovered podcast note details (URL, author pubkey, timestamp) in IndexedDB (`PodcastNoteCache`).
-    - Uses a shared profile cache (`ProfileCache` via `src/utils/profileCache.ts`).
-- **Display:**
-    - Shows the current podcast's author profile picture and name.
-    - Displays a scrollable, focusable list of discovered episodes, numbered with the most recent first (e.g., "Item 9 of 9").
-    - Includes an HTML5 audio player with playback speed controls (0.75x - 2.0x).
-- **Dependencies:** `useNdk`, `nostr-hooks` (indirectly via App), `@nostr-dev-kit/ndk`, `../utils/profileCache`.
+### Running the Development Server
 
-### `MessageBoard.tsx` (`src/components/MessageBoard.tsx`)
-- **Purpose:** Displays recent text notes (Kind 1) that are replies to a specific Nostr event or tag a specific public key.
-- **Data Source:** Subscribes to Kind 1 notes based on filters (e.g., `#e` tag for replies, `#p` tag for mentions).
-- **Display:** Shows a list of recent messages with sender avatar and name.
-- **Dependencies:** `useNdk`, `useProfile` (from `nostr-hooks`).
+1.  Start the Vite development server:
+    ```bash
+    npm run dev
+    # or
+    yarn dev
+    # or
+    pnpm dev
+    ```
+2.  Open your browser and navigate to the URL provided (usually `http://localhost:5173` or similar).
 
-### `profileCache.ts` (`src/utils/profileCache.ts`)
-- Provides shared logic for caching and retrieving Nostr user profiles (Kind 0) using IndexedDB (`ProfileCache`).
-- Includes functions to get, save, and delete the profile database.
-- Used by `Podcastr.tsx` (and potentially other components) to reduce redundant profile fetches.
+## Usage
 
-### `constants.ts` (`src/constants.ts`)
-- Stores important configuration values:
-    - `RELAYS`: List of Nostr relay URLs to connect to.
-    - `MAIN_THREAD_EVENT_ID_HEX`: Hex ID of the root event for the message thread.
-    - `MAIN_THREAD_NEVENT_URI`: Full `nevent` URI used for the QR code.
-    - `TV_PUBKEY_HEX`: Hex public key of the TV instance.
-    - `MAIN_POST_CONTENT`: Content for the initial post (not currently used for auto-posting).
+Once the app is running, you can typically:
 
-## Caching
+*   Select authors or feeds (depending on the main App component's implementation).
+*   Use keyboard arrow keys (Up/Down) to navigate lists like the podcast player.
+*   Use Enter or Spacebar to select items or activate focused buttons (Play/Pause, Speed).
+*   Use the mouse to click on interactive elements.
+*   The controls will fade out after 45 seconds of inactivity and reappear on interaction.
 
-This application makes extensive use of **IndexedDB** for caching to improve performance and reduce network load:
-- `MediaFeedCache`: Stores metadata for recent image notes.
-- `PodcastNoteCache`: Stores metadata for discovered podcast episode notes.
-- `ProfileCache`: Stores Nostr user profile data (Kind 0 events).
+*(Adjust the Usage section based on how the main App component orchestrates the different views).*
 
-## Setup
+## Contributing
 
-1.  **Set Constants:** Before running, configure the necessary values in `src/constants.ts`:
-    *   Publish a root note for your chat thread using a client associated with the TV's keys.
-    *   Set `MAIN_THREAD_EVENT_ID_HEX` to the **hex ID** of that root note.
-    *   Set `MAIN_THREAD_NEVENT_URI` to the full `nevent` URI of that root note (for the QR code).
-    *   Set `TV_PUBKEY_HEX` to the hex public key corresponding to the `npub` defined in `App.tsx` (`TV_PUBKEY_NPUB`).
-    *   Configure the desired `RELAYS`.
-2.  **Install Dependencies:** `npm install` or `yarn install`.
-3.  **Run Development Server:** `npm run dev` or `yarn dev`.
+Contributions are welcome! Please feel free to open an issue or submit a pull request.
+
+todo list
+
+lets add a setting page to add a feature to query the relays for hastag data
