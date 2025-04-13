@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import QRCode from 'react-qr-code';
+import { useInactivityTimer } from '../hooks/useInactivityTimer';
 
 interface VideoPlayerProps {
   url: string | null;
@@ -11,6 +12,10 @@ interface VideoPlayerProps {
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false); // Start paused until play succeeds
+  const mainContainerRef = useRef<HTMLDivElement>(null); // Ref for the main component container
+
+  // --- Inactivity Hook ---
+  const [isInactive, resetInactivityTimer] = useInactivityTimer(45000); // 45 seconds
 
   // Effect to attempt play when URL changes
   useEffect(() => {
@@ -77,6 +82,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded }) =
     };
   }, [onEnded]); // Re-run if the onEnded callback changes
 
+  // --- Effect to Add Global Listeners for Inactivity --- 
+  useEffect(() => {
+    const container = mainContainerRef.current;
+    if (!container) return;
+
+    const handleActivity = () => {
+        // console.log("VideoPlayer Activity detected, resetting timer"); // Optional: for debugging
+        resetInactivityTimer();
+    };
+
+    // Events that indicate activity
+    const activityEvents: Array<keyof HTMLElementEventMap> = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'focus'];
+
+    activityEvents.forEach(event => {
+        // Use capture phase for focus to catch focus events on child elements reliably
+        container.addEventListener(event, handleActivity, event === 'focus');
+    });
+
+    // Initial reset
+    resetInactivityTimer();
+
+    return () => {
+      activityEvents.forEach(event => {
+          // Ensure the listener being removed matches the one added (capture phase for focus)
+          container.removeEventListener(event, handleActivity, event === 'focus');
+      });
+    };
+    // Hook dependencies ensure this runs correctly
+  }, [resetInactivityTimer]); 
+
   const handlePlayPause = () => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
@@ -120,7 +155,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded }) =
   }
 
   return (
-    <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden">
+    <div 
+        ref={mainContainerRef} // Add ref
+        className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden"
+        // Listeners are now added via useEffect
+    >
       {/* Video Element - set muted={false} */}
       <video 
         ref={videoRef}
@@ -135,8 +174,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded }) =
         onError={(e) => console.error("Video source error:", e)}
       />
 
-      {/* ---> Move Controls Overlay to bottom-right area <--- */}
-      <div className="absolute bottom-4 right-24 md:right-28 lg:right-32 z-10 flex space-x-4 p-1"> {/* Use mode toggle position classes, adjusted slightly */} 
+      {/* Controls Overlay - Apply fade effect */} 
+      <div 
+          className={`absolute bottom-4 right-24 md:right-28 lg:right-32 z-10 flex space-x-4 p-1 transition-opacity duration-500 ease-in-out ${isInactive ? 'opacity-20' : 'opacity-100'}`}
+      > 
         {/* Play/Pause Button */}
         <button 
             onClick={handlePlayPause} 
@@ -152,7 +193,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded }) =
         </button>
       </div>
 
-      {/* Restore QR Code */}
+      {/* QR Code - Optionally fade this too? Or keep it visible? Let's keep it for now */}
       {posterNpub && (
           <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 bg-white p-1 rounded w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
               <QRCode

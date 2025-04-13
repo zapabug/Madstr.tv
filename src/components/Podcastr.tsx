@@ -1,385 +1,78 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNdk } from 'nostr-hooks';
-import { NDKEvent, NDKFilter, NDKSubscription, NDKKind, NDKUserProfile } from '@nostr-dev-kit/ndk';
-import { nip19 } from 'nostr-tools';
-// Import shared profile cache utilities
-import { 
-    ProfileData, 
-    getProfileFromCache, 
-    saveProfileToCache,
-    parseProfileContent 
-} from '../utils/profileCache'; // Adjust path as needed
+// src/components/Podcastr.tsx
 
-// Updated interface to store pubkey directly and add content
-interface PodcastNote {
-  id: string; // Unique ID: eventId-urlIndex
-  eventId: string; // Original event ID
-  type: 'podcast';
-  url: string;
-  posterPubkey: string; // Store hex pubkey
-  createdAt: number;
-  content?: string; // Re-add optional content field
-}
+import React, { useState, useEffect, useRef } from 'react';
+import { useInactivityTimer } from '../hooks/useInactivityTimer';
+import { usePodcastNotes } from '../hooks/usePodcastNotes';
+import { useProfileData } from '../hooks/useProfileData';
+import { useAudioPlayback } from '../hooks/useAudioPlayback';
 
-// Remove local ProfileData interface and podcast-specific profile cache functions
-// Remove local podcast note cache functions (we will use the shared profile cache for consistency)
-
-// --- Unified Podcast Note Caching (Using Existing Functions) ---
-const PODCAST_NOTE_DB_NAME = 'PodcastNoteCache'; 
-const PODCAST_NOTE_DB_VERSION = 1;
-const PODCAST_NOTE_STORE_NAME = 'podcastNotes'; 
-
-async function openPodcastNoteDB(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(PODCAST_NOTE_DB_NAME, PODCAST_NOTE_DB_VERSION);
-        request.onerror = (event) => reject((event.target as IDBOpenDBRequest).error);
-        request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
-        request.onupgradeneeded = (event) => {
-            const db = (event.target as IDBOpenDBRequest).result;
-             if (!db.objectStoreNames.contains(PODCAST_NOTE_STORE_NAME)) {
-                db.createObjectStore(PODCAST_NOTE_STORE_NAME, { keyPath: 'id' });
-            }
-        };
-    });
-}
-
-async function savePodcastNotesToCache(notes: PodcastNote[]): Promise<void> {
-    if (notes.length === 0) return;
-    const db = await openPodcastNoteDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([PODCAST_NOTE_STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(PODCAST_NOTE_STORE_NAME);
-        notes.forEach(note => store.put(note));
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-    });
-}
-
-async function getPodcastNotesFromCache(): Promise<PodcastNote[]> {
-    const db = await openPodcastNoteDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([PODCAST_NOTE_STORE_NAME], 'readonly');
-        const store = transaction.objectStore(PODCAST_NOTE_STORE_NAME);
-        const request = store.getAll();
-        request.onsuccess = () => {
-            const notes = request.result || [];
-            notes.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-            const limit = 50; 
-            if (notes.length > limit) {
-                resolve(notes.slice(0, limit));
-            } else {
-                resolve(notes);
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
-}
-// --- End Unified Podcast Note Caching ---
-
-const podcastUrlRegex = /https?:\/\S+\.(?:mp3|m4a|wav)/gi;
-
-function getMediaType(url: string): 'podcast' | null {
-  const extension = url.split('.').pop()?.toLowerCase();
-  if (!extension) return null;
-  if (['mp3', 'm4a', 'wav'].includes(extension)) {
-    return 'podcast';
-  }
-  return null;
-}
-
-// Updated function to store pubkey
-const processEventsIntoPodcastNotes = (events: NDKEvent[], notesByIdMap: Map<string, PodcastNote>): PodcastNote[] => {
-  const newNotes: PodcastNote[] = [];
-  events.forEach(event => {
-    const content = event.content;
-    const matchedUrls = content.match(podcastUrlRegex);
-    const posterPubkey = event.pubkey;
-
-    if (matchedUrls && matchedUrls.length > 0) {
-      matchedUrls.forEach((url, index) => {
-        const mediaType = getMediaType(url);
-        if (mediaType) { 
-          const mediaItemId = `${event.id}-${index}`;
-          if (!notesByIdMap.has(mediaItemId)) {
-            const newNote: PodcastNote = {
-              id: mediaItemId,
-              eventId: event.id,
-              type: mediaType,
-              url: url,
-              posterPubkey: posterPubkey, // Store pubkey
-              createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
-              content: content,
-            };
-            notesByIdMap.set(mediaItemId, newNote);
-            newNotes.push(newNote);
-          }
-        }
-      });
+// --- Helper to format time (seconds) into MM:SS ---
+const formatTime = (seconds: number): string => {
+    if (isNaN(seconds) || !isFinite(seconds)) {
+        return '00:00';
     }
-  });
-  newNotes.sort((a, b) => b.createdAt - a.createdAt);
-  return newNotes;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    const formattedMinutes = String(minutes).padStart(2, '0');
+    const formattedSeconds = String(remainingSeconds).padStart(2, '0');
+    return `${formattedMinutes}:${formattedSeconds}`;
 };
 
 interface PodcastPlayerProps {
-  authors: string[]; // Expect list of hex pubkeys
+  authors: string[];
 }
 
-// Rename component to Podcastr
 const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
-  const { ndk } = useNdk();
-  const [podcastNotes, setPodcastNotes] = useState<PodcastNote[]>([]);
-  const notesById = useRef<Map<string, PodcastNote>>(new Map());
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
-  const [isCacheLoaded, setIsCacheLoaded] = useState(false); // Cache for notes
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const scrollableListRef = useRef<HTMLDivElement>(null); // <-- Add ref for scrollable list
-
-  // --- Add State for Profiles ---
-  const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for poster profiles
-  const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
-  // No need for separate profile cache loaded state, piggyback on note cache
-
-  // --- Add State for Playback Speed --- 
-  const [playbackRate, setPlaybackRate] = useState(1.0);
+  const [focusedItemIndex, setFocusedItemIndex] = useState(0);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
-  const speedMenuRef = useRef<HTMLDivElement>(null); // Ref for menu container
-  const speedButtonRef = useRef<HTMLButtonElement>(null); // Ref for speed button
 
-  // Load podcast notes from cache on mount
+  // --- Refs ---
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const scrollableListRef = useRef<HTMLDivElement>(null);
+  const listItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const speedMenuRef = useRef<HTMLDivElement>(null);
+  const speedButtonRef = useRef<HTMLButtonElement>(null);
+  const playPauseButtonRef = useRef<HTMLButtonElement>(null);
+  const progressBarRef = useRef<HTMLInputElement>(null);
+  const mainContainerRef = useRef<HTMLDivElement>(null); // <<< Declaration >>>
+
+  // --- Custom Hooks ---
+  const { notes, isLoading: isLoadingNotes } = usePodcastNotes(authors);
+  const { profiles } = useProfileData(notes);
+  // Get the current item based on the index *after* notes have loaded
+  const currentItem = !isLoadingNotes && notes.length > currentItemIndex ? notes[currentItemIndex] : null;
+  const {
+    isPlaying,
+    currentTime,
+    duration,
+    playbackRate,
+    setPlaybackRate,
+    togglePlayPause,
+    handleSeek
+  } = useAudioPlayback({ audioRef, currentItemUrl: currentItem?.url || null });
+  const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
+
+  // --- Effects ---
+
+  // Initialize/Resize list item refs when notes change
   useEffect(() => {
-    getPodcastNotesFromCache() // Use note cache function
-      .then(cachedNotes => {
-        console.log(`PodcastPlayer: Loaded ${cachedNotes.length} podcast notes from cache.`);
-        setPodcastNotes(cachedNotes);
-        notesById.current = new Map(cachedNotes.map(note => [note.id, note]));
-        setIsCacheLoaded(true);
-        if (cachedNotes.length > 0 && currentItemIndex >= cachedNotes.length) {
-          setCurrentItemIndex(0); 
-        }
-        // Optimization: Pre-load profiles for cached notes?
-        // Could iterate cachedNotes and call fetchProfile if not in profiles state yet.
-      })
-      .catch(err => {
-        console.error('PodcastPlayer: Failed to load notes from cache:', err);
-        setIsCacheLoaded(true); 
-      });
-  }, []); 
+      listItemRefs.current = Array(notes.length).fill(null).map((_, i) => listItemRefs.current[i] || null);
+  }, [notes]);
 
-   // --- Function to Fetch Profiles (Fix Dependency Loop & Add Logging) --- 
-  const fetchPodcastAuthorProfile = useCallback(async (pubkey: string) => {
-    // ADD Log at the very beginning
-    console.log(`Podcastr: ENTER fetchPodcastAuthorProfile for ${pubkey?.substring(0,8)}`); 
-
-    if (!ndk || !pubkey || processingPubkeys.current.has(pubkey)) {
-      console.log(`Podcastr: EXIT fetchPodcastAuthorProfile early (check 1) for ${pubkey?.substring(0,8)}: ndk=${!!ndk}, pubkey=${!!pubkey}, processing=${processingPubkeys.current.has(pubkey)}`);
-      return;
-    }
-    
-    let profileExistsInState = false;
-    setProfiles(prev => {
-        if (prev[pubkey]?.name) {
-            profileExistsInState = true; 
-        }
-        return prev; 
-    });
-    if (profileExistsInState) { 
-        console.log(`Podcastr: EXIT fetchPodcastAuthorProfile early (check 2 - name already in state) for ${pubkey?.substring(0,8)}`);
-        return; 
-    }
-
-    console.log(`Podcastr: Checking cache for ${pubkey.substring(0,8)}...`);
-    // Check shared cache first
-    try {
-      // ADD log before await
-      console.log(`Podcastr: Awaiting getProfileFromCache for ${pubkey.substring(0,8)}.`);
-      const cachedProfile = await getProfileFromCache(pubkey); 
-      // ADD log after await
-      console.log(`Podcastr: Awaited getProfileFromCache for ${pubkey.substring(0,8)}. Result:`, cachedProfile);
-      
-      if (cachedProfile) {
-           console.log(`Podcastr: Found profile in cache for ${pubkey.substring(0,8)}:`, cachedProfile);
-           if (cachedProfile.name) { 
-                setProfiles(prev => ({ ...prev, [pubkey]: { ...cachedProfile, isLoading: false } }));
-                console.log(`Podcastr: Using named profile from cache for ${pubkey.substring(0,8)}, exiting fetch.`);
-                return;
-           } else {
-               console.log(`Podcastr: Profile in cache for ${pubkey.substring(0,8)} has no name, proceeding to fetch.`);
-           }
-      } else {
-           console.log(`Podcastr: No profile found in cache for ${pubkey.substring(0,8)}.`);
-      }
-    } catch (err) {
-      // ADD more detail to error log
-      console.error(`Podcastr: CAUGHT ERROR checking shared cache for ${pubkey.substring(0, 8)}:`, err);
-      // Optionally re-throw or handle differently if needed
-    }
-
-    // We expect execution to reach here if cache miss or error
-    console.log(`Podcastr: Proceeding after cache check for ${pubkey.substring(0, 8)}...`);
-    console.log(`Podcastr: Initiating network fetch for ${pubkey.substring(0, 8)}...`);
-    processingPubkeys.current.add(pubkey);
-    setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: true } }));
-
-    try {
-      const user = ndk.getUser({ pubkey });
-      const profileEvent = await user.fetchProfile();
-      console.log(`Podcastr: Network response for ${pubkey.substring(0,8)}: Event=`, profileEvent);
-      
-      let profileDataToSave: Omit<ProfileData, 'cachedAt' | 'isLoading'> | null = null;
-
-      // --- Handle different possible structures for profile data --- 
-      if (profileEvent && typeof profileEvent.content === 'string') {
-        // Standard case: Parse the content string
-        console.log(`Podcastr: Handling standard profile event with content string for ${pubkey.substring(0,8)}.`);
-        profileDataToSave = parseProfileContent(profileEvent.content, pubkey);
-        if (!profileDataToSave) {
-            console.error(`Podcastr: Failed to parse content string for ${pubkey.substring(0,8)}.`);
-        }
-      } else if (profileEvent && (profileEvent.name || profileEvent.picture || profileEvent.displayName)) {
-         // Fallback case: NDK might have pre-parsed? Use direct properties.
-         console.log(`Podcastr: Handling profile event with direct properties (no content string) for ${pubkey.substring(0,8)}.`);
-         // Construct ProfileData manually from available properties
-         profileDataToSave = {
-             pubkey: pubkey,
-             name: typeof profileEvent.name === 'string' ? profileEvent.name : undefined,
-             picture: typeof profileEvent.picture === 'string' ? profileEvent.picture : undefined,
-             displayName: typeof profileEvent.displayName === 'string' ? profileEvent.displayName : undefined,
-             about: typeof profileEvent.about === 'string' ? profileEvent.about : undefined,
-             banner: typeof profileEvent.banner === 'string' ? profileEvent.banner : undefined,
-             lud16: typeof profileEvent.lud16 === 'string' ? profileEvent.lud16 : undefined,
-             nip05: typeof profileEvent.nip05 === 'string' ? profileEvent.nip05 : undefined,
-             // Add other relevant fields present in the logged object
-         };
-         // Basic validation: ensure we got at least something useful
-         if (!profileDataToSave.name && !profileDataToSave.picture && !profileDataToSave.displayName) {
-             console.warn(`Podcastr: Direct properties found for ${pubkey.substring(0,8)}, but missing key fields (name/picture/displayName).`);
-             profileDataToSave = null; // Treat as invalid if key fields missing
-         }
-      } else {
-        // No usable profile data found
-        console.log(`Podcastr: No usable profile content or direct properties found for ${pubkey.substring(0,8)}.`);
-      }
-      // --- End Structure Handling ---
-
-      if (profileDataToSave) {
-          console.log(`Podcastr: Successfully processed profile data for ${pubkey.substring(0,8)}:`, profileDataToSave);
-          setProfiles(prev => {
-              const newState = { ...prev, [pubkey]: { ...profileDataToSave!, isLoading: false } }; // Use ! because we checked profileDataToSave
-              return newState;
-          });
-          saveProfileToCache({ ...profileDataToSave, pubkey }).catch(err => 
-              console.error(`Podcastr: Failed to save profile to shared cache for ${pubkey.substring(0, 8)}:`, err)
-          );
-      } else {
-           // If profileDataToSave is still null after checks
-           console.log(`Podcastr: Marking fetch as complete (no valid data) for ${pubkey.substring(0,8)}.`);
-           setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: false } }));
-      }
-
-    } catch (error) {
-      console.error(`Podcastr: Error during network fetch for ${pubkey}:`, error);
-      setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: false } }));
-    } finally {
-        // console.log(`Podcastr: Finished fetchProfile for ${pubkey.substring(0,8)}, removing from processing.`);
-        processingPubkeys.current.delete(pubkey);
-    }
-  }, [ndk]); 
-
-  // NDK Subscription Effect for Podcast Notes
+  // Reset focus/selection when notes list changes (e.g., author selection changes)
   useEffect(() => {
-    if (!ndk || authors.length === 0 || !isCacheLoaded) {
-      if (authors.length === 0) {
-        setPodcastNotes([]);
-        notesById.current.clear();
-        setCurrentItemIndex(0);
-      }
-      return;
-    }
-    console.log(`PodcastPlayer: Subscribing for ${authors.length} authors...`);
-    const filter: NDKFilter = {
-      kinds: [NDKKind.Text], 
-      authors: authors,
-      limit: 50, 
-    };
-    const subscription = ndk.subscribe(filter, { closeOnEose: false });
-    subscription.on('event', (event: NDKEvent) => {
-      // Check if the note content contains an audio URL
-      const audioUrlMatch = event.content?.match(podcastUrlRegex);
+    // Check if notes array identity has changed or length is 0 to avoid unnecessary resets
+    setCurrentItemIndex(0);
+    setFocusedItemIndex(0);
+  }, [notes]); // Depend on notes array identity
 
-      if (audioUrlMatch && audioUrlMatch[0]) {
-          const newNotes = processEventsIntoPodcastNotes([event], notesById.current);
-          if (newNotes.length > 0) {
-            console.log(`PodcastPlayer: Adding ${newNotes.length} new podcast notes.`);
-            setPodcastNotes(prevNotes => {
-              const combined = [...newNotes, ...prevNotes]; 
-              combined.sort((a, b) => b.createdAt - a.createdAt);
-              const limitedNotes = combined.slice(0, 50);
-              savePodcastNotesToCache(newNotes).catch(err => console.error('PodcastPlayer: Failed to save new notes to cache:', err));
-              notesById.current = new Map(limitedNotes.map(n => [n.id, n]));
-              return limitedNotes;
-            });
-          }
-      }
-    });
-    subscription.on('eose', () => { console.log("PodcastPlayer: Subscription EOSE."); });
-    subscription.start();
-    return () => {
-      console.log("PodcastPlayer: Cleaning up subscription.");
-      subscription.stop();
-    };
-  }, [ndk, authors, isCacheLoaded]);
-
-  // --- Effect to fetch profiles for ALL notes in the list --- << COMMENT OUT
-  /*
-  useEffect(() => {
-    console.log(`Podcastr: useEffect [podcastNotes] triggered. Count: ${podcastNotes.length}`); // Log effect trigger
-    if (podcastNotes.length > 0) {
-        const uniquePubkeys = new Set(podcastNotes.map(note => note.posterPubkey));
-        console.log("Podcastr: Attempting profile fetch for unique pubkeys:", Array.from(uniquePubkeys)); 
-        uniquePubkeys.forEach(pubkey => {
-             // Log before calling fetchProfile for a specific pubkey
-            console.log(`Podcastr: Calling fetchPodcastAuthorProfile inside loop for ${pubkey?.substring(0,8)}`);
-            fetchPodcastAuthorProfile(pubkey); 
-        });
-    }
-  }, [podcastNotes, fetchPodcastAuthorProfile]);
-  */
-
-  const currentItem = podcastNotes[currentItemIndex];
-  const currentProfile = currentItem ? profiles[currentItem.posterPubkey] : null;
-  // const hasValidProfile = currentProfile && !currentProfile.isLoading && (currentProfile.name || currentProfile.picture); // No longer needed as top section removed
-
-  // --- RE-ADD Effect to fetch profile for the CURRENT item ---
-  useEffect(() => {
-      if (currentItem && currentItem.posterPubkey) {
-          // console.log(`Podcastr: Triggering fetch for current item's profile: ${currentItem.posterPubkey.substring(0,8)}`);
-          fetchPodcastAuthorProfile(currentItem.posterPubkey);
-      }
-      // Ensure dependency array includes currentItem and fetchProfile
-  }, [currentItem, fetchPodcastAuthorProfile]); 
-
-  // Effect to update audio source when currentItem changes
-  useEffect(() => {
-    if (audioRef.current && currentItem) {
-      audioRef.current.src = currentItem.url;
-      audioRef.current.load(); 
-    }
-  }, [currentItem]);
-
-  // Effect to apply playbackRate to audio element
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = playbackRate;
-    }
-  }, [playbackRate]);
-
-  // Effect to close menu if clicked outside
+  // Effect to close speed menu if clicked outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
         isSpeedMenuOpen &&
-        speedMenuRef.current && 
+        speedMenuRef.current &&
         !speedMenuRef.current.contains(event.target as Node) &&
         speedButtonRef.current &&
         !speedButtonRef.current.contains(event.target as Node)
@@ -391,24 +84,97 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isSpeedMenuOpen]); // Re-run when menu open state changes
+  }, [isSpeedMenuOpen]);
+
+  // Effect to scroll focused item into view
+  useEffect(() => {
+    // Ensure notes exist and index is valid before scrolling
+    if (notes.length > 0 && focusedItemIndex >= 0 && focusedItemIndex < listItemRefs.current.length && listItemRefs.current[focusedItemIndex]) {
+        listItemRefs.current[focusedItemIndex]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+        });
+    }
+  }, [focusedItemIndex, notes.length]);
+
+  // Effect for Initial Focus on the list
+  useEffect(() => {
+      if (!isLoadingNotes && notes.length > 0 && scrollableListRef.current) {
+          const validIndex = Math.max(0, Math.min(focusedItemIndex, notes.length - 1));
+          if (focusedItemIndex !== validIndex) {
+              setFocusedItemIndex(validIndex); // Ensure index is valid
+          }
+          // Check if the list itself doesn't already have focus
+          // This can prevent focus jumps if user clicked elsewhere while notes loaded
+          if (document.activeElement !== scrollableListRef.current) {
+            console.log("Podcastr: Setting initial focus to scrollable list.");
+            scrollableListRef.current.focus();
+          }
+      }
+  }, [isLoadingNotes, notes.length, focusedItemIndex]); // Rerun if loading state, notes length or focusedIndex changes
+
+  // Effect for Inactivity Listeners
+  useEffect(() => {
+    const container = mainContainerRef.current; // <<< Usage 1 >>>
+    if (!container) return;
+    const handleActivity = () => resetInactivityTimer();
+    const activityEvents: Array<keyof HTMLElementEventMap> = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'focus'];
+    activityEvents.forEach(event => container.addEventListener(event, handleActivity, event === 'focus'));
+    resetInactivityTimer();
+    return () => {
+      activityEvents.forEach(event => {
+          if (container) {
+             container.removeEventListener(event, handleActivity, event === 'focus');
+          }
+      });
+    };
+  }, [resetInactivityTimer]);
+
+  // --- Event Handlers ---
 
   const handleSpeedChange = (newRate: number) => {
       setPlaybackRate(newRate);
       setIsSpeedMenuOpen(false);
   };
 
-  // <-- Add useEffect to set initial focus -->
-  useEffect(() => {
-      // Set focus to the list when it's ready and has items
-      if (isCacheLoaded && podcastNotes.length > 0 && scrollableListRef.current) {
-          console.log("Podcastr: Setting initial focus to scrollable list.");
-          scrollableListRef.current.focus();
+  const handleListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (notes.length === 0) return;
+      let newIndex = focusedItemIndex;
+      switch (event.key) {
+          case 'ArrowUp':
+              newIndex = Math.max(0, focusedItemIndex - 1);
+              event.preventDefault();
+              break;
+          case 'ArrowDown':
+              newIndex = Math.min(notes.length - 1, focusedItemIndex + 1);
+              event.preventDefault();
+              break;
+          case 'Enter':
+          case ' ':
+              if (newIndex >= 0 && newIndex < notes.length) {
+                 setCurrentItemIndex(newIndex);
+                 playPauseButtonRef.current?.focus();
+              }
+              event.preventDefault();
+              break;
+          default:
+              return;
       }
-      // Dependencies ensure this runs when cache loads or notes appear
-  }, [isCacheLoaded, podcastNotes]);
+      if (newIndex !== focusedItemIndex) {
+          setFocusedItemIndex(newIndex);
+      }
+  };
 
-  if (!isCacheLoaded) {
+  const handlePlayPauseKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+          togglePlayPause();
+          event.preventDefault();
+      }
+  };
+
+  // --- Render Logic ---
+
+  if (isLoadingNotes) {
     return (
         <div className='relative w-full h-full bg-gray-800 flex items-center justify-center overflow-hidden p-4'>
             <p className='text-gray-400 text-lg font-medium'>Loading Podcasts...</p>
@@ -416,7 +182,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     );
   }
 
-  if (podcastNotes.length === 0) {
+  if (notes.length === 0) {
     return (
       <div className='relative w-full h-full bg-gray-800 flex items-center justify-center overflow-hidden p-4'>
         <p className='text-gray-400 text-lg font-medium'>No podcasts found for selected authors.</p>
@@ -424,26 +190,29 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     );
   }
 
-  // --- Update Rendering Logic ---
-  // const displayName = currentProfile?.name || currentProfile?.displayName || currentItem?.posterPubkey?.substring(0, 10) + '...' || 'Unknown';
-  // const pictureUrl = currentProfile?.picture;
-  // const isLoadingProfile = currentProfile?.isLoading;
-
   return (
-    <div className='relative w-full h-full bg-blue-950 flex flex-col overflow-hidden p-2 text-white rounded-lg'>
-      {/* Removed Top Profile Section */}
-
-      {/* Scrollable Podcast List: Adjusted styles for new background */}
+    <div
+        ref={mainContainerRef}
+        className='relative w-full h-full bg-blue-950 flex flex-col overflow-hidden p-2 text-white rounded-lg'
+    >
+      {/* Scrollable Podcast List */}
       <div
           ref={scrollableListRef}
           tabIndex={0}
-          // Using focus:ring-offset to ensure visibility on blue bg
-          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded" 
+          onKeyDown={handleListKeyDown}
+          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded"
+          aria-activedescendant={notes[focusedItemIndex]?.id}
+          aria-label="Podcast List"
+          role="listbox"
       >
-        {podcastNotes.map((note, index) => {
-            const isSelected = index === currentItemIndex;
-            // Adjusted list item backgrounds for blue theme
-            const itemBg = isSelected ? 'bg-purple-700 bg-opacity-70' : 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
+        {notes.map((note, index) => {
+            const isActuallySelected = index === currentItemIndex;
+            const isFocused = index === focusedItemIndex;
+            let itemBg = 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
+            if (isActuallySelected) {
+                itemBg = 'bg-purple-700 bg-opacity-70';
+            }
+            const focusStyle = isFocused ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-blue-950' : '';
             const profile = profiles[note.posterPubkey];
             const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey.substring(0, 10) + '...';
             const itemPictureUrl = profile?.picture;
@@ -452,17 +221,24 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
             return (
                 <div
                     key={note.id}
+                    id={note.id}
+                    ref={(el) => {
+                        if (index < listItemRefs.current.length) {
+                            listItemRefs.current[index] = el;
+                        } else {
+                           console.warn(`Podcastr: Attempted to assign ref to index ${index} beyond current length ${listItemRefs.current.length}`);
+                        }
+                    }}
+                    role="option"
+                    aria-selected={isActuallySelected}
                     tabIndex={-1}
-                    // Updated focus ring for blue bg
-                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-blue-950 focus:ring-purple-500`}
+                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} ${focusStyle} focus:outline-none`}
                     onClick={() => setCurrentItemIndex(index)}
                     title={note.content || note.url}
                 >
-                    {/* Number Circle - Adjusted background */}
                     <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
-                        <span className="text-xs font-semibold text-white">{podcastNotes.length - index}</span>
+                        <span className="text-xs font-semibold text-white">{notes.length - index}</span>
                     </div>
-                    {/* Profile Picture - Adjusted background */}
                     <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
                         {itemIsLoadingProfile ? (
                             <div className="w-full h-full animate-pulse bg-gray-400"></div>
@@ -474,7 +250,6 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
                             </span>
                         )}
                     </div>
-                    {/* Profile Name - Ensure text visibility */}
                     <p className="text-sm text-white truncate flex-grow" title={itemDisplayName}>
                        {itemDisplayName}
                     </p>
@@ -483,36 +258,87 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
         })}
       </div>
 
-      {/* Audio Player Controls Area - Adjusted background */}
-      <div className="relative w-full max-w-md p-1 mt-auto bg-black bg-opacity-50 rounded flex-shrink-0 mx-auto flex items-center space-x-2">
-        {/* Audio Element */}
-        <audio ref={audioRef} controls className="w-full flex-grow">
-            Your browser does not support the audio element.
-        </audio>
-        
-        {/* Speed Control Button & Menu */}
+      {/* Audio Player Controls Area - Apply fade effect */}
+      <div
+          className={`w-full max-w-xl px-2 py-1 mt-auto bg-black bg-opacity-60 rounded-lg flex-shrink-0 mx-auto flex items-center space-x-3 transition-opacity duration-500 ease-in-out ${isInactive ? 'opacity-20' : 'opacity-100'}`}
+      >
+        {/* Audio Element - Hidden (Ref is passed to useAudioPlayback) */}
+        <audio ref={audioRef} className="hidden" />
+
+        {/* Play/Pause Button (Uses togglePlayPause from hook) */}
+        <button
+            ref={playPauseButtonRef}
+            onClick={togglePlayPause} // Use function from hook
+            onKeyDown={handlePlayPauseKeyDown}
+            tabIndex={0}
+            className="flex-shrink-0 p-2 rounded-md text-white bg-purple-600 hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
+            aria-label={isPlaying ? "Pause Podcast" : "Play Podcast"}
+        >
+            {isPlaying ? (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                </svg>
+            ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                </svg>
+            )}
+        </button>
+
+        {/* Progress Bar & Time Display (Uses state/handlers from hook) */}
+        <div className="flex flex-grow items-center space-x-2 min-w-0 px-1">
+            <span className="text-xs font-mono text-gray-300 w-10 text-right flex-shrink-0">
+                {formatTime(currentTime)} {/* <<< Usage 1 >>> */}
+            </span>
+            <input
+                ref={progressBarRef}
+                type="range"
+                min="0"
+                max={duration || 0}
+                value={currentTime || 0}
+                onChange={handleSeek} // Use handler from hook
+                className="flex-grow h-1 bg-gray-600 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black podcast-progress"
+                style={{
+                    background: duration > 0 && isFinite(duration) && isFinite(currentTime)
+                        ? `linear-gradient(to right, #a855f7 ${ (currentTime / duration) * 100 }%, #4b5563 ${ (currentTime / duration) * 100 }%)`
+                        : '#4b5563'
+                }}
+                tabIndex={0}
+                aria-label="Podcast progress"
+            />
+            <span className="text-xs font-mono text-gray-300 w-10 text-left flex-shrink-0">
+                {formatTime(duration)} {/* <<< Usage 2 >>> */}
+            </span>
+        </div>
+
+        {/* Speed Control Button & Menu (Uses state/handler from hook) */}
         <div className="relative flex-shrink-0">
-            <button 
+            <button
                 ref={speedButtonRef}
                 onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
-                className="p-1 text-gray-400 hover:text-white focus:outline-none"
+                className="p-1 text-xs font-semibold w-10 h-10 flex items-center justify-center rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
                 title="Playback Speed"
-             >
-                {/* Simple Text Button - can be replaced with icon */}
-                <span className="text-xs font-semibold">{playbackRate.toFixed(2)}x</span> 
+                aria-haspopup="true"
+                aria-expanded={isSpeedMenuOpen}
+                tabIndex={0}
+            >
+                <span>{playbackRate.toFixed(1)}x</span>
             </button>
-
-            {/* Speed Menu (Conditional Rendering) */}
             {isSpeedMenuOpen && (
-                <div 
+                <div
                     ref={speedMenuRef}
-                    className="absolute bottom-full right-0 mb-1 w-20 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10 overflow-hidden"
+                    className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded shadow-lg py-1 z-10"
+                    role="menu"
                 >
-                    {[0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((rate) => (
+                    {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(rate => (
                         <button
                             key={rate}
                             onClick={() => handleSpeedChange(rate)}
-                            className={`block w-full px-3 py-1 text-xs text-left ${playbackRate === rate ? 'bg-purple-600 text-white' : 'text-white hover:bg-gray-700'}`}
+                            className={`block w-full text-left px-3 py-1 text-sm ${
+                                playbackRate === rate ? 'bg-purple-600 text-white' : 'text-gray-200 hover:bg-gray-600'
+                            }`}
+                            role="menuitemradio"
+                            aria-checked={playbackRate === rate}
                         >
                             {rate.toFixed(2)}x
                         </button>
@@ -526,5 +352,4 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   );
 };
 
-// Update export name
-export default Podcastr; 
+export default Podcastr;
