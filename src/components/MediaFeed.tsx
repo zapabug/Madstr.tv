@@ -4,8 +4,8 @@ import { useNdk } from 'nostr-hooks';
 import { NDKEvent, NDKFilter, NDKSubscription, NDKKind } from '@nostr-dev-kit/ndk'; // Removed nip19 import from here
 import { nip19 } from 'nostr-tools'; // Import nip19 from nostr-tools
 
-// Re-define MediaNote interface locally or import from a types file
-interface MediaNote {
+// Define MediaNote interface if not already defined
+export interface MediaNote {
   id: string; // Unique ID: eventId-urlIndex
   eventId: string; // Original event ID
   type: 'image' | 'video';
@@ -243,170 +243,120 @@ const processEventsIntoMediaNotes = (events: NDKEvent[], notesByIdMap: Map<strin
 
 
 // Update props interface
-interface MediaFeedProps {
-  authors: string[]; // Expect list of hex pubkeys
+export interface MediaFeedProps {
+  authors: string[];
+  handlePrevious: () => void;
+  handleNext: () => void;
+  mediaMode: 'podcast' | 'video';
+  currentImageIndex: number;
+  imageNotes: MediaNote[];
+  onNotesLoaded: (notes: MediaNote[]) => void;
 }
 
 const MAX_SLIDES = 30;
-const SLIDE_DURATION_MS = 60000; // 60 seconds per slide
-const FADE_DURATION_MS = 750; // 0.75 seconds fade
 
-const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
-  const { ndk } = useNdk(); // Get NDK instance
-  const [mediaNotes, setMediaNotes] = useState<MediaNote[]>([]); // Local state for notes
-  const notesById = useRef<Map<string, MediaNote>>(new Map()); // Track processed media IDs
-  // currentItemIndex is now primarily managed by the cross-fade effect
-  // const [currentItemIndex, setCurrentItemIndex] = useState(0); 
+// Accept new props
+const MediaFeed: React.FC<MediaFeedProps> = ({ authors, handlePrevious, handleNext, mediaMode, currentImageIndex, imageNotes, onNotesLoaded }) => {
+  const { ndk } = useNdk();
+  const notesById = useRef<Map<string, MediaNote>>(new Map());
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
-  
-  // State for cross-fade
-  const [currentImageIndex, setCurrentImageIndex] = useState(0); // Index for the visible image in the shuffled array
-  const [previousImageIndex, setPreviousImageIndex] = useState<number | null>(null); // Index for the fading-out image
-  const [isFading, setIsFading] = useState(false);
 
-  // Timer ref
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Load from cache on component mount (already shuffles)
+  // Load from cache on component mount
   useEffect(() => {
     getFromCache()
       .then(cachedNotes => {
-        console.log(`MediaFeed: Loaded and shuffled ${cachedNotes.length} items from cache (limit ${MAX_CACHED_NOTES}).`);
-        setMediaNotes(cachedNotes);
+        console.log(`MediaFeed: Loaded and shuffled ${cachedNotes.length} items from cache.`);
+        onNotesLoaded(cachedNotes);
         notesById.current = new Map(cachedNotes.map(note => [note.id, note]));
         setIsCacheLoaded(true);
-        setCurrentImageIndex(0); // Start fade from index 0 of shuffled array
       })
       .catch(err => {
         console.error('MediaFeed: Failed to load from cache:', err);
         setIsCacheLoaded(true);
       });
-  }, []); 
+  }, [onNotesLoaded]);
 
   // --- Subscription Effect --- 
   useEffect(() => {
     if (!ndk || authors.length === 0 || !isCacheLoaded) {
-      // Clear notes if authors become empty
       if (authors.length === 0) {
-          setMediaNotes([]);
+          onNotesLoaded([]);
           notesById.current.clear();
-          setCurrentImageIndex(0); // Reset index
       }
       return;
-  }
+    }
 
-  console.log(`MediaFeed: Authors updated, creating subscription for ${authors.length} authors...`);
+    console.log(`MediaFeed: Authors updated, creating subscription for ${authors.length} authors...`);
 
-  const filter: NDKFilter = {
-    kinds: [1],
-    authors: authors,
-    limit: 1000, 
-  };
+    const filter: NDKFilter = {
+      kinds: [1],
+      authors: authors,
+      limit: 1000, 
+    };
 
-  const subscription: NDKSubscription = ndk.subscribe([filter], { closeOnEose: false });
+    const subscription: NDKSubscription = ndk.subscribe([filter], { closeOnEose: false });
 
-  subscription.on('event', (event: NDKEvent) => {
-    const newNotes = processEventsIntoMediaNotes([event], notesById.current);
-    if (newNotes.length > 0) {
-          console.log(`MediaFeed: Adding ${newNotes.length} new image notes from event ${event.id.substring(0,8)}.`);
-          setMediaNotes(prevNotes => {
-            // Add new notes
-            let combined = [...prevNotes, ...newNotes]; 
-            // --- SHUFFLE the combined list --- 
+    if (notesById.current.size === 0 && imageNotes.length > 0) {
+       console.log("MediaFeed: Initializing notesById from prop imageNotes.");
+       notesById.current = new Map(imageNotes.map(note => [note.id, note]));
+    }
+
+    subscription.on('event', (event: NDKEvent) => {
+      const newNotes = processEventsIntoMediaNotes([event], notesById.current);
+      if (newNotes.length > 0) {
+            let combined = [...imageNotes, ...newNotes];
             let shuffledCombined = shuffleArray(combined);
-            // Trim if over cache limit AFTER shuffling
             if (shuffledCombined.length > MAX_CACHED_NOTES) {
-                console.log(`MediaFeed: Trimming shuffled notes from ${shuffledCombined.length} to ${MAX_CACHED_NOTES}`);
-                // Note: Trimming after shuffling might discard some of the *new* notes if the cache was full.
-                // Alternative: Trim by date *before* shuffling? Sticking with shuffle then trim for now.
                 shuffledCombined = shuffledCombined.slice(0, MAX_CACHED_NOTES);
             }
-            // Update the notesById map based on the final shuffled+trimmed list
-            notesById.current = new Map(shuffledCombined.map(n => [n.id, n])); 
+            notesById.current = new Map(shuffledCombined.map(n => [n.id, n]));
             
-            // Ensure the currentImageIndex remains valid within the new array length
-            const newLength = Math.min(shuffledCombined.length, MAX_SLIDES);
-            if (newLength > 0 && currentImageIndex >= newLength) {
-                console.log(`MediaFeed: Resetting currentImageIndex from ${currentImageIndex} due to notes update.`);
-                // Resetting index might cause a visual jump, but prevents errors.
-                // We directly return the shuffled array, the timer effect will use it.
-                setCurrentImageIndex(0);
-            } 
-            // Return the shuffled, potentially trimmed list
-            return shuffledCombined; 
-        });
-    }
-  });
-
-  subscription.on('eose', () => {
-      console.log("MediaFeed: Subscription EOSE received.");
-  });
-
-  subscription.start();
-  console.log("MediaFeed: Subscription started.");
-
-  // Cleanup function
-  return () => {
-    console.log("MediaFeed: Cleaning up subscription.");
-    subscription.stop();
-  };
-
-  // Re-run effect if NDK instance or authors list changes or cache is loaded
-  }, [ndk, authors, isCacheLoaded]); 
-
-  // --- Timer Effect for Cycling Slides with Cross-fade --- 
-  useEffect(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-    // Use the current mediaNotes state directly, which should be shuffled
-    const displayItems = mediaNotes.slice(0, MAX_SLIDES);
-    const cycleLength = displayItems.length;
-
-    if (cycleLength > 1) {
-      console.log(`MediaFeed: Setting timer for ${SLIDE_DURATION_MS}ms. Current index: ${currentImageIndex}`);
-      timerRef.current = setTimeout(() => {
-        console.log(`MediaFeed: Timer fired. Fading from index ${currentImageIndex}`);
-        setIsFading(true); 
-        setPreviousImageIndex(currentImageIndex); 
-
-        const nextIndex = (currentImageIndex + 1) % cycleLength;
-        // setCurrentItemIndex(nextIndex); // We don't need this separate index now
-
-        setTimeout(() => {
-           console.log(`MediaFeed: Fade complete. Setting index to ${nextIndex}`);
-           setCurrentImageIndex(nextIndex); // Update the image index for the next cycle
-           setIsFading(false);
-           setPreviousImageIndex(null); 
-        }, FADE_DURATION_MS);
-
-      }, SLIDE_DURATION_MS); // Use the updated longer duration
-    }
-
-    return () => {
-      if (timerRef.current) {
-        console.log("MediaFeed: Clearing timer due to cleanup/dependency change.");
-        clearTimeout(timerRef.current);
+            saveToCache(newNotes).catch(err => console.error('MediaFeed: Failed cache save', err));
+            
+            onNotesLoaded(shuffledCombined);
       }
+    });
+
+    subscription.on('eose', () => {
+        console.log("MediaFeed: Subscription EOSE received.");
+    });
+
+    subscription.start();
+    console.log("MediaFeed: Subscription started.");
+
+    // Cleanup function
+    return () => {
+      console.log("MediaFeed: Cleaning up subscription.");
+      subscription.stop();
     };
-  // Rerun timer logic if the image index changes OR the underlying notes array changes
-  }, [currentImageIndex, mediaNotes]); 
+
+    // Re-run effect if NDK instance or authors list changes or cache is loaded
+  }, [ndk, authors, isCacheLoaded, imageNotes, onNotesLoaded]); 
 
   // --- Rendering Logic --- 
-  const displayItems = mediaNotes.slice(0, MAX_SLIDES);
+  
+  // Only render image slideshow content if in podcast/image mode
+  if (mediaMode !== 'podcast') {
+    // In video mode, this component doesn't display the main content
+    // App.tsx handles showing the VideoPlayer.
+    // We might want a placeholder or nothing, returning null is simplest.
+    return null; 
+  }
 
-  if (displayItems.length === 0) {
-    console.log('MediaFeed: Rendering placeholder (no displayable items).');
+  // Rendering logic for IMAGE MODE:
+  const displayItems = imageNotes.slice(0, MAX_SLIDES);
+
+  if (!isCacheLoaded || displayItems.length === 0) {
     return (
       <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
-        <p className="text-gray-400">Waiting for media feed...</p>
+        <p className="text-gray-400">
+          {isCacheLoaded ? 'No images found.' : 'Loading images...'}
+        </p>
       </div>
     );
   }
 
-  // Use currentImageIndex directly
-  const currentItem = displayItems[currentImageIndex]; 
-  const previousItem = previousImageIndex !== null ? displayItems[previousImageIndex] : null;
+  const currentItem = displayItems[currentImageIndex];
 
   if (!currentItem) {
       console.error("MediaFeed: currentItem is undefined. Index:", currentImageIndex, "Display count:", displayItems.length);
@@ -417,12 +367,7 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
       );
   }
 
-  // --- ADD LOGGING before QR Code --- 
-  console.log("MediaFeed Rendering - currentItem:", currentItem);
-  console.log("MediaFeed Rendering - currentItem.posterNpub:", currentItem?.posterNpub);
-
   const currentImageUrl = currentItem.type === 'image' ? currentItem.url : null;
-  const previousImageUrl = previousItem?.type === 'image' ? previousItem.url : null;
 
   return (
     <div className="relative w-full h-full bg-transparent flex flex-col items-center justify-center overflow-hidden">
@@ -440,31 +385,16 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
           />
       )}
       
-      {/* Media Display Area with Cross-Fade (needs higher z-index than background) */}
-      <div className="relative w-full h-full flex items-center justify-center z-10"> 
-          {/* Current Image Layer */}
+      {/* Media Display Area - Simplified for single image */}
+      <div className="relative w-full h-full flex items-center justify-center z-10">
           {currentImageUrl && (
               <img 
                   key={`${currentItem.id}-img-current`} 
                   src={currentImageUrl} 
                   alt="Media content" 
-                  className={`absolute inset-0 object-contain w-full h-full transition-opacity duration-${FADE_DURATION_MS} ease-in-out ${isFading ? 'opacity-0' : 'opacity-100'}`}
+                  // Remove fade classes
+                  className={`absolute inset-0 object-contain w-full h-full`}
               />
-          )}
-          {/* Previous Image Layer (for fading out) */}
-          {previousImageUrl && isFading && (
-               <img 
-                  key={`${previousItem?.id}-img-previous`} 
-                  src={previousImageUrl} 
-                  alt="Media content (fading out)" 
-                  className={`absolute inset-0 object-contain w-full h-full transition-opacity duration-${FADE_DURATION_MS} ease-in-out opacity-0`}
-              />             
-          )}
-          {/* Video Display (Placeholder - would need integration) */}
-          {currentItem.type === 'video' && (
-              <div className="w-full h-full flex items-center justify-center">
-                  <p className="text-white bg-black bg-opacity-50 p-2 rounded">Video playback not fully integrated with fade yet.</p>
-              </div>
           )}
       </div>
 

@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import QRCode from 'react-qr-code'; // Import QRCode
-import MediaFeed from './components/MediaFeed';
+import MediaFeed, { MediaFeedProps, MediaNote } from './components/MediaFeed'; // Import props type if needed
 import MessageBoard from './components/MessageBoard'; // Re-enable import
 import Podcastr from './components/Podcastr'; // Re-import Podcastr
-import VideoList from './components/VideoList'; // Import VideoList
+import VideoList, { VideoNote } from './components/VideoList'; // Import VideoList
 import VideoPlayer from './components/VideoPlayer'; // Import VideoPlayer
 import RelayStatus from './components/RelayStatus'; // Import the new component
 import { nip19 } from 'nostr-tools';
@@ -41,6 +41,20 @@ function App() {
 
   // State for bottom-right panel toggle
   const [interactiveMode, setInteractiveMode] = useState<'podcast' | 'video'>('podcast');
+
+  // State for notes (now managed centrally)
+  const [imageNotes, setImageNotes] = useState<MediaNote[]>([]); 
+  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+  const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]); 
+  const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+
+  // Define handleVideoSelect first
+  const handleVideoSelect = useCallback((url: string | null, npub: string | null, index: number) => {
+    console.log(`App: Video selected - URL: ${url}, Npub: ${npub}, Index: ${index}`);
+    setSelectedVideoUrl(url);
+    setSelectedVideoNpub(npub);
+    setCurrentVideoIndex(index);
+  }, []); // No dependencies needed if it only calls setters
 
   useEffect(() => {
     console.log("App: Initializing NDK...");
@@ -132,17 +146,124 @@ function App() {
 
   }, [ndk]); // Re-run when NDK instance is available
 
-  // Callback for VideoList selection
-  const handleVideoSelect = useCallback((url: string | null, npub: string | null) => {
-    console.log(`App: Video selected - URL: ${url}, Npub: ${npub}`);
-    setSelectedVideoUrl(url);
-    setSelectedVideoNpub(npub);
-    // Reset mode when video selected? Or keep it on video list?
-    // setInteractiveMode('podcast'); // Example: Switch back after selecting
-  }, []);
+  // ---> Callback handlers for loaded notes <---
+  const handleImageNotesLoaded = useCallback((notes: MediaNote[]) => {
+      console.log(`App: Received ${notes.length} image notes.`);
+      setImageNotes(notes);
+      // Reset index if it's out of bounds after notes update?
+      if (currentImageIndex >= notes.length && notes.length > 0) {
+          setCurrentImageIndex(0);
+      }
+  }, [currentImageIndex]); // Dependency needed for index check
+
+  const handleVideoNotesLoaded = useCallback((notes: VideoNote[]) => {
+      console.log(`App: Received ${notes.length} video notes.`);
+      setVideoNotes(notes);
+      if (currentVideoIndex >= notes.length && notes.length > 0) {
+          setCurrentVideoIndex(0);
+      }
+      if (notes.length > 0 && !selectedVideoUrl) {
+          console.log("App: Auto-selecting first video on load.");
+          let npub: string | null = null;
+          try {
+              npub = nip19.npubEncode(notes[0].posterPubkey);
+          } catch (e) { console.error("App: Failed to encode npub in handleVideoNotesLoaded", e); }
+          // Call handleVideoSelect (now defined above)
+          handleVideoSelect(notes[0].url, npub, 0);
+      }
+  // Remove handleVideoSelect from dependencies
+  }, [currentVideoIndex, selectedVideoUrl]);
+
+  // Prev/Next handlers (use centrally managed notes state)
+  const handlePrevious = useCallback(() => {
+    if (interactiveMode === 'podcast') {
+      // Now operates directly on imageNotes state
+      const cycleLength = imageNotes.length;
+      if (cycleLength === 0) return;
+      const prevIndex = (currentImageIndex - 1 + cycleLength) % cycleLength;
+      setCurrentImageIndex(prevIndex);
+      console.log(`App: Previous Image - Index: ${prevIndex}`);
+    } else {
+      // Now operates directly on videoNotes state
+      const cycleLength = videoNotes.length;
+      if (cycleLength === 0) return;
+      const prevIndex = (currentVideoIndex - 1 + cycleLength) % cycleLength;
+      setCurrentVideoIndex(prevIndex);
+      const newSelectedVideo = videoNotes[prevIndex];
+      if (newSelectedVideo) {
+          setSelectedVideoUrl(newSelectedVideo.url);
+          // ---> Encode hex pubkey to npub <---
+          let npub: string | null = null;
+          try {
+              npub = nip19.npubEncode(newSelectedVideo.posterPubkey);
+          } catch (e) { console.error("App: Failed to encode npub in handlePrevious", e); }
+          setSelectedVideoNpub(npub);
+          console.log(`App: Previous Video - Index: ${prevIndex}, URL: ${newSelectedVideo.url}`);
+      } else {
+          console.warn("App: Previous Video - No video found at index", prevIndex);
+      }
+    }
+  // Add imageNotes/videoNotes to dependencies as handlers now read them
+  }, [interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes]);
+
+  const handleNext = useCallback(() => {
+    if (interactiveMode === 'podcast') {
+      const cycleLength = imageNotes.length;
+      if (cycleLength === 0) return;
+      const nextIndex = (currentImageIndex + 1) % cycleLength;
+      setCurrentImageIndex(nextIndex);
+      console.log(`App: Next Image - Index: ${nextIndex}`);
+    } else {
+      const cycleLength = videoNotes.length;
+      if (cycleLength === 0) return;
+      const nextIndex = (currentVideoIndex + 1) % cycleLength;
+      setCurrentVideoIndex(nextIndex);
+      const newSelectedVideo = videoNotes[nextIndex];
+      if (newSelectedVideo) {
+          setSelectedVideoUrl(newSelectedVideo.url);
+          // ---> Encode hex pubkey to npub <---
+          let npub: string | null = null;
+          try {
+              npub = nip19.npubEncode(newSelectedVideo.posterPubkey);
+          } catch (e) { console.error("App: Failed to encode npub in handleNext", e); }
+          setSelectedVideoNpub(npub);
+          console.log(`App: Next Video - Index: ${nextIndex}, URL: ${newSelectedVideo.url}`);
+      } else {
+          console.warn("App: Next Video - No video found at index", nextIndex);
+      }
+    }
+  // Add imageNotes/videoNotes to dependencies
+  }, [interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes]);
 
   const toggleInteractiveMode = () => {
-      setInteractiveMode(prev => prev === 'podcast' ? 'video' : 'podcast');
+      setInteractiveMode(prev => {
+        const newMode = prev === 'podcast' ? 'video' : 'podcast';
+        console.log("App: Toggling interactiveMode to", newMode);
+        if (newMode === 'video' && videoNotes.length > 0) {
+            console.log("App: Selecting current/first video on mode toggle.");
+            const indexToSelect = currentVideoIndex < videoNotes.length ? currentVideoIndex : 0;
+            const videoToSelect = videoNotes[indexToSelect];
+            if (videoToSelect) {
+                 let npub: string | null = null;
+                 try {
+                     npub = nip19.npubEncode(videoToSelect.posterPubkey);
+                 } catch (e) { console.error("App: Failed to encode npub in toggleInteractiveMode", e); }
+                 // Call handleVideoSelect (now defined above)
+                 handleVideoSelect(videoToSelect.url, npub, indexToSelect);
+            }
+        } else if (newMode === 'podcast') {
+             // Optionally clear video selection when switching away from video mode?
+             // setSelectedVideoUrl(null);
+             // setSelectedVideoNpub(null);
+        }
+        return newMode;
+      });
+  // Remove handleVideoSelect from dependencies
+  // Keep videoNotes, currentVideoIndex if read directly before calling setter?
+  // Safer to keep state read inside the callback if logic depends on it.
+  // For now, assuming handleVideoSelect is the main dependency needed for the *action*.
+  // Let's try removing all dependencies for simplicity, as it only calls setters.
+  // }, [videoNotes, currentVideoIndex]); 
   };
 
   // --> Use the nevent URI directly for the QR code value <--
@@ -197,34 +318,75 @@ function App() {
 
         {/* MediaFeed Area (Top Section) */}
         {isLoadingAuthors ? (
-            <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
-                <p className="text-gray-400">Loading author list...</p>
-            </div>
-         ) : selectedVideoUrl ? (
-            <VideoPlayer url={selectedVideoUrl} posterNpub={selectedVideoNpub} />
+             <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
+                 <p className="text-gray-400">Loading author list...</p>
+             </div>
+         ) : selectedVideoUrl && interactiveMode === 'video' ? ( // Only show VideoPlayer if a video is selected AND in video mode
+            <VideoPlayer 
+              url={selectedVideoUrl} 
+              posterNpub={selectedVideoNpub} 
+              onEnded={handleNext} // Trigger next video when current ends
+            />
          ) : (
             <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
-                <MediaFeed authors={mediaAuthors} />
+                 {/* ---> Pass handlers and state down to MediaFeed <-- */}
+                <MediaFeed 
+                    authors={mediaAuthors} 
+                    handlePrevious={handlePrevious}
+                    handleNext={handleNext}
+                    mediaMode={interactiveMode}
+                    currentImageIndex={currentImageIndex}
+                    imageNotes={imageNotes}
+                    onNotesLoaded={handleImageNotesLoaded}
+                />
             </div>
          )}
 
-        {/* --- Toggle Button (Absolute Position - Left of Media QR) --- */}
-        {/* Positioned relative to the parent 'Inner wrapper' div */}
-        <button 
-           onClick={toggleInteractiveMode}
-           className="absolute bottom-4 right-24 md:right-28 lg:right-32 z-20 p-1 bg-transparent border-none 
-                      text-purple-500 hover:text-purple-300 focus:text-purple-300 
-                      focus:outline-none transition-colors duration-150 text-xs font-semibold uppercase"
-           aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
-           title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
-           style={{lineHeight: '1'}} // Adjust line height for better vertical alignment
-        >
-            {interactiveMode === 'podcast' ? 'Videos' : 'Podcasts'}
-        </button>
+        {/* ---> Add Prev/Next Buttons Here (Render Conditionally) <--- */}
+        {((interactiveMode === 'podcast' && imageNotes.length > 1) || 
+          (interactiveMode === 'video' && videoNotes.length > 1)) && (
+          <>
+            {/* Prev Button - Adjust upward offset */}
+            <button 
+                onClick={handlePrevious}
+                className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-transparent border-none text-purple-600 hover:text-purple-400 focus:text-purple-400 focus:outline-none transition-colors duration-150 m-0"
+                aria-label="Previous Item"
+                style={{ transform: 'translateY(-50%) translateY(-120px)' }} 
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 p-0 m-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5 L 13 12 L 15 19" />
+                </svg>
+            </button>
+            {/* Next Button - Adjust upward offset */}
+            <button 
+                onClick={handleNext}
+                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-transparent border-none text-purple-600 hover:text-purple-400 focus:text-purple-400 focus:outline-none transition-colors duration-150 m-0"
+                aria-label="Next Item"
+                style={{ transform: 'translateY(-50%) translateY(-120px)' }} 
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 p-0 m-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5 L 11 12 L 9 19" />
+                </svg>
+            </button>
+          </>
+        )}
 
         {/* Split Screen Container: Fixed Height, Flex Row */}
         <div className="relative w-full h-1/3 flex-shrink-0 flex flex-row overflow-hidden mt-1"> {/* Added small margin-top */}
             
+            {/* ---> ADD Toggle Button Here (Top Center of this section) <--- */}
+            <button 
+               onClick={toggleInteractiveMode}
+               // Position absolute relative to this container, top-center
+               className="absolute top-1 left-1/2 transform -translate-x-1/2 z-20 p-1 bg-black bg-opacity-60 rounded 
+                          text-purple-400 hover:text-purple-200 focus:text-purple-200 
+                          focus:outline-none transition-colors duration-150 text-xs font-semibold uppercase"
+               aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
+               title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
+            >
+                {interactiveMode === 'podcast' ? 'Videos' : 'Podcasts'}
+            </button>
+
             {/* Message Board Container (Left Side - 2/3 width) */}
             <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900 rounded-lg"> {/* Width 2/3, Scroll */}
                 {ndk ? (
@@ -242,20 +404,21 @@ function App() {
 
             {/* Interactive Panel Container (Right 1/3) */}
             <div className="w-1/3 h-full flex flex-col overflow-hidden ml-1">
-                <div className="flex-grow min-h-0 bg-gray-800 rounded-lg p-1"> 
+                <div className="flex-grow min-h-0 bg-gray-800 rounded-lg p-1">
                     {ndk ? (
                         interactiveMode === 'podcast' ? (
-                            <Podcastr authors={mediaAuthors} />
+                            <Podcastr authors={mediaAuthors} /> // TODO: Need to lift audioNotes state?
                         ) : (
                             <VideoList 
                                 authors={mediaAuthors} 
-                                onVideoSelect={handleVideoSelect}
+                                onVideoSelect={handleVideoSelect} 
+                                currentVideoIndex={currentVideoIndex}
+                                videoNotes={videoNotes}
+                                onNotesLoaded={handleVideoNotesLoaded}
                             />
                         )
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center"> 
-                          <p className="text-gray-400">Initializing Nostr...</p> 
-                        </div>
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">Initializing...</div>
                     )}
                 </div>
             </div>
