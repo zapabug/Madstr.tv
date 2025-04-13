@@ -166,7 +166,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
       });
   }, []); 
 
-   // --- Function to Fetch Profiles (Fix Dependency Loop) --- 
+   // --- Function to Fetch Profiles (Fix Dependency Loop & Add Logging) --- 
   const fetchPodcastAuthorProfile = useCallback(async (pubkey: string) => {
     // ADD Log at the very beginning
     console.log(`Podcastr: ENTER fetchPodcastAuthorProfile for ${pubkey?.substring(0,8)}`); 
@@ -191,7 +191,12 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     console.log(`Podcastr: Checking cache for ${pubkey.substring(0,8)}...`);
     // Check shared cache first
     try {
+      // ADD log before await
+      console.log(`Podcastr: Awaiting getProfileFromCache for ${pubkey.substring(0,8)}.`);
       const cachedProfile = await getProfileFromCache(pubkey); 
+      // ADD log after await
+      console.log(`Podcastr: Awaited getProfileFromCache for ${pubkey.substring(0,8)}. Result:`, cachedProfile);
+      
       if (cachedProfile) {
            console.log(`Podcastr: Found profile in cache for ${pubkey.substring(0,8)}:`, cachedProfile);
            if (cachedProfile.name) { 
@@ -205,9 +210,13 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
            console.log(`Podcastr: No profile found in cache for ${pubkey.substring(0,8)}.`);
       }
     } catch (err) {
-      console.error(`Podcastr: Error checking shared cache for ${pubkey.substring(0, 8)}:`, err);
+      // ADD more detail to error log
+      console.error(`Podcastr: CAUGHT ERROR checking shared cache for ${pubkey.substring(0, 8)}:`, err);
+      // Optionally re-throw or handle differently if needed
     }
 
+    // We expect execution to reach here if cache miss or error
+    console.log(`Podcastr: Proceeding after cache check for ${pubkey.substring(0, 8)}...`);
     console.log(`Podcastr: Initiating network fetch for ${pubkey.substring(0, 8)}...`);
     processingPubkeys.current.add(pubkey);
     setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: true } }));
@@ -321,7 +330,8 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     };
   }, [ndk, authors, isCacheLoaded]);
 
-  // --- Effect to fetch profiles for ALL notes in the list ---
+  // --- Effect to fetch profiles for ALL notes in the list --- << COMMENT OUT
+  /*
   useEffect(() => {
     console.log(`Podcastr: useEffect [podcastNotes] triggered. Count: ${podcastNotes.length}`); // Log effect trigger
     if (podcastNotes.length > 0) {
@@ -334,10 +344,11 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
         });
     }
   }, [podcastNotes, fetchPodcastAuthorProfile]);
+  */
 
   const currentItem = podcastNotes[currentItemIndex];
   const currentProfile = currentItem ? profiles[currentItem.posterPubkey] : null;
-  const hasValidProfile = currentProfile && !currentProfile.isLoading && (currentProfile.name || currentProfile.picture);
+  // const hasValidProfile = currentProfile && !currentProfile.isLoading && (currentProfile.name || currentProfile.picture); // No longer needed as top section removed
 
   // --- RE-ADD Effect to fetch profile for the CURRENT item ---
   useEffect(() => {
@@ -419,37 +430,40 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   // const isLoadingProfile = currentProfile?.isLoading;
 
   return (
-    <div className='relative w-full h-full bg-gray-900 flex flex-col overflow-hidden p-2 text-white rounded-lg'>
+    <div className='relative w-full h-full bg-blue-950 flex flex-col overflow-hidden p-2 text-white rounded-lg'>
       {/* Removed Top Profile Section */}
 
-      {/* Scrollable Podcast List: Takes up available space */}
-      <div 
-          ref={scrollableListRef} // <-- Assign ref
-          tabIndex={0} // <-- Make container focusable
-          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-1 focus:ring-purple-400 rounded" // Added focus styles
+      {/* Scrollable Podcast List: Adjusted styles for new background */}
+      <div
+          ref={scrollableListRef}
+          tabIndex={0}
+          // Using focus:ring-offset to ensure visibility on blue bg
+          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded" 
       >
         {podcastNotes.map((note, index) => {
             const isSelected = index === currentItemIndex;
-            const itemBg = isSelected ? 'bg-purple-800 bg-opacity-60' : 'bg-gray-700 bg-opacity-50 hover:bg-gray-600 hover:bg-opacity-70';
+            // Adjusted list item backgrounds for blue theme
+            const itemBg = isSelected ? 'bg-purple-700 bg-opacity-70' : 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
             const profile = profiles[note.posterPubkey];
             const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey.substring(0, 10) + '...';
             const itemPictureUrl = profile?.picture;
             const itemIsLoadingProfile = profile?.isLoading;
 
-            return ( 
+            return (
                 <div
                     key={note.id}
-                    tabIndex={-1} // <-- Change item tabIndex to -1
-                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                    tabIndex={-1}
+                    // Updated focus ring for blue bg
+                    className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-blue-950 focus:ring-purple-500`}
                     onClick={() => setCurrentItemIndex(index)}
-                    title={note.content || note.url} 
+                    title={note.content || note.url}
                 >
-                    {/* Number Circle - Reverse numbering for display */}
-                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center mr-2"> 
+                    {/* Number Circle - Adjusted background */}
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
                         <span className="text-xs font-semibold text-white">{podcastNotes.length - index}</span>
                     </div>
-                    {/* Profile Picture */}
-                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-500 overflow-hidden mr-2">
+                    {/* Profile Picture - Adjusted background */}
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
                         {itemIsLoadingProfile ? (
                             <div className="w-full h-full animate-pulse bg-gray-400"></div>
                         ) : itemPictureUrl ? (
@@ -460,18 +474,18 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
                             </span>
                         )}
                     </div>
-                    {/* Profile Name */}
-                    <p className="text-sm text-gray-200 truncate flex-grow" title={itemDisplayName}>
-                       {itemDisplayName} 
+                    {/* Profile Name - Ensure text visibility */}
+                    <p className="text-sm text-white truncate flex-grow" title={itemDisplayName}>
+                       {itemDisplayName}
                     </p>
                 </div>
             );
         })}
       </div>
 
-      {/* Audio Player Controls Area */}
-      <div className="relative w-full max-w-md p-1 mt-auto bg-black bg-opacity-40 rounded flex-shrink-0 mx-auto flex items-center space-x-2"> 
-         {/* Audio Element */}
+      {/* Audio Player Controls Area - Adjusted background */}
+      <div className="relative w-full max-w-md p-1 mt-auto bg-black bg-opacity-50 rounded flex-shrink-0 mx-auto flex items-center space-x-2">
+        {/* Audio Element */}
         <audio ref={audioRef} controls className="w-full flex-grow">
             Your browser does not support the audio element.
         </audio>

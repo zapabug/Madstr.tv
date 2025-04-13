@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import QRCode from 'react-qr-code'; // Import QRCode
 import MediaFeed from './components/MediaFeed';
 import MessageBoard from './components/MessageBoard'; // Re-enable import
-import Podcastr from './components/Podcastr'; // Import renamed Podcastr
+import Podcastr from './components/Podcastr'; // Re-import Podcastr
+import VideoList from './components/VideoList'; // Import VideoList
+import VideoPlayer from './components/VideoPlayer'; // Import VideoPlayer
 import RelayStatus from './components/RelayStatus'; // Import the new component
 import { nip19 } from 'nostr-tools';
 import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
@@ -15,7 +17,12 @@ const TV_PUBKEY_NPUB = 'npub1a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsfzzwnyc4
 // Function to safely decode npub
 function getHexPubkey(npub: string): string | null {
     try {
-        return nip19.decode(npub).data as string;
+        const decoded = nip19.decode(npub);
+        if (decoded.type === 'npub') {
+            return decoded.data;
+        }
+        console.warn(`Decoded type is not npub: ${decoded.type}`);
+        return null;
     } catch (e) {
         console.error(`Failed to decode npub ${npub}:`, e);
         return null;
@@ -27,6 +34,13 @@ function App() {
   const { initNdk, ndk } = useNdk();
   const [mediaAuthors, setMediaAuthors] = useState<string[]>([]); // State for media authors
   const [isLoadingAuthors, setIsLoadingAuthors] = useState<boolean>(true); // Loading state for authors
+  
+  // State for selected video
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [selectedVideoNpub, setSelectedVideoNpub] = useState<string | null>(null);
+
+  // State for bottom-right panel toggle
+  const [interactiveMode, setInteractiveMode] = useState<'podcast' | 'video'>('podcast');
 
   useEffect(() => {
     console.log("App: Initializing NDK...");
@@ -118,12 +132,18 @@ function App() {
 
   }, [ndk]); // Re-run when NDK instance is available
 
-  // --- Remove old state logic placeholders ---
-  // const mediaNotes: any[] = []; // Removed placeholder
-  // const inboxNotes: any[] = []; // Removed placeholder
-  // const isLoadingMediaContacts = false; // Replaced by isLoadingAuthors
-  const isReceivingData = false; // Placeholder for RelayStatus
-  // --> End Placeholder ---
+  // Callback for VideoList selection
+  const handleVideoSelect = useCallback((url: string | null, npub: string | null) => {
+    console.log(`App: Video selected - URL: ${url}, Npub: ${npub}`);
+    setSelectedVideoUrl(url);
+    setSelectedVideoNpub(npub);
+    // Reset mode when video selected? Or keep it on video list?
+    // setInteractiveMode('podcast'); // Example: Switch back after selecting
+  }, []);
+
+  const toggleInteractiveMode = () => {
+      setInteractiveMode(prev => prev === 'podcast' ? 'video' : 'podcast');
+  };
 
   // --> Use the nevent URI directly for the QR code value <--
   const qrValue = MAIN_THREAD_NEVENT_URI || '';
@@ -131,9 +151,13 @@ function App() {
       console.warn("App.tsx: MAIN_THREAD_NEVENT_URI is not set in constants.ts. QR code will be empty.");
   }
 
+  // Placeholder for relay status
+  const isReceivingData = false; 
+
   return (
     <>
     {/* Outermost div: Has padding, border, AND background */}
+    {/* Background style will be handled dynamically later for ambient effect */}
     <div className="relative flex flex-col min-h-screen h-screen text-white border-4 border-purple-600 pt-8 bg-black">
       {/* Absolute Positioned Titles (Remain the same) */}
       <h2 className="absolute top-4 right-32 z-20 text-lg font-semibold text-purple-800 px-4 py-1 rounded">
@@ -143,24 +167,22 @@ function App() {
         📺 TV Feed 🎉
       </h2>
 
-      {/* --> Moved Thread QR Code to Bottom Left <-- */}
+      {/* --- Bottom Left Area (QR Code Only) --- */}
       <div className="absolute bottom-4 left-4 z-10 flex flex-col items-center">
-          {/* QR Code Container */}
+          {/* Reply QR Code Container */}
           <div className="bg-white p-1 rounded shadow-lg w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:w-24 mb-1">
               {qrValue ? (
                 <QRCode
-                  value={qrValue} // Use the generated nostr:note1... URI
-                  size={256} // Max internal size
+                  value={qrValue} 
+                  size={256} 
                   style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                   viewBox={`0 0 256 256`}
                   level="L"
                 />
               ) : (
-                // Optionally render a placeholder if qrValue is empty
                 <div className="w-full h-full flex items-center justify-center text-black text-xs text-center">No Thread ID</div>
               )}
           </div>
-          {/* Subtle Title */}
           <p className="text-xs text-gray-400 font-semibold">Reply here</p>
       </div>
 
@@ -178,17 +200,33 @@ function App() {
             <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
                 <p className="text-gray-400">Loading author list...</p>
             </div>
+         ) : selectedVideoUrl ? (
+            <VideoPlayer url={selectedVideoUrl} posterNpub={selectedVideoNpub} />
          ) : (
             <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
                 <MediaFeed authors={mediaAuthors} />
             </div>
          )}
 
+        {/* --- Toggle Button (Absolute Position - Left of Media QR) --- */}
+        {/* Positioned relative to the parent 'Inner wrapper' div */}
+        <button 
+           onClick={toggleInteractiveMode}
+           className="absolute bottom-4 right-24 md:right-28 lg:right-32 z-20 p-1 bg-transparent border-none 
+                      text-purple-500 hover:text-purple-300 focus:text-purple-300 
+                      focus:outline-none transition-colors duration-150 text-xs font-semibold uppercase"
+           aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
+           title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
+           style={{lineHeight: '1'}} // Adjust line height for better vertical alignment
+        >
+            {interactiveMode === 'podcast' ? 'Videos' : 'Podcasts'}
+        </button>
+
         {/* Split Screen Container: Fixed Height, Flex Row */}
-        <div className="relative w-full h-1/3 flex-shrink-0 flex flex-row overflow-hidden"> {/* Fixed height, Flexbox row */}
+        <div className="relative w-full h-1/3 flex-shrink-0 flex flex-row overflow-hidden mt-1"> {/* Added small margin-top */}
             
             {/* Message Board Container (Left Side - 2/3 width) */}
-            <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900 border-r border-gray-700"> {/* Width 2/3, Scroll, Border Right */}
+            <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900 rounded-lg"> {/* Width 2/3, Scroll */}
                 {ndk ? (
                     <MessageBoard 
                       ndk={ndk} 
@@ -202,17 +240,24 @@ function App() {
                 )}
             </div> {/* End Message Board Container */} 
 
-            {/* Podcastr Container (Right Side - 1/3 width) - Remove Background & Border */}
-            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden"> 
-                {ndk ? (
-                    <Podcastr 
-                        authors={mediaAuthors} 
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center"> 
-                      <p className="text-gray-400">Initializing Nostr...</p> 
-                    </div>
-                )}
+            {/* Interactive Panel Container (Right 1/3) */}
+            <div className="w-1/3 h-full flex flex-col overflow-hidden ml-1">
+                <div className="flex-grow min-h-0 bg-gray-800 rounded-lg p-1"> 
+                    {ndk ? (
+                        interactiveMode === 'podcast' ? (
+                            <Podcastr authors={mediaAuthors} />
+                        ) : (
+                            <VideoList 
+                                authors={mediaAuthors} 
+                                onVideoSelect={handleVideoSelect}
+                            />
+                        )
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center"> 
+                          <p className="text-gray-400">Initializing Nostr...</p> 
+                        </div>
+                    )}
+                </div>
             </div>
 
         </div> {/* End Split Screen Container */} 

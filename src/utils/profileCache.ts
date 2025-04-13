@@ -24,115 +24,85 @@ const PROFILE_STORE_NAME = 'profiles';
 // Module-level variables for singleton DB connection management
 let dbInstance: IDBDatabase | null = null;
 let dbOpenPromise: Promise<IDBDatabase> | null = null;
-let dbDeleteAttempted = false; // Flag to ensure delete is only attempted once per session/load
-
-// --- Add Function to Delete Database (remains the same) ---
-async function deleteProfileDB(): Promise<void> {
-    return new Promise((resolve, reject) => {
-        console.log(`Attempting to delete IndexedDB: ${PROFILE_DB_NAME}`);
-        const deleteRequest = indexedDB.deleteDatabase(PROFILE_DB_NAME);
-        deleteRequest.onerror = (event) => {
-            console.error(`Error deleting database ${PROFILE_DB_NAME}:`, (event.target as IDBOpenDBRequest).error);
-            reject((event.target as IDBOpenDBRequest).error);
-        };
-        deleteRequest.onsuccess = () => {
-            console.log(`Database ${PROFILE_DB_NAME} deleted successfully or did not exist.`);
-            resolve();
-        };
-        deleteRequest.onblocked = () => {
-            // This shouldn't usually happen unless another tab has the DB open
-            console.warn(`Database ${PROFILE_DB_NAME} deletion blocked. Please close other tabs/instances using this app.`);
-            reject(new Error('Database deletion blocked'));
-        };
-    });
-}
-
 
 // Internal function to handle the actual DB opening and upgrade logic
 async function _openAndInitializeDb(): Promise<IDBDatabase> {
-    // Attempt deletion only once before the first open attempt
-    if (!dbDeleteAttempted) {
-        dbDeleteAttempted = true; // Set flag immediately
-        try {
-            await deleteProfileDB();
-        } catch (deleteError) {
-            console.error("Database deletion failed, proceeding with open attempt anyway:", deleteError);
-            // Decide if you want to reject here or let the open proceed
-        }
-    }
-
   return new Promise((resolve, reject) => {
     console.log(`Attempting to open DB: ${PROFILE_DB_NAME} version ${PROFILE_DB_VERSION}`);
     const request = indexedDB.open(PROFILE_DB_NAME, PROFILE_DB_VERSION);
 
     request.onerror = (event) => {
         console.error(`IndexedDB error opening ${PROFILE_DB_NAME}:`, (event.target as IDBOpenDBRequest).error);
+        dbOpenPromise = null; // Reset promise on error
         reject((event.target as IDBOpenDBRequest).error);
     }
     request.onsuccess = (event) => {
         console.log(`IndexedDB ${PROFILE_DB_NAME} opened successfully.`);
-        resolve((event.target as IDBOpenDBRequest).result);
+        const db = (event.target as IDBOpenDBRequest).result;
+        resolve(db);
     }
     request.onupgradeneeded = (event) => {
       console.log(`Upgrading IndexedDB ${PROFILE_DB_NAME} to version ${PROFILE_DB_VERSION}`);
       const db = (event.target as IDBOpenDBRequest).result;
+      const transaction = (event.target as IDBOpenDBRequest).transaction;
+      if (!transaction) {
+          console.error("Upgrade needed but no transaction found!");
+          return; 
+      }
       if (!db.objectStoreNames.contains(PROFILE_STORE_NAME)) {
-         console.log(`Creating object store: ${PROFILE_STORE_NAME}`);
-         try {
-            db.createObjectStore(PROFILE_STORE_NAME, { keyPath: 'pubkey' });
-            console.log(`Object store ${PROFILE_STORE_NAME} created successfully.`);
-         } catch (e) {
-             console.error(`Error creating object store ${PROFILE_STORE_NAME}:`, e);
-             reject(e);
-             if (event.target && (event.target as IDBOpenDBRequest).transaction) {
-                 try {
-                    (event.target as IDBOpenDBRequest).transaction?.abort();
-                 } catch (abortError) {
-                    console.error("Error aborting transaction during failed upgrade:", abortError);
-                 }
-             }
-             return;
-         }
+          console.log(`Creating object store: ${PROFILE_STORE_NAME}`);
+          try {
+              db.createObjectStore(PROFILE_STORE_NAME, { keyPath: 'pubkey' });
+              console.log(`Object store ${PROFILE_STORE_NAME} creation initiated.`);
+          } catch (e) {
+              console.error(`Error creating object store ${PROFILE_STORE_NAME}:`, e);
+              try { transaction.abort(); } catch (abortError) { console.error("Error aborting transaction after failed store creation:", abortError); }
+              return;
+          }
       } else {
           console.log(`Object store ${PROFILE_STORE_NAME} already exists.`);
       }
+      transaction.oncomplete = () => {
+          console.log("DB upgrade transaction completed.");
+      };
+      transaction.onerror = (event) => {
+          console.error("Error during DB upgrade transaction:", (event.target as IDBTransaction).error);
+      };
     };
   });
 }
 
 // Singleton getter for the DB instance
 function getDbInstance(): Promise<IDBDatabase> {
+    console.log("getDbInstance called."); // Add log
     if (dbInstance) {
-        // If instance exists, return it immediately
+        console.log("Returning existing dbInstance."); // Add log
         return Promise.resolve(dbInstance);
     }
     if (dbOpenPromise) {
-        // If an open operation is already in progress, return its promise
+        console.log("Returning existing dbOpenPromise."); // Add log
         return dbOpenPromise;
     }
-    // Otherwise, initiate the open operation
-    console.log("Initiating new DB connection promise.");
-    dbOpenPromise = _openAndInitializeDb();
 
-    dbOpenPromise
+    console.log("Initiating new DB connection promise (_openAndInitializeDb)..."); // Add log
+    dbOpenPromise = _openAndInitializeDb()
         .then(db => {
-            console.log("DB connection promise resolved successfully.");
-            dbInstance = db; // Cache the instance
-            dbOpenPromise = null; // Clear the promise
-            // Optional: Add handler for database closing unexpectedly
+            console.log("DB connection promise resolved successfully. Caching instance."); // Add log
+            dbInstance = db;
+            dbOpenPromise = null;
             dbInstance.onclose = () => {
                 console.warn(`IndexedDB ${PROFILE_DB_NAME} connection closed unexpectedly.`);
-                dbInstance = null; // Reset instance if connection closes
+                dbInstance = null;
             };
             return db;
         })
         .catch(err => {
-            console.error("DB connection promise failed:", err);
-            dbOpenPromise = null; // Clear the promise on failure
-            // Propagate the error
+            console.error("DB connection promise CATCH block executed:", err); // Add log
+            dbOpenPromise = null;
             throw err;
         });
 
+    console.log("Returning newly created dbOpenPromise."); // Add log
     return dbOpenPromise;
 }
 
@@ -159,23 +129,44 @@ export async function saveProfileToCache(profile: ProfileData): Promise<void> {
 }
 
 export async function getProfileFromCache(pubkey: string): Promise<ProfileData | null> {
-  const db = await getDbInstance(); // Use singleton getter
+  console.log(`getProfileFromCache: called for ${pubkey.substring(0,8)}`); // Add log
+  const db = await getDbInstance(); 
+  console.log(`getProfileFromCache: awaited getDbInstance for ${pubkey.substring(0,8)}`); // Add log
   return new Promise((resolve, reject) => {
      if (!db) {
+        console.error(`getProfileFromCache: DB instance is null/undefined for ${pubkey.substring(0,8)}`); // Add log
         reject(new Error("Database connection not available for getting profile."));
         return;
-    }
-    const transaction = db.transaction([PROFILE_STORE_NAME], 'readonly');
-    const store = transaction.objectStore(PROFILE_STORE_NAME);
-    const request = store.get(pubkey);
-    request.onsuccess = () => {
-      // console.log("Got profile from cache:", request.result?.pubkey);
-      resolve(request.result as ProfileData | null);
-    };
-    request.onerror = (event) => {
-        console.error("Error getting profile from cache:", (event.target as IDBRequest).error);
+     }
+     console.log(`getProfileFromCache: Creating transaction for ${pubkey.substring(0,8)}`); // Add log
+     let transaction: IDBTransaction;
+     try {
+       transaction = db.transaction([PROFILE_STORE_NAME], 'readonly');
+     } catch (e) {
+        console.error(`getProfileFromCache: Error creating transaction for ${pubkey.substring(0,8)}:`, e); // Add log
+        reject(e);
+        return;
+     }
+     const store = transaction.objectStore(PROFILE_STORE_NAME);
+     console.log(`getProfileFromCache: Requesting get(${pubkey.substring(0,8)}) from store`); // Add log
+     const request = store.get(pubkey);
+     
+     request.onsuccess = () => {
+       console.log(`getProfileFromCache: store.get SUCCESS for ${pubkey.substring(0,8)}. Result:`, request.result); // Add log
+       resolve(request.result as ProfileData | null);
+     };
+     request.onerror = (event) => {
+        console.error(`getProfileFromCache: store.get ERROR for ${pubkey.substring(0,8)}:`, (event.target as IDBRequest).error); // Add log
         reject((event.target as IDBRequest).error);
-    }
+     };
+     
+     transaction.oncomplete = () => {
+         console.log(`getProfileFromCache: Transaction completed for ${pubkey.substring(0,8)}.`); // Add log
+     };
+     transaction.onerror = (event) => {
+         console.error(`getProfileFromCache: Transaction error for ${pubkey.substring(0,8)}:`, (event.target as IDBTransaction).error); // Add log
+         // Reject might have already happened via request.onerror
+     };
   });
 }
 

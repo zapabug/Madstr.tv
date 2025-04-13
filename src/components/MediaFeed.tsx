@@ -208,31 +208,36 @@ const processEventsIntoMediaNotes = (events: NDKEvent[], notesByIdMap: Map<strin
 
             matchedUrls.forEach((url, index) => {
                 const mediaType = getMediaType(url);
-                // --- Keep this check to only include images --- 
+                // --- Explicitly check for 'image' type --- 
                 if (mediaType === 'image') { 
                     const mediaItemId = `${event.id}-${index}`;
                     if (!notesByIdMap.has(mediaItemId)) {
                         const newNote: MediaNote = {
                             id: mediaItemId,
                             eventId: event.id,
-                            type: mediaType, // Will always be 'image' here
+                            type: 'image', // Explicitly set type
                             url: url,
-                            posterNpub: posterNpub!,
+                            posterNpub: posterNpub!, // Non-null assertion as it's checked above
                             createdAt: event.created_at ?? Math.floor(Date.now() / 1000), 
                         };
                         notesByIdMap.set(mediaItemId, newNote);
                         newNotes.push(newNote);
                     }
+                } else {
+                    // Optional: Log ignored non-image media types
+                    // console.log(`MediaFeed: Ignoring non-image media type (${mediaType}) found in event ${event.id}: ${url}`);
                 }
-                // --- End Check --- 
             });
         }
     });
-    newNotes.sort((a, b) => b.createdAt - a.createdAt); // Use MediaNote's createdAt for sorting
+    // No need to sort here if shuffling happens later
+    // newNotes.sort((a, b) => b.createdAt - a.createdAt);
     if (newNotes.length > 0) {
+      // Saving to cache might still save all notes processed initially,
+      // consider filtering notes passed to saveToCache if that's an issue.
       saveToCache(newNotes).catch(err => console.error('MediaFeed: Failed to save to cache:', err));
     }
-    return newNotes;
+    return newNotes; // Return only the newly processed IMAGE notes
 };
 // --- End Re-integrated Helper Logic ---
 
@@ -242,182 +247,154 @@ interface MediaFeedProps {
   authors: string[]; // Expect list of hex pubkeys
 }
 
-const MAX_SLIDES = 30; // Define max slides to display
+const MAX_SLIDES = 30;
+const SLIDE_DURATION_MS = 60000; // 60 seconds per slide
+const FADE_DURATION_MS = 750; // 0.75 seconds fade
 
 const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   const { ndk } = useNdk(); // Get NDK instance
   const [mediaNotes, setMediaNotes] = useState<MediaNote[]>([]); // Local state for notes
   const notesById = useRef<Map<string, MediaNote>>(new Map()); // Track processed media IDs
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  // currentItemIndex is now primarily managed by the cross-fade effect
+  // const [currentItemIndex, setCurrentItemIndex] = useState(0); 
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   
-  // State for player controls
-  const [isPlaying, setIsPlaying] = useState(true); // Assume autoplay initially
-  const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay policy
-  const videoRef = useRef<HTMLVideoElement>(null); // Ref for video element
+  // State for cross-fade
+  const [currentImageIndex, setCurrentImageIndex] = useState(0); // Index for the visible image in the shuffled array
+  const [previousImageIndex, setPreviousImageIndex] = useState<number | null>(null); // Index for the fading-out image
+  const [isFading, setIsFading] = useState(false);
 
-  // Load from cache on component mount
+  // Timer ref
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load from cache on component mount (already shuffles)
   useEffect(() => {
-    getFromCache() // This now returns shuffled notes up to MAX_CACHED_NOTES
+    getFromCache()
       .then(cachedNotes => {
         console.log(`MediaFeed: Loaded and shuffled ${cachedNotes.length} items from cache (limit ${MAX_CACHED_NOTES}).`);
-        setMediaNotes(cachedNotes); // Set state with shuffled notes
+        setMediaNotes(cachedNotes);
         notesById.current = new Map(cachedNotes.map(note => [note.id, note]));
         setIsCacheLoaded(true);
-        // Reset index after loading shuffled cache
-        setCurrentItemIndex(0); 
+        setCurrentImageIndex(0); // Start fade from index 0 of shuffled array
       })
       .catch(err => {
         console.error('MediaFeed: Failed to load from cache:', err);
         setIsCacheLoaded(true);
       });
-  }, []); // Run once on mount
+  }, []); 
 
   // --- Subscription Effect --- 
   useEffect(() => {
-    // Don't subscribe if NDK is not ready or authors list is empty or cache not loaded
     if (!ndk || authors.length === 0 || !isCacheLoaded) {
-        // Clear notes if authors become empty
-        if (authors.length === 0) {
-            setMediaNotes([]);
-            notesById.current.clear();
-            setCurrentItemIndex(0); // Reset index
-        }
-        return;
-    }
-
-    console.log(`MediaFeed: Authors updated, creating subscription for ${authors.length} authors...`);
-
-    // Do not clear state if we have cached data
-    // setMediaNotes([]);
-    // notesById.current.clear();
-    // setCurrentItemIndex(0);
-
-    const filter: NDKFilter = {
-      kinds: [1],
-      authors: authors,
-      limit: 1000, // Fetch a large batch initially
-    };
-
-    const subscription: NDKSubscription = ndk.subscribe([filter], { closeOnEose: false });
-
-    subscription.on('event', (event: NDKEvent) => {
-      const newNotes = processEventsIntoMediaNotes([event], notesById.current);
-      if (newNotes.length > 0) {
-            console.log(`MediaFeed: Adding ${newNotes.length} new image notes from event ${event.id.substring(0,8)}.`);
-            // Add new notes and re-sort the whole list, then take the display slice
-            setMediaNotes(prevNotes => {
-              // Add new notes
-              let combined = [...prevNotes, ...newNotes]; 
-              // Re-sort combined list by date initially to manage cache trimming
-              combined.sort((a: MediaNote, b: MediaNote) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-              // Trim if over cache limit
-              if (combined.length > MAX_CACHED_NOTES) {
-                  combined = combined.slice(0, MAX_CACHED_NOTES);
-              }
-              // **Important:** We don't re-shuffle here. Shuffling only happens on initial load from cache.
-              // New items are typically added near the 'end' of the conceptual chronological list,
-              // but since the display list is shuffled on load, their appearance feels random.
-              // Ensure index stays valid 
-              if (currentItemIndex >= Math.min(combined.length, MAX_SLIDES)) {
-                  setCurrentItemIndex(0);
-              }
-              return combined; // Return the date-sorted, potentially trimmed list
-          });
+      // Clear notes if authors become empty
+      if (authors.length === 0) {
+          setMediaNotes([]);
+          notesById.current.clear();
+          setCurrentImageIndex(0); // Reset index
       }
-    });
+      return;
+  }
 
-    subscription.on('eose', () => {
-        console.log("MediaFeed: Subscription EOSE received.");
-    });
+  console.log(`MediaFeed: Authors updated, creating subscription for ${authors.length} authors...`);
 
-    subscription.start();
-    console.log("MediaFeed: Subscription started.");
+  const filter: NDKFilter = {
+    kinds: [1],
+    authors: authors,
+    limit: 1000, 
+  };
 
-    // Cleanup function
-    return () => {
-      console.log("MediaFeed: Cleaning up subscription.");
-      subscription.stop();
-    };
+  const subscription: NDKSubscription = ndk.subscribe([filter], { closeOnEose: false });
+
+  subscription.on('event', (event: NDKEvent) => {
+    const newNotes = processEventsIntoMediaNotes([event], notesById.current);
+    if (newNotes.length > 0) {
+          console.log(`MediaFeed: Adding ${newNotes.length} new image notes from event ${event.id.substring(0,8)}.`);
+          setMediaNotes(prevNotes => {
+            // Add new notes
+            let combined = [...prevNotes, ...newNotes]; 
+            // --- SHUFFLE the combined list --- 
+            let shuffledCombined = shuffleArray(combined);
+            // Trim if over cache limit AFTER shuffling
+            if (shuffledCombined.length > MAX_CACHED_NOTES) {
+                console.log(`MediaFeed: Trimming shuffled notes from ${shuffledCombined.length} to ${MAX_CACHED_NOTES}`);
+                // Note: Trimming after shuffling might discard some of the *new* notes if the cache was full.
+                // Alternative: Trim by date *before* shuffling? Sticking with shuffle then trim for now.
+                shuffledCombined = shuffledCombined.slice(0, MAX_CACHED_NOTES);
+            }
+            // Update the notesById map based on the final shuffled+trimmed list
+            notesById.current = new Map(shuffledCombined.map(n => [n.id, n])); 
+            
+            // Ensure the currentImageIndex remains valid within the new array length
+            const newLength = Math.min(shuffledCombined.length, MAX_SLIDES);
+            if (newLength > 0 && currentImageIndex >= newLength) {
+                console.log(`MediaFeed: Resetting currentImageIndex from ${currentImageIndex} due to notes update.`);
+                // Resetting index might cause a visual jump, but prevents errors.
+                // We directly return the shuffled array, the timer effect will use it.
+                setCurrentImageIndex(0);
+            } 
+            // Return the shuffled, potentially trimmed list
+            return shuffledCombined; 
+        });
+    }
+  });
+
+  subscription.on('eose', () => {
+      console.log("MediaFeed: Subscription EOSE received.");
+  });
+
+  subscription.start();
+  console.log("MediaFeed: Subscription started.");
+
+  // Cleanup function
+  return () => {
+    console.log("MediaFeed: Cleaning up subscription.");
+    subscription.stop();
+  };
 
   // Re-run effect if NDK instance or authors list changes or cache is loaded
   }, [ndk, authors, isCacheLoaded]); 
 
-  // --- Control Handlers --- 
-  const cycleLength = Math.min(mediaNotes.length, MAX_SLIDES);
-
-  const handlePrevious = () => {
-    if (cycleLength === 0) return;
-    setCurrentItemIndex((prevIndex) => (prevIndex - 1 + cycleLength) % cycleLength);
-    setIsPlaying(true); // Assume autoplay on new item
-  };
-
-  const handleNext = () => {
-    if (cycleLength === 0) return;
-    setCurrentItemIndex((prevIndex) => (prevIndex + 1) % cycleLength);
-    setIsPlaying(true); // Assume autoplay on new item
-  };
-
-  const handlePlayPause = () => {
-    if (videoRef.current) {
-        if (isPlaying) {
-            videoRef.current.pause();
-        } else {
-            videoRef.current.play().catch(error => console.error("Video play failed:", error));
-        }
-        setIsPlaying(!isPlaying);
-    }
-  };
-
-  const handleMuteToggle = () => {
-    if (videoRef.current) {
-        videoRef.current.muted = !isMuted;
-        setIsMuted(!isMuted);
-    }
-  };
-
-  // --- Effect to control video playback based on state/currentItem --- 
+  // --- Timer Effect for Cycling Slides with Cross-fade --- 
   useEffect(() => {
-    if (!videoRef.current) return;
-
-    const currentItem = mediaNotes[currentItemIndex];
-    if (currentItem?.type === 'video') {
-      videoRef.current.playbackRate = 1.0;
-      if (isPlaying) {
-        videoRef.current.play().catch(error => {
-          console.error("Video autoplay failed:", error);
-        });
-      } else {
-        videoRef.current.pause();
-      }
-      if (isMuted) {
-        videoRef.current.muted = true;
-      } else {
-        videoRef.current.muted = false;
-      }
-    } else {
-      videoRef.current.pause();
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
     }
-  }, [currentItemIndex, isPlaying, isMuted, mediaNotes]);
+    // Use the current mediaNotes state directly, which should be shuffled
+    const displayItems = mediaNotes.slice(0, MAX_SLIDES);
+    const cycleLength = displayItems.length;
 
-  // Effect to cycle through media every 90 seconds
-  useEffect(() => {
-    if (mediaNotes.length <= 1) return; // No need to cycle if 0 or 1 item
+    if (cycleLength > 1) {
+      console.log(`MediaFeed: Setting timer for ${SLIDE_DURATION_MS}ms. Current index: ${currentImageIndex}`);
+      timerRef.current = setTimeout(() => {
+        console.log(`MediaFeed: Timer fired. Fading from index ${currentImageIndex}`);
+        setIsFading(true); 
+        setPreviousImageIndex(currentImageIndex); 
 
-    const interval = setInterval(() => {
-      if (isPlaying) {
-        setCurrentItemIndex((prevIndex) => (prevIndex + 1) % mediaNotes.length);
+        const nextIndex = (currentImageIndex + 1) % cycleLength;
+        // setCurrentItemIndex(nextIndex); // We don't need this separate index now
+
+        setTimeout(() => {
+           console.log(`MediaFeed: Fade complete. Setting index to ${nextIndex}`);
+           setCurrentImageIndex(nextIndex); // Update the image index for the next cycle
+           setIsFading(false);
+           setPreviousImageIndex(null); 
+        }, FADE_DURATION_MS);
+
+      }, SLIDE_DURATION_MS); // Use the updated longer duration
+    }
+
+    return () => {
+      if (timerRef.current) {
+        console.log("MediaFeed: Clearing timer due to cleanup/dependency change.");
+        clearTimeout(timerRef.current);
       }
-    }, 90000); // 90 seconds
-
-    return () => clearInterval(interval);
-  }, [mediaNotes.length, isPlaying]);
+    };
+  // Rerun timer logic if the image index changes OR the underlying notes array changes
+  }, [currentImageIndex, mediaNotes]); 
 
   // --- Rendering Logic --- 
-  // Get the items to actually display (latest MAX_SLIDES)
   const displayItems = mediaNotes.slice(0, MAX_SLIDES);
 
-  // Handle the case where there are no items to display after filtering/fetching
   if (displayItems.length === 0) {
     console.log('MediaFeed: Rendering placeholder (no displayable items).');
     return (
@@ -427,12 +404,12 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
     );
   }
 
-  // Ensure index is valid within displayItems
-  // currentItemIndex is updated by the timer effect, which uses cycleLength
-  const currentItem = displayItems[currentItemIndex];
+  // Use currentImageIndex directly
+  const currentItem = displayItems[currentImageIndex]; 
+  const previousItem = previousImageIndex !== null ? displayItems[previousImageIndex] : null;
 
   if (!currentItem) {
-      console.error("MediaFeed: currentItem is undefined. Index:", currentItemIndex, "Display count:", displayItems.length);
+      console.error("MediaFeed: currentItem is undefined. Index:", currentImageIndex, "Display count:", displayItems.length);
       return (
         <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
           <p className="text-red-500">Error loading media item.</p>
@@ -440,110 +417,74 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
       );
   }
 
-  const isCurrentVideo = currentItem.type === 'video';
+  // --- ADD LOGGING before QR Code --- 
+  console.log("MediaFeed Rendering - currentItem:", currentItem);
+  console.log("MediaFeed Rendering - currentItem.posterNpub:", currentItem?.posterNpub);
+
+  const currentImageUrl = currentItem.type === 'image' ? currentItem.url : null;
+  const previousImageUrl = previousItem?.type === 'image' ? previousItem.url : null;
 
   return (
-    <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden">
-        
-        {/* Media Display Area */}
-        <div className="w-full h-full flex items-center justify-center"> 
-            {/* Use CSS to show/hide instead of conditional rendering to keep video ref stable */}
-            <img 
-                key={`${currentItem.id}-img`} // Key for image changes
-                src={currentItem.type === 'image' ? currentItem.url : ''} // Only set src if image
-                alt="Media content" 
-                className={`object-contain max-h-full max-w-full ${currentItem.type === 'image' ? 'block' : 'hidden'}`} 
-            />
-            <video 
-                ref={videoRef} 
-                key={`${currentItem.id}-vid`} // Key needed if src changes aren't reliable enough
-                src={currentItem.type === 'video' ? currentItem.url : undefined} // Set src only if video
-                loop // Keep loop
-                // Removed autoPlay, muted, controls - managed by state/ref
-                className={`object-contain max-h-full max-w-full ${currentItem.type === 'video' ? 'block' : 'hidden'}`}
-                // Handle potential errors loading video source
-                onError={(e) => console.error("Video source error:", e)}
-            />
-        </div>
+    <div className="relative w-full h-full bg-transparent flex flex-col items-center justify-center overflow-hidden">
+      {/* Ambient Background - Use fixed positioning and low z-index */}
+      {currentImageUrl && (
+          <div 
+              className="fixed inset-0 z-[-1] transition-all duration-1000 ease-in-out" // Use fixed, inset-0, z-[-1]
+              style={{
+                  backgroundImage: `url(${currentImageUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  filter: 'blur(40px) brightness(0.6)', 
+                  transform: 'scale(1.1)' 
+              }}
+          />
+      )}
+      
+      {/* Media Display Area with Cross-Fade (needs higher z-index than background) */}
+      <div className="relative w-full h-full flex items-center justify-center z-10"> 
+          {/* Current Image Layer */}
+          {currentImageUrl && (
+              <img 
+                  key={`${currentItem.id}-img-current`} 
+                  src={currentImageUrl} 
+                  alt="Media content" 
+                  className={`absolute inset-0 object-contain w-full h-full transition-opacity duration-${FADE_DURATION_MS} ease-in-out ${isFading ? 'opacity-0' : 'opacity-100'}`}
+              />
+          )}
+          {/* Previous Image Layer (for fading out) */}
+          {previousImageUrl && isFading && (
+               <img 
+                  key={`${previousItem?.id}-img-previous`} 
+                  src={previousImageUrl} 
+                  alt="Media content (fading out)" 
+                  className={`absolute inset-0 object-contain w-full h-full transition-opacity duration-${FADE_DURATION_MS} ease-in-out opacity-0`}
+              />             
+          )}
+          {/* Video Display (Placeholder - would need integration) */}
+          {currentItem.type === 'video' && (
+              <div className="w-full h-full flex items-center justify-center">
+                  <p className="text-white bg-black bg-opacity-50 p-2 rounded">Video playback not fully integrated with fade yet.</p>
+              </div>
+          )}
+      </div>
 
-        {/* QR Code (Bottom Right) */}
-        <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 bg-white p-1 rounded w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
-            <QRCode
-            value={`nostr:${currentItem.posterNpub}`}
-            size={256}
-            style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-            viewBox={`0 0 256 256`}
-            level="L"
-            />
-        </div>
-
-        {/* Video Controls (Bottom Center) - Play/Pause, Mute */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 flex space-x-4">
-            {isCurrentVideo && (
-                <>
-                    {/* Play/Pause Button - Enforced Minimal */}
-                    <button 
-                        onClick={handlePlayPause} 
-                        // Enforce no background/border. Change text color on hover/focus.
-                        className="p-1 bg-transparent border-none text-purple-400 hover:text-purple-200 focus:text-purple-200 focus:outline-none transition-colors duration-150"
-                        aria-label={isPlaying ? "Pause" : "Play"}
-                    >
-                        {/* SVG Icon */} 
-                         {isPlaying ? 
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> 
-                            : 
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        }
-                    </button>
-                    {/* Mute/Unmute Button - Enforced Minimal */}
-                    <button 
-                        onClick={handleMuteToggle} 
-                         // Enforce no background/border. Change text color on hover/focus.
-                        className="p-1 bg-transparent border-none text-purple-400 hover:text-purple-200 focus:text-purple-200 focus:outline-none transition-colors duration-150"
-                        aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                        {/* SVG Icon */} 
-                          {isMuted ? 
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
-                            : 
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                         }
-                    </button>
-                </>
-            )}
-        </div>
-
-        {/* Prev Button (Absolute Left Edge) */}
-        {cycleLength > 1 && (
-             <button 
-                onClick={handlePrevious} 
-                // Change text color to purple-600, hover/focus to purple-400
-                className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-transparent border-none text-purple-600 hover:text-purple-400 focus:text-purple-400 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150 m-0"
-                disabled={cycleLength <= 1}
-                aria-label="Previous Item"
-             >
-                 {/* SVG Icon - Add p-0 m-0 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 p-0 m-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5 L 13 12 L 15 19" />
-                 </svg>
-             </button>
-        )}
-
-        {/* Next Button (Absolute Right Edge) */}
-        {cycleLength > 1 && (
-            <button 
-                onClick={handleNext} 
-                 // Change text color to purple-600, hover/focus to purple-400
-                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-transparent border-none text-purple-600 hover:text-purple-400 focus:text-purple-400 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-150 m-0"
-                disabled={cycleLength <= 1}
-                aria-label="Next Item"
-            >
-                {/* SVG Icon - Add p-0 m-0 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 p-0 m-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5 L 11 12 L 9 19" />
-                 </svg>
-            </button>
-        )}
+      {/* QR Code (Ensure high z-index) */}
+      {currentItem.posterNpub ? (
+          <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 bg-white p-1 rounded w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
+              <QRCode
+              value={`nostr:${currentItem.posterNpub}`}
+              size={256}
+              style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+              viewBox={`0 0 256 256`}
+              level="L"
+              />
+          </div>
+      ) : (
+          (() => { 
+              console.log(`MediaFeed: QR Code not rendered for item ${currentItem.id} - missing posterNpub.`); 
+              return null; 
+          })()
+      )}
 
     </div>
   );
