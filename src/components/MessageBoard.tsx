@@ -96,16 +96,6 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
     console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId} from ${authors.length} authors...`);
     subscribeToReplies(ndk, targetEventId, authors);
 
-    // Add interval to refresh subscription every 30 seconds
-    const refreshInterval = setInterval(() => {
-      console.log('MessageBoard: Refreshing subscription for new messages...');
-      if (subscription.current) {
-        subscription.current.stop();
-        subscription.current = null;
-      }
-      subscribeToReplies(ndk, targetEventId, authors);
-    }, 30000); // Refresh every 30 seconds
-
     // Cleanup function
     return () => {
       console.log('MessageBoard: Cleaning up replies subscription...');
@@ -113,7 +103,6 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
         subscription.current.stop();
         subscription.current = null;
       }
-      clearInterval(refreshInterval); // Clear the refresh interval
       setMessages([]);
       setProfiles({}); // Clear profiles on cleanup
       processingPubkeys.current.clear(); // Clear processing set
@@ -143,7 +132,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
 
     console.log(`MessageBoard: Fetching profile for ${pubkey.substring(0, 8)}...`);
     processingPubkeys.current.add(pubkey); 
-    setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: true } })); // Ensure pubkey is set
+    setProfiles(prev => ({ ...prev, [pubkey]: { ...prev[pubkey], pubkey: pubkey, isLoading: true } }));
 
     try {
       const user = ndk.getUser({ pubkey });
@@ -176,7 +165,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
     } finally {
         processingPubkeys.current.delete(pubkey);
     }
-  }, [ndk, profiles]); // Added profiles dependency
+  }, [ndk]); // Removed profiles dependency
 
   // --- Effect to trigger profile fetches and subscriptions when messages update ---
   useEffect(() => {

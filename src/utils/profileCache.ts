@@ -21,7 +21,12 @@ const PROFILE_DB_NAME = 'ProfileCache'; // Unified DB Name
 const PROFILE_DB_VERSION = 2;
 const PROFILE_STORE_NAME = 'profiles';
 
-// --- Add Function to Delete Database ---
+// Module-level variables for singleton DB connection management
+let dbInstance: IDBDatabase | null = null;
+let dbOpenPromise: Promise<IDBDatabase> | null = null;
+let dbDeleteAttempted = false; // Flag to ensure delete is only attempted once per session/load
+
+// --- Add Function to Delete Database (remains the same) ---
 async function deleteProfileDB(): Promise<void> {
     return new Promise((resolve, reject) => {
         console.log(`Attempting to delete IndexedDB: ${PROFILE_DB_NAME}`);
@@ -42,11 +47,10 @@ async function deleteProfileDB(): Promise<void> {
     });
 }
 
-// Flag to ensure delete is only attempted once per session/load
-let dbDeleteAttempted = false; 
 
-async function openProfileDB(): Promise<IDBDatabase> {
-    // Attempt deletion only once
+// Internal function to handle the actual DB opening and upgrade logic
+async function _openAndInitializeDb(): Promise<IDBDatabase> {
+    // Attempt deletion only once before the first open attempt
     if (!dbDeleteAttempted) {
         dbDeleteAttempted = true; // Set flag immediately
         try {
@@ -60,7 +64,7 @@ async function openProfileDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     console.log(`Attempting to open DB: ${PROFILE_DB_NAME} version ${PROFILE_DB_VERSION}`);
     const request = indexedDB.open(PROFILE_DB_NAME, PROFILE_DB_VERSION);
-    
+
     request.onerror = (event) => {
         console.error(`IndexedDB error opening ${PROFILE_DB_NAME}:`, (event.target as IDBOpenDBRequest).error);
         reject((event.target as IDBOpenDBRequest).error);
@@ -79,7 +83,7 @@ async function openProfileDB(): Promise<IDBDatabase> {
             console.log(`Object store ${PROFILE_STORE_NAME} created successfully.`);
          } catch (e) {
              console.error(`Error creating object store ${PROFILE_STORE_NAME}:`, e);
-             reject(e); 
+             reject(e);
              if (event.target && (event.target as IDBOpenDBRequest).transaction) {
                  try {
                     (event.target as IDBOpenDBRequest).transaction?.abort();
@@ -87,7 +91,7 @@ async function openProfileDB(): Promise<IDBDatabase> {
                     console.error("Error aborting transaction during failed upgrade:", abortError);
                  }
              }
-             return; 
+             return;
          }
       } else {
           console.log(`Object store ${PROFILE_STORE_NAME} already exists.`);
@@ -96,14 +100,55 @@ async function openProfileDB(): Promise<IDBDatabase> {
   });
 }
 
+// Singleton getter for the DB instance
+function getDbInstance(): Promise<IDBDatabase> {
+    if (dbInstance) {
+        // If instance exists, return it immediately
+        return Promise.resolve(dbInstance);
+    }
+    if (dbOpenPromise) {
+        // If an open operation is already in progress, return its promise
+        return dbOpenPromise;
+    }
+    // Otherwise, initiate the open operation
+    console.log("Initiating new DB connection promise.");
+    dbOpenPromise = _openAndInitializeDb();
+
+    dbOpenPromise
+        .then(db => {
+            console.log("DB connection promise resolved successfully.");
+            dbInstance = db; // Cache the instance
+            dbOpenPromise = null; // Clear the promise
+            // Optional: Add handler for database closing unexpectedly
+            dbInstance.onclose = () => {
+                console.warn(`IndexedDB ${PROFILE_DB_NAME} connection closed unexpectedly.`);
+                dbInstance = null; // Reset instance if connection closes
+            };
+            return db;
+        })
+        .catch(err => {
+            console.error("DB connection promise failed:", err);
+            dbOpenPromise = null; // Clear the promise on failure
+            // Propagate the error
+            throw err;
+        });
+
+    return dbOpenPromise;
+}
+
+
 export async function saveProfileToCache(profile: ProfileData): Promise<void> {
-  const db = await openProfileDB();
+  const db = await getDbInstance(); // Use singleton getter
   return new Promise((resolve, reject) => {
+    if (!db) { // Add check for safety, although getDbInstance should handle errors
+        reject(new Error("Database connection not available for saving profile."));
+        return;
+    }
     const transaction = db.transaction([PROFILE_STORE_NAME], 'readwrite');
     const store = transaction.objectStore(PROFILE_STORE_NAME);
     // Ensure cachedAt is set before putting
-    const profileWithTimestamp = { ...profile, cachedAt: Date.now() }; 
-    console.log("Saving profile to cache:", profileWithTimestamp.pubkey);
+    const profileWithTimestamp = { ...profile, cachedAt: Date.now() };
+    // console.log("Saving profile to cache:", profileWithTimestamp.pubkey); // Reduce log verbosity
     store.put(profileWithTimestamp);
     transaction.oncomplete = () => resolve();
     transaction.onerror = (event) => {
@@ -114,8 +159,12 @@ export async function saveProfileToCache(profile: ProfileData): Promise<void> {
 }
 
 export async function getProfileFromCache(pubkey: string): Promise<ProfileData | null> {
-  const db = await openProfileDB();
+  const db = await getDbInstance(); // Use singleton getter
   return new Promise((resolve, reject) => {
+     if (!db) {
+        reject(new Error("Database connection not available for getting profile."));
+        return;
+    }
     const transaction = db.transaction([PROFILE_STORE_NAME], 'readonly');
     const store = transaction.objectStore(PROFILE_STORE_NAME);
     const request = store.get(pubkey);
@@ -132,8 +181,12 @@ export async function getProfileFromCache(pubkey: string): Promise<ProfileData |
 
 // Gets *all* profiles, mainly for potential cleanup or bulk operations
 export async function getAllProfilesFromCache(): Promise<ProfileData[]> {
-  const db = await openProfileDB();
+  const db = await getDbInstance(); // Use singleton getter
   return new Promise((resolve, reject) => {
+     if (!db) {
+        reject(new Error("Database connection not available for getting all profiles."));
+        return;
+    }
     const transaction = db.transaction([PROFILE_STORE_NAME], 'readonly');
     const store = transaction.objectStore(PROFILE_STORE_NAME);
     const request = store.getAll();
@@ -149,29 +202,53 @@ export async function getAllProfilesFromCache(): Promise<ProfileData[]> {
 
 // Optional: Function to delete expired profiles
 export async function deleteExpiredProfilesFromCache(expirationTimeMs: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
-  const db = await openProfileDB();
-  const allProfiles = await getAllProfilesFromCache(); // Reuse getAll
-  const now = Date.now();
-  const expiredPubkeys = allProfiles
-    .filter(profile => !profile.cachedAt || (now - profile.cachedAt > expirationTimeMs))
-    .map(profile => profile.pubkey);
+  const db = await getDbInstance(); // Use singleton getter
+  // No need to call getAllProfilesFromCache here, do it inside the transaction
+  return new Promise((resolve, reject) => {
+     if (!db) {
+        reject(new Error("Database connection not available for deleting expired profiles."));
+        return;
+    }
+    const transaction = db.transaction([PROFILE_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(PROFILE_STORE_NAME);
+    const now = Date.now();
+    const expiredPubkeys: string[] = [];
 
-  if (expiredPubkeys.length > 0) {
-    console.log("Deleting expired profiles:", expiredPubkeys);
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([PROFILE_STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(PROFILE_STORE_NAME);
-      expiredPubkeys.forEach(pubkey => store.delete(pubkey));
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = (event) => {
-        console.error("Error deleting expired profiles:", (event.target as IDBRequest).error);
-        reject((event.target as IDBRequest).error);
-      }
-    });
-  } else {
-    return Promise.resolve();
-  }
+    // Use a cursor to iterate and delete efficiently
+    const cursorRequest = store.openCursor();
+    cursorRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+            const profile: ProfileData = cursor.value;
+            if (!profile.cachedAt || (now - profile.cachedAt > expirationTimeMs)) {
+                expiredPubkeys.push(profile.pubkey);
+                cursor.delete(); // Delete the record directly
+            }
+            cursor.continue();
+        } else {
+            // End of cursor iteration
+             if (expiredPubkeys.length > 0) {
+                console.log("Deleting expired profiles:", expiredPubkeys);
+            }
+        }
+    };
+    cursorRequest.onerror = (event) => {
+         console.error("Error iterating profiles for deletion:", (event.target as IDBRequest).error);
+         reject((event.target as IDBRequest).error);
+    };
+
+    // Transaction completion handles resolve/reject
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = (event) => {
+        // Cursor error might have already rejected, but this catches transaction-level errors
+        if (!(event.target as IDBTransaction).error) { // Avoid duplicate console logs if cursor already failed
+             console.error("Error during expired profile deletion transaction:", (event.target as IDBTransaction).error);
+        }
+        reject((event.target as IDBTransaction).error ?? new Error("Expired profile deletion transaction failed"));
+    };
+  });
 }
+
 
 // Helper to parse NDKEvent content into our ProfileData structure
 export function parseProfileContent(contentString: string, pubkey: string): Omit<ProfileData, 'cachedAt' | 'isLoading'> | null {

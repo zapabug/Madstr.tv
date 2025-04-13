@@ -133,6 +133,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [isCacheLoaded, setIsCacheLoaded] = useState(false); // Cache for notes
   const audioRef = useRef<HTMLAudioElement>(null);
+  const scrollableListRef = useRef<HTMLDivElement>(null); // <-- Add ref for scrollable list
 
   // --- Add State for Profiles ---
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for poster profiles
@@ -336,6 +337,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
 
   const currentItem = podcastNotes[currentItemIndex];
   const currentProfile = currentItem ? profiles[currentItem.posterPubkey] : null;
+  const hasValidProfile = currentProfile && !currentProfile.isLoading && (currentProfile.name || currentProfile.picture);
 
   // --- RE-ADD Effect to fetch profile for the CURRENT item ---
   useEffect(() => {
@@ -385,6 +387,16 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
       setIsSpeedMenuOpen(false);
   };
 
+  // <-- Add useEffect to set initial focus -->
+  useEffect(() => {
+      // Set focus to the list when it's ready and has items
+      if (isCacheLoaded && podcastNotes.length > 0 && scrollableListRef.current) {
+          console.log("Podcastr: Setting initial focus to scrollable list.");
+          scrollableListRef.current.focus();
+      }
+      // Dependencies ensure this runs when cache loads or notes appear
+  }, [isCacheLoaded, podcastNotes]);
+
   if (!isCacheLoaded) {
     return (
         <div className='relative w-full h-full bg-gray-800 flex items-center justify-center overflow-hidden p-4'>
@@ -402,35 +414,20 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
   }
 
   // --- Update Rendering Logic ---
-  const displayName = currentProfile?.name || currentProfile?.displayName || currentItem?.posterPubkey?.substring(0, 10) + '...' || 'Unknown';
-  const pictureUrl = currentProfile?.picture;
-  const isLoadingProfile = currentProfile?.isLoading;
+  // const displayName = currentProfile?.name || currentProfile?.displayName || currentItem?.posterPubkey?.substring(0, 10) + '...' || 'Unknown';
+  // const pictureUrl = currentProfile?.picture;
+  // const isLoadingProfile = currentProfile?.isLoading;
 
   return (
     <div className='relative w-full h-full bg-gray-900 flex flex-col overflow-hidden p-2 text-white rounded-lg'>
-      {/* Updated Top Section with Profile Info */}
-       <div className="w-full flex items-center justify-start p-2 mb-4 border-b border-gray-700">
-           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-600 overflow-hidden mr-3">
-              {isLoadingProfile ? (
-                  <div className="w-full h-full animate-pulse bg-gray-500"></div>
-              ) : pictureUrl ? (
-                  <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" onError={() => console.error(`PodcastPlayer: Failed to load image for ${displayName}`)} />
-              ) : (
-                  <span className="text-gray-300 text-xl font-semibold flex items-center justify-center h-full uppercase">
-                      {displayName.substring(0, 1)}
-                  </span>
-              )}
-           </div>
-           <div>
-              <p className="text-sm font-semibold text-gray-200 truncate" title={displayName}>{displayName}</p>
-              <p className="text-xs text-gray-400">
-                Now Playing (Item {podcastNotes.length - currentItemIndex} of {podcastNotes.length})
-              </p>
-           </div>
-       </div>
+      {/* Removed Top Profile Section */}
 
       {/* Scrollable Podcast List: Takes up available space */}
-      <div className="flex-grow w-full overflow-y-auto pr-1 mb-2"> 
+      <div 
+          ref={scrollableListRef} // <-- Assign ref
+          tabIndex={0} // <-- Make container focusable
+          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-1 focus:ring-purple-400 rounded" // Added focus styles
+      >
         {podcastNotes.map((note, index) => {
             const isSelected = index === currentItemIndex;
             const itemBg = isSelected ? 'bg-purple-800 bg-opacity-60' : 'bg-gray-700 bg-opacity-50 hover:bg-gray-600 hover:bg-opacity-70';
@@ -442,7 +439,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
             return ( 
                 <div
                     key={note.id}
-                    tabIndex={0}
+                    tabIndex={-1} // <-- Change item tabIndex to -1
                     className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-purple-500`}
                     onClick={() => setCurrentItemIndex(index)}
                     title={note.content || note.url} 
@@ -495,13 +492,13 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
             {isSpeedMenuOpen && (
                 <div 
                     ref={speedMenuRef}
-                    className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded-md shadow-lg z-10 overflow-hidden"
+                    className="absolute bottom-full right-0 mb-1 w-20 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10 overflow-hidden"
                 >
                     {[0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((rate) => (
                         <button
                             key={rate}
                             onClick={() => handleSpeedChange(rate)}
-                            className={`block w-full px-3 py-1 text-xs text-left ${playbackRate === rate ? 'bg-purple-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+                            className={`block w-full px-3 py-1 text-xs text-left ${playbackRate === rate ? 'bg-purple-600 text-white' : 'text-white hover:bg-gray-700'}`}
                         >
                             {rate.toFixed(2)}x
                         </button>

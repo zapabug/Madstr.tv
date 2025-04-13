@@ -33,27 +33,91 @@ function getMediaType(url: string): 'image' | 'video' | null {
 
 // IndexedDB setup for caching media metadata
 const DB_NAME = 'MediaFeedCache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'mediaNotes';
 
 // Increased cache limit
 const MAX_CACHED_NOTES = 500;
 
-async function openDB(): Promise<IDBDatabase> {
+// --- Singleton DB Management for MediaFeedCache ---
+let mediaDbInstance: IDBDatabase | null = null;
+let mediaDbOpenPromise: Promise<IDBDatabase> | null = null;
+
+async function _openMediaDB(): Promise<IDBDatabase> {
+  console.log(`Attempting to open DB: ${DB_NAME} version ${DB_VERSION}`);
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = (event) => reject((event.target as IDBOpenDBRequest).error);
-    request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
+    request.onerror = (event) => {
+        console.error(`IndexedDB error opening ${DB_NAME}:`, (event.target as IDBOpenDBRequest).error);
+        reject((event.target as IDBOpenDBRequest).error);
+    }
+    request.onsuccess = (event) => {
+        console.log(`IndexedDB ${DB_NAME} opened successfully.`);
+        resolve((event.target as IDBOpenDBRequest).result);
+    }
     request.onupgradeneeded = (event) => {
+      console.log(`Upgrading IndexedDB ${DB_NAME} to version ${DB_VERSION}`);
       const db = (event.target as IDBOpenDBRequest).result;
-      db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+            console.log(`Creating object store: ${STORE_NAME}`);
+            try {
+               db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+               console.log(`Object store ${STORE_NAME} created successfully.`);
+            } catch (e) {
+                console.error(`Error creating object store ${STORE_NAME}:`, e);
+                reject(e); 
+                 if (event.target && (event.target as IDBOpenDBRequest).transaction) {
+                    try {
+                       (event.target as IDBOpenDBRequest).transaction?.abort();
+                    } catch (abortError) {
+                       console.error("Error aborting transaction during failed upgrade:", abortError);
+                    }
+                }
+                return; 
+            }
+         } else {
+            console.log(`Object store ${STORE_NAME} already exists.`);
+         }
     };
   });
 }
 
+function getMediaDbInstance(): Promise<IDBDatabase> {
+    if (mediaDbInstance) {
+        return Promise.resolve(mediaDbInstance);
+    }
+    if (mediaDbOpenPromise) {
+        return mediaDbOpenPromise;
+    }
+    console.log("Initiating new MediaFeedCache DB connection promise.");
+    mediaDbOpenPromise = _openMediaDB();
+
+    mediaDbOpenPromise
+        .then(db => {
+            console.log("MediaFeedCache DB connection promise resolved successfully.");
+            mediaDbInstance = db;
+            mediaDbOpenPromise = null;
+            mediaDbInstance.onclose = () => {
+                console.warn(`IndexedDB ${DB_NAME} connection closed unexpectedly.`);
+                mediaDbInstance = null;
+            };
+            return db;
+        })
+        .catch(err => {
+            console.error("MediaFeedCache DB connection promise failed:", err);
+            mediaDbOpenPromise = null;
+            throw err;
+        });
+
+    return mediaDbOpenPromise;
+}
+// --- End Singleton DB Management ---
+
+
 async function saveToCache(notes: MediaNote[]): Promise<void> {
-  const db = await openDB();
+  const db = await getMediaDbInstance(); // Use singleton getter
   return new Promise((resolve, reject) => {
+    if (!db) return reject(new Error("MediaFeedCache DB not available for saving."));
     const transaction = db.transaction([STORE_NAME], 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     notes.forEach(note => store.put(note));
@@ -81,9 +145,11 @@ function shuffleArray<T>(array: T[]): T[] {
   return array;
 }
 
+
 async function getFromCache(): Promise<MediaNote[]> {
-  const db = await openDB();
+  const db = await getMediaDbInstance(); // Use singleton getter
   return new Promise((resolve, reject) => {
+    if (!db) return reject(new Error("MediaFeedCache DB not available for getting."));
     const transaction = db.transaction([STORE_NAME], 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.getAll();
@@ -94,7 +160,8 @@ async function getFromCache(): Promise<MediaNote[]> {
       // Limit to the most recent MAX_CACHED_NOTES items
       if (notes.length > MAX_CACHED_NOTES) {
         const excessIds = notes.slice(MAX_CACHED_NOTES).map((n: MediaNote) => n.id);
-        deleteExcessFromCache(excessIds);
+        // Call deleteExcessFromCache without awaiting db again inside
+        _deleteExcessFromCacheInternal(db, excessIds);
         notes = notes.slice(0, MAX_CACHED_NOTES);
       }
       // Shuffle the notes before resolving
@@ -104,15 +171,23 @@ async function getFromCache(): Promise<MediaNote[]> {
   });
 }
 
+// Internal helper to delete within an existing transaction context if possible, or create new one
+async function _deleteExcessFromCacheInternal(db: IDBDatabase, ids: string[]): Promise<void> {
+     if (ids.length === 0) return Promise.resolve();
+     console.log(`MediaFeed: Deleting ${ids.length} excess cached items.`);
+     return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        ids.forEach(id => store.delete(id));
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+    });
+}
+
+// Optional: Keep an exported version if needed externally, but it will open a new DB connection
 async function deleteExcessFromCache(ids: string[]): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    ids.forEach(id => store.delete(id));
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
+  const db = await getMediaDbInstance(); // Use singleton getter
+  return _deleteExcessFromCacheInternal(db, ids); // Delegate to internal function
 }
 
 // Helper function to process events into MediaNote array
