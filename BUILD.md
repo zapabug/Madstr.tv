@@ -122,4 +122,6 @@ Once the prerequisites are met, you can start the development server using Bun:
 
 ```bash
 bun run dev
-``` 
+```
+
+**Note:** Recent updates to the project have resolved issues with profile image loading in the `MessageBoard` component. The application now successfully displays profile data and images for all authors, leveraging the streaming nature of Nostr data through subscriptions for Kind 0 (Metadata) events. Ensure your environment is up to date with the latest code changes to benefit from these improvements. 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'react-qr-code';
 import { useNdk } from 'nostr-hooks';
-import { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'; // Removed nip19 import from here
+import { NDKEvent, NDKFilter, NDKSubscription, NDKKind } from '@nostr-dev-kit/ndk'; // Removed nip19 import from here
 import { nip19 } from 'nostr-tools'; // Import nip19 from nostr-tools
 
 // Re-define MediaNote interface locally or import from a types file
@@ -15,7 +15,7 @@ interface MediaNote {
 }
 
 // --- Re-integrate Helper Logic from old useMediaNotes --- 
-// Regex to find image/video URLs in note content
+// Regex to find image/video/podcast URLs in note content
 const mediaUrlRegex = /https?:\/\S+\.(?:png|jpg|jpeg|gif|webp|mp4|mov|webm)/gi;
 
 // Helper to determine media type from URL
@@ -29,6 +29,68 @@ function getMediaType(url: string): 'image' | 'video' | null {
     return 'video';
   }
   return null;
+}
+
+// IndexedDB setup for caching media metadata
+const DB_NAME = 'MediaFeedCache';
+const DB_VERSION = 1;
+const STORE_NAME = 'mediaNotes';
+
+async function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = (event) => reject((event.target as IDBOpenDBRequest).error);
+    request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+    };
+  });
+}
+
+async function saveToCache(notes: MediaNote[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    notes.forEach(note => store.put(note));
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function getFromCache(): Promise<MediaNote[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const notes = request.result;
+      // Sort by createdAt descending (newest first)
+      notes.sort((a: MediaNote, b: MediaNote) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      // Limit to the most recent 100 items
+      if (notes.length > 100) {
+        const excessIds = notes.slice(100).map((n: MediaNote) => n.id);
+        deleteExcessFromCache(excessIds);
+        resolve(notes.slice(0, 100));
+      } else {
+        resolve(notes);
+      }
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteExcessFromCache(ids: string[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    ids.forEach(id => store.delete(id));
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
 }
 
 // Helper function to process events into MediaNote array
@@ -49,7 +111,8 @@ const processEventsIntoMediaNotes = (events: NDKEvent[], notesByIdMap: Map<strin
 
             matchedUrls.forEach((url, index) => {
                 const mediaType = getMediaType(url);
-                if (mediaType) {
+                // Only process if it's an image
+                if (mediaType === 'image') { 
                     const mediaItemId = `${event.id}-${index}`;
                     if (!notesByIdMap.has(mediaItemId)) {
                         const newNote: MediaNote = {
@@ -68,6 +131,9 @@ const processEventsIntoMediaNotes = (events: NDKEvent[], notesByIdMap: Map<strin
         }
     });
     newNotes.sort((a, b) => b.createdAt - a.createdAt); // Use MediaNote's createdAt for sorting
+    if (newNotes.length > 0) {
+      saveToCache(newNotes).catch(err => console.error('MediaFeed: Failed to save to cache:', err));
+    }
     return newNotes;
 };
 // --- End Re-integrated Helper Logic ---
@@ -85,16 +151,35 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   const [mediaNotes, setMediaNotes] = useState<MediaNote[]>([]); // Local state for notes
   const notesById = useRef<Map<string, MediaNote>>(new Map()); // Track processed media IDs
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   
   // State for player controls
   const [isPlaying, setIsPlaying] = useState(true); // Assume autoplay initially
   const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay policy
   const videoRef = useRef<HTMLVideoElement>(null); // Ref for video element
 
+  // Load from cache on component mount
+  useEffect(() => {
+    getFromCache()
+      .then(cachedNotes => {
+        console.log(`MediaFeed: Loaded ${cachedNotes.length} items from cache.`);
+        setMediaNotes(cachedNotes);
+        notesById.current = new Map(cachedNotes.map(note => [note.id, note]));
+        setIsCacheLoaded(true);
+        if (cachedNotes.length > 0 && currentItemIndex >= cachedNotes.length) {
+          setCurrentItemIndex(0);
+        }
+      })
+      .catch(err => {
+        console.error('MediaFeed: Failed to load from cache:', err);
+        setIsCacheLoaded(true);
+      });
+  }, []); // Run once on mount
+
   // --- Subscription Effect --- 
   useEffect(() => {
-    // Don't subscribe if NDK is not ready or authors list is empty
-    if (!ndk || authors.length === 0) {
+    // Don't subscribe if NDK is not ready or authors list is empty or cache not loaded
+    if (!ndk || authors.length === 0 || !isCacheLoaded) {
         // Clear notes if authors become empty
         if (authors.length === 0) {
             setMediaNotes([]);
@@ -106,10 +191,10 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
 
     console.log(`MediaFeed: Authors updated, creating subscription for ${authors.length} authors...`);
 
-    // Clear previous state when authors change
-    setMediaNotes([]);
-    notesById.current.clear();
-    setCurrentItemIndex(0);
+    // Do not clear state if we have cached data
+    // setMediaNotes([]);
+    // notesById.current.clear();
+    // setCurrentItemIndex(0);
 
     const filter: NDKFilter = {
       kinds: [1],
@@ -151,8 +236,8 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
       subscription.stop();
     };
 
-  // Re-run effect if NDK instance or authors list changes
-  }, [ndk, authors]); 
+  // Re-run effect if NDK instance or authors list changes or cache is loaded
+  }, [ndk, authors, isCacheLoaded]); 
 
   // --- Control Handlers --- 
   const cycleLength = Math.min(mediaNotes.length, MAX_SLIDES);
@@ -191,29 +276,38 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   useEffect(() => {
     if (!videoRef.current) return;
 
-    const currentItem = mediaNotes[currentItemIndex]; 
-    // Need mediaNotes defined earlier or calculate here
-    // Let's calculate mediaNotes here for safety
-    const safeCurrentItem = mediaNotes[currentItemIndex];
-
-    if (safeCurrentItem?.type === 'video') {
-        videoRef.current.muted = isMuted;
-        if (isPlaying) {
-            // Attempt to play, catch errors (e.g., user interaction needed)
-            videoRef.current.play().catch(error => {
-                console.error("Video autoplay failed:", error);
-                // Optionally set isPlaying to false if autoplay fails
-                // setIsPlaying(false);
-            });
-        } else {
-            videoRef.current.pause();
-        }
-    } else {
-        // If current item is not a video, ensure video is paused
+    const currentItem = mediaNotes[currentItemIndex];
+    if (currentItem?.type === 'video') {
+      videoRef.current.playbackRate = 1.0;
+      if (isPlaying) {
+        videoRef.current.play().catch(error => {
+          console.error("Video autoplay failed:", error);
+        });
+      } else {
         videoRef.current.pause();
+      }
+      if (isMuted) {
+        videoRef.current.muted = true;
+      } else {
+        videoRef.current.muted = false;
+      }
+    } else {
+      videoRef.current.pause();
     }
-    // Dependency on currentItem.id ensures this runs when the item changes
-  }, [currentItemIndex, isPlaying, isMuted, mediaNotes]); // Add mediaNotes here
+  }, [currentItemIndex, isPlaying, isMuted, mediaNotes]);
+
+  // Effect to cycle through media every 90 seconds
+  useEffect(() => {
+    if (mediaNotes.length <= 1) return; // No need to cycle if 0 or 1 item
+
+    const interval = setInterval(() => {
+      if (isPlaying) {
+        setCurrentItemIndex((prevIndex) => (prevIndex + 1) % mediaNotes.length);
+      }
+    }, 90000); // 90 seconds
+
+    return () => clearInterval(interval);
+  }, [mediaNotes.length, isPlaying]);
 
   // --- Rendering Logic --- 
   // Get the items to actually display (latest MAX_SLIDES)
@@ -223,7 +317,7 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   if (displayItems.length === 0) {
     console.log('MediaFeed: Rendering placeholder (no displayable items).');
     return (
-      <div className="relative w-full h-[60%] bg-black flex items-center justify-center overflow-hidden">
+      <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
         <p className="text-gray-400">Waiting for media feed...</p>
       </div>
     );
@@ -236,7 +330,7 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   if (!currentItem) {
       console.error("MediaFeed: currentItem is undefined. Index:", currentItemIndex, "Display count:", displayItems.length);
       return (
-        <div className="relative w-full h-[60%] bg-black flex items-center justify-center overflow-hidden">
+        <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
           <p className="text-red-500">Error loading media item.</p>
         </div>
       );
@@ -245,7 +339,7 @@ const MediaFeed: React.FC<MediaFeedProps> = ({ authors }) => {
   const isCurrentVideo = currentItem.type === 'video';
 
   return (
-    <div className="relative w-full h-[60%] bg-black flex flex-col items-center justify-center overflow-hidden">
+    <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden">
         
         {/* Media Display Area */}
         <div className="w-full h-full flex items-center justify-center"> 

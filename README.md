@@ -41,7 +41,7 @@ This application is designed to run on a display (like a TV) and show content fr
 ### `MessageBoard.tsx` (`src/components/MessageBoard.tsx`)
 - **Purpose:** Displays recent text notes (Kind 1) that are replies to a specific Nostr event or tag a specific public key.
 - **Data Source:** Subscribes to Kind 1 notes based on filters defined within the component (currently set to filter by `#p` tag pointing to `TV_PUBKEY_HEX` in `src/constants.ts`).
-- **Display:** Shows a list of the most recent messages, including the sender's avatar and name.
+- **Display:** Shows a list of the most recent messages, including the sender's avatar and name, with profile data and images successfully loaded for all authors via streaming subscriptions.
 - **Dependencies:** `useNdk`, `useProfile` (from `nostr-hooks`).
 
 ### `constants.ts` (`src/constants.ts`)

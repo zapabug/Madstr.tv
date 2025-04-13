@@ -29,12 +29,20 @@ This document summarizes the issues encountered and steps taken to resolve them 
 *   **Attempt 3 (Change Filter Strategy):** Modified the filter in `MessageBoard.tsx` to fetch Kind 1 notes tagging the TV's public key (`#p` tag with `TV_PUBKEY_HEX`) instead of replying to the specific event (`#e` tag). Added `TV_PUBKEY_HEX` to `src/constants.ts`.
 *   **Current State:** Despite trying both `#e` and `#p` filters with correct constants and relays, and ensuring the subscription stays open (`closeOnEose: false`), the `MessageBoard` is still reported as not displaying incoming messages.
 
+### 5. MessageBoard Not Displaying Profile Images
+
+*   **Problem:** Profile images for authors in `MessageBoard` were not loading, even when messages were displayed. Initially, even the app's own profile (TugaTV) lacked an image.
+*   **Cause:** The initial implementation used a one-time `fetchProfile()` call for each author, which might fail if profile data (Kind 0 events) wasn't immediately available on connected relays. There was no mechanism to retry or listen for streamed updates for most authors.
+*   **Solution (Part 1 - App Profile):** Added a dedicated subscription for the app's own profile (using `TV_PUBKEY_NPUB`) in `MessageBoard.tsx` to listen for Kind 0 events via the Nostr stream. This ensured the app's profile data, including the image, was captured and displayed as 'TugaTV' when it arrived. This was successful for the app's profile.
+*   **Solution (Part 2 - Other Profiles - Fix):** **Highlighted Change:** Extended the subscription approach to all message authors by adding a subscription for Kind 0 (Metadata) events for all authors in `MessageBoard.tsx`. This change, implemented in the effect triggered by new messages, listens for profile updates via the Nostr stream for all relevant public keys. It ensures that even if profile data isn't available during the initial fetch, it is captured and displayed when it arrives. Detailed logging was also added to track fetching, parsing, and image loading errors, which helped confirm the data flow.
+*   **Result:** With the subscription for all authors' profiles in place, profile data and images for other authors started loading successfully in `MessageBoard`, resolving the issue.
+
 ### Current Status
 
 With these changes:
 1.  NDK initializes correctly.
 2.  The application attempts to subscribe to and fetch the Kind 3 contact list persistently for the `MediaFeed`.
 3.  The `MediaFeed` appears to be functioning correctly based on the fetched authors.
-4.  The `MessageBoard` attempts to subscribe to Kind 1 notes mentioning the TV's public key (`#p` tag) using `closeOnEose: false`, but is **currently not displaying messages** for reasons yet to be determined.
+4.  The `MessageBoard` now successfully displays messages and **profile images for all authors, including the app itself (TugaTV)**, thanks to the subscription model for profile data that leverages the streaming nature of Nostr.
 
 The application should now be more robust in fetching necessary data from Nostr relays. 

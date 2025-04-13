@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'react-qr-code'; // Import QRCode
 import MediaFeed from './components/MediaFeed';
 import MessageBoard from './components/MessageBoard'; // Re-enable import
+import Podcastr from './components/Podcastr'; // Import renamed Podcastr
 import RelayStatus from './components/RelayStatus'; // Import the new component
 import { nip19 } from 'nostr-tools';
 import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
@@ -132,12 +133,15 @@ function App() {
 
   return (
     <>
-    {/* Ensure min-height and flex column layout - PARENT MUST BE RELATIVE */}
-    <div className="relative flex flex-col min-h-screen h-screen bg-gray-900 text-white">
-      {/* Absolute Positioned Title - REMOVED */}
-      {/* <h2 className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-lg font-semibold text-center text-purple-800 px-4 py-1 bg-gray-900 bg-opacity-75 rounded">
-       📺 TV Feed 🎉
-      </h2> */}
+    {/* Outermost div: Has padding, border, AND background */}
+    <div className="relative flex flex-col min-h-screen h-screen text-white border-4 border-purple-600 pt-8 bg-black">
+      {/* Absolute Positioned Titles (Remain the same) */}
+      <h2 className="absolute top-4 right-32 z-20 text-lg font-semibold text-purple-800 px-4 py-1 rounded">
+        Mad⚡str.tv
+      </h2>
+      <h2 className="absolute top-1/2 left-32 -translate-y-1/2 z-30 text-lg font-semibold text-purple-800 px-4 py-1 rounded">
+        📺 TV Feed 🎉
+      </h2>
 
       {/* --> Moved Thread QR Code to Bottom Left <-- */}
       <div className="absolute bottom-4 left-4 z-10 flex flex-col items-center">
@@ -166,38 +170,55 @@ function App() {
       {/* For now, let's keep it but be aware of potential overlap */}
       <RelayStatus isReceivingData={isReceivingData} />
 
-      {/* Pass authors list to MediaFeed */}
-      {isLoadingAuthors ? (
-          <div className="relative w-full flex-shrink-0 basis-3/5 bg-black flex items-center justify-center overflow-hidden">
-              <p className="text-gray-400">Loading author list...</p>
-          </div>
-       ) : (
-          // Make this container relative to position title within it
-          <div className="relative w-full flex-shrink-0 basis-3/5 bg-black flex items-center justify-center overflow-hidden">
-              {/* Title positioned absolutely within MediaFeed container */}
-              <h2 className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-lg font-semibold text-center text-purple-800 px-3 py-1 bg-black bg-opacity-60 rounded">
-                  📺 TV Feed Fun! 🎉
-              </h2>
-              {/* MediaFeed component */}
-              <MediaFeed authors={mediaAuthors} />
-          </div>
-       )}
+      {/* Inner wrapper: Fills space below padding, NO background, NO border */}
+      <div className="relative flex flex-col flex-grow min-h-0 overflow-hidden">
 
-      {/* Message Board Container */}
-      {/* Removing flex-col and inner title */}
-      <div className="relative w-full flex-grow min-h-0 bg-gray-800 p-4 overflow-y-auto border-4 border-purple-600">
-          {/* MessageBoard rendering area (removed inner wrapper) */}
-              {ndk ? (
-                  <MessageBoard 
-                    ndk={ndk} 
-                    neventToFollow={MAIN_THREAD_NEVENT_URI} 
-                    authors={mediaAuthors}
-                  />
-              ) : (
-                  <p className="text-gray-400">Initializing Nostr connection...</p> // Placeholder while ndk is null
-              )}
-      </div>
-    </div>
+        {/* MediaFeed Area (Top Section) */}
+        {isLoadingAuthors ? (
+            <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
+                <p className="text-gray-400">Loading author list...</p>
+            </div>
+         ) : (
+            <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
+                <MediaFeed authors={mediaAuthors} />
+            </div>
+         )}
+
+        {/* Split Screen Container: Fixed Height, Flex Row */}
+        <div className="relative w-full h-1/3 flex-shrink-0 flex flex-row overflow-hidden"> {/* Fixed height, Flexbox row */}
+            
+            {/* Message Board Container (Left Side - 2/3 width) */}
+            <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900 border-r border-gray-700"> {/* Width 2/3, Scroll, Border Right */}
+                {ndk ? (
+                    <MessageBoard 
+                      ndk={ndk} 
+                      neventToFollow={MAIN_THREAD_NEVENT_URI} 
+                      authors={mediaAuthors}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center"> {/* Centering placeholder */}
+                        <p className="text-gray-400">Initializing Nostr connection...</p>
+                    </div>
+                )}
+            </div> {/* End Message Board Container */} 
+
+            {/* Podcastr Container (Right Side - 1/3 width) - Remove Background & Border */}
+            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden"> 
+                {ndk ? (
+                    <Podcastr 
+                        authors={mediaAuthors} 
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center"> 
+                      <p className="text-gray-400">Initializing Nostr...</p> 
+                    </div>
+                )}
+            </div>
+
+        </div> {/* End Split Screen Container */} 
+
+      </div> {/* End Inner Wrapper */} 
+    </div> {/* End Outermost Div */} 
     </>
   );
 }
