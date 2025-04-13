@@ -15,34 +15,54 @@ If you are developing a production application, we recommend using TypeScript an
 
 # TugaTV Nostr Display Application
 
-This application is designed to run on a display (like a TV) and show content from the Nostr network.
+This application is designed to run on a display (like a TV) and show content from the Nostr network, including media slideshows, podcast episodes, and message boards.
 
 ## Key Components
 
 ### `App.tsx`
 - Initializes the Nostr Development Kit (NDK) using `nostr-hooks` and connects to specified relays (`src/constants.ts`).
 - Fetches the Kind 3 contact list (follows) for the TV's public key (`TV_PUBKEY_NPUB`).
-- Passes the list of followed public keys (hex format) to the `MediaFeed` component.
-- Renders the overall layout, including the `MediaFeed` and `MessageBoard`.
+- Passes the list of followed public keys (hex format) to the `MediaFeed` and `Podcastr` components.
+- Renders the overall layout, including `MediaFeed`, `Podcastr`, and `MessageBoard`.
 - Displays a QR code linking to the main chat thread (`MAIN_THREAD_NEVENT_URI`).
 
 ### `MediaFeed.tsx` (`src/components/MediaFeed.tsx`)
-- **Purpose:** Displays a slideshow of recent images and videos found in Nostr notes (Kind 1) posted by a specific list of authors.
-- **Data Source:** Subscribes to Kind 1 notes from the hex public keys provided in the `authors` prop (received from `App.tsx`, based on the TV's Kind 3 list).
-- **Media Extraction:** Scans the `content` of incoming notes for URLs ending in common image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) or video (`.mp4`, `.mov`, `.webm`) extensions.
+- **Purpose:** Displays a slideshow of recent images found in Nostr notes (Kind 1) posted by a specific list of authors.
+- **Data Source:** Subscribes to Kind 1 notes from the hex public keys provided in the `authors` prop.
+- **Media Extraction:** Scans the `content` of incoming notes for URLs ending in common image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) extensions.
+- **Caching:** Caches metadata for up to **500** recent image notes in IndexedDB (`MediaFeedCache`).
 - **Display:**
-    - Shows up to `MAX_SLIDES` (currently 30) unique media items, sorted newest first by note creation time.
+    - On load, **shuffles** the cached notes to provide variety.
+    - Shows up to `MAX_SLIDES` (currently 30) unique images from the shuffled set, cycling automatically.
     - Includes navigation controls (Previous/Next).
-    - Provides Play/Pause and Mute/Unmute controls for videos.
-    - Videos attempt to autoplay muted.
-    - Shows the poster's Nostr profile picture and name (via `useProfile`).
-- **Dependencies:** `useNdk`, `useProfile` (from `nostr-hooks`), `nostr-tools`.
+    - Shows the poster's Nostr profile QR code.
+    - _Note: Video display/playback logic exists but is currently disabled (only images are processed)._
+- **Dependencies:** `useNdk`, `react-qr-code`.
+
+### `Podcastr.tsx` (`src/components/Podcastr.tsx`)
+- **Purpose:** Discovers, lists, and plays podcast episodes shared via Nostr notes (Kind 1).
+- **Data Source:** Subscribes to Kind 1 notes from the hex public keys provided in the `authors` prop.
+- **Podcast Discovery:** Scans the `content` of incoming notes for URLs ending in common audio formats (`.mp3`, `.m4a`, `.wav`).
+- **Profile Fetching:** Fetches author profile information (Kind 0) using NDK. Handles variations in how NDK returns profile data (from `.content` string or direct properties).
+- **Caching:**
+    - Caches discovered podcast note details (URL, author pubkey, timestamp) in IndexedDB (`PodcastNoteCache`).
+    - Uses a shared profile cache (`ProfileCache` via `src/utils/profileCache.ts`).
+- **Display:**
+    - Shows the current podcast's author profile picture and name.
+    - Displays a scrollable, focusable list of discovered episodes, numbered with the most recent first (e.g., "Item 9 of 9").
+    - Includes an HTML5 audio player with playback speed controls (0.75x - 2.0x).
+- **Dependencies:** `useNdk`, `nostr-hooks` (indirectly via App), `@nostr-dev-kit/ndk`, `../utils/profileCache`.
 
 ### `MessageBoard.tsx` (`src/components/MessageBoard.tsx`)
 - **Purpose:** Displays recent text notes (Kind 1) that are replies to a specific Nostr event or tag a specific public key.
-- **Data Source:** Subscribes to Kind 1 notes based on filters defined within the component (currently set to filter by `#p` tag pointing to `TV_PUBKEY_HEX` in `src/constants.ts`).
-- **Display:** Shows a list of the most recent messages, including the sender's avatar and name, with profile data and images successfully loaded for all authors via streaming subscriptions.
+- **Data Source:** Subscribes to Kind 1 notes based on filters (e.g., `#e` tag for replies, `#p` tag for mentions).
+- **Display:** Shows a list of recent messages with sender avatar and name.
 - **Dependencies:** `useNdk`, `useProfile` (from `nostr-hooks`).
+
+### `profileCache.ts` (`src/utils/profileCache.ts`)
+- Provides shared logic for caching and retrieving Nostr user profiles (Kind 0) using IndexedDB (`ProfileCache`).
+- Includes functions to get, save, and delete the profile database.
+- Used by `Podcastr.tsx` (and potentially other components) to reduce redundant profile fetches.
 
 ### `constants.ts` (`src/constants.ts`)
 - Stores important configuration values:
@@ -51,6 +71,13 @@ This application is designed to run on a display (like a TV) and show content fr
     - `MAIN_THREAD_NEVENT_URI`: Full `nevent` URI used for the QR code.
     - `TV_PUBKEY_HEX`: Hex public key of the TV instance.
     - `MAIN_POST_CONTENT`: Content for the initial post (not currently used for auto-posting).
+
+## Caching
+
+This application makes extensive use of **IndexedDB** for caching to improve performance and reduce network load:
+- `MediaFeedCache`: Stores metadata for recent image notes.
+- `PodcastNoteCache`: Stores metadata for discovered podcast episode notes.
+- `ProfileCache`: Stores Nostr user profile data (Kind 0 events).
 
 ## Setup
 
