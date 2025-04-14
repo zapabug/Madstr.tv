@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import QRCode from 'react-qr-code'; // Import QRCode
-import MediaFeed, { MediaFeedProps, MediaNote, MediaFeedRef } from './components/MediaFeed'; // Import props type if needed
+import MediaFeed, { MediaFeedRef } from './components/MediaFeed'; // Import props type if needed
 import MessageBoard from './components/MessageBoard'; // Re-enable import
 import Podcastr from './components/Podcastr'; // Re-import Podcastr
-import VideoList, { VideoNote } from './components/VideoList'; // Import VideoList
+import VideoList from './components/VideoList'; // Import VideoList
 import VideoPlayer from './components/VideoPlayer'; // Import VideoPlayer
 import RelayStatus from './components/RelayStatus'; // Import the new component
 import { nip19 } from 'nostr-tools';
 import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors'; // Import the new hook
+import { useMediaState } from './hooks/useMediaState'; // Import the new hook
 
 // Public key for this TV instance (used for displaying QR code)
 const TV_PUBKEY_NPUB = 'npub1a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsfzzwnyc4s6a66d8';
@@ -32,18 +33,22 @@ function App() {
   // Use the new hook to get NDK instance, authors, and loading state
   const { ndk, mediaAuthors, isLoadingAuthors } = useMediaAuthors();
   
-  // State for selected video
-  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
-  const [selectedVideoNpub, setSelectedVideoNpub] = useState<string | null>(null);
-
-  // State for bottom-right panel toggle
-  const [interactiveMode, setInteractiveMode] = useState<'podcast' | 'video'>('podcast');
-
-  // State for notes (now managed centrally)
-  const [imageNotes, setImageNotes] = useState<MediaNote[]>([]); 
-  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
-  const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]); 
-  const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+  // Hook for Media State & Handlers
+  const {
+    interactiveMode,
+    imageNotes,
+    currentImageIndex,
+    videoNotes,
+    currentVideoIndex,
+    selectedVideoUrl,
+    selectedVideoNpub,
+    handleImageNotesLoaded,
+    handleVideoNotesLoaded,
+    handleVideoSelect,
+    handlePrevious,
+    handleNext,
+    toggleInteractiveMode,
+  } = useMediaState();
 
   // <<< Add state for Play/Pause button now in App >>>
   const [appIsPlayingRequest, setAppIsPlayingRequest] = useState<boolean>(false); // What App wants the video to do
@@ -51,42 +56,6 @@ function App() {
 
   // <<< Ref for MediaFeed component >>>
   const mediaFeedRef = useRef<MediaFeedRef>(null);
-
-  // Define handleVideoSelect first
-  const handleVideoSelect = useCallback((url: string | null, npub: string | null, index: number) => {
-    console.log(`App: Video selected - URL: ${url}, Npub: ${npub}, Index: ${index}`);
-    setSelectedVideoUrl(url);
-    setSelectedVideoNpub(npub);
-    setCurrentVideoIndex(index);
-  }, []); // No dependencies needed if it only calls setters
-
-  // ---> Callback handlers for loaded notes <---
-  const handleImageNotesLoaded = useCallback((notes: MediaNote[]) => {
-      console.log(`App: Received ${notes.length} image notes.`);
-      setImageNotes(notes);
-      // Reset index if it's out of bounds after notes update?
-      if (currentImageIndex >= notes.length && notes.length > 0) {
-          setCurrentImageIndex(0);
-      }
-  }, [currentImageIndex]); // Dependency needed for index check
-
-  const handleVideoNotesLoaded = useCallback((notes: VideoNote[]) => {
-      console.log(`App: Received ${notes.length} video notes.`);
-      setVideoNotes(notes);
-      if (currentVideoIndex >= notes.length && notes.length > 0) {
-          setCurrentVideoIndex(0);
-      }
-      if (notes.length > 0 && !selectedVideoUrl) {
-          console.log("App: Auto-selecting first video on load.");
-          let npub: string | null = null;
-          try {
-              npub = nip19.npubEncode(notes[0].posterPubkey);
-          } catch (e) { console.error("App: Failed to encode npub in handleVideoNotesLoaded", e); }
-          // Call handleVideoSelect (now defined above)
-          handleVideoSelect(notes[0].url, npub, 0);
-      }
-  // Remove handleVideoSelect from dependencies
-  }, [currentVideoIndex, selectedVideoUrl]);
 
   // <<< Handler for VideoPlayer reporting its state >>>
   const handleVideoPlayingStateChange = useCallback((isPlaying: boolean) => {
@@ -108,98 +77,6 @@ function App() {
           event.preventDefault();
       }
   }, []);
-
-  // Prev/Next handlers (use centrally managed notes state)
-  const handlePrevious = useCallback(() => {
-    if (interactiveMode === 'podcast') {
-      // Now operates directly on imageNotes state
-      const cycleLength = imageNotes.length;
-      if (cycleLength === 0) return;
-      const prevIndex = (currentImageIndex - 1 + cycleLength) % cycleLength;
-      setCurrentImageIndex(prevIndex);
-      console.log(`App: Previous Image - Index: ${prevIndex}`);
-    } else {
-      // Now operates directly on videoNotes state
-      const cycleLength = videoNotes.length;
-      if (cycleLength === 0) return;
-      const prevIndex = (currentVideoIndex - 1 + cycleLength) % cycleLength;
-      setCurrentVideoIndex(prevIndex);
-      const newSelectedVideo = videoNotes[prevIndex];
-      if (newSelectedVideo) {
-          setSelectedVideoUrl(newSelectedVideo.url);
-          // ---> Encode hex pubkey to npub <---
-          let npub: string | null = null;
-          try {
-              npub = nip19.npubEncode(newSelectedVideo.posterPubkey);
-          } catch (e) { console.error("App: Failed to encode npub in handlePrevious", e); }
-          setSelectedVideoNpub(npub);
-          console.log(`App: Previous Video - Index: ${prevIndex}, URL: ${newSelectedVideo.url}`);
-      } else {
-          console.warn("App: Previous Video - No video found at index", prevIndex);
-      }
-    }
-  // Add imageNotes/videoNotes to dependencies as handlers now read them
-  }, [interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes]);
-
-  const handleNext = useCallback(() => {
-    if (interactiveMode === 'podcast') {
-      const cycleLength = imageNotes.length;
-      if (cycleLength === 0) return;
-      const nextIndex = (currentImageIndex + 1) % cycleLength;
-      setCurrentImageIndex(nextIndex);
-      console.log(`App: Next Image - Index: ${nextIndex}`);
-    } else {
-      const cycleLength = videoNotes.length;
-      if (cycleLength === 0) return;
-      const nextIndex = (currentVideoIndex + 1) % cycleLength;
-      setCurrentVideoIndex(nextIndex);
-      const newSelectedVideo = videoNotes[nextIndex];
-      if (newSelectedVideo) {
-          setSelectedVideoUrl(newSelectedVideo.url);
-          // ---> Encode hex pubkey to npub <---
-          let npub: string | null = null;
-          try {
-              npub = nip19.npubEncode(newSelectedVideo.posterPubkey);
-          } catch (e) { console.error("App: Failed to encode npub in handleNext", e); }
-          setSelectedVideoNpub(npub);
-          console.log(`App: Next Video - Index: ${nextIndex}, URL: ${newSelectedVideo.url}`);
-      } else {
-          console.warn("App: Next Video - No video found at index", nextIndex);
-      }
-    }
-  // Add imageNotes/videoNotes to dependencies
-  }, [interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes]);
-
-  const toggleInteractiveMode = () => {
-      setInteractiveMode(prev => {
-        const newMode = prev === 'podcast' ? 'video' : 'podcast';
-        console.log("App: Toggling interactiveMode to", newMode);
-        if (newMode === 'video' && videoNotes.length > 0) {
-            console.log("App: Selecting current/first video on mode toggle.");
-            const indexToSelect = currentVideoIndex < videoNotes.length ? currentVideoIndex : 0;
-            const videoToSelect = videoNotes[indexToSelect];
-            if (videoToSelect) {
-                 let npub: string | null = null;
-                 try {
-                     npub = nip19.npubEncode(videoToSelect.posterPubkey);
-                 } catch (e) { console.error("App: Failed to encode npub in toggleInteractiveMode", e); }
-                 // Call handleVideoSelect (now defined above)
-                 handleVideoSelect(videoToSelect.url, npub, indexToSelect);
-            }
-        } else if (newMode === 'podcast') {
-             // Optionally clear video selection when switching away from video mode?
-             // setSelectedVideoUrl(null);
-             // setSelectedVideoNpub(null);
-        }
-        return newMode;
-      });
-  // Remove handleVideoSelect from dependencies
-  // Keep videoNotes, currentVideoIndex if read directly before calling setter?
-  // Safer to keep state read inside the callback if logic depends on it.
-  // For now, assuming handleVideoSelect is the main dependency needed for the *action*.
-  // Let's try removing all dependencies for simplicity, as it only calls setters.
-  // }, [videoNotes, currentVideoIndex]); 
-  };
 
   // <<< NEW: Function to focus the toggle button in MediaFeed >>>
   const focusMediaFeedToggle = useCallback(() => {
