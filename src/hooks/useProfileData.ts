@@ -7,19 +7,15 @@ import {
     parseProfileContent 
 } from '../utils/profileCache'; // Import shared profile utilities
 
-// Assuming PodcastNote is defined elsewhere or we redefine it here if necessary
-interface PodcastNote {
-  id: string;
-  posterPubkey: string;
-  // ... other fields
-}
+// Use the generic NostrNote type
+import { NostrNote } from '../types/nostr';
 
 interface UseProfileDataResult {
   profiles: Record<string, ProfileData>;
   fetchProfile: (pubkey: string) => Promise<void>; // Expose fetch for potential pre-fetching
 }
 
-export function useProfileData(notes: PodcastNote[]): UseProfileDataResult {
+export function useProfileData(notes: NostrNote[]): UseProfileDataResult {
   const { ndk } = useNdk();
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({});
   const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
@@ -102,18 +98,21 @@ export function useProfileData(notes: PodcastNote[]): UseProfileDataResult {
   // --- Effect to Trigger Profile Fetches --- 
   useEffect(() => {
     if (notes.length > 0) {
-      const uniquePubkeysInNotes = new Set(notes.map(note => note.posterPubkey));
-      // console.log("useProfileData: Checking profiles for pubkeys:", Array.from(uniquePubkeysInNotes));
-      uniquePubkeysInNotes.forEach(pubkey => {
-        // Fetch only if we don't have a profile with a name yet
-        if (pubkey && !profiles[pubkey]?.name && !processingPubkeys.current.has(pubkey)) {
-          // console.log(`useProfileData: Triggering fetch for missing profile: ${pubkey.substring(0,8)}`);
-          fetchProfile(pubkey);
-        }
+        // Filter out notes without a posterPubkey before creating the Set
+        const validPubkeysInNotes = notes
+            .map(note => note.posterPubkey)
+            .filter((pubkey): pubkey is string => typeof pubkey === 'string' && pubkey.length > 0);
+        
+        const uniquePubkeysInNotes = new Set(validPubkeysInNotes);
+
+        uniquePubkeysInNotes.forEach(pubkey => {
+            // Fetch logic remains the same: check if profile needs fetching
+            if (!profiles[pubkey]?.name && !processingPubkeys.current.has(pubkey)) {
+                fetchProfile(pubkey);
+            }
       });
     }
-    // Only re-run when the list of notes changes significantly (e.g., identity or length)
-  }, [notes, profiles, fetchProfile]); // Depend on notes, profiles, and the fetch function itself
+  }, [notes, profiles, fetchProfile]);
 
   return { profiles, fetchProfile };
 } 

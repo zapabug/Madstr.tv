@@ -7,8 +7,9 @@ The `Podcastr` component is a React functional component designed to discover, d
 ## Key Features
 
 *   **Nostr Integration:** Uses `nostr-hooks` and `@nostr-dev-kit/ndk` to connect to the Nostr network.
-*   **Podcast Discovery:** Subscribes to `Kind 1` (Text) notes from specified authors and parses note content for URLs matching common audio formats (`.mp3`, `.m4a`, `.wav`). 
+*   **Podcast Discovery:** Subscribes to `Kind 1` (Text) notes from specified authors and parses note content for URLs matching common audio formats (`.mp3`, `.m4a`, `.wav`).
     *   _Note:_ Discovery currently relies solely on finding audio URLs within the `content` of Kind 1 notes. It does not yet parse specific podcast-related tags (e.g., "episode", "title") or subscribe to dedicated podcast feed events (like potential future NIPs).
+    *   **_IMPORTANT UPDATE (Regarding Current Implementation):_** The data fetching logic described in this document is **outdated**. The actual podcast fetching now happens in the parent `App.tsx` component. That component subscribes to **Kind 1 and Kind 30402** events from the specified authors and attempts to extract audio URLs from the `content` or specific tags (`url`, `enclosure`) of those events. **Crucially, the current system does NOT use Kind 0 (profile metadata) events to discover podcast episode URLs.** This difference might be relevant to ongoing issues with podcast discovery.
 *   **Profile Fetching:** Retrieves author profile information (Kind 0 events) using NDK's `fetchProfile()` method. Handles potential variations in NDK response formats (data in `.content` string vs. direct properties).
 *   **Caching:**
     *   **Podcast Notes:** Caches discovered podcast note details (URL, author pubkey, timestamp, etc.) in IndexedDB (`PodcastNoteCache`) for faster loading.

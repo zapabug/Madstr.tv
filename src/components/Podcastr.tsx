@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
-import { usePodcastNotes } from '../hooks/usePodcastNotes';
+// import { usePodcastNotes } from '../hooks/usePodcastNotes'; // <<< REMOVE
 import { useProfileData } from '../hooks/useProfileData';
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback';
+import { NostrNote } from '../types/nostr'; // <<< ADD type import
 
 // --- Helper to format time (seconds) into MM:SS ---
 const formatTime = (seconds: number): string => {
@@ -20,13 +21,15 @@ const formatTime = (seconds: number): string => {
 
 interface PodcastPlayerProps {
   authors: string[];
+  notes: NostrNote[]; // <<< ADD notes prop
+  isLoadingNotes: boolean; // <<< ADD isLoadingNotes prop
   handleLeft?: () => void;
   handleRight?: () => void;
   onFocusRightEdge?: () => void;
   // onFocusBottomEdge?: () => void; // <<< REMOVED
 }
 
-const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRight, onFocusRightEdge /*, onFocusBottomEdge*/ }) => {
+const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, notes, isLoadingNotes, handleLeft, handleRight, onFocusRightEdge /*, onFocusBottomEdge*/ }) => {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
 
@@ -41,8 +44,9 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
   const mainContainerRef = useRef<HTMLDivElement>(null); // <<< Declaration >>>
 
   // --- Custom Hooks ---
-  const { notes, isLoading: isLoadingNotes } = usePodcastNotes(authors);
-  const { profiles } = useProfileData(notes);
+  // <<< REMOVE internal notes fetching >>>
+  // const { notes, isLoading: isLoadingNotes } = usePodcastNotes(authors);
+  const { profiles } = useProfileData(notes); // <<< Use notes prop here
   // Get the current item based on the index *after* notes have loaded
   const currentItem = !isLoadingNotes && notes.length > currentItemIndex ? notes[currentItemIndex] : null;
   // --- Log currentItem and its URL before passing to hook ---
@@ -55,9 +59,9 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
     setPlaybackRate,
     togglePlayPause,
     handleSeek
-  } = useMediaElementPlayback({ 
+  } = useMediaElementPlayback({
       mediaRef: audioRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
-      currentItemUrl: currentItem?.url || null 
+      currentItemUrl: currentItem?.url || null
   });
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
 
@@ -76,7 +80,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
       }
     }
   // Depend on notes list and loading state
-  }, [notes, isLoadingNotes]); 
+  }, [notes, isLoadingNotes]);
 
   // Initialize/Resize list item refs when notes change
   useEffect(() => {
@@ -195,8 +199,8 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
             if (isActuallySelected) {
                 itemBg = 'bg-purple-700 bg-opacity-70';
             }
-            const profile = profiles[note.posterPubkey];
-            const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey.substring(0, 10) + '...';
+            const profile = note.posterPubkey ? profiles[note.posterPubkey] : null;
+            const itemDisplayName = profile?.name || profile?.displayName || (note.posterPubkey ? note.posterPubkey.substring(0, 10) + '...' : 'Unknown');
             const itemPictureUrl = profile?.picture;
             const itemIsLoadingProfile = profile?.isLoading;
 
@@ -330,19 +334,28 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
                 aria-label="Seek through podcast"
                 tabIndex={0} // RESTORED
                 disabled={!duration || duration <= 0} 
-                onKeyDown={(e) => { 
+                onKeyDown={(e) => {
                   console.log(`Podcastr Seekbar KeyDown - Fired! key='${e.key}'`);
-                  // --- DIAGNOSTIC LOGGING (Level 2 - Props check) ---
-                  console.log(`Podcastr Seekbar KeyDown: key='${e.key}', handleLeft defined=${!!handleLeft}`); 
-                  // --- END DIAGNOSTIC LOGGING ---
+                  // --- DIAGNOSTIC LOGGING (Level 2 - Props check) ---\
+                  console.log(`Podcastr Seekbar KeyDown: key='${e.key}', handleLeft defined=${!!handleLeft}`);
+                  // --- END DIAGNOSTIC LOGGING ---\
 
-                  // Handle Up to escape the seek bar
+                  // Handle Up to escape the seek bar -> focus list item
                   if (e.key === 'ArrowUp') {
-                    if (handleLeft) {
-                      console.log("Podcastr: Seek bar up -> calling handleLeft (exit)");
-                      handleLeft();
-                      e.preventDefault();
+                    // <<< CHANGE START >>>
+                    // Focus the currently selected item, or the first item if index is invalid
+                    const targetIndex = currentItemIndex >= 0 && currentItemIndex < listItemRefs.current.length ? currentItemIndex : 0;
+                    const targetItem = listItemRefs.current[targetIndex];
+                    if (targetItem) {
+                        console.log(`Podcastr: Seek bar up -> focusing list item index ${targetIndex}`);
+                        targetItem.focus();
+                        e.preventDefault(); // Prevent default scroll/etc.
+                    } else {
+                         console.warn(`Podcastr: Seek bar up -> list item ref at index ${targetIndex} not found!`);
+                         // Optionally, call handleLeft as a fallback? For now, do nothing.
+                         // if (handleLeft) { handleLeft(); e.preventDefault(); }
                     }
+                    // <<< CHANGE END >>>
                   }
                   // Handle Down to focus Speed Button
                   if (e.key === 'ArrowDown') {

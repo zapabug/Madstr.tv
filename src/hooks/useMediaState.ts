@@ -1,154 +1,267 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { nip19 } from 'nostr-tools';
-import { MediaNote } from '../components/MediaFeed'; // Assuming MediaNote is exported
-import { VideoNote } from '../components/VideoList'; // Assuming VideoNote is exported
+import { NostrNote } from '../types/nostr';
 
 // Helper function (if needed, or keep in App.tsx if only used there once)
 // function getHexPubkey... (already moved to useMediaAuthors or kept in App if needed elsewhere)
 
-export function useMediaState() {
-    // State for selected video
-    const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+// --- Define Props Interface --- 
+interface UseMediaStateProps {
+  // Accept note arrays directly
+  initialImageNotes?: NostrNote[];
+  initialPodcastNotes?: NostrNote[];
+  initialVideoNotes?: NostrNote[];
+  // Keep fetchers and lengths
+  fetchOlderImages?: () => void;
+  fetchOlderVideos?: () => void;
+  shuffledImageNotesLength?: number; // Need length for boundary check
+  shuffledVideoNotesLength?: number; // Need length for boundary check
+}
+
+// Define return type for clarity
+interface UseMediaStateReturn {
+  viewMode: 'imagePodcast' | 'videoPlayer';
+  // Return internal notes state
+  imageNotes: NostrNote[];
+  podcastNotes: NostrNote[];
+  videoNotes: NostrNote[];
+  // Keep loading states
+  isLoadingPodcastNotes: boolean;
+  isLoadingVideoNotes: boolean;
+  // Indices and URL
+  currentImageIndex: number;
+  currentPodcastIndex: number;
+  currentVideoIndex: number;
+  selectedVideoNpub: string | null; 
+  currentItemUrl: string | null;
+  // Remove handle...NotesLoaded
+  // handleImageNotesLoaded: (notes: NostrNote[]) => void;
+  // handlePodcastNotesLoaded: (notes: NostrNote[]) => void;
+  // handleVideoNotesLoaded: (notes: NostrNote[]) => void;
+  // Keep other handlers
+  handleVideoSelect: (note: NostrNote, index: number) => void; 
+  handlePrevious: () => void;
+  handleNext: () => void;
+  setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
+  setCurrentPodcastIndex: (index: number) => void;
+  // Keep setters for loading state?
+  // Or manage loading state internally based on prop changes?
+  // Let's manage internally for now.
+  // setIsLoadingPodcastNotes: React.Dispatch<React.SetStateAction<boolean>>;
+  // setIsLoadingVideoNotes: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+// <<< Define Regex for media URLs >>>
+const imageRegex = /https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
+const videoRegex = /https?:\/\/\S+\.(?:mp4|mov|webm|m3u8)/i;
+const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
+
+export function useMediaState({ 
+    // Destructure new props
+    initialImageNotes = [],
+    initialPodcastNotes = [],
+    initialVideoNotes = [],
+    // Keep others
+    fetchOlderImages, 
+    fetchOlderVideos, 
+    shuffledImageNotesLength = 0, 
+    shuffledVideoNotesLength = 0 
+  }: UseMediaStateProps = {}): UseMediaStateReturn {
+
+    // State for selected video author npub
     const [selectedVideoNpub, setSelectedVideoNpub] = useState<string | null>(null);
 
-    // State for bottom-right panel toggle
-    const [interactiveMode, setInteractiveMode] = useState<'podcast' | 'video'>('podcast');
+    // State for the current view mode - Simplified
+    const [viewMode, setViewModeInternal] = useState<'imagePodcast' | 'videoPlayer'>('imagePodcast');
 
-    // State for notes
-    const [imageNotes, setImageNotes] = useState<MediaNote[]>([]); 
+    // State for notes and indices
+    const [imageNotes, setImageNotes] = useState<NostrNote[]>([]); 
     const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
-    const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]); 
+    const [videoNotes, setVideoNotes] = useState<NostrNote[]>([]); 
     const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+    const [isLoadingVideoNotes, setIsLoadingVideoNotes] = useState<boolean>(true); // Start as true
 
-    // Define handleVideoSelect first as it might be used by other handlers here
-    const handleVideoSelect = useCallback((url: string | null, npub: string | null, index: number) => {
-        console.log(`useMediaState: Video selected - URL: ${url}, Npub: ${npub}, Index: ${index}`);
-        setSelectedVideoUrl(url);
-        setSelectedVideoNpub(npub);
-        setCurrentVideoIndex(index);
-    }, []); // No dependencies needed if it only calls setters
+    const [podcastNotes, setPodcastNotes] = useState<NostrNote[]>([]);
+    const [currentPodcastIndex, setCurrentPodcastIndexInternal] = useState<number>(0);
+    const [isLoadingPodcastNotes, setIsLoadingPodcastNotes] = useState<boolean>(true); // Start as true
+    
+    const [currentItemUrl, setCurrentItemUrl] = useState<string | null>(null);
 
-    // Callback handlers for loaded notes
-    const handleImageNotesLoaded = useCallback((notes: MediaNote[]) => {
-        console.log(`useMediaState: Received ${notes.length} image notes.`);
-        setImageNotes(notes);
-        // Reset index if it's out of bounds after notes update
-        if (currentImageIndex >= notes.length && notes.length > 0) {
+    // --- NEW: Effect to process initialImageNotes prop --- 
+    useEffect(() => {
+        console.log(`useMediaState: Processing ${initialImageNotes.length} initial image notes.`);
+        // Sort notes received from props
+        const sortedNotes = [...initialImageNotes].sort((a, b) => b.created_at - a.created_at);
+        setImageNotes(sortedNotes);
+        // Reset index if needed
+        if (currentImageIndex >= sortedNotes.length && sortedNotes.length > 0) {
             setCurrentImageIndex(0);
         }
-    }, [currentImageIndex]); // Dependency needed for index check
+        // Assuming loading is finished when notes arrive?
+        // setIsLoadingImageNotes(false); // If we had this state
+    }, [initialImageNotes]); // Depend on the prop
 
-    const handleVideoNotesLoaded = useCallback((notes: VideoNote[]) => {
-        console.log(`useMediaState: Received ${notes.length} video notes.`);
-        setVideoNotes(notes);
-        // Reset video index if out of bounds
-        if (currentVideoIndex >= notes.length && notes.length > 0) {
-            setCurrentVideoIndex(0);
+    // --- NEW: Effect to process initialPodcastNotes prop --- 
+    useEffect(() => {
+        console.log(`useMediaState: Processing ${initialPodcastNotes.length} initial podcast notes.`);
+        const sortedNotes = [...initialPodcastNotes].sort((a, b) => b.created_at - a.created_at);
+        setPodcastNotes(sortedNotes);
+        setIsLoadingPodcastNotes(false); // Set loading false here
+        // Reset index if needed
+        const newIndex = (currentPodcastIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentPodcastIndex;
+        if (newIndex !== currentPodcastIndex) {
+            setCurrentPodcastIndexInternal(newIndex);
         }
-        // Auto-select first video if none is selected and notes are loaded
-        if (notes.length > 0 && !selectedVideoUrl) {
-            console.log("useMediaState: Auto-selecting first video on load.");
-            let npub: string | null = null;
-            try {
-                npub = nip19.npubEncode(notes[0].posterPubkey);
-            } catch (e) { console.error("useMediaState: Failed to encode npub in handleVideoNotesLoaded", e); }
-            handleVideoSelect(notes[0].url, npub, 0);
-        }
-    // Dependencies: currentVideoIndex, selectedVideoUrl, handleVideoSelect
-    }, [currentVideoIndex, selectedVideoUrl, handleVideoSelect]);
+    }, [initialPodcastNotes]); // Depend on the prop
 
-    // Prev/Next handlers
+    // --- NEW: Effect to process initialVideoNotes prop --- 
+    useEffect(() => {
+        console.log(`useMediaState: Processing ${initialVideoNotes.length} initial video notes.`);
+        const sortedNotes = [...initialVideoNotes].sort((a, b) => b.created_at - a.created_at);
+        setVideoNotes(sortedNotes);
+        setIsLoadingVideoNotes(false); // Set loading false here
+        // Reset index if needed
+        const newIndex = (currentVideoIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentVideoIndex;
+        if (newIndex !== currentVideoIndex) {
+             setCurrentVideoIndex(newIndex);
+        }
+    }, [initialVideoNotes]); // Depend on the prop
+
+    // Update currentItemUrl whenever the relevant source changes
+    useEffect(() => {
+        let newUrl: string | null = null;
+        console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, pIdx=${currentPodcastIndex}, vIdx=${currentVideoIndex}`);
+
+        if (viewMode === 'imagePodcast') {
+            if (podcastNotes.length > 0 && currentPodcastIndex < podcastNotes.length) {
+                newUrl = podcastNotes[currentPodcastIndex]?.url || null;
+            }
+        } else { // viewMode === 'videoPlayer'
+            if (videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
+                newUrl = videoNotes[currentVideoIndex]?.url || null;
+            }
+        }
+        
+        if (newUrl !== currentItemUrl) {
+            console.log(`useMediaState URL Effect: Setting currentItemUrl from ${currentItemUrl} to: ${newUrl}`);
+            setCurrentItemUrl(newUrl);
+        } else {
+            console.log(`useMediaState URL Effect: currentItemUrl (${currentItemUrl}) already matches newUrl (${newUrl}). No change.`);
+        }
+
+    // Dependencies: viewMode, indices, notes arrays, currentItemUrl
+    }, [viewMode, currentPodcastIndex, currentVideoIndex, podcastNotes, videoNotes, currentItemUrl]);
+
+    // Set Podcast Index (does NOT change viewMode)
+    const setCurrentPodcastIndex = useCallback((index: number) => {
+        console.log("useMediaState: setCurrentPodcastIndex called with", index);
+        if (index >= 0 && index < podcastNotes.length) {
+            setCurrentPodcastIndexInternal(index);
+        } else {
+            console.warn(`useMediaState: Attempted to set invalid podcast index ${index}`);
+        }
+    }, [podcastNotes]);
+
+    // Function to set view mode directly
+    const setViewMode = useCallback((mode: 'imagePodcast' | 'videoPlayer') => {
+        console.log("useMediaState: Setting viewMode to", mode);
+        if (mode !== viewMode) { // Only update if changed
+             setViewModeInternal(mode);
+        }
+    }, [viewMode]); // Depend on viewMode
+
+    // Select Video (sets index AND switches mode to videoPlayer)
+    const handleVideoSelect = useCallback((note: NostrNote, index: number) => {
+        console.log(`useMediaState: Video selected - Index: ${index}, URL: ${note.url}`);
+        let newNpub: string | null = null;
+        if (note.posterPubkey) { 
+            try { newNpub = nip19.npubEncode(note.posterPubkey); } catch (e) { console.error("npubEncode error:", e); }
+        } else {
+             console.warn(`useMediaState: posterPubkey missing on selected video note ${note.id}`);
+        }
+        setSelectedVideoNpub(newNpub);
+        setCurrentVideoIndex(index);
+        setViewMode('videoPlayer'); 
+    }, [setViewMode]); // Depends on setViewMode
+
+    // Prev/Next handlers - Updated for simplified modes
     const handlePrevious = useCallback(() => {
-        if (interactiveMode === 'podcast') {
-            const cycleLength = imageNotes.length;
-            if (cycleLength === 0) return;
-            const prevIndex = (currentImageIndex - 1 + cycleLength) % cycleLength;
+        if (viewMode === 'imagePodcast') {
+            const count = imageNotes.length;
+            if (count === 0) return;
+            const prevIndex = (currentImageIndex - 1 + count) % count;
             setCurrentImageIndex(prevIndex);
             console.log(`useMediaState: Previous Image - Index: ${prevIndex}`);
-        } else {
-            const cycleLength = videoNotes.length;
-            if (cycleLength === 0) return;
-            const prevIndex = (currentVideoIndex - 1 + cycleLength) % cycleLength;
+        } else { // viewMode === 'videoPlayer'
+            const count = videoNotes.length;
+            if (count === 0) return;
+            const prevIndex = (currentVideoIndex - 1 + count) % count;
             const newSelectedVideo = videoNotes[prevIndex];
             if (newSelectedVideo) {
-                let npub: string | null = null;
-                try {
-                    npub = nip19.npubEncode(newSelectedVideo.posterPubkey);
-                } catch (e) { console.error("useMediaState: Failed to encode npub in handlePrevious", e); }
-                handleVideoSelect(newSelectedVideo.url, npub, prevIndex); // Use handleVideoSelect
-                console.log(`useMediaState: Previous Video - Index: ${prevIndex}, URL: ${newSelectedVideo.url}`);
-            } else {
-                console.warn("useMediaState: Previous Video - No video found at index", prevIndex);
+                let newNpub: string | null = null;
+                if (newSelectedVideo.posterPubkey) { try { newNpub = nip19.npubEncode(newSelectedVideo.posterPubkey); } catch(e){} }
+                setSelectedVideoNpub(newNpub);
+                setCurrentVideoIndex(prevIndex);
+                console.log(`useMediaState: Previous Video - Index: ${prevIndex}`);
             }
         }
-    // Dependencies: interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes, handleVideoSelect
-    }, [interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes, handleVideoSelect]);
+    }, [
+        viewMode, 
+        currentImageIndex, currentVideoIndex, 
+        imageNotes, videoNotes // Depend on internal state now
+    ]);
 
     const handleNext = useCallback(() => {
-        if (interactiveMode === 'podcast') {
-            const cycleLength = imageNotes.length;
-            if (cycleLength === 0) return;
-            const nextIndex = (currentImageIndex + 1) % cycleLength;
-            setCurrentImageIndex(nextIndex);
-            console.log(`useMediaState: Next Image - Index: ${nextIndex}`);
-        } else {
-            const cycleLength = videoNotes.length;
-            if (cycleLength === 0) return;
-            const nextIndex = (currentVideoIndex + 1) % cycleLength;
-            const newSelectedVideo = videoNotes[nextIndex];
-            if (newSelectedVideo) {
-                let npub: string | null = null;
-                try {
-                    npub = nip19.npubEncode(newSelectedVideo.posterPubkey);
-                } catch (e) { console.error("useMediaState: Failed to encode npub in handleNext", e); }
-                handleVideoSelect(newSelectedVideo.url, npub, nextIndex); // Use handleVideoSelect
-                console.log(`useMediaState: Next Video - Index: ${nextIndex}, URL: ${newSelectedVideo.url}`);
+         if (viewMode === 'imagePodcast') {
+            const count = shuffledImageNotesLength;
+            if (count === 0) return;
+            const nextIndex = (currentImageIndex + 1);
+            if (nextIndex >= count) {
+                console.log("useMediaState: Reached end of images, calling fetchOlderImages...");
+                fetchOlderImages?.();
             } else {
-                console.warn("useMediaState: Next Video - No video found at index", nextIndex);
+                setCurrentImageIndex(nextIndex);
+                console.log(`useMediaState: Next Image - Index: ${nextIndex}`);
+            }
+        } else { // viewMode === 'videoPlayer'
+            const count = shuffledVideoNotesLength;
+            if (count === 0) return;
+            const nextIndex = (currentVideoIndex + 1);
+            if (nextIndex >= count) {
+                console.log("useMediaState: Reached end of videos, calling fetchOlderVideos...");
+                fetchOlderVideos?.(); 
+            } else {
+                 setCurrentVideoIndex(nextIndex);
+                 console.log(`useMediaState: Next Video - Index: ${nextIndex}`);
             }
         }
-    // Dependencies: interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes, handleVideoSelect
-    }, [interactiveMode, currentImageIndex, currentVideoIndex, imageNotes, videoNotes, handleVideoSelect]);
+    }, [
+        viewMode, 
+        currentImageIndex, currentVideoIndex, 
+        shuffledImageNotesLength, shuffledVideoNotesLength, 
+        fetchOlderImages, fetchOlderVideos, 
+        // Removed original note arrays from deps as npub lookup on next is removed
+    ]);
 
-    const toggleInteractiveMode = useCallback(() => {
-        setInteractiveMode(prev => {
-            const newMode = prev === 'podcast' ? 'video' : 'podcast';
-            console.log("useMediaState: Toggling interactiveMode to", newMode);
-            // If switching to video mode, select the current/first video
-            if (newMode === 'video' && videoNotes.length > 0) {
-                console.log("useMediaState: Selecting current/first video on mode toggle.");
-                const indexToSelect = currentVideoIndex < videoNotes.length ? currentVideoIndex : 0;
-                const videoToSelect = videoNotes[indexToSelect];
-                if (videoToSelect) {
-                    let npub: string | null = null;
-                    try {
-                        npub = nip19.npubEncode(videoToSelect.posterPubkey);
-                    } catch (e) { console.error("useMediaState: Failed to encode npub in toggleInteractiveMode", e); }
-                    handleVideoSelect(videoToSelect.url, npub, indexToSelect);
-                }
-            }
-            return newMode;
-        });
-    // Dependencies: videoNotes, currentVideoIndex, handleVideoSelect
-    }, [videoNotes, currentVideoIndex, handleVideoSelect]);
-
-    // Return all the state values and handlers needed by App.tsx
+    // Return value - updated
     return {
-        // State values
-        interactiveMode,
-        imageNotes,
+        viewMode,
+        imageNotes, // Return internal state
+        podcastNotes, // Return internal state
+        videoNotes, // Return internal state
+        isLoadingPodcastNotes,
+        isLoadingVideoNotes,
         currentImageIndex,
-        videoNotes,
+        currentPodcastIndex,
         currentVideoIndex,
-        selectedVideoUrl,
         selectedVideoNpub,
-        
-        // Handlers
-        handleImageNotesLoaded,
-        handleVideoNotesLoaded,
+        currentItemUrl,
+        // Removed handle...NotesLoaded
         handleVideoSelect,
         handlePrevious,
         handleNext,
-        toggleInteractiveMode,
+        setViewMode,
+        setCurrentPodcastIndex,
+        // Removed setIsLoading...
     };
 } 
