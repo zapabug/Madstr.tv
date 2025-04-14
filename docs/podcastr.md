@@ -16,9 +16,14 @@ The `Podcastr` component is a React functional component designed to discover, d
 *   **User Interface:**
     *   Displays the currently selected podcast's author name and profile picture (or initials).
     *   Shows a scrollable list of discovered podcast episodes, numbered with the most recent first.
-    *   List items are focusable and clickable, facilitating navigation (e.g., with arrow keys or a remote).
-    *   Includes a standard HTML5 audio player for playback.
-    *   Features a playback speed control button with a dropdown menu (0.75x to 2.0x).
+    *   List items are focusable (`tabIndex={0}`) and clickable, facilitating direct D-pad/arrow key navigation between items.
+    *   **Includes an explicitly rendered standard HTML5 `<audio>` element** for reliable playback control and event handling.
+    *   Features playback controls including a Play/Pause button, a **seek bar (slider)**, and a playback speed control button with a dropdown menu (0.75x to 2.0x).
+*   **Focus Management:**
+    *   Leverages native browser focus for list item navigation.
+    *   **Implements specific `onKeyDown` handlers on controls like the seek bar and speed button to manage focus transitions.** 
+        *   The **seek bar** handles `ArrowUp` (via `handleLeft` prop) and `ArrowDown` (via `onFocusBottomEdge` prop) to allow focus to escape upwards or downwards (typically to the `MediaFeed` toggle).
+        *   The **speed button** handles `ArrowRight` (via `onFocusRightEdge` prop) to allow focus to escape rightwards (typically to the `MediaFeed` toggle).
 *   **State Management:** Leverages React hooks (`useState`, `useEffect`, `useRef`, `useCallback`) to manage component state, side effects (data fetching, subscriptions), and references to DOM elements.
 
 ## Core Logic Flow
@@ -53,9 +58,9 @@ The `Podcastr` component is a React functional component designed to discover, d
     *   Displays loading indicators while cache or profiles are loading.
     *   Shows a message if no podcasts are found.
     *   Renders the current item's profile info (picture, name) at the top.
-    *   Renders the scrollable list, displaying the reverse chronological number, author picture/initials, and author name for each item. Highlights the selected item.
-    *   Renders the HTML audio player, updating its `src` when `currentItemIndex` changes.
-    *   Renders the playback speed control.
+    *   Renders the scrollable list, applying focus styles (`focus:`) directly to list items.
+    *   Renders the **HTML `<audio>` element**, updating its `src` when `currentItemIndex` changes.
+    *   Renders the playback controls (Play/Pause, Seek Bar, Speed Control).
 
 ## Dependencies
 

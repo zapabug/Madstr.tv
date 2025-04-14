@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import QRCode from 'react-qr-code'; // Import QRCode
 import MediaFeed, { MediaFeedRef } from './components/MediaFeed'; // Import props type if needed
 import MessageBoard from './components/MessageBoard'; // Re-enable import
@@ -10,6 +10,7 @@ import { nip19 } from 'nostr-tools';
 import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors'; // Import the new hook
 import { useMediaState } from './hooks/useMediaState'; // Import the new hook
+import { useVideoPlayback } from './hooks/useVideoPlayback'; // Import the hook
 
 // Public key for this TV instance (used for displaying QR code)
 const TV_PUBKEY_NPUB = 'npub1a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsfzzwnyc4s6a66d8';
@@ -50,33 +51,17 @@ function App() {
     toggleInteractiveMode,
   } = useMediaState();
 
-  // <<< Add state for Play/Pause button now in App >>>
-  const [appIsPlayingRequest, setAppIsPlayingRequest] = useState<boolean>(false); // What App wants the video to do
-  const [videoIsPlayingActual, setVideoIsPlayingActual] = useState<boolean>(false); // What VideoPlayer reports
+  // Use the new hook for video playback state and handlers
+  const {
+    appIsPlayingRequest,
+    videoIsPlayingActual,
+    handleVideoPlayingStateChange,
+    handleAppPlayPauseClick,
+    handleAppPlayPauseKeyDown,
+  } = useVideoPlayback();
 
   // <<< Ref for MediaFeed component >>>
   const mediaFeedRef = useRef<MediaFeedRef>(null);
-
-  // <<< Handler for VideoPlayer reporting its state >>>
-  const handleVideoPlayingStateChange = useCallback((isPlaying: boolean) => {
-      setVideoIsPlayingActual(isPlaying);
-      // Sync request state if actual state changes unexpectedly (e.g., video ends)
-      if (!isPlaying && appIsPlayingRequest) {
-          setAppIsPlayingRequest(false);
-      }
-  }, [appIsPlayingRequest]); // Dependency needed for sync logic
-
-  // <<< Handlers for Play/Pause button now in App >>>
-  const handleAppPlayPauseClick = useCallback(() => {
-      setAppIsPlayingRequest(prev => !prev);
-  }, []);
-
-  const handleAppPlayPauseKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-          setAppIsPlayingRequest(prev => !prev);
-          event.preventDefault();
-      }
-  }, []);
 
   // <<< NEW: Function to focus the toggle button in MediaFeed >>>
   const focusMediaFeedToggle = useCallback(() => {
@@ -321,10 +306,9 @@ function App() {
                         interactiveMode === 'podcast' ? (
                             <Podcastr 
                                 authors={mediaAuthors} 
-                                handleLeft={handlePrevious}
+                                handleLeft={toggleInteractiveMode}
                                 handleRight={handleNext}
                                 onFocusRightEdge={focusMediaFeedToggle}
-                                onFocusBottomEdge={focusMediaFeedToggle}
                             /> 
                         ) : (
                             <VideoList 

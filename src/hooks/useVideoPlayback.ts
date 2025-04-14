@@ -1,135 +1,42 @@
-import { useState, useCallback, RefObject, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
-interface UseVideoPlaybackArgs {
-  videoRef: RefObject<HTMLVideoElement | null>;
-  url: string | null;
-  onPlayAttempt?: () => void;
-  onPause?: () => void;
-  onPlaySuccess?: () => void;
-  onPlayError?: (error: any) => void;
-  onEnded?: () => void;
-}
+export function useVideoPlayback() {
+    // State for controlling playback request vs actual state
+    const [appIsPlayingRequest, setAppIsPlayingRequest] = useState<boolean>(false); 
+    const [videoIsPlayingActual, setVideoIsPlayingActual] = useState<boolean>(false);
 
-interface UseVideoPlaybackReturn {
-  isPlaying: boolean;
-  togglePlayPause: () => void;
-  handleKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
-}
-
-export const useVideoPlayback = ({
-  videoRef,
-  url,
-  onPlayAttempt,
-  onPause,
-  onPlaySuccess,
-  onPlayError,
-  onEnded,
-}: UseVideoPlaybackArgs): UseVideoPlaybackReturn => {
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (videoElement && url) {
-        console.log("useVideoPlayback: URL changed, attempting to play", url);
-        videoElement.load();
-        videoElement.muted = false;
-        setIsPlaying(false);
-        onPlayAttempt?.();
-
-        const playPromise = videoElement.play();
-
-        if (playPromise !== undefined) {
-            playPromise.then(() => {
-                console.log("useVideoPlayback: Auto-play promise resolved.");
-                if (videoElement.muted) {
-                    console.warn("useVideoPlayback: Auto-playback started but was forced muted. Pausing.");
-                    videoElement.pause();
-                    setIsPlaying(false);
-                    onPause?.();
-                } else {
-                    console.log("useVideoPlayback: Auto-playback started successfully.");
-                    setIsPlaying(true);
-                    onPlaySuccess?.();
-                }
-            }).catch(error => {
-                console.warn("useVideoPlayback: Auto-play promise rejected:", error);
-                videoElement.pause();
-                setIsPlaying(false);
-                onPlayError?.(error);
-            });
+    // Handler for VideoPlayer reporting its actual playing state
+    // This updates the internal actual state and syncs the request state if needed
+    const handleVideoPlayingStateChange = useCallback((isPlaying: boolean) => {
+        setVideoIsPlayingActual(isPlaying);
+        // If video stops unexpectedly (e.g., ends, buffers), sync request state
+        if (!isPlaying && appIsPlayingRequest) {
+            console.log("useVideoPlayback: Video stopped unexpectedly, syncing request state.");
+            setAppIsPlayingRequest(false);
         }
-    } else {
-        setIsPlaying(false);
-        if (videoElement) videoElement.pause();
-    }
+    }, [appIsPlayingRequest]); // Dependency needed for sync logic
 
-    return () => {
-        if (videoElement) {
-            videoElement.pause();
-            setIsPlaying(false);
+    // Handler for user clicking the Play/Pause button
+    const handleAppPlayPauseClick = useCallback(() => {
+        console.log("useVideoPlayback: Play/Pause button clicked.");
+        setAppIsPlayingRequest(prev => !prev);
+    }, []);
+
+    // Handler for user pressing Enter/Space on the Play/Pause button
+    const handleAppPlayPauseKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            console.log("useVideoPlayback: Play/Pause button keydown (Enter/Space).");
+            setAppIsPlayingRequest(prev => !prev);
+            event.preventDefault();
         }
-    }
-  }, [url, videoRef, onPlayAttempt, onPause, onPlaySuccess, onPlayError]);
+    }, []);
 
-  useEffect(() => {
-      const videoElement = videoRef.current;
-      if (!videoElement) return;
-
-      const handleVideoEnd = () => {
-          console.log("useVideoPlayback: Video ended.");
-          setIsPlaying(false);
-          onEnded?.();
-      };
-
-      videoElement.addEventListener('ended', handleVideoEnd);
-
-      return () => {
-          videoElement.removeEventListener('ended', handleVideoEnd);
-      };
-  }, [videoRef, onEnded]);
-
-  const togglePlayPause = useCallback(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) return;
-
-    if (isPlaying) {
-      videoElement.pause();
-      setIsPlaying(false);
-      onPause?.();
-      console.log("useVideoPlayback: Paused manually.");
-    } else {
-      console.log("useVideoPlayback: Attempting manual play...");
-      videoElement.muted = false;
-      onPlayAttempt?.();
-      const playPromise = videoElement.play();
-
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          console.log("useVideoPlayback: Manual play succeeded.");
-          if (videoElement.muted) {
-            console.warn("useVideoPlayback: Manual play started but browser forced mute unexpectedly. Pausing.");
-            videoElement.pause();
-            setIsPlaying(false);
-            onPause?.();
-          } else {
-            setIsPlaying(true);
-            onPlaySuccess?.();
-          }
-        }).catch(error => {
-          console.error("useVideoPlayback: Manual play failed:", error);
-          setIsPlaying(false);
-          onPlayError?.(error);
-        });
-      }
-    }
-  }, [videoRef, isPlaying, onPlayAttempt, onPause, onPlaySuccess, onPlayError]);
-
-  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      togglePlayPause();
-      event.preventDefault();
-    }
-  }, [togglePlayPause]);
-
-  return { isPlaying, togglePlayPause, handleKeyDown };
-}; 
+    // Return the state needed by components and the handlers they trigger
+    return {
+        appIsPlayingRequest,
+        videoIsPlayingActual,
+        handleVideoPlayingStateChange, // Passed to VideoPlayer
+        handleAppPlayPauseClick,       // Passed to Play/Pause button
+        handleAppPlayPauseKeyDown,     // Passed to Play/Pause button
+    };
+} 

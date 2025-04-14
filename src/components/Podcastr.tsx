@@ -23,10 +23,10 @@ interface PodcastPlayerProps {
   handleLeft?: () => void;
   handleRight?: () => void;
   onFocusRightEdge?: () => void;
-  onFocusBottomEdge?: () => void;
+  // onFocusBottomEdge?: () => void; // <<< REMOVED
 }
 
-const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRight, onFocusRightEdge, onFocusBottomEdge }) => {
+const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRight, onFocusRightEdge /*, onFocusBottomEdge*/ }) => {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
 
@@ -140,7 +140,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
 
   // <<< ADD LOGGING HERE >>>
   // Log seek bar related values on each render for diagnostics
-  console.log(`Podcastr Render Check: duration=${duration}, isDisabled=${!duration || duration <= 0}, handleLeft defined=${!!handleLeft}, onFocusBottomEdge defined=${!!onFocusBottomEdge}`);
+  console.log(`Podcastr Render Check: duration=${duration}, isDisabled=${!duration || duration <= 0}, handleLeft defined=${!!handleLeft}`);
 
   if (isLoadingNotes) {
     return (
@@ -310,29 +310,32 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
                 className="w-full h-1 bg-purple-600 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
                 aria-label="Seek through podcast"
                 tabIndex={0} // RESTORED
-                disabled={!duration || duration <= 0} // ADDED: Disable if no valid duration
-                onKeyDown={(e) => { // RESTORED
-                  // --- DIAGNOSTIC LOGGING (Level 1 - Did handler fire?) ---
+                disabled={!duration || duration <= 0} 
+                onKeyDown={(e) => { 
                   console.log(`Podcastr Seekbar KeyDown - Fired! key='${e.key}'`);
                   // --- DIAGNOSTIC LOGGING (Level 2 - Props check) ---
-                  console.log(`Podcastr Seekbar KeyDown: key='${e.key}', handleLeft defined=${!!handleLeft}, onFocusBottomEdge defined=${!!onFocusBottomEdge}`);
+                  console.log(`Podcastr Seekbar KeyDown: key='${e.key}', handleLeft defined=${!!handleLeft}`); 
                   // --- END DIAGNOSTIC LOGGING ---
 
-                  // Handle Up/Down to escape the seek bar
+                  // Handle Up to escape the seek bar
                   if (e.key === 'ArrowUp') {
-                    if (handleLeft) { // Check if prop exists
+                    if (handleLeft) {
+                      console.log("Podcastr: Seek bar up -> calling handleLeft (exit)");
                       handleLeft();
                       e.preventDefault();
                     }
                   }
+                  // Handle Down to focus Speed Button
                   if (e.key === 'ArrowDown') {
-                    if (onFocusBottomEdge) { // Check if prop exists
-                      console.log("Podcastr: Seek bar down -> calling onFocusBottomEdge"); // Keep existing log
-                      onFocusBottomEdge();
-                      e.preventDefault(); // Prevent default only if prop exists
-                    }
+                      if (speedButtonRef.current) {
+                          console.log("Podcastr: Seek bar down -> focusing speed button");
+                          speedButtonRef.current.focus();
+                          e.preventDefault();
+                      } else {
+                           console.warn("Podcastr: Seek bar down -> speedButtonRef not found!")
+                      }
                   }
-                  /* Still commented out seek logic ... */
+                  // Left/Right arrow keys will perform default seek bar actions (no preventDefault here)
                 }}
               />
               <span className="text-xs text-gray-300 w-10 text-left ml-2 flex-shrink-0">{formatTime(duration)}</span>
