@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { usePodcastNotes } from '../hooks/usePodcastNotes';
 import { useProfileData } from '../hooks/useProfileData';
-import { useAudioPlayback } from '../hooks/useAudioPlayback';
+import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback';
 
 // --- Helper to format time (seconds) into MM:SS ---
 const formatTime = (seconds: number): string => {
@@ -46,7 +46,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
   // Get the current item based on the index *after* notes have loaded
   const currentItem = !isLoadingNotes && notes.length > currentItemIndex ? notes[currentItemIndex] : null;
   // --- Log currentItem and its URL before passing to hook ---
-  console.log(`Podcastr: Checking currentItem for audio hook: index=${currentItemIndex}, isLoadingNotes=${isLoadingNotes}, notes.length=${notes.length}, currentItem exists=${!!currentItem}, url=${currentItem?.url}`);
+  console.log(`Podcastr: Checking currentItem for media hook: index=${currentItemIndex}, isLoadingNotes=${isLoadingNotes}, notes.length=${notes.length}, currentItem exists=${!!currentItem}, url=${currentItem?.url}`);
   const {
     isPlaying,
     currentTime,
@@ -55,10 +55,28 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
     setPlaybackRate,
     togglePlayPause,
     handleSeek
-  } = useAudioPlayback({ audioRef, currentItemUrl: currentItem?.url || null });
+  } = useMediaElementPlayback({ 
+      mediaRef: audioRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
+      currentItemUrl: currentItem?.url || null 
+  });
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
 
   // --- Effects ---
+
+  // <<< NEW EFFECT: Focus first list item on notes load >>>
+  useEffect(() => {
+    // Only run if notes are loaded and the list is not empty
+    if (!isLoadingNotes && notes.length > 0) {
+      // Ensure the ref for the first item exists
+      if (listItemRefs.current[0]) {
+        console.log("Podcastr: Focusing first list item.");
+        listItemRefs.current[0].focus();
+      } else {
+        console.warn("Podcastr: Attempted to focus first item, but ref was null.");
+      }
+    }
+  // Depend on notes list and loading state
+  }, [notes, isLoadingNotes]); 
 
   // Initialize/Resize list item refs when notes change
   useEffect(() => {
@@ -193,6 +211,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
                 console.log(`PodcastItem KeyDown: About to call setCurrentItemIndex(${index})`);
                 // ---
                 setCurrentItemIndex(index);
+                event.preventDefault();
               }
             };
 

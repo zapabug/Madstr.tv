@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import QRCode from 'react-qr-code';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
-import { useVideoPlayback } from '../hooks/useVideoPlayback';
+import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback';
 
 interface VideoPlayerProps {
   url: string | null;
@@ -23,10 +23,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded, int
   const { 
     isPlaying: internalIsPlaying,
     togglePlayPause,
-  } = useVideoPlayback({
-    videoRef,
-    url,
-    onEnded,
+  } = useMediaElementPlayback({
+    mediaRef: videoRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
+    currentItemUrl: url,
+    onEnded: onEnded,
   });
 
   // --- Effects for Play/Pause state communication ---
@@ -39,7 +39,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded, int
         console.log(`VideoPlayer: App requested play=${appIsPlayingRequest}, current=${internalIsPlaying}. Triggering toggle.`);
         togglePlayPause();
     }
-  }, [appIsPlayingRequest]); 
+  }, [appIsPlayingRequest, internalIsPlaying, togglePlayPause]);
 
   // --- Effect to Add Global Listeners for Inactivity --- 
   useEffect(() => {
