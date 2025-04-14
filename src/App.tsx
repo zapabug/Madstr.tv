@@ -300,6 +300,73 @@ function App() {
   // Placeholder for relay status
   const isReceivingData = false; 
 
+  // --- Add Keyboard Listener for Mode Toggle ('m' key) ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      
+      // --- Global Actions --- 
+      if (event.key === 'm' || event.key === 'M') {
+        console.log("App: 'm' key pressed, toggling interactive mode.");
+        toggleInteractiveMode();
+        event.preventDefault(); 
+        return;
+      }
+      
+      // --- Handle Remote Control specific keys ---
+      if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'Back') {
+        console.log("App: Remote control back/exit button pressed");
+        if (interactiveMode === 'podcast') {
+          // Exit podcast mode
+          toggleInteractiveMode();
+          event.preventDefault();
+          return;
+        }
+        event.preventDefault();
+        return;
+      }
+      
+      if (event.key === ' ') { 
+        if (interactiveMode === 'video') {
+           console.log("App: Space bar pressed, toggling video play/pause.");
+           handleAppPlayPauseClick(); 
+           event.preventDefault(); 
+           return;
+        } else {
+            // Allow space to bubble up if focus is elsewhere (e.g., Podcastr controls)
+            console.log("App: Space in podcast mode, letting event bubble.");
+            // Do NOT preventDefault or return here.
+        }
+      }
+
+      // --- Global Arrow Handling ---
+      // Handle Left/Right directly unless propagation was stopped (e.g., seek bar escape)
+      if (event.key === 'ArrowLeft') {
+        if (event.cancelBubble) return; // Check if propagation stopped
+        console.log("App: Global Left Arrow.");
+        handlePrevious();
+        event.preventDefault(); // Prevent potential page scroll
+      }
+      if (event.key === 'ArrowRight') {
+        if (event.cancelBubble) return; // Check if propagation stopped
+        console.log("App: Global Right Arrow.");
+        handleNext();
+        event.preventDefault(); // Prevent potential page scroll
+      }
+      // Up/Down arrows not handled globally
+
+    };
+
+    console.log("App: Adding keyboard listeners (m, space, arrows - simplified global V2).");
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup function
+    return () => {
+      console.log("App: Removing keyboard listeners.");
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+    // Dependencies remain the same
+  }, [toggleInteractiveMode, handleAppPlayPauseClick, handlePrevious, handleNext]);
+
   return (
     <>
     {/* Outermost div: Has padding, border, AND background */}
@@ -451,7 +518,11 @@ function App() {
                 <div className="flex-grow min-h-0 bg-gray-800 rounded-lg p-1">
                     {ndk ? (
                         interactiveMode === 'podcast' ? (
-                            <Podcastr authors={mediaAuthors} /> // TODO: Need to lift audioNotes state?
+                            <Podcastr 
+                                authors={mediaAuthors} 
+                                handleLeft={handlePrevious}
+                                handleRight={handleNext}
+                            /> 
                         ) : (
                             <VideoList 
                                 authors={mediaAuthors} 

@@ -20,9 +20,11 @@ const formatTime = (seconds: number): string => {
 
 interface PodcastPlayerProps {
   authors: string[];
+  handleLeft?: () => void;
+  handleRight?: () => void;
 }
 
-const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
+const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRight }) => {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [focusedItemIndex, setFocusedItemIndex] = useState(0);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
@@ -97,21 +99,17 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     }
   }, [focusedItemIndex, notes.length]);
 
-  // Effect for Initial Focus on the list
+  // Effect for Initial Focus on the list - modified to be less aggressive
   useEffect(() => {
-      if (!isLoadingNotes && notes.length > 0 && scrollableListRef.current) {
+      if (!isLoadingNotes && notes.length > 0) {
           const validIndex = Math.max(0, Math.min(focusedItemIndex, notes.length - 1));
           if (focusedItemIndex !== validIndex) {
               setFocusedItemIndex(validIndex); // Ensure index is valid
           }
-          // Check if the list itself doesn't already have focus
-          // This can prevent focus jumps if user clicked elsewhere while notes loaded
-          if (document.activeElement !== scrollableListRef.current) {
-            console.log("Podcastr: Setting initial focus to scrollable list.");
-            scrollableListRef.current.focus();
-          }
+          // Do not automatically set focus to avoid trapping the user
+          // Focus will be set only if explicitly needed (e.g., on first load or user interaction)
       }
-  }, [isLoadingNotes, notes.length, focusedItemIndex]); // Rerun if loading state, notes length or focusedIndex changes
+  }, [isLoadingNotes, notes.length, focusedItemIndex]);
 
   // Effect for Inactivity Listeners
   useEffect(() => {
@@ -142,12 +140,23 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
       let newIndex = focusedItemIndex;
       switch (event.key) {
           case 'ArrowUp':
-              newIndex = Math.max(0, focusedItemIndex - 1);
-              event.preventDefault();
+              if (focusedItemIndex > 0) {
+                newIndex = Math.max(0, focusedItemIndex - 1);
+                event.preventDefault();
+              } else {
+                // At the top, allow focus to move out (e.g., to exit button or other controls)
+                return;
+              }
               break;
           case 'ArrowDown':
-              newIndex = Math.min(notes.length - 1, focusedItemIndex + 1);
-              event.preventDefault();
+              if (focusedItemIndex < notes.length - 1) {
+                newIndex = Math.min(notes.length - 1, focusedItemIndex + 1);
+                event.preventDefault();
+              } else {
+                // At the bottom, allow focus to move to play/pause or other controls
+                playPauseButtonRef.current?.focus();
+                event.preventDefault();
+              }
               break;
           case 'Enter':
           case ' ':
@@ -157,6 +166,10 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
               }
               event.preventDefault();
               break;
+          case 'Tab':
+              // Allow normal tab navigation to move focus out of the list
+              // No need to preventDefault, let the browser handle tabbing
+              return;
           default:
               return;
       }
@@ -170,6 +183,17 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
           togglePlayPause();
           event.preventDefault();
       }
+  };
+
+  // Add a new handler for container keydown events
+  const handleContainerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      // Use handleLeft as an "exit" action when Escape is pressed
+      if (handleLeft) {
+        handleLeft();
+        event.preventDefault();
+      }
+    }
   };
 
   // --- Render Logic ---
@@ -194,7 +218,24 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
     <div
         ref={mainContainerRef}
         className='relative w-full h-full bg-blue-950 flex flex-col overflow-hidden p-2 text-white rounded-lg'
+        onKeyDown={handleContainerKeyDown}
     >
+      {/* Exit Button - Only show when a podcast is selected */}
+      {currentItemIndex >= 0 && notes.length > 0 && (
+        <div className="absolute top-2 right-2 z-10">
+          <button
+            onClick={() => handleLeft && handleLeft()}
+            className="p-1.5 bg-transparent text-white/30 hover:text-white/90 rounded-full focus:ring-2 focus:ring-yellow-400 transition-colors"
+            tabIndex={0}
+            aria-label="Exit Podcaster"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+      
       {/* Scrollable Podcast List */}
       <div
           ref={scrollableListRef}
@@ -225,15 +266,23 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
                     ref={(el) => {
                         if (index < listItemRefs.current.length) {
                             listItemRefs.current[index] = el;
-                        } else {
-                           console.warn(`Podcastr: Attempted to assign ref to index ${index} beyond current length ${listItemRefs.current.length}`);
                         }
                     }}
                     role="option"
                     aria-selected={isActuallySelected}
                     tabIndex={-1}
                     className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} ${focusStyle} focus:outline-none`}
-                    onClick={() => setCurrentItemIndex(index)}
+                    onClick={() => {
+                        if (index === currentItemIndex) {
+                            // If clicking on already selected item, exit to video mode
+                            if (handleLeft) {
+                                handleLeft();
+                            }
+                        } else {
+                            // Normal behavior - select the new item
+                            setCurrentItemIndex(index);
+                        }
+                    }}
                     title={note.content || note.url}
                 >
                     <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
@@ -243,126 +292,125 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
                         {itemIsLoadingProfile ? (
                             <div className="w-full h-full animate-pulse bg-gray-400"></div>
                         ) : itemPictureUrl ? (
-                            <img src={itemPictureUrl} alt={itemDisplayName} className="w-full h-full object-cover" onError={() => console.error(`Podcastr: Failed profile img: ${itemPictureUrl}`)} />
+                            <img 
+                              src={itemPictureUrl} 
+                              alt={itemDisplayName} 
+                              className="w-full h-full object-cover" 
+                            />
                         ) : (
                             <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
                                 {itemDisplayName.substring(0, 1)}
                             </span>
                         )}
                     </div>
-                    <p className="text-sm text-white truncate flex-grow" title={itemDisplayName}>
-                       {itemDisplayName}
-                    </p>
+                    <div className="flex-grow flex flex-col">
+                        <p className="text-sm text-white truncate" title={itemDisplayName}>
+                           {itemDisplayName}
+                        </p>
+                    </div>
                 </div>
             );
         })}
       </div>
 
-      {/* Audio Player Controls Area - Apply fade effect */}
-      <div
-          className={`w-full max-w-xl px-2 py-1 mt-auto bg-black bg-opacity-60 rounded-lg flex-shrink-0 mx-auto flex items-center justify-between transition-opacity duration-500 ease-in-out ${isInactive ? 'opacity-20' : 'opacity-100'}`}
-      >
-        {/* Audio Element - Hidden (Ref is passed to useAudioPlayback) */}
-        <audio ref={audioRef} className="hidden" />
-
-        {/* Play/Pause Button (Uses togglePlayPause from hook) */}
-        <button
+      {/* Playback Controls */}
+      <div className="w-full flex flex-col items-center justify-center mb-1 bg-blue-900 bg-opacity-50 rounded p-1">
+        <div className="w-full flex justify-between items-center mb-1 px-1 max-w-full">
+          <button
             ref={playPauseButtonRef}
-            onClick={togglePlayPause} // Use function from hook
+            onClick={togglePlayPause}
             onKeyDown={handlePlayPauseKeyDown}
+            className="flex-shrink-0 p-1 rounded-md text-white bg-blue-700 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-blue-900 transition-colors duration-150"
+            aria-label={isPlaying ? "Pause" : "Play"}
             tabIndex={0}
-            className="flex-shrink-0 p-2 rounded-md text-white bg-purple-600 hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
-            aria-label={isPlaying ? "Pause Podcast" : "Play Podcast"}
-        >
+          >
             {isPlaying ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-                </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+              </svg>
             ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
-                </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+              </svg>
             )}
-        </button>
-
-        {/* NEW WRAPPER for Progress + Speed */}
-        <div className="flex items-center space-x-2">
-          {/* Progress Bar & Time Display (Uses state/handlers from hook) */}
-          <div className="flex flex-grow items-center space-x-2 min-w-0 px-1">
-              <span className="text-xs font-mono text-gray-300 w-10 text-right flex-shrink-0">
-                  {formatTime(currentTime)} {/* <<< Usage 1 >>> */}
-              </span>
-              <input
-                  ref={progressBarRef}
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  value={currentTime || 0}
-                  onChange={handleSeek} // Use handler from hook
-                  className="flex-grow h-1 bg-gray-600 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black podcast-progress"
-                  style={{
-                      background: duration > 0 && isFinite(duration) && isFinite(currentTime)
-                          ? `linear-gradient(to right, #a855f7 ${ (currentTime / duration) * 100 }%, #4b5563 ${ (currentTime / duration) * 100 }%)`
-                          : '#4b5563'
-                  }}
-                  tabIndex={0}
-                  aria-label="Podcast progress"
-              />
-              <span className="text-xs font-mono text-gray-300 w-10 text-left flex-shrink-0">
-                  {formatTime(duration)} {/* <<< Usage 2 >>> */}
-              </span>
-          </div>
-
-          {/* Speed Control Button & Menu (Sibling within new wrapper) */}
-          <div className="relative flex-shrink-0">
-              <button 
-                  ref={speedButtonRef}
-                  onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
-                  onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                          setIsSpeedMenuOpen(!isSpeedMenuOpen);
-                          e.preventDefault();
-                      }
-                  }}
-                  className="p-1 text-xs font-semibold w-10 h-10 flex items-center justify-center rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
-                  title="Playback Speed"
-                  aria-haspopup="true"
-                  aria-expanded={isSpeedMenuOpen}
-                  tabIndex={0}
-               >
-                  <span>{playbackRate.toFixed(1)}x</span>
-              </button>
-              {isSpeedMenuOpen && (
-                  <div 
-                      ref={speedMenuRef}
-                      className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded shadow-lg py-1 z-10"
-                      role="menu"
-                  >
-                      {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(rate => (
-                          <button
-                              key={rate}
-                              onClick={() => handleSpeedChange(rate)}
-                              onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                      handleSpeedChange(rate);
-                                      e.preventDefault();
-                                  }
-                              }}
-                              className={`block w-full text-left px-3 py-1 text-sm ${
-                                  playbackRate === rate ? 'bg-purple-600 text-white' : 'text-gray-200 hover:bg-gray-600'
-                              }`}
-                              role="menuitemradio"
-                              aria-checked={playbackRate === rate}
-                          >
-                              {rate.toFixed(2)}x
-                          </button>
-                      ))}
-                  </div>
-              )}
-          </div>
-        {/* END NEW WRAPPER */}
+          </button>
+          <button
+            ref={speedButtonRef}
+            onClick={() => setIsSpeedMenuOpen(prev => !prev)}
+            className="flex-shrink-0 p-1 ml-2 text-white bg-blue-700 hover:bg-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-blue-900 transition-colors duration-150 text-xs"
+            aria-label="Change playback speed"
+            tabIndex={0}
+          >
+            {playbackRate.toFixed(2)}x
+          </button>
         </div>
-
+        {/* Speed Menu */}
+        {isSpeedMenuOpen && (
+          <div 
+            ref={speedMenuRef}
+            className="absolute right-2 bottom-12 w-24 bg-blue-800 shadow-lg rounded-md py-1 z-10 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-blue-950"
+            role="menu"
+            aria-label="Playback speed options"
+          >
+            {[2.0, 1.75, 1.5, 1.25, 1.0, 0.75].map(rate => (
+              <button
+                key={rate}
+                onClick={() => handleSpeedChange(rate)}
+                className={`w-full text-left px-3 py-1 text-white hover:bg-blue-700 text-xs ${playbackRate === rate ? 'font-bold' : ''}`}
+                role="menuitem"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    handleSpeedChange(rate);
+                    e.preventDefault();
+                  }
+                }}
+              >
+                {rate.toFixed(2)}x
+              </button>
+            ))}
+          </div>
+        )}
+        {/* Progress Bar */}
+        <div className="w-full flex items-center justify-center max-w-full px-1 mt-1">
+          <span className="text-xs text-gray-300 w-10 text-right mr-2 flex-shrink-0">{formatTime(currentTime)}</span>
+          <input
+            ref={progressBarRef}
+            type="range"
+            min={0}
+            max={duration || 100}
+            value={currentTime}
+            onChange={handleSeek}
+            className="w-full h-1 bg-blue-600 rounded-lg appearance-none cursor-pointer accent-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-blue-900"
+            aria-label="Seek through podcast"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                // Prevent parent handlers (like App.tsx) from handling these keys
+                // while focused on the seek bar
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+                // Add custom seek behavior if desired
+                const seekAmount = duration / 20; // e.g., 5% of duration
+                if (e.key === 'ArrowLeft') {
+                  const newTime = Math.max(0, currentTime - seekAmount);
+                  if (progressBarRef.current) {
+                    progressBarRef.current.value = newTime.toString();
+                    handleSeek({ target: progressBarRef.current } as React.ChangeEvent<HTMLInputElement>);
+                  }
+                } else if (e.key === 'ArrowRight') {
+                  const newTime = Math.min(duration, currentTime + seekAmount);
+                  if (progressBarRef.current) {
+                    progressBarRef.current.value = newTime.toString();
+                    handleSeek({ target: progressBarRef.current } as React.ChangeEvent<HTMLInputElement>);
+                  }
+                }
+                e.preventDefault();
+              }
+            }}
+          />
+          <span className="text-xs text-gray-300 w-10 text-left ml-2 flex-shrink-0">{formatTime(duration)}</span>
+        </div>
       </div>
 
     </div>

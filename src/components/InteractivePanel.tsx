@@ -1,21 +1,27 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Podcastr from './Podcastr';
-import VideoList, { VideoListProps } from './VideoList'; // Import props type
+import VideoList, { VideoListProps, VideoNote } from './VideoList'; // Import props type and VideoNote
 
 // Define the props for the InteractivePanel
 interface InteractivePanelProps {
   authors: string[];
   onVideoSelect: VideoListProps['onVideoSelect']; // Reuse type from VideoList
+  interactiveMode: 'podcast' | 'video';
+  toggleInteractiveMode: () => void;
+  currentVideoIndex: number;
+  videoNotes: VideoNote[];
+  onNotesLoaded: (notes: VideoNote[]) => void;
 }
 
-const InteractivePanel: React.FC<InteractivePanelProps> = ({ authors, onVideoSelect }) => {
-  // State for bottom-right panel toggle
-  const [interactiveMode, setInteractiveMode] = useState<'podcast' | 'video'>('podcast');
-
-  const toggleInteractiveMode = () => {
-    setInteractiveMode(prev => prev === 'podcast' ? 'video' : 'podcast');
-  };
-
+const InteractivePanel: React.FC<InteractivePanelProps> = ({
+  authors,
+  onVideoSelect,
+  interactiveMode,
+  toggleInteractiveMode,
+  currentVideoIndex,
+  videoNotes,
+  onNotesLoaded,
+}) => {
   return (
     // Outermost container for the panel + toggle button
     <div className="relative w-full h-full flex flex-col">
@@ -41,10 +47,13 @@ const InteractivePanel: React.FC<InteractivePanelProps> = ({ authors, onVideoSel
                 // Pass authors to Podcastr
                 <Podcastr authors={authors} />
             ) : (
-                // Pass authors and onVideoSelect to VideoList
+                // Pass all required props to VideoList
                 <VideoList
                     authors={authors}
                     onVideoSelect={onVideoSelect}
+                    currentVideoIndex={currentVideoIndex}
+                    videoNotes={videoNotes}
+                    onNotesLoaded={onNotesLoaded}
                 />
             )}
         </div>
