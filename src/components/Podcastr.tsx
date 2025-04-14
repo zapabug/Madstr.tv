@@ -144,7 +144,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
                 newIndex = Math.max(0, focusedItemIndex - 1);
                 event.preventDefault();
               } else {
-                // At the top, allow focus to move out (e.g., to exit button or other controls)
+                // At the top, allow focus to move out naturally
                 return;
               }
               break;
@@ -153,22 +153,20 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
                 newIndex = Math.min(notes.length - 1, focusedItemIndex + 1);
                 event.preventDefault();
               } else {
-                // At the bottom, allow focus to move to play/pause or other controls
-                playPauseButtonRef.current?.focus();
-                event.preventDefault();
+                // At the bottom, allow natural focus movement out of the list
+                return;
               }
               break;
           case 'Enter':
           case ' ':
               if (newIndex >= 0 && newIndex < notes.length) {
                  setCurrentItemIndex(newIndex);
-                 playPauseButtonRef.current?.focus();
+                 // Do not force focus to play/pause button, let natural focus remain
               }
               event.preventDefault();
               break;
           case 'Tab':
               // Allow normal tab navigation to move focus out of the list
-              // No need to preventDefault, let the browser handle tabbing
               return;
           default:
               return;
@@ -386,26 +384,33 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, handleLeft, handleRig
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                // Prevent parent handlers (like App.tsx) from handling these keys
-                // while focused on the seek bar
-                e.stopPropagation();
-                e.nativeEvent.stopImmediatePropagation();
-                // Add custom seek behavior if desired
+                // Allow TV remote navigation to work naturally unless seeking is performed
                 const seekAmount = duration / 20; // e.g., 5% of duration
                 if (e.key === 'ArrowLeft') {
                   const newTime = Math.max(0, currentTime - seekAmount);
-                  if (progressBarRef.current) {
-                    progressBarRef.current.value = newTime.toString();
-                    handleSeek({ target: progressBarRef.current } as React.ChangeEvent<HTMLInputElement>);
+                  if (currentTime > 0) {
+                    if (progressBarRef.current) {
+                      progressBarRef.current.value = newTime.toString();
+                      handleSeek({ target: progressBarRef.current } as React.ChangeEvent<HTMLInputElement>);
+                    }
+                    e.preventDefault();
+                  } else if (handleLeft) {
+                    handleLeft();
+                    e.preventDefault();
                   }
                 } else if (e.key === 'ArrowRight') {
                   const newTime = Math.min(duration, currentTime + seekAmount);
-                  if (progressBarRef.current) {
-                    progressBarRef.current.value = newTime.toString();
-                    handleSeek({ target: progressBarRef.current } as React.ChangeEvent<HTMLInputElement>);
+                  if (currentTime < duration) {
+                    if (progressBarRef.current) {
+                      progressBarRef.current.value = newTime.toString();
+                      handleSeek({ target: progressBarRef.current } as React.ChangeEvent<HTMLInputElement>);
+                    }
+                    e.preventDefault();
+                  } else if (handleRight) {
+                    handleRight();
+                    e.preventDefault();
                   }
                 }
-                e.preventDefault();
               }
             }}
           />
