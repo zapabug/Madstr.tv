@@ -6,18 +6,25 @@ This document outlines the steps to build the Android APK for the TV app after u
 
 1.  **Android SDK:** You need the Android SDK installed. The build process requires the SDK location to be configured.
 2.  **Java Development Kit (JDK):** A compatible JDK (e.g., JDK 21) is required by Gradle.
-3.  **Web Assets Built:** Ensure you have run the web build process (e.g., `bun run build`) first, so the latest web code is in the `dist/` directory.
+3.  **Web Assets Built:** Ensure you have run the web build process (e.g., `bun run build`) first, so the latest web code is in the `dist/` directory. This step will be explicitly enforced in the build steps below.
 
 ## Steps
 
-1.  **Sync Web Assets:**
+1.  **Build Web Assets:**
+    Ensure the latest web assets are compiled by running the web build command. This step is mandatory to include the latest code changes in the APK.
+    **(Run this command from the project root directory: `/home/jq/gitshit/tvapp`)**
+    ```bash
+    bun run build
+    ```
+
+2.  **Sync Web Assets:**
     Copy the built web assets from `dist/` into the Android project.
     **(Run this command from the project root directory: `/home/jq/gitshit/tvapp`)**
     ```bash
     npx cap sync android
     ```
 
-2.  **Set Environment Variables & Build:**
+3.  **Set Environment Variables & Build:**
     You need to tell Gradle where to find the Android SDK and the correct Java version. You can do this by setting environment variables before running the build command.
     **(Run the entire command block below from the project root directory: `/home/jq/gitshit/tvapp`. It handles changing directories internally.)**
 
@@ -43,7 +50,7 @@ This document outlines the steps to build the Android APK for the TV app after u
     *   `./gradlew assembleDebug`: Compiles the app and builds the debug APK.
     *   (Note: This command leaves you in the `android` directory after execution).
 
-3.  **Locate the APK:**
+4.  **Locate the APK:**
     The generated debug APK file will typically be located at:
     `android/app/build/outputs/apk/debug/app-debug.apk`
     (Relative to the project root, this is `android/app/build/outputs/apk/debug/app-debug.apk`) 

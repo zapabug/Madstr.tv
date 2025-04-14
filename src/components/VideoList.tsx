@@ -189,13 +189,6 @@ const VideoList: React.FC<VideoListProps> = ({
     };
   }, [ndk, authors, isCacheLoaded, videoNotes, onNotesLoaded]);
 
-  // Effect for initial focus
-   useEffect(() => {
-      if (isCacheLoaded && videoNotes.length > 0 && scrollableListRef.current) {
-          scrollableListRef.current.focus();
-      }
-  }, [isCacheLoaded, videoNotes]);
-
   const handleSelect = (note: VideoNote, index: number) => {
       let npub: string | null = null;
       try {
@@ -215,10 +208,9 @@ const VideoList: React.FC<VideoListProps> = ({
     <div className='relative w-full h-full bg-gray-800 flex flex-col overflow-hidden p-2 text-white rounded-lg'>
       <h3 className="text-sm font-semibold text-purple-300 mb-2 pl-1">Video List</h3>
       {/* Scrollable Video List */}
-      <div 
-          ref={scrollableListRef} 
-          tabIndex={0} 
-          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-1 focus:ring-purple-400 rounded"
+      <div
+          ref={scrollableListRef}
+          className="flex-grow w-full overflow-y-auto pr-1 mb-2 rounded"
       >
         {videoNotes.map((note, index) => {
             const isSelected = index === currentVideoIndex;
@@ -226,13 +218,22 @@ const VideoList: React.FC<VideoListProps> = ({
             // Use posterPubkey directly as fallback display name
             const itemDisplayName = note.posterPubkey.substring(0, 10) + '...';
 
-            return ( 
+            // Handler for Enter/Space on individual items
+            const handleItemKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                handleSelect(note, index);
+                event.preventDefault();
+              }
+            };
+
+            return (
                 <div
                     key={note.id}
-                    tabIndex={-1} 
+                    tabIndex={0}
                     className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-purple-500`}
                     onClick={() => handleSelect(note, index)}
-                    title={note.content || note.url} 
+                    onKeyDown={handleItemKeyDown}
+                    title={note.content || note.url}
                 >
                     {/* Video Icon? Or Thumbnail later? */}
                     <div className="flex-shrink-0 w-7 h-7 rounded bg-gray-600 flex items-center justify-center mr-2">

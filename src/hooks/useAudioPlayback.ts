@@ -160,12 +160,22 @@ export function useAudioPlayback({
       const audio = audioRef.current;
       if (!audio) return;
 
+      const handleError = (e: Event) => {
+        console.error("useAudioPlayback: Audio Element Error:", audio.error, e);
+        // Optionally reset state on error
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+      };
+
       audio.addEventListener('loadedmetadata', handleLoadedMetadata);
       audio.addEventListener('timeupdate', handleTimeUpdate);
+      audio.addEventListener('error', handleError);
 
       return () => {
           audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
           audio.removeEventListener('timeupdate', handleTimeUpdate);
+          audio.removeEventListener('error', handleError);
       };
   }, [audioRef, handleLoadedMetadata, handleTimeUpdate]); // Re-attach if handlers change
 

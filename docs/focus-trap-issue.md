@@ -1,48 +1,67 @@
-# Handling Keyboard Focus Traps in `Podcastr` List
+# Handling Keyboard Focus Navigation in `Podcastr` and `App`
 
 ## Problem Description
 
-Users encountered a "focus trap" when navigating the podcast list within the `Podcastr` component using arrow keys (simulating remote control input). Specifically, once the list gained focus, it was difficult or impossible to use the Left/Right arrow keys to trigger the intended global "Previous" and "Next" media navigation actions handled by the main `App` component. Pressing Up/Down arrows at the list boundaries also didn't allow exiting the list component as intuitively expected.
+Users encountered difficulties navigating the application using D-pad controls (simulating remote input):
 
-## Root Cause Analysis
+1.  **Focus Trap in Lists:** Once focus entered the podcast list (`Podcastr.tsx`) or video list (`VideoList.tsx`), it was difficult to navigate out naturally using the D-pad, especially Up/Down at the boundaries.
+2.  **Focus Trap in Seek Bar:** Focus entering the seek bar (`input type="range"` in `Podcastr.tsx`) could not be easily moved away using Up/Down arrows.
+3.  **Unnatural Navigation Path:** Moving focus from the `Podcastr` controls (bottom-right panel) to the 'Videos/Podcasts' toggle button (visually near the bottom-right of the `MediaFeed` component in the top panel) using the D-pad was not intuitive due to the DOM structure not matching the visual layout.
+4.  **Global Navigation Interference:** Initial attempts at handling focus internally sometimes interfered with global Left/Right arrow key actions intended for media navigation in `App.tsx`.
 
-The issue stemmed from the interaction between the internal keyboard event handler (`handleListKeyDown`) within `Podcastr.tsx` and the global keyboard listener within `App.tsx`.
+## Root Cause Analysis (Initial State)
 
-1.  **Internal Handler (`Podcastr.tsx`):** The `Podcastr` list `div` had an `onKeyDown` handler (`handleListKeyDown`) to manage focus highlighting (`focusedItemIndex`) and item selection (Enter/Space). Initially, this handler called `event.preventDefault()` for *all* handled arrow keys (Up, Down, Left, Right), even at the list boundaries.
-2.  **Event Propagation Stopped:** Calling `event.preventDefault()` within `handleListKeyDown` stopped the key press event from bubbling up to the `window` object, where the global listener in `App.tsx` was attached.
-3.  **Global Handler Ignored:** Consequently, the global listener never received the Left/Right arrow events when the `Podcastr` list had focus. The logic in `App.tsx` intended to check `event.defaultPrevented` became ineffective because the event was stopped before reaching it.
-4.  **Sticky Focus:** Although attempts were made to call `handlePrevious`/`handleNext` directly from `Podcastr` or use `blur()`, the focus often remained effectively trapped because the fundamental issue of the internal handler stopping event propagation wasn't fully addressed.
+The issues primarily stemmed from:
 
-## Comparison with Other Components
-
-*   **`MediaFeed.tsx`:** This component displays the main image slideshow. It has **no internal `onKeyDown` handler**. Arrow keys pressed while it is visible are directly caught by the global listener in `App.tsx`, triggering `handlePrevious`/`handleNext` without interference. This highlighted the desired outcome for global navigation keys.
-*   **`MessageBoard.tsx`:** This component displays a scrollable list of text messages. Like `MediaFeed`, it **has no internal `onKeyDown` handler** for the list itself. Arrow keys pressed while its list has focus trigger default browser behavior (scrolling for Up/Down, likely nothing for Left/Right), which doesn't conflict with the global media navigation logic.
+1.  **Over-reliance on JavaScript Focus Management:** Components like `Podcastr` initially used state variables (`focusedItemIndex`) and `onKeyDown` handlers on list containers (`<div role="listbox">`) to manage focus highlighting. These handlers often called `event.preventDefault()` excessively, stopping native browser navigation and event bubbling.
+2.  **Non-Focusable List Items:** Individual list items (`<div role="option">`) were not inherently focusable (`tabIndex={-1}`).
+3.  **Lack of Escape Logic:** The seek bar lacked specific key handlers to move focus away when Up/Down was pressed.
+4.  **DOM vs. Visual Layout:** The 'Videos/Podcasts' toggle button, although positioned visually near the bottom-right within the `MediaFeed` component, was structurally part of the top screen area in the DOM, making direct D-pad navigation from the bottom `Podcastr` panel unnatural.
+5.  **Event Propagation Issues:** `preventDefault()` calls in child components stopped events from reaching the global handlers in `App.tsx`.
 
 ## Resolution Steps
 
-The solution involved simplifying the event handling and clarifying the responsibilities:
+The solution involved embracing native browser focus navigation where possible and implementing targeted manual focus jumps only where necessary:
 
-1.  **Simplify `Podcastr.tsx` (`handleListKeyDown`):**
-    *   Removed handling for `ArrowLeft` and `ArrowRight` entirely. These events are now allowed to bubble up.
-    *   Modified `ArrowUp` and `ArrowDown` handling:
-        *   When navigating *within* the list bounds, `setFocusedItemIndex` is called, and `event.preventDefault()` is used to stop default page scrolling.
-        *   When hitting the *top or bottom boundary*, the handler now simply `return`s without calling `preventDefault()`, allowing the Up/Down events to bubble up (likely resulting in page scroll or being ignored if the page can't scroll).
-    *   Kept Enter/Space handling for item selection.
+1.  **Enable Native List Item Focus (`Podcastr.tsx`, `VideoList.tsx`):**
+    *   Removed `tabIndex` and `onKeyDown` handlers from the main list container `div`s.
+    *   Set `tabIndex={0}` on each individual list item `div` (`role="option"`) within the `.map()` loop, making them directly focusable by the D-pad.
+    *   Applied focus styling directly to items using Tailwind's `focus:` variants (e.g., `focus:border focus:border-orange-500`).
+    *   Added simple `onKeyDown` handlers to each item to listen for `Enter` or `Space` to trigger selection (`setCurrentItemIndex` or `handleSelect`), calling `preventDefault()` only for these selection actions.
+    *   Removed the `focusedItemIndex` state and related effects.
 
-2.  **Update Other `Podcastr.tsx` Handlers:**
-    *   Ensured `handlePlayPauseKeyDown` (for Left boundary) and `handleSpeedButtonKeyDown` (for Right boundary) still explicitly call `handleLeft`/`handleRight` props and `preventDefault()` to exit the controls area correctly.
-    *   Kept `handleProgressBarKeyDown` unchanged, as its Left/Right handling (scrubbing vs. focus move) and Up/Down focus escape (with `preventDefault`) are specific requirements.
+2.  **Implement Seek Bar Escape Logic (`Podcastr.tsx`):**
+    *   Kept the seek bar focusable (`tabIndex={0}`).
+    *   Added an `onKeyDown` handler to the seek bar (`<input type="range">`).
+    *   **`ArrowUp`:** Calls the `handleLeft` prop (passed from `App.tsx`), which typically handles moving focus left or exiting the component, and calls `e.preventDefault()`.
+    *   **`ArrowDown`:** Calls a new `onFocusBottomEdge` prop (passed from `App.tsx`) and `e.preventDefault()`. This prop is specifically designed to manually shift focus to the 'Videos/Podcasts' toggle button.
 
-3.  **Simplify `App.tsx` (Global `handleKeyDown`):**
-    *   Removed complex checks for focus location (`.podcastr-component`, `.podcastr-controls-bar`).
-    *   First handles global actions: 'm' (mode toggle) and Space (for video play/pause).
-    *   Checks `event.defaultPrevented`. If an internal handler (like the seek bar's Up/Down escape) already prevented the default, the global handler does nothing more for that event.
-    *   **If `event.defaultPrevented` is `false`**, it proceeds to handle `ArrowLeft` by calling `handlePrevious` and `ArrowRight` by calling `handleNext`, preventing default scroll *after* the global action.
+3.  **Implement Manual Focus Jump to Toggle Button:**
+    *   **`MediaFeed.tsx`:**
+        *   Wrapped the component export in `React.forwardRef`.
+        *   Created a `ref` (`toggleButtonRef`) for the 'Videos/Podcasts' button.
+        *   Used `useImperativeHandle` to expose a `focusToggleButton` method that calls `toggleButtonRef.current.focus()`.
+    *   **`App.tsx`:**
+        *   Created a `ref` (`mediaFeedRef`) for the `MediaFeed` component instance.
+        *   Passed `mediaFeedRef` to the `<MediaFeed>` element.
+        *   Created a callback function `focusMediaFeedToggle` that calls `mediaFeedRef.current.focusToggleButton()`.
+        *   Passed `focusMediaFeedToggle` down to `<Podcastr>` as the `onFocusBottomEdge` prop (for seek bar escape) and the `onFocusRightEdge` prop (for speed button escape).
+    *   **`Podcastr.tsx`:**
+        *   Added `onFocusRightEdge?(): void` and `onFocusBottomEdge?(): void` to `PodcastPlayerProps`.
+        *   Added an `onKeyDown` handler to the **Speed Button** (`speedButtonRef`). On `ArrowRight`, it now calls the `onFocusRightEdge` prop and `e.preventDefault()`, triggering the focus jump to the toggle button.
+        *   Modified the **Seek Bar**'s `onKeyDown` handler to call `onFocusBottomEdge` on `ArrowDown` (as described in step 2).
+
+4.  **Simplify Global Handlers (`App.tsx`):**
+    *   The global `handleKeyDown` listener attached to `window` was simplified. The logic specifically handling `ArrowLeft` and `ArrowRight` for media navigation was commented out or removed, allowing these keys to perform default browser actions (like D-pad navigation) unless explicitly handled and prevented by a focused child component (like the seek bar's escape or the list items' selection).
+
+5.  **UI Cleanup (`Podcastr.tsx`):**
+    *   Removed the explicit 'X' (Exit) button from the top-right corner of `Podcastr`.
 
 ## Outcome
 
-This revised approach ensures:
+This revised approach results in:
 
-*   Left/Right arrows consistently trigger global previous/next navigation unless focus is specifically on an element that needs to handle them differently (like the seek bar's scrubbing action, or the internal focus movement between control buttons).
-*   Up/Down arrows handle internal list navigation within `Podcastr` but allow bubbling (likely causing scrolling) at the boundaries.
-*   The focus trap within the `Podcastr` list interfering with global Left/Right navigation is resolved. 
+*   **More Reliable D-pad Navigation:** Focus movement between list items, and between items and adjacent controls (like Play/Pause, Speed) largely relies on standard browser behavior, which is generally more robust for TV environments.
+*   **Resolved Focus Traps:** The list items and seek bar are no longer traps; specific key presses (`ArrowUp`/`ArrowDown` on seek, boundary navigation handled natively for lists) allow focus to move out.
+*   **Predictable Cross-Component Navigation:** The manual focus jump from the `Podcastr` controls (seek bar via `ArrowDown`, speed button via `ArrowRight`) to the toggle button in `MediaFeed` ensures this specific, visually-expected but structurally-challenging navigation path works reliably.
+*   **Clearer Event Handling:** Reduced complexity by removing unnecessary `preventDefault()` calls and centralized focus state management. Native focus states (`:focus`) are used for styling. 

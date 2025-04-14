@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import QRCode from 'react-qr-code';
 import { useNdk } from 'nostr-hooks';
 import { NDKEvent, NDKFilter, NDKSubscription, NDKKind } from '@nostr-dev-kit/ndk'; // Removed nip19 import from here
@@ -255,6 +255,11 @@ export interface MediaFeedProps {
   toggleInteractiveMode: () => void;
 }
 
+// Define the type for the methods exposed by the ref
+export interface MediaFeedRef {
+  focusToggleButton: () => void;
+}
+
 const MAX_SLIDES = 30;
 
 // --- Funny Loading Messages ---
@@ -271,8 +276,8 @@ const loadingMessages = [
   "Don't trust, verify... images loading."
 ];
 
-// Accept new props
-const MediaFeed: React.FC<MediaFeedProps> = ({ 
+// Wrap component with forwardRef
+const MediaFeed = forwardRef<MediaFeedRef, MediaFeedProps>(({ 
   authors, 
   handlePrevious, 
   handleNext, 
@@ -282,11 +287,21 @@ const MediaFeed: React.FC<MediaFeedProps> = ({
   onNotesLoaded, 
   interactiveMode,
   toggleInteractiveMode
-}) => {
+}, ref) => {
   const { ndk } = useNdk();
   const notesById = useRef<Map<string, MediaNote>>(new Map());
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+  const toggleButtonRef = useRef<HTMLButtonElement>(null); // Ref for the button
+
+  // --- Expose focus method via useImperativeHandle ---
+  useImperativeHandle(ref, () => ({
+    focusToggleButton: () => {
+      console.log("MediaFeed: focusToggleButton method called.");
+      console.log("MediaFeed: Attempting to focus button ref:", toggleButtonRef.current);
+      toggleButtonRef.current?.focus();
+    }
+  }));
 
   // Effect for cycling loading messages
   useEffect(() => {
@@ -478,24 +493,23 @@ const MediaFeed: React.FC<MediaFeedProps> = ({
           })()
       )}
 
-      {/* <<< RE-ADD Toggle Button Here (Bottom Right, offset from QR) >>> */}
+      {/* <<< Toggle Button (Ensure ref is attached) >>> */}
       <div 
-          // Position to the left of the QR code
           className={`absolute bottom-4 right-24 md:right-28 lg:right-32 z-20 flex items-center`}
       > 
           <button 
+              ref={toggleButtonRef} // Attach the ref here
               onClick={toggleInteractiveMode}
-              // Add onKeyDown handler
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   toggleInteractiveMode();
-                  e.preventDefault(); // Prevent default space bar scroll
+                  e.preventDefault();
                 }
               }}
-              tabIndex={0} // Ensure focusable
+              tabIndex={0}
               className="p-1 bg-black bg-opacity-60 rounded 
                          text-purple-400 hover:text-purple-200 
-                         focus:text-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 // Enhanced focus style
+                         focus:text-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 
                          transition-all duration-150 text-xs font-semibold uppercase"
               aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
               title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
@@ -506,6 +520,6 @@ const MediaFeed: React.FC<MediaFeedProps> = ({
 
     </div>
   );
-};
+}); // Close forwardRef
 
 export default MediaFeed; 
