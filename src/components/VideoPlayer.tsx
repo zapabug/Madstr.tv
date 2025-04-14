@@ -99,9 +99,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, posterNpub, onEnded, int
       > 
         <button 
             onClick={toggleInteractiveMode}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                toggleInteractiveMode();
+                e.preventDefault();
+              }
+            }}
+            tabIndex={0}
             className="p-1 bg-black bg-opacity-60 rounded 
-                       text-purple-400 hover:text-purple-200 focus:text-purple-200 
-                       focus:outline-none transition-colors duration-150 text-xs font-semibold uppercase"
+                       text-purple-400 hover:text-purple-200 
+                       focus:text-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75
+                       transition-all duration-150 text-xs font-semibold uppercase"
             aria-label={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
             title={interactiveMode === 'podcast' ? 'Show Video List' : 'Show Podcasts'}
         >

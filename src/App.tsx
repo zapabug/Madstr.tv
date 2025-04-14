@@ -307,7 +307,7 @@ function App() {
     <div className="relative flex flex-col min-h-screen h-screen text-white border-4 border-purple-600 pt-8 bg-black">
       {/* Absolute Positioned Titles (Remain the same) */}
       <h2 className="absolute top-4 right-32 z-20 text-lg font-semibold text-purple-800 px-4 py-1 rounded">
-        Mad⚡str.tv
+        Mad⚡tr.tv
       </h2>
 
       {/* --- Bottom Left Area (QR Code Only) --- */}

@@ -200,7 +200,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
           ref={scrollableListRef}
           tabIndex={0}
           onKeyDown={handleListKeyDown}
-          className="flex-grow w-full overflow-y-auto pr-1 mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded" 
+          className="flex-grow w-full overflow-y-auto mb-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-blue-950 rounded" 
           aria-activedescendant={notes[focusedItemIndex]?.id}
           aria-label="Podcast List"
           role="listbox"
@@ -260,7 +260,7 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
 
       {/* Audio Player Controls Area - Apply fade effect */}
       <div
-          className={`w-full max-w-xl px-2 py-1 mt-auto bg-black bg-opacity-60 rounded-lg flex-shrink-0 mx-auto flex items-center space-x-3 transition-opacity duration-500 ease-in-out ${isInactive ? 'opacity-20' : 'opacity-100'}`}
+          className={`w-full max-w-xl px-2 py-1 mt-auto bg-black bg-opacity-60 rounded-lg flex-shrink-0 mx-auto flex items-center justify-between transition-opacity duration-500 ease-in-out ${isInactive ? 'opacity-20' : 'opacity-100'}`}
       >
         {/* Audio Element - Hidden (Ref is passed to useAudioPlayback) */}
         <audio ref={audioRef} className="hidden" />
@@ -285,67 +285,84 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors }) => {
             )}
         </button>
 
-        {/* Progress Bar & Time Display (Uses state/handlers from hook) */}
-        <div className="flex flex-grow items-center space-x-2 min-w-0 px-1">
-            <span className="text-xs font-mono text-gray-300 w-10 text-right flex-shrink-0">
-                {formatTime(currentTime)} {/* <<< Usage 1 >>> */}
-            </span>
-            <input
-                ref={progressBarRef}
-                type="range"
-                min="0"
-                max={duration || 0}
-                value={currentTime || 0}
-                onChange={handleSeek} // Use handler from hook
-                className="flex-grow h-1 bg-gray-600 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black podcast-progress"
-                style={{
-                    background: duration > 0 && isFinite(duration) && isFinite(currentTime)
-                        ? `linear-gradient(to right, #a855f7 ${ (currentTime / duration) * 100 }%, #4b5563 ${ (currentTime / duration) * 100 }%)`
-                        : '#4b5563'
-                }}
-                tabIndex={0}
-                aria-label="Podcast progress"
-            />
-            <span className="text-xs font-mono text-gray-300 w-10 text-left flex-shrink-0">
-                {formatTime(duration)} {/* <<< Usage 2 >>> */}
-            </span>
+        {/* NEW WRAPPER for Progress + Speed */}
+        <div className="flex items-center space-x-2">
+          {/* Progress Bar & Time Display (Uses state/handlers from hook) */}
+          <div className="flex flex-grow items-center space-x-2 min-w-0 px-1">
+              <span className="text-xs font-mono text-gray-300 w-10 text-right flex-shrink-0">
+                  {formatTime(currentTime)} {/* <<< Usage 1 >>> */}
+              </span>
+              <input
+                  ref={progressBarRef}
+                  type="range"
+                  min="0"
+                  max={duration || 0}
+                  value={currentTime || 0}
+                  onChange={handleSeek} // Use handler from hook
+                  className="flex-grow h-1 bg-gray-600 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black podcast-progress"
+                  style={{
+                      background: duration > 0 && isFinite(duration) && isFinite(currentTime)
+                          ? `linear-gradient(to right, #a855f7 ${ (currentTime / duration) * 100 }%, #4b5563 ${ (currentTime / duration) * 100 }%)`
+                          : '#4b5563'
+                  }}
+                  tabIndex={0}
+                  aria-label="Podcast progress"
+              />
+              <span className="text-xs font-mono text-gray-300 w-10 text-left flex-shrink-0">
+                  {formatTime(duration)} {/* <<< Usage 2 >>> */}
+              </span>
+          </div>
+
+          {/* Speed Control Button & Menu (Sibling within new wrapper) */}
+          <div className="relative flex-shrink-0">
+              <button 
+                  ref={speedButtonRef}
+                  onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
+                  onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                          setIsSpeedMenuOpen(!isSpeedMenuOpen);
+                          e.preventDefault();
+                      }
+                  }}
+                  className="p-1 text-xs font-semibold w-10 h-10 flex items-center justify-center rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
+                  title="Playback Speed"
+                  aria-haspopup="true"
+                  aria-expanded={isSpeedMenuOpen}
+                  tabIndex={0}
+               >
+                  <span>{playbackRate.toFixed(1)}x</span>
+              </button>
+              {isSpeedMenuOpen && (
+                  <div 
+                      ref={speedMenuRef}
+                      className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded shadow-lg py-1 z-10"
+                      role="menu"
+                  >
+                      {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(rate => (
+                          <button
+                              key={rate}
+                              onClick={() => handleSpeedChange(rate)}
+                              onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                      handleSpeedChange(rate);
+                                      e.preventDefault();
+                                  }
+                              }}
+                              className={`block w-full text-left px-3 py-1 text-sm ${
+                                  playbackRate === rate ? 'bg-purple-600 text-white' : 'text-gray-200 hover:bg-gray-600'
+                              }`}
+                              role="menuitemradio"
+                              aria-checked={playbackRate === rate}
+                          >
+                              {rate.toFixed(2)}x
+                          </button>
+                      ))}
+                  </div>
+              )}
+          </div>
+        {/* END NEW WRAPPER */}
         </div>
 
-        {/* Speed Control Button & Menu (Uses state/handler from hook) */}
-        <div className="relative flex-shrink-0">
-            <button 
-                ref={speedButtonRef}
-                onClick={() => setIsSpeedMenuOpen(!isSpeedMenuOpen)}
-                className="p-1 text-xs font-semibold w-10 h-10 flex items-center justify-center rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
-                title="Playback Speed"
-                aria-haspopup="true"
-                aria-expanded={isSpeedMenuOpen}
-                tabIndex={0}
-             >
-                <span>{playbackRate.toFixed(1)}x</span>
-            </button>
-            {isSpeedMenuOpen && (
-                <div 
-                    ref={speedMenuRef}
-                    className="absolute bottom-full right-0 mb-1 w-20 bg-gray-700 border border-gray-600 rounded shadow-lg py-1 z-10"
-                    role="menu"
-                >
-                    {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map(rate => (
-                        <button
-                            key={rate}
-                            onClick={() => handleSpeedChange(rate)}
-                            className={`block w-full text-left px-3 py-1 text-sm ${
-                                playbackRate === rate ? 'bg-purple-600 text-white' : 'text-gray-200 hover:bg-gray-600'
-                            }`}
-                            role="menuitemradio"
-                            aria-checked={playbackRate === rate}
-                        >
-                            {rate.toFixed(2)}x
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
       </div>
 
     </div>
