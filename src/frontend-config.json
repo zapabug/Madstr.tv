@@ -1,0 +1,150 @@
+{
+  "appName": "MadstrTV",
+  "rootComponent": "App",
+  "description": "Nostr media viewer for TVs with split-screen layout.",
+  "layout": {
+    "root": {
+      "type": "FlexColumn",
+      "height": "h-screen",
+      "padding": "pt-8",
+      "border": "border-4 border-purple-600",
+      "backgroundColor": "bg-black",
+      "children": [
+        {
+          "id": "TopMediaArea",
+          "purpose": "Displays primary visual content (ImageFeed or VideoPlayer)",
+          "layout": {
+            "type": "FlexGrow",
+            "minHeight": "min-h-0",
+            "display": "flex",
+            "alignment": "items-center justify-center",
+            "overflow": "overflow-hidden"
+          },
+          "conditionalRendering": {
+            "stateVariable": "viewMode",
+            "components": {
+              "imagePodcast": {
+                "component": "ImageFeed",
+                "props": ["shuffledImageNotes", "isLoading", "currentImageIndex", "handlePrevious", "handleNext", "ref:imageFeedRef"]
+              },
+              "videoPlayer": {
+                "component": "VideoPlayer",
+                "props": ["videoRef", "src:currentItemUrl", "isPlaying", "togglePlayPause"]
+              }
+            }
+          }
+        },
+        {
+          "id": "BottomSplitPanel",
+          "purpose": "Contains MessageBoard and MediaPanel (list/controls)",
+          "layout": {
+            "type": "FlexRow",
+            "height": "h-1/3",
+            "flexShrink": "flex-shrink-0",
+            "overflow": "overflow-hidden",
+            "marginTop": "mt-1"
+          },
+          "children": [
+            {
+              "id": "MessageBoardPanel",
+              "component": "MessageBoard",
+              "purpose": "Displays Nostr chat messages",
+              "layout": {
+                "width": "w-2/3",
+                "height": "h-full",
+                "flexShrink": "flex-shrink-0",
+                "overflow": "overflow-y-auto",
+                "backgroundColor": "bg-gray-900",
+                "borderRadius": "rounded-lg"
+              },
+              "props": ["ndk", "neventToFollow", "authors"]
+            },
+            {
+              "id": "InteractivePanel",
+              "component": "MediaPanel",
+              "purpose": "Displays media list (Podcast/Video) and playback controls",
+              "layout": {
+                "width": "w-1/3",
+                "height": "h-full",
+                "marginLeft": "ml-1",
+                "display": "flex flex-col",
+                "overflow": "overflow-hidden"
+              },
+              "props": [
+                "viewMode", 
+                "audioRef", 
+                "videoRef", 
+                "podcastNotes", 
+                "shuffledVideoNotes", 
+                "isLoadingPodcastNotes", 
+                "isLoadingVideoNotes", 
+                "currentPodcastIndex", 
+                "currentVideoIndex", 
+                "setCurrentPodcastIndex", 
+                "onVideoSelect", 
+                // Playback state/handlers
+                "isPlaying", 
+                "currentTime", 
+                "duration", 
+                "playbackRate", 
+                "togglePlayPause", 
+                "handleSeek", 
+                "setPlaybackRate", 
+                "setViewMode"
+              ]
+            }
+          ]
+        }
+      ],
+      "absoluteChildren": [ // Elements outside the main flex flow
+         {
+            "id": "AppTitle",
+            "component": "h2",
+            "text": "Mad⚡tr.tv",
+            "position": "absolute top-4 right-32 z-20" 
+         },
+         {
+            "id": "QRCodeArea",
+            "component": "QRCode",
+            "position": "absolute bottom-4 left-4 z-10"
+         },
+         {
+             "id": "RelayStatusArea",
+             "component": "RelayStatus",
+             "position": "absolute bottom-4 left-4" // Note: Might overlap QR, needs positioning review
+         },
+         {
+            "id": "PrevButton",
+            "component": "button",
+            "position": "absolute left-0 top-1/2 transform -translate-y-1/2",
+            "conditionalRendering": {
+                "condition": "(viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) || (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1)"
+            }
+         },
+         {
+            "id": "NextButton",
+            "component": "button",
+            "position": "absolute right-0 top-1/2 transform -translate-y-1/2",
+            "conditionalRendering": {
+                "condition": "(viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) || (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1)"
+            }
+         }
+      ]
+    }
+  },
+  "keyComponents": [
+    "App",
+    "ImageFeed",
+    "VideoPlayer",
+    "MediaPanel",
+    "MessageBoard",
+    "QRCode",
+    "RelayStatus"
+  ],
+  "keyHooks": [
+      "useMediaAuthors",
+      "useMediaNotes",
+      "useMediaState",
+      "useMediaElementPlayback"
+  ]
+}
