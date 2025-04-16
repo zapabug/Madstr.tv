@@ -47,7 +47,9 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Data Handling:**
         *   Receives `imageNotes`, `videoNotes` from `useMediaNotes`.
         *   Uses `useEffect` to call `shuffleArray` on these notes and updates `shuffledImageNotes`/`shuffledVideoNotes` state. **Shuffling happens here because the UI components need the shuffled order.**
+        *   Uses a `useEffect` hook to monitor `viewMode` changes. When the mode switches to `'videoPlayer'`, it automatically triggers the `fetchOlderVideos` callback to fetch the next batch of older videos in the background.
     *   **Rendering Logic:**
+        *   Renders an invisible `<audio>` element associated with `audioRef`. This element is controlled by `useMediaElementPlayback`.
         *   **Top Area (A):** Renders `ImageFeed` (if `viewMode === 'imagePodcast'`) OR `VideoPlayer` (if `viewMode === 'videoPlayer'`). Passes relevant props (e.g., `shuffledImageNotes` to `ImageFeed`, `videoRef`/`currentItemUrl`/playback state to `VideoPlayer`).
         *   **Bottom Panel (B1):** Renders `MessageBoard`, passing `ndk`, `authors`.
         *   **Bottom Panel (B2):** Renders `MediaPanel`, passing `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `shuffledVideoNotes`, indices, playback state/handlers, etc.
@@ -64,7 +66,10 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Purpose:** Displays the video player UI.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'videoPlayer'`.
     *   **Key Props:** `videoRef`, `src` (bound to `currentItemUrl`), `isPlaying`, `togglePlayPause`.
-    *   **Functionality:** Renders the `<video>` element with `autoPlay`. Shows an overlay play button if `isPlaying` is false.
+    *   **Functionality:** 
+        * Renders the `<video>` element with `autoPlay`.
+        * Shows a centered, circular overlay play button (`absolute p-4 rounded-full...`) if `isPlaying` is false.
+        * **Note on Dual Play Buttons:** This centered button co-exists with the Play/Pause button in the `MediaPanel`'s control bar. While potentially redundant, the centered button is retained for specific edge cases, such as allowing direct interaction with the video player when controls are hidden or when autoplay fails and immediate user action is desired.
 
 *   **`MediaPanel.tsx`:**
     *   **Purpose:** Displays the relevant **list** (Podcasts or Videos) and the **playback controls**. Acts as the interactive panel in the bottom-right.
@@ -77,7 +82,7 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
         *   Connects controls to handlers/state passed from `App` (originating from `useMediaState` and `useMediaElementPlayback`).
         *   Handles list item selection/navigation (e.g., calls `setCurrentPodcastIndex` or `onVideoSelect`).
         *   **Does NOT render the `<video>` element.**
-        *   **Does NOT render the `<audio>` element (uses `audioRef` for controls).**
+        *   **Does NOT render the `<audio>` element (uses `audioRef` passed from `App` for controls).**
 
 *   **`MessageBoard.tsx`:**
     *   **Purpose:** Displays Nostr chat messages for a specific thread.
@@ -98,64 +103,10 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 *   **`useMediaNotes`:**
     *   **Input:** `authors`, `mediaType` ('image', 'podcast', 'video'), `ndk`, `limit` (optional), `until` (optional).
     *   **Output:** `notes` (array of `NostrNote` objects, sorted by created_at descending), `isLoading`.
-    *   **Function:** Fetches Nostr notes (Kind 1) based on authors and specified Kinds (e.g., `IMAGE_KINDS`). Uses `limit`/`until` for pagination. Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes over time if `limit`/`until` changes. Parses URLs/metadata. Caches new notes. **Returns raw, sorted notes.**
+    *   **Function:** Fetches Nostr notes based on authors and specified Kinds. Uses `limit`/`until` for pagination. Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes over time if `limit`/`until` changes. Parses URLs/metadata. Caches new notes. **Returns raw, sorted notes.**
+    *   **URL Parsing Logic:**
+        *   For **videos**: Prioritizes checking for an `m` tag (MIME type, e.g., `["m", "video/mp4"]`). If found, it confirms the event as video and looks for the URL in `url` or `media` tags (or content as last resort). If no `m` tag is found, it falls back to checking `url`, `media` tags, and finally event `content` against a regex for video file extensions (`.mp4`, `.mov`, etc.).
+        *   For **podcasts/images**: Primarily checks specific tags (`enclosure`/`image`) and the `url`/`media` tags, falling back to content regex matching audio/image file extensions.
 
 *   **`useMediaState`:**
-    *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (raw arrays from `useMediaNotes`), `fetchOlderImages`, `fetchOlderVideos` (callbacks from `App`), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
-    *   **Output:** `viewMode`, `imageNotes`, `podcastNotes`, `videoNotes` (internal, sorted state copies), `isLoadingPodcastNotes`, `isLoadingVideoNotes`, `currentImageIndex`, `currentPodcastIndex`, `currentVideoIndex`, `selectedVideoNpub`, `currentItemUrl`, `handleVideoSelect`, `handlePrevious`, `handleNext`, `setViewMode`, `setCurrentPodcastIndex`.
-    *   **Function:**
-        *   Holds core UI state: `viewMode`, `current...Index`, `selectedVideoNpub`.
-        *   Receives initial note arrays via props. Uses internal `useEffect` hooks watching these props to: sort them, update internal state (`imageNotes`, `podcastNotes`, `videoNotes`), set internal loading flags (`isLoading...Notes`) to `false`, and reset indices if necessary.
-        *   Calculates `currentItemUrl` based on `viewMode` and current index/notes via `useEffect`.
-        *   Provides navigation handlers (`handlePrevious`, `handleNext`). `handleNext` uses the passed `shuffled...Length` props to detect the end of the list and calls the appropriate `fetchOlder...` callback.
-        *   Provides selection handlers: `handleVideoSelect` (updates video index/npub, crucially sets `viewMode = 'videoPlayer'`), `setCurrentPodcastIndex`.
-        *   Provides `setViewMode` for explicit mode changes (e.g., toggle button).
-
-*   **`useMediaElementPlayback`:**
-    *   **Input:** `mediaElementRef` (`audioRef` or `videoRef` from `App`), `currentItemUrl` (from `useMediaState`), `onEnded` (callback, typically `handleNext`), `initialTime` (for resuming podcasts).
-    *   **Output:** Playback state (`isPlaying`, `currentTime`, `duration`, `playbackRate`, `isSeeking`) and control functions (`setPlaybackRate`, `togglePlayPause`, `handleSeek`, `play`, `pause`, `setIsSeeking`).
-    *   **Function:** Abstract layer over HTML `<audio>`/`<video>` elements. Attaches listeners, manages playback state, provides control functions.
-
-## 5. Data Flow & State Management Summary
-
-1.  **Init:** `App` starts `useMediaAuthors` -> `ndk`/`authors`.
-2.  **Fetch:** `App` starts `useMediaNotes` (x3) with `authors`, `ndk`. Returns `imageNotes`, `podcastNotes`, `videoNotes`.
-3.  **Shuffle:** `App` `useEffect` hooks watch fetched notes, call `shuffleArray`, update `shuffledImageNotes`/`shuffledVideoNotes` state in `App`.
-4.  **State Hook:** `App` passes initial notes, fetchers, shuffled lengths to `useMediaState`. `useMediaState` processes initial notes, sets up internal state and URL calculation.
-5.  **Render:** `App` renders layout based on `viewMode` from `useMediaState`.
-    *   Top: `ImageFeed` (gets `shuffledImageNotes`) OR `VideoPlayer` (gets `videoRef`, `currentItemUrl`, playback state).
-    *   Bottom-Left: `MessageBoard`.
-    *   Bottom-Right: `MediaPanel` (gets `viewMode`, refs, `podcastNotes`, `shuffledVideoNotes`, playback state/handlers).
-6.  **Interaction:**
-    *   Controls in `MediaPanel` call handlers passed from `App` (originating in `useMediaState` / `useMediaElementPlayback`).
-    *   Selecting video in `MediaPanel` calls `handleVideoSelect` -> `useMediaState` updates index/npub and sets `viewMode='videoPlayer'`.
-    *   `App` re-renders, showing `VideoPlayer` top, `MediaPanel` shows video list bottom-right.
-    *   Navigation (`handleNext`) -> `useMediaState` checks boundary -> calls `fetchOlder...` -> `App` updates `until` -> `useMediaNotes` fetches more -> `App` shuffles more -> `useMediaState` gets new initial notes -> UI updates.
-
-## 6. Navigation and Focus Management
-
-*   Focus management primarily handled within individual components (`ImageFeed`, `MediaPanel`).
-*   Mode switching driven by user actions (video selection, toggle button) via `useMediaState`.
-*   Pagination (`fetchOlder...`) triggered by `handleNext` boundary checks in `useMediaState`.
-
-## 7. Areas for Potential Improvement/Review
-
-*   **Bottom-Right Panel:** Confirm its dedicated purpose (list/controls).
-*   **Podcast UI:** Determine if UI beyond `MediaPanel` controls is needed. Integrate `Podcastr.tsx` if required.
-*   **`useMediaState` Complexity:** Could potentially be broken down further if logic becomes too complex.
-*   **Npub Update on Next/Prev Video:** `handleNext`/`handlePrevious` in `useMediaState` currently only update the video index, not `selectedVideoNpub`. This might be fine if npub is only needed on direct selection (`handleVideoSelect`), but worth noting. Requires access to shuffled notes inside hook for proper npub lookup.
-*   **Error Handling/Loading States:** Ensure comprehensive handling.
-*   **Caching Strategy.**
-
-## 8. Additional Notes
-
-*   **Randomization:** Explicitly happens in `App` via `useEffect` after notes are fetched, before passing to UI.
-*   **Persistence:** Podcast time (`localStorage`), video time (none).
-*   **`<audio>` Element:** Assumed to be rendered invisibly in `App.tsx` (needs verification) and controlled via `audioRef` passed through `App`.
-
-## Additional Notes
-
-*   **URL Parsing:** Logic is now primarily within `useMediaState`'s URL effect.
-*   **Prop Drilling:** Still necessary to connect `App` state/hooks to components.
-*   **Persistence:** Podcast time saved via `localStorage`. Video position is not saved.
-*   **Randomization:** Image/Video notes shuffled in `App`. 
+    *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (raw arrays from `useMediaNotes`), `fetchOlderImages`, `

@@ -1,74 +1,97 @@
 {
   "appName": "MadstrTV",
   "rootComponent": "App",
-  "description": "Nostr media viewer for TVs with split-screen layout.",
+  "description": "Nostr media viewer for TVs with split-screen layout and dynamic fullscreen mode.",
   "layout": {
     "root": {
       "type": "FlexColumn",
       "height": "h-screen",
-      "padding": "pt-8",
-      "border": "border-4 border-purple-600",
-      "backgroundColor": "bg-black",
+      "padding": "pt-4",
+      "border": "border-2 border-purple-900",
+      "backgroundColor": "bg-gradient-radial from-gray-900 via-black to-black",
       "children": [
         {
           "id": "TopMediaArea",
-          "purpose": "Displays primary visual content (ImageFeed or VideoPlayer)",
+          "purpose": "Displays primary visual content (ImageFeed or VideoPlayer). Contains author QR code internally and an absolutely positioned mode toggle button.",
           "layout": {
             "type": "FlexGrow",
+            "position": "relative",
             "minHeight": "min-h-0",
             "display": "flex",
             "alignment": "items-center justify-center",
-            "overflow": "overflow-hidden"
+            "overflow": "overflow-hidden",
+            "backgroundColor": "bg-black"
           },
           "conditionalRendering": {
             "stateVariable": "viewMode",
             "components": {
               "imagePodcast": {
                 "component": "ImageFeed",
-                "props": ["shuffledImageNotes", "isLoading", "currentImageIndex", "handlePrevious", "handleNext", "ref:imageFeedRef"]
+                "props": ["shuffledImageNotes", "isLoading", "currentImageIndex", "handlePrevious", "handleNext", "ref:imageFeedRef", "authorNpub"]
               },
               "videoPlayer": {
                 "component": "VideoPlayer",
-                "props": ["videoRef", "src:currentItemUrl", "isPlaying", "togglePlayPause"]
+                "props": ["videoRef", "src:currentItemUrl", "isPlaying", "togglePlayPause", "authorNpub", "autoplayFailed", "isMuted"]
               }
             }
-          }
+          },
+          "absoluteChildren": [
+            {
+               "id": "TopToggleModeButton",
+               "component": "motion.button",
+               "purpose": "Duplicate toggle button for view mode, hidden in fullscreen.",
+               "position": "absolute bottom-2 right-24 z-20",
+               "conditionalRendering": {
+                 "condition": "!isFullScreen" 
+               },
+               "styling": "p-1.5 bg-black/50 rounded text-purple-300 hover:text-purple-100 focus:text-purple-100 text-xs font-semibold uppercase",
+               "onClick": "setViewMode(...)"
+            }
+          ]
         },
         {
           "id": "BottomSplitPanel",
-          "purpose": "Contains MessageBoard and MediaPanel (list/controls)",
+          "purpose": "Contains MessageBoard and MediaPanel. Hides in fullscreen mode with animation.",
           "layout": {
             "type": "FlexRow",
-            "height": "h-1/3",
+            "component": "motion.div",
+            "height": "h-1/4",
             "flexShrink": "flex-shrink-0",
             "overflow": "overflow-hidden",
-            "marginTop": "mt-1"
+            "marginTop": "mt-2"
+          },
+          "conditionalRendering": {
+             "condition": "!isFullScreen"
           },
           "children": [
             {
               "id": "MessageBoardPanel",
               "component": "MessageBoard",
-              "purpose": "Displays Nostr chat messages",
+              "purpose": "Displays Nostr chat messages.",
               "layout": {
                 "width": "w-2/3",
                 "height": "h-full",
                 "flexShrink": "flex-shrink-0",
                 "overflow": "overflow-y-auto",
-                "backgroundColor": "bg-gray-900",
-                "borderRadius": "rounded-lg"
+                "backgroundColor": "bg-gray-900/80 backdrop-blur-sm",
+                "borderRadius": "rounded-lg",
+                "padding": "p-2"
               },
-              "props": ["ndk", "neventToFollow", "authors"]
+              "props": ["ndk", "neventToFollow", "authors", "onNewMessage"]
             },
             {
               "id": "InteractivePanel",
               "component": "MediaPanel",
-              "purpose": "Displays media list (Podcast/Video) and playback controls",
+              "purpose": "Displays media list (Podcast/Video) and playback controls.",
               "layout": {
                 "width": "w-1/3",
                 "height": "h-full",
-                "marginLeft": "ml-1",
+                "marginLeft": "ml-2",
                 "display": "flex flex-col",
-                "overflow": "overflow-hidden"
+                "overflow": "overflow-hidden",
+                 "backgroundColor": "bg-gray-800/80 backdrop-blur-sm",
+                 "borderRadius": "rounded-lg",
+                 "padding": "p-2"
               },
               "props": [
                 "viewMode", 
@@ -82,7 +105,6 @@
                 "currentVideoIndex", 
                 "setCurrentPodcastIndex", 
                 "onVideoSelect", 
-                // Playback state/handlers
                 "isPlaying", 
                 "currentTime", 
                 "duration", 
@@ -90,44 +112,56 @@
                 "togglePlayPause", 
                 "handleSeek", 
                 "setPlaybackRate", 
-                "setViewMode"
+                "setViewMode",
+                "authors"
               ]
             }
           ]
         }
       ],
-      "absoluteChildren": [ // Elements outside the main flex flow
+      "absoluteChildren": [
          {
             "id": "AppTitle",
             "component": "h2",
             "text": "Mad⚡tr.tv",
-            "position": "absolute top-4 right-32 z-20" 
+            "position": "absolute top-2 right-4 z-20",
+            "styling": "text-base font-bold text-purple-400 pointer-events-none"
          },
          {
             "id": "QRCodeArea",
-            "component": "QRCode",
-            "position": "absolute bottom-4 left-4 z-10"
+            "component": "div",
+            "purpose": "Main QR code for replies.",
+            "position": "absolute bottom-4 left-4 z-10",
+            "internalStyling": "bg-white p-1.5 rounded-md shadow-lg w-20 h-20+"
          },
          {
              "id": "RelayStatusArea",
              "component": "RelayStatus",
-             "position": "absolute bottom-4 left-4" // Note: Might overlap QR, needs positioning review
+             "purpose": "Displays relay connection status dot and contains hidden settings button.",
+             "position": "absolute bottom-4 left-4 z-20"
          },
          {
-            "id": "PrevButton",
-            "component": "button",
-            "position": "absolute left-0 top-1/2 transform -translate-y-1/2",
-            "conditionalRendering": {
-                "condition": "(viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) || (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1)"
-            }
-         },
-         {
-            "id": "NextButton",
-            "component": "button",
-            "position": "absolute right-0 top-1/2 transform -translate-y-1/2",
-            "conditionalRendering": {
-                "condition": "(viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) || (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1)"
-            }
+            "id": "PaginationButtons",
+            "component": "motion.div",
+            "purpose": "Previous/Next media buttons, hidden in fullscreen.",
+            "position": "static",
+             "conditionalRendering": {
+                 "condition": "!isFullScreen && ((viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) || (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1))"
+             },
+             "children": [
+                {
+                    "id": "PrevButton",
+                    "component": "button",
+                    "position": "absolute left-2 top-1/2 transform -translate-y-1/2 z-10",
+                    "styling": "p-3 bg-black/30 rounded-full text-purple-400 ..."
+                 },
+                 {
+                    "id": "NextButton",
+                    "component": "button",
+                    "position": "absolute right-2 top-1/2 transform -translate-y-1/2 z-10",
+                    "styling": "p-3 bg-black/30 rounded-full text-purple-400 ..."
+                 }
+             ]
          }
       ]
     }
@@ -139,12 +173,19 @@
     "MediaPanel",
     "MessageBoard",
     "QRCode",
-    "RelayStatus"
+    "RelayStatus" 
   ],
   "keyHooks": [
       "useMediaAuthors",
       "useMediaNotes",
       "useMediaState",
       "useMediaElementPlayback"
+  ],
+  "interactionNotes": [
+    "Fullscreen mode activates after 30s of user inactivity OR 2m of message inactivity.",
+    "Fullscreen mode exits on any user interaction OR new message arrival.",
+    "ImageFeed auto-carousels every 45 seconds.",
+    "Videos play back-to-back automatically.",
+    "Settings button is hidden within RelayStatus, revealed on focus."
   ]
 }

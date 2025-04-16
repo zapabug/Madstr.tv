@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 // useNdk no longer needed here
 // import { useNdk } from 'nostr-hooks'; 
 // NDK types no longer needed here
@@ -7,6 +7,8 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { nip19 } from 'nostr-tools'; 
 import { NostrNote, NostrProfile } from '../types/nostr'; 
 import { useProfileData } from '../hooks/useProfileData';
+import { motion, AnimatePresence } from 'framer-motion';
+import QRCode from 'react-qr-code';
 
 // Remove internal MediaNote interface if NostrNote is sufficient
 /*
@@ -20,7 +22,7 @@ interface MediaNote {
 }
 */
 
-// Update props: remove authors, onNotesLoaded, add isLoading
+// Update props: remove authors, onNotesLoaded, add isLoading, authorNpub
 export interface MediaFeedProps {
   // authors: string[]; // Removed
   isLoading: boolean; // Added
@@ -28,6 +30,7 @@ export interface MediaFeedProps {
   handleNext: () => void;
   currentImageIndex: number;
   imageNotes: NostrNote[]; 
+  authorNpub: string | null; // Added
   // onNotesLoaded: (notes: NostrNote[]) => void; // Removed
 }
 
@@ -48,7 +51,7 @@ const loadingMessages = [
 ];
 
 
-const ImageFeed = React.forwardRef<ImageFeedRef, MediaFeedProps>((
+const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
   { 
     // authors, // Removed
     isLoading, // Added
@@ -56,6 +59,7 @@ const ImageFeed = React.forwardRef<ImageFeedRef, MediaFeedProps>((
     handleNext,
     currentImageIndex,
     imageNotes, 
+    authorNpub, // Added
     // onNotesLoaded, // Removed
   },
   ref 
@@ -95,8 +99,18 @@ const ImageFeed = React.forwardRef<ImageFeedRef, MediaFeedProps>((
     }
   }));
 
+  // Find the current image note
+  const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0
+    ? imageNotes[currentImageIndex]
+    : null;
+  const imageUrl = currentImageNote?.url;
+  // <<< Get profile data needed for display >>>
+  const profile = currentImageNote?.posterPubkey ? profiles[currentImageNote.posterPubkey] : undefined;
+  const displayName = profile?.name || profile?.displayName || currentImageNote?.posterPubkey?.substring(0, 10) || 'Anon';
+  const timestamp = currentImageNote?.created_at ? new Date(currentImageNote.created_at * 1000).toLocaleString() : 'Date unknown';
+
   // --- Render Logic (Use isLoading prop) ---
-  if (isLoading) {
+  if (isLoading && !imageUrl) {
     // Show loading spinner/message while fetching
     return (
          <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
@@ -121,41 +135,66 @@ const ImageFeed = React.forwardRef<ImageFeedRef, MediaFeedProps>((
     );
   }
 
-  const currentNote = imageNotes[currentImageIndex];
-  // Handle case where index might be out of bounds briefly
-  if (!currentNote) {
-     return (
-      <div className="w-full h-full flex items-center justify-center text-gray-400">
-        Loading image data...
-      </div>
-    );
-  }
-
-  // Get profile using the pubkey from the NostrNote
-  const profile = currentNote.posterPubkey ? profiles[currentNote.posterPubkey] : undefined;
-
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
-      {/* Image Display */}
-      <div className="flex-grow w-full flex items-center justify-center overflow-hidden p-4">
-        <img 
-          key={currentNote.id} 
-          src={currentNote.url || ''} 
-          alt={`Nostr Event ${currentNote.id}`}
-          className="max-w-full max-h-full object-contain transition-opacity duration-300 ease-in-out"
-          onError={(e) => console.error(`Image source error for ${currentNote.id} (URL: ${currentNote.url}):`, e)}
-        />
-      </div>
+    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+      {isLoading && !imageUrl && (
+        <p className="text-gray-400">Loading images...</p>
+      )}
 
-      {/* Info Overlay */}
-      <div className="absolute bottom-4 left-4 z-10 bg-black bg-opacity-60 p-2 rounded max-w-xs">
-        <p className="text-xs text-gray-300 truncate">
-          Posted by: {profile?.name || profile?.displayName || currentNote.posterPubkey?.substring(0,10)+'...' || 'Anon'}
+      <AnimatePresence initial={false} mode="wait">
+        {imageUrl ? (
+          <motion.img
+            key={imageUrl} // Keyed by URL for transition
+            src={imageUrl}
+            alt={`Nostr post ${currentImageNote?.id || 'image'}`}
+            className="block max-w-full max-h-full object-contain select-none" // Ensure it scales within bounds
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4, ease: 'easeInOut' }}
+            onError={() => console.error(`ImageFeed: Failed to load image ${imageUrl}`)}
+            style={{ imageRendering: 'pixelated' }} // Optional: For pixel art
+          />
+        ) : !isLoading && (
+          <p className="text-gray-500">No image found or failed to load.</p>
+        )}
+      </AnimatePresence>
+
+      {/* <<< NEW: Author Name (Above QR) >>> */}
+      {currentImageNote && (
+        <p 
+          className="absolute bottom-24 right-2 z-20 text-xs text-gray-300 bg-black/30 px-1 py-0.5 rounded pointer-events-none truncate max-w-[100px]" 
+          // Adjust bottom-24 and max-w as needed
+          title={displayName}
+        >
+          {displayName}
         </p>
-        <p className="text-xs text-gray-300">
-          {new Date(currentNote.created_at * 1000).toLocaleString()}
+      )}
+
+      {/* Author QR Code (Existing) */}
+      {authorNpub && (
+          <div className="absolute bottom-2 right-2 z-20 bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
+              <QRCode
+                  value={authorNpub}
+                  size={256} // Render high-res
+                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                  viewBox={`0 0 256 256`}
+                  level="L" // Lower error correction for denser code if needed
+                  bgColor="#FFFFFF" // White background
+                  fgColor="#000000" // Black foreground
+              />
+          </div>
+      )}
+
+      {/* <<< NEW: Timestamp (Below QR) >>> */}
+      {currentImageNote && (
+        <p 
+          className="absolute bottom-0 right-2 z-20 text-[10px] text-gray-400 bg-black/30 px-1 py-0.5 rounded pointer-events-none"
+          // Adjust positioning/styling if needed
+        >
+          {timestamp}
         </p>
-      </div>
+      )}
 
       {/* Hidden Toggle Button (for focus target) */}
       <button

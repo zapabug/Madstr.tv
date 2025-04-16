@@ -314,18 +314,26 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
 
   return (
     <div
-        ref={mainContainerRef}
-        className='relative w-full h-full bg-blue-950 flex flex-col overflow-hidden p-2 text-white rounded-lg' 
+      ref={mainContainerRef}
+      className={`
+        media-panel h-full w-full flex flex-col text-white
+        bg-gray-800 bg-opacity-80 backdrop-blur-sm 
+        p-2 
+        rounded-lg 
+        border border-slate-700
+        transition-opacity duration-500 ease-in-out
+        ${isInactive ? 'opacity-0' : 'opacity-100'}
+      `}
+      tabIndex={-1} // Make container focusable for inactivity detection
     >
       {/* --- REMOVE Video Player Area --- */}
       {/* {displayContext === 'main' && viewMode === 'videoPlayer' && currentItemUrl && ( ... video element ... )} */}
 
-      {/* Scrollable List Area - Always flex-grow */}
+      {/* Scrollable List Area - Restoring inner border, keeping background */}
       <div
           ref={scrollableListRef}
-          // Restore to always grow
-          className={`flex-grow w-full overflow-y-auto mb-2 rounded`} 
-          aria-label={listAriaLabel} // Keep dynamic aria-label
+          className={`flex-grow w-full overflow-y-auto rounded border border-slate-700 bg-slate-800`}
+          aria-label={listAriaLabel} 
           role="listbox"
       >
         {isLoadingNotes ? (
@@ -346,10 +354,10 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                 const isImageMode = viewMode === 'imagePodcast'; // Was isPodcastMode
                 const isSelected = index === currentItemIndex;
 
-                // Styling based on selection
+                // Styling based on selection - Use consistent purple bg
                 let itemBg = 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
                 if (isSelected) {
-                    itemBg = isImageMode ? 'bg-purple-700 bg-opacity-70' : 'bg-teal-700 bg-opacity-70';
+                    itemBg = 'bg-purple-700 bg-opacity-70'; // Always use purple when selected
                 }
                 
                 // Profile Data lookup
@@ -403,23 +411,34 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
       {/* {viewMode === 'image' && <audio ref={audioRef} />} */}
       {/* {viewMode === 'video' && <video ref={videoRef} key={...} src={...} className="hidden" />} */}
        
-      {/* Playback Controls (Shared Structure) */}
-      <div className={`w-full flex flex-row items-center justify-between bg-black rounded p-1 h-[60px]`}> 
+      {/* Playback Controls (Shared Structure) - Removed p-1 */}
+      <div className={`w-full flex flex-row items-center justify-between bg-black rounded h-[60px]`}> 
           
-          {/* Play/Pause Button (No change) */}
+          {/* Play/Pause Button (Blue Background, Purple Icon) */}
           <button
             ref={playPauseButtonRef}
             onClick={togglePlayPause} // Use prop handler
             onKeyDown={handlePlayPauseKeyDown}
-            className="flex-shrink-0 p-1 rounded-md text-purple-500 bg-blue-700 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black transition-colors duration-150"
+            className={`
+              flex-shrink-0 p-1 rounded-md 
+              bg-blue-700 text-purple-500 // Use blue background, purple icon
+              hover:bg-blue-600 // Darken blue on hover
+              focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black 
+              transition-colors duration-150
+            `}
             aria-label={isPlaying ? "Pause" : "Play"}
             tabIndex={0}
           >
-             {/* Icons remain the same */}
             {isPlaying ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>
+              // Pause Icon (Simplified Path)
+              <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
+                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>
+              // Play Icon (Triangle)
+              <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} stroke="none" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+              </svg>
             )}
           </button>
 

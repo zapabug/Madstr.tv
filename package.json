@@ -13,6 +13,7 @@
     "@noble/hashes": "^1.7.1",
     "@noble/secp256k1": "^2.2.3",
     "@nostr-dev-kit/ndk": "^2.13.2",
+    "framer-motion": "^12.7.3",
     "idb": "^8.0.2",
     "nostr-hooks": "^4.3.3",
     "nostr-tools": "^2.12.0",

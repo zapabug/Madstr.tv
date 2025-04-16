@@ -17,9 +17,10 @@ interface MessageBoardProps {
   ndk: NDK | null;
   neventToFollow: string;
   authors: string[]; // Add authors prop
+  onNewMessage?: () => void; // <<< Add optional callback prop
 }
 
-const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, authors }) => {
+const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, authors, onNewMessage }) => {
   const [messages, setMessages] = useState<NDKEvent[]>([]);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for profiles (uses imported type)
@@ -253,11 +254,22 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
             if (prevMessages.some(msg => msg.id === event.id)) {
                 return prevMessages;
             }
-            // Prepend new message for chronological order (newest first)
-            const newMessages = [event, ...prevMessages]; 
+            // Add the new event
+            const combinedMessages = [event, ...prevMessages];
+            // Explicitly sort by timestamp descending (newest first)
+            const sortedMessages = combinedMessages.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
+
             // Optionally trim the list if it gets too long
-            // if (newMessages.length > 100) newMessages.length = 100;
-            return newMessages;
+            // if (sortedMessages.length > 100) sortedMessages.length = 100;
+
+            // <<< Call the callback function if provided, but defer it slightly >>>
+            if (onNewMessage) {
+                setTimeout(() => {
+                    onNewMessage();
+                }, 0);
+            }
+
+            return sortedMessages; // Return the explicitly sorted array
         });
     });
 
@@ -277,37 +289,40 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
   }
 
   return (
-    <div className="bg-black shadow-2xl box-border overflow-hidden p-4 lg:p-6 flex flex-col items-center w-full">
+    <div className="h-full overflow-y-auto scroll-smooth p-2">
       {messages.length === 0 && !renderStatus() && (
           <p className="text-gray-500 text-center mt-6 text-lg lg:text-xl">No replies yet...</p>
       )}
 
       {messages.length > 0 && (
-        <ul className="space-y-2 w-full max-w-lg lg:max-w-3xl xl:max-w-4xl my-4 lg:my-6 pl-20">
-          {messages.map((msg) => {
+        <ul className="w-full space-y-1 pl-32">
+          {messages.map((msg, index) => {
               const profile = profiles[msg.pubkey];
-              const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...'; // Use displayName as fallback
+              const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...';
               const pictureUrl = profile?.picture;
               const isLoadingProfile = profile?.isLoading;
 
               return (
-                <li key={msg.id} className="flex flex-row items-start space-x-2 py-1 lg:py-2 bg-gray-900 bg-opacity-50 rounded-lg px-3 lg:px-4 shadow-md">
-                  <div className="flex-shrink-0 w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-gray-600 overflow-hidden mt-1 lg:mt-2">
+                <li 
+                  key={msg.id} 
+                  className={`flex flex-row items-start space-x-2 transition-colors duration-100 py-1 lg:py-1.5 px-3 lg:px-4 bg-gray-900/60 rounded-lg`}
+                >
+                  <div className="flex-shrink-0 w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-gray-600/80 overflow-hidden mt-1">
                       {isLoadingProfile ? (
                           <div className="w-full h-full animate-pulse bg-gray-500"></div>
                       ) : pictureUrl ? (
-                          <img src={pictureUrl} alt={displayName} className="w-full h-full object-cover" onError={() => console.error(`MessageBoard: Failed to load image for ${displayName} at ${pictureUrl}`)} />
+                          <img src={pictureUrl} alt={displayName || 'avatar'} className="w-full h-full object-cover" onError={() => console.error(`Failed to load ${pictureUrl}`)} />
                       ) : (
-                          <span className="text-gray-300 text-xs lg:text-sm font-semibold flex items-center justify-center h-full uppercase">
-                              {displayName.substring(0, 2)}
+                          <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
+                              {displayName?.substring(0, 2) || '??'}
                           </span>
                       )}
                   </div>
-                  <div className="flex-grow min-w-0 mt-1 lg:mt-2">
-                      <span className="font-medium text-gray-200 text-sm lg:text-base mr-2" title={profile?.name ? msg.pubkey : undefined}>
+                  <div className={`flex-grow min-w-0 mt-0.5`}>
+                      <span className="font-medium text-purple-600 text-sm lg:text-base mr-1.5" title={profile?.name ? msg.pubkey : undefined}>
                           {displayName}:
                       </span>
-                      <span className="text-sm lg:text-base text-gray-300 break-words">
+                      <span className="text-sm lg:text-base text-gray-200 break-words">
                           {msg.content}
                       </span>
                   </div>

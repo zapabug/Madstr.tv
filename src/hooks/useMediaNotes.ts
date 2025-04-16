@@ -61,56 +61,103 @@ export function useMediaNotes({
     const currentSubscription = useRef<NDKSubscription | null>(null);
     const isFetching = useRef<boolean>(false); // Prevent concurrent fetches
 
-    const processEvent = useCallback((event: NDKEvent, urlRegex: RegExp, type: MediaType): NostrNote | null => {
+    const processEvent = useCallback((event: NDKEvent, _urlRegex: RegExp, type: MediaType): NostrNote | null => {
+        // Use specific regex for fallback, but m-tag is primary
+        const urlRegex = getUrlRegexForMediaType(type);
         console.log(`processEvent (${type}): Checking event ${event.id}`, { content: event.content, tags: event.tags });
 
         let mediaUrl: string | undefined;
         let foundVia: string | null = null;
+        let isVideoByMimeType = false;
 
-        // 1. Check 'url' tag
-        const urlTag = event.tags.find((t) => t[0] === 'url');
-        if (urlTag && urlTag[1]?.match(urlRegex)) {
-            mediaUrl = urlTag[1];
-            foundVia = 'url tag';
+        // --- Logic adjusted to prioritize Mime Type ('m' tag) --- 
+
+        // 1. Check for VIDEO MIME type tag ('m') first
+        if (type === 'video') { 
+            const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('video/'));
+            if (mimeTag) {
+                console.log(`processEvent (${type}): Found video MIME type tag:`, mimeTag[1]);
+                isVideoByMimeType = true;
+                // Now find the associated URL, prioritizing specific tags
+                const urlTag = event.tags.find((t) => t[0] === 'url');
+                if (urlTag && urlTag[1]) {
+                    mediaUrl = urlTag[1];
+                    foundVia = 'm tag + url tag';
+                }
+                if (!mediaUrl) {
+                    const mediaTag = event.tags.find((t) => t[0] === 'media');
+                    if (mediaTag && mediaTag[1]) {
+                        mediaUrl = mediaTag[1];
+                        foundVia = 'm tag + media tag';
+                    }
+                }
+                // Fallback to content regex IF mime type was found but no url/media tag
+                if (!mediaUrl) {
+                    const genericUrlRegex = /https?:\/\/\S+/i; // Use generic regex here
+                    const contentMatch = event.content.match(genericUrlRegex);
+                    if (contentMatch) {
+                        mediaUrl = contentMatch[0];
+                        foundVia = 'm tag + content regex';
+                    }
+                }
+            }
         }
 
-        // 2. Check type-specific tags (if no URL yet)
-        if (!mediaUrl) {
-            if (type === 'podcast') {
+        // 2. Fallback: If not identified as video by MIME type OR if type is not video,
+        //    use the original logic (checking tags + regex)
+        if (!mediaUrl) { // Check if URL was found via m-tag path OR if type wasn't video
+            if (isVideoByMimeType) {
+                console.log(`processEvent (${type}): Identified by MIME type but failed to find URL via tags/content.`);
+            } else {
+                 console.log(`processEvent (${type}): No video MIME type found (or not video type), falling back to URL regex checks.`);
+            }
+
+            const urlTag = event.tags.find((t) => t[0] === 'url');
+            if (urlTag && urlTag[1]?.match(urlRegex)) {
+                mediaUrl = urlTag[1];
+                foundVia = 'url tag + regex';
+            }
+
+            if (!mediaUrl) {
+                 const mediaTag = event.tags.find((t) => t[0] === 'media');
+                 if (mediaTag && mediaTag[1]?.match(urlRegex)) {
+                     mediaUrl = mediaTag[1];
+                     foundVia = 'media tag + regex';
+                 }
+            }
+            
+            // Check type-specific tags only relevant for non-video (keep podcast/image logic here)
+            if (!mediaUrl && type === 'podcast') {
                 const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
                 if (enclosureTag && enclosureTag[1]?.match(urlRegex)) {
                     mediaUrl = enclosureTag[1];
-                    foundVia = 'enclosure tag';
+                    foundVia = 'enclosure tag + regex';
                 }
-            } else if (type === 'image') {
+            } else if (!mediaUrl && type === 'image') {
                 const imageTag = event.tags.find((t) => t[0] === 'image');
                 if (imageTag && imageTag[1]?.match(urlRegex)) {
                     mediaUrl = imageTag[1];
-                    foundVia = 'image tag';
+                    foundVia = 'image tag + regex';
+                }
+            }
+            
+            // Fallback to content regex (using the specific type regex)
+            if (!mediaUrl) {
+                console.log(`processEvent (${type}): Checking content fallback for event ${event.id}. Regex: ${urlRegex}`); // Keep log
+                console.log(`processEvent (${type}): Content to check:`, JSON.stringify(event.content)); // Keep log
+                const contentMatch = event.content.match(urlRegex);
+                console.log(`processEvent (${type}): Content match result:`, contentMatch); // Keep log
+                if (contentMatch) {
+                    mediaUrl = contentMatch[0];
+                    foundVia = 'content regex';
                 }
             }
         }
-        
-        // 3. Check generic 'media' tag (if no URL yet)
-        if (!mediaUrl) {
-             const mediaTag = event.tags.find((t) => t[0] === 'media');
-             if (mediaTag && mediaTag[1]?.match(urlRegex)) {
-                 mediaUrl = mediaTag[1];
-                 foundVia = 'media tag';
-             }
-        }
 
-        // 4. Fallback to content regex (if no URL yet)
-        if (!mediaUrl) {
-            const contentMatch = event.content.match(urlRegex);
-            if (contentMatch) {
-                mediaUrl = contentMatch[0];
-                foundVia = 'content regex';
-            }
-        }
+        // --- End of URL Finding Logic --- 
 
         if (!mediaUrl) {
-            console.log(`processEvent (${type}): Skipping event ${event.id} - No valid URL found via tags (url, enclosure, image, media) or content regex.`);
+            console.log(`processEvent (${type}): Skipping event ${event.id} - No valid URL found via m-tag or fallback checks.`);
             return null;
         } else {
              console.log(`processEvent (${type}): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
