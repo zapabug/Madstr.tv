@@ -71,6 +71,7 @@ export function useMediaElementPlayback({
   const lastSaveTimeRef = useRef<number>(0);
   const SAVE_INTERVAL = 5000;
   const hasAttemptedPlayRef = useRef(false);
+  const initialPlaySuccessfulRef = useRef(false);
 
   const updateProgress = useCallback(() => {
     if (mediaElementRef.current && !isSeeking) {
@@ -88,24 +89,30 @@ export function useMediaElementPlayback({
       setCurrentTime(0);
       setDuration(0);
       hasAttemptedPlayRef.current = false;
+      initialPlaySuccessfulRef.current = false;
       return;
     }
+
+    console.log(`useMediaElementPlayback: Effect triggered. New URL: ${currentItemUrl}, Mode: ${viewMode}, initialTime: ${initialTime}`);
+    
+    setIsPlaying(false);
+    setIsMuted(true);
+    mediaElement.muted = true;
+    setAutoplayFailed(false);
+    setCurrentTime(initialTime);
+    setDuration(0);
+    hasAttemptedPlayRef.current = false;
+    initialPlaySuccessfulRef.current = false;
 
     const handleLoadedMetadata = () => {
       console.log("useMediaElementPlayback: Metadata loaded, duration:", mediaElement.duration);
       setDuration(mediaElement.duration);
-      setIsMuted(mediaElement.muted);
-      if (
-        initialTime > 0 &&
-        Math.abs(mediaElement.currentTime - initialTime) > 0.1
-      ) {
-        console.log(
-          `Setting initial time for ${currentItemUrl} to ${initialTime}`
-        );
+      if (initialTime > 0 && Math.abs(mediaElement.currentTime - initialTime) > 1) {
+        console.log(`Applying initial time for ${currentItemUrl} to ${initialTime}`);
         isProgrammaticSeek.current = true;
         mediaElement.currentTime = initialTime;
       } else {
-        setCurrentTime(0);
+        setCurrentTime(mediaElement.currentTime);
       }
     };
 
@@ -124,80 +131,63 @@ export function useMediaElementPlayback({
     };
 
     const handlePlay = () => {
-        console.log("useMediaElementPlayback: Play event fired.");
-        setIsPlaying(true);
-        setIsMuted(mediaElement.muted);
-        setAutoplayFailed(false);
-        hasAttemptedPlayRef.current = true;
+      console.log("useMediaElementPlayback: Play event fired.");
+      setIsPlaying(true);
+      setIsMuted(mediaElement.muted);
+      setAutoplayFailed(false);
+      hasAttemptedPlayRef.current = true;
+      initialPlaySuccessfulRef.current = true;
     };
 
     const handlePause = () => {
-        console.log("useMediaElementPlayback: Pause event fired.");
-        if (!isProgrammaticSeek.current) {
-            setIsPlaying(false);
-        }
+      console.log("useMediaElementPlayback: Pause event fired.");
+      if (!isProgrammaticSeek.current) {
+        setIsPlaying(false);
+      }
     }
+
     const handleEnded = () => {
       console.log("useMediaElementPlayback: Ended event fired.");
       setIsPlaying(false);
       setCurrentTime(mediaElement.duration);
+      initialPlaySuccessfulRef.current = false;
       if (onEnded) {
         console.log("useMediaElementPlayback: Calling onEnded callback.");
         onEnded();
       }
     };
+
     const handleRateChange = () => setPlaybackRateState(mediaElement.playbackRate);
 
     const handleVolumeChange = () => {
-        console.log("useMediaElementPlayback: VolumeChange event fired. Muted:", mediaElement.muted);
-        setIsMuted(mediaElement.muted);
+      console.log("useMediaElementPlayback: VolumeChange event fired. Muted:", mediaElement.muted);
+      setIsMuted(mediaElement.muted);
     };
 
-    console.log(`useMediaElementPlayback: Source changed/effect triggered. New URL: ${currentItemUrl}, Mode: ${viewMode}, initialTime: ${initialTime}`);
-    setIsPlaying(false);
-    setIsMuted(true);
-    setAutoplayFailed(false);
-    setCurrentTime(initialTime);
-    setDuration(0);
-    hasAttemptedPlayRef.current = false;
-
-    const attemptPlayback = async () => {
-        await new Promise(resolve => setTimeout(resolve, 50));
-        if (mediaElement.readyState >= 1) {
-            try {
-                console.log("useMediaElementPlayback: Attempting playback for new source...");
-                mediaElement.muted = false;
-                await mediaElement.play();
-                console.log("useMediaElementPlayback: Playback initiated successfully for new source.");
-            } catch (error: any) {
-                console.warn("useMediaElementPlayback: Playback attempt failed for new source:", error.name, error.message);
-                setIsPlaying(false);
-                setIsMuted(true);
-                setAutoplayFailed(true);
-                mediaElement.muted = true;
-                hasAttemptedPlayRef.current = true;
-            }
-        } else {
-            console.warn("useMediaElementPlayback: Media element not ready to play after load().");
-             setIsPlaying(false);
-             setIsMuted(true);
-             setAutoplayFailed(true);
-             hasAttemptedPlayRef.current = true;
+    const handleCanPlay = async () => {
+      console.log(`useMediaElementPlayback: Canplay event fired. ReadyState: ${mediaElement.readyState}`);
+      if (
+        viewMode === 'videoPlayer' && 
+        !initialPlaySuccessfulRef.current && 
+        !hasAttemptedPlayRef.current &&
+        mediaElement.readyState >= 3
+      ) {
+        hasAttemptedPlayRef.current = true;
+        try {
+          console.log("useMediaElementPlayback: Attempting playback via handleCanPlay...");
+          mediaElement.muted = false;
+          await mediaElement.play();
+          console.log("useMediaElementPlayback: Playback initiated successfully via handleCanPlay.");
+        } catch (error: any) {
+          console.warn("useMediaElementPlayback: Playback attempt failed in handleCanPlay:", error.name, error.message);
+          setIsPlaying(false);
+          mediaElement.muted = true;
+          setIsMuted(true);
+          setAutoplayFailed(true);
+          initialPlaySuccessfulRef.current = false;
         }
+      }
     };
-
-    if (viewMode === 'videoPlayer') {
-        attemptPlayback();
-    } else {
-        console.log("useMediaElementPlayback: In imagePodcast mode, skipping initial playback attempt.");
-        if (mediaElement) {
-            mediaElement.muted = true;
-            mediaElement.pause();
-        }
-        setIsPlaying(false);
-        setIsMuted(true);
-        setAutoplayFailed(false);
-    }
 
     mediaElement.addEventListener('loadedmetadata', handleLoadedMetadata);
     mediaElement.addEventListener('timeupdate', handleTimeUpdate);
@@ -206,6 +196,14 @@ export function useMediaElementPlayback({
     mediaElement.addEventListener('ended', handleEnded);
     mediaElement.addEventListener('ratechange', handleRateChange);
     mediaElement.addEventListener('volumechange', handleVolumeChange);
+    mediaElement.addEventListener('canplay', handleCanPlay);
+
+    // Set the source *before* calling load()
+    console.log(`useMediaElementPlayback: Setting src to ${currentItemUrl}`);
+    mediaElement.src = currentItemUrl;
+
+    console.log("useMediaElementPlayback: Explicitly calling load() for new source.");
+    mediaElement.load();
 
     return () => {
       console.log("useMediaElementPlayback: Cleaning up listeners for", currentItemUrl);
@@ -216,6 +214,8 @@ export function useMediaElementPlayback({
       mediaElement.removeEventListener('ended', handleEnded);
       mediaElement.removeEventListener('ratechange', handleRateChange);
       mediaElement.removeEventListener('volumechange', handleVolumeChange);
+      mediaElement.removeEventListener('canplay', handleCanPlay);
+      
       if (!mediaElement.paused) {
          console.log("useMediaElementPlayback: Pausing media during cleanup.");
          mediaElement.pause();

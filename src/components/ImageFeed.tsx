@@ -160,20 +160,22 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
         )}
       </AnimatePresence>
 
-      {/* <<< NEW: Author Name (Above QR) >>> */}
-      {currentImageNote && (
-        <p 
-          className="absolute bottom-24 right-2 z-20 text-xs text-gray-300 bg-black/30 px-1 py-0.5 rounded pointer-events-none truncate max-w-[100px]" 
-          // Adjust bottom-24 and max-w as needed
-          title={displayName}
-        >
-          {displayName}
-        </p>
-      )}
-
-      {/* Author QR Code (Existing) */}
+      {/* --- Grouped Author Info Container --- */}
       {authorNpub && (
-          <div className="absolute bottom-2 right-2 z-20 bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20">
+        <div className="absolute bottom-2 right-2 z-20 flex flex-col items-center space-y-0.5"> {/* Main container */}
+          
+          {/* Author Name (Moved inside container) */}
+          {currentImageNote && (
+            <p 
+              className="text-xs text-purple-500 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none truncate max-w-[120px] text-center"
+              title={displayName}
+            >
+              {displayName}
+            </p>
+          )}
+
+          {/* Author QR Code (Moved inside container) */}
+          <div className="bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18"> {/* Removed absolute, slightly smaller max size */}
               <QRCode
                   value={authorNpub}
                   size={256} // Render high-res
@@ -184,19 +186,20 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
                   fgColor="#000000" // Black foreground
               />
           </div>
+          
+          {/* Timestamp (Moved inside container) */}
+          {currentImageNote && (
+            <p 
+              className="text-[10px] text-purple-500 bg-black/40 px-1 py-0.5 rounded pointer-events-none text-center"
+            >
+              {timestamp}
+            </p>
+          )}
+
+        </div>
       )}
 
-      {/* <<< NEW: Timestamp (Below QR) >>> */}
-      {currentImageNote && (
-        <p 
-          className="absolute bottom-0 right-2 z-20 text-[10px] text-gray-400 bg-black/30 px-1 py-0.5 rounded pointer-events-none"
-          // Adjust positioning/styling if needed
-        >
-          {timestamp}
-        </p>
-      )}
-
-      {/* Hidden Toggle Button (for focus target) */}
+      {/* Hidden Toggle Button (Keep outside the info container) */}
       <button
         ref={toggleButtonRef}
         className="absolute opacity-0 pointer-events-none" // Make it truly hidden

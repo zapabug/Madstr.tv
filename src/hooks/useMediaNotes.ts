@@ -214,32 +214,42 @@ export function useMediaNotes({
         const urlRegex = getUrlRegexForMediaType(mediaType);
 
         const fetchAndSubscribe = async () => {
-            // --- Cache Check (Load initial state if map is empty) ---
-            if (notesById.current.size === 0) { 
-                console.log(`useMediaNotes (${mediaType}): Map empty, loading cached notes for ${authorsList.length} authors.`);
-                const cachedNotes = await getCachedNotesByAuthors(authorsList);
-                console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`); 
-                const relevantCachedNotes: NostrNote[] = [];
-                if (cachedNotes.length > 0) {
-                    cachedNotes.forEach(note => {
-                        if (kindsToFetch.includes(note.kind) && note.url && note.url.match(urlRegex)) { 
-                            if (!notesById.current.has(note.id)) {
-                                notesById.current.set(note.id, note);
-                                relevantCachedNotes.push(note);
-                            }    
-                        } 
-                    });
-                    if (relevantCachedNotes.length > 0) {
-                        const sortedNotes = [...relevantCachedNotes].sort((a, b) => b.created_at - a.created_at);
-                        console.log(`useMediaNotes (${mediaType}): Loaded ${sortedNotes.length} relevant notes from cache into map.`); 
-                        // Don't setNotes yet, wait for live fetch to complete or EOSE
-                    } else {
-                        console.log(`useMediaNotes (${mediaType}): No relevant notes found in cache after filtering.`);
+            // --- Cache Check (Always read and merge) ---
+            console.log(`useMediaNotes (${mediaType}): Checking cache for ${authorsList.length} authors.`);
+            // <<< Always try to load from cache >>>
+            const cachedNotes = await getCachedNotesByAuthors(authorsList);
+            console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`); 
+            const relevantCachedNotes: NostrNote[] = [];
+            let newNotesAddedFromCache = false;
+            if (cachedNotes.length > 0) {
+                cachedNotes.forEach(note => {
+                    // Filter for relevance (kind, matching URL regex for the *current* mediaType)
+                    if (kindsToFetch.includes(note.kind) && note.url && note.url.match(urlRegex)) { 
+                        if (!notesById.current.has(note.id)) {
+                            notesById.current.set(note.id, note);
+                            relevantCachedNotes.push(note);
+                            newNotesAddedFromCache = true;
+                        }    
+                    } 
+                });
+                if (newNotesAddedFromCache) {
+                    console.log(`useMediaNotes (${mediaType}): Added ${relevantCachedNotes.length} relevant notes from cache to map.`); 
+                    // <<< Update UI immediately with combined notes from map >>>
+                    const allNotesFromMap = Array.from(notesById.current.values());
+                    const sortedNotes = allNotesFromMap.sort((a, b) => b.created_at - a.created_at);
+                    if (isMounted) {
+                        console.log(`useMediaNotes (${mediaType}): Updating state immediately with ${sortedNotes.length} notes from cache/map.`);
+                        setNotes(sortedNotes); 
+                        // Maybe set isLoading false briefly if only cache was hit?
+                        // setIsLoading(false); // Consider implications
                     }
                 } else {
-                     console.log(`useMediaNotes (${mediaType}): Cache was empty for these authors.`);
+                    console.log(`useMediaNotes (${mediaType}): No *new* relevant notes found in cache after filtering.`);
                 }
+            } else {
+                 console.log(`useMediaNotes (${mediaType}): Cache was empty for these authors.`);
             }
+            // <<< End of modified cache handling >>>
             
             // --- Subscription --- 
             console.log(`useMediaNotes (${mediaType}): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Until: ${until ? new Date(until * 1000).toISOString() : 'N/A'})...`);
@@ -258,60 +268,32 @@ export function useMediaNotes({
                 currentSubscription.current.stop();
             }
             
-            const sub = ndk.subscribe(filter, { closeOnEose: true, groupable: false });
-            currentSubscription.current = sub;
+            currentSubscription.current = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
 
-            const newlyFetchedNotes: NostrNote[] = [];
-
-            sub.on('event', (event: NDKEvent) => {
-                console.log(`useMediaNotes (${mediaType}): Received event ${event.id}`);
-                if (!isMounted) return; // Ignore if unmounted
-                // Process only if not already in our map
-                if (!notesById.current.has(event.id)) {
-                    const processedNote = processEvent(event, urlRegex, mediaType);
-                    if (processedNote) {
-                        // Double-check map again inside callback
-                        if (!notesById.current.has(processedNote.id)) {
-                            console.log(`useMediaNotes (${mediaType}): Adding event ${processedNote.id} to map.`); 
-                            notesById.current.set(processedNote.id, processedNote);
-                            newlyFetchedNotes.push(processedNote);
-                        }
-                    }
+            currentSubscription.current.on('event', (event: NDKEvent) => {
+                const note = processEvent(event, urlRegex, mediaType);
+                if (note && !notesById.current.has(note.id)) {
+                    console.log(`useMediaNotes (${mediaType}): Adding new note ${note.id} from WS`);
+                    notesById.current.set(note.id, note);
+                    // Don't update main state here, wait for EOSE to batch updates
                 }
             });
 
-            sub.on('eose', () => {
-                console.log(`useMediaNotes (${mediaType}): Subscription EOSE.`);
-                if (!isMounted) return;
-
-                if (newlyFetchedNotes.length > 0) {
-                    cacheMediaNotes(newlyFetchedNotes);
-                    console.log(`useMediaNotes (${mediaType}): Cached ${newlyFetchedNotes.length} new notes.`);
+            currentSubscription.current.on('eose', () => {
+                console.log(`useMediaNotes (${mediaType}): EOSE received.`);
+                const finalNotes = Array.from(notesById.current.values());
+                const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
+                if (isMounted) {
+                    console.log(`useMediaNotes (${mediaType}): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                    setNotes(sortedFinalNotes);
+                    setIsLoading(false);
+                    isFetching.current = false;
                 }
-
-                // Update state with accumulated notes from the map
-                const finalNotes = Array.from(notesById.current.values())
-                                         .sort((a, b) => b.created_at - a.created_at);
-                console.log(`useMediaNotes (${mediaType}): Setting final state with ${finalNotes.length} total notes.`);
-                setNotes(finalNotes);
-                setIsLoading(false);
-                isFetching.current = false; // Mark fetching as complete
-                currentSubscription.current = null; 
-            });
-
-            sub.on('close', (reason: any) => {
-                console.log(`useMediaNotes (${mediaType}): Subscription closed. Reason:`, reason);
-                 if (!isMounted) return;
-                 // If closed before EOSE, still update state with what we have
-                 if (isFetching.current) {
-                    const finalNotes = Array.from(notesById.current.values())
-                                         .sort((a, b) => b.created_at - a.created_at);
-                    console.log(`useMediaNotes (${mediaType}): Setting final state after close with ${finalNotes.length} total notes.`);
-                     setNotes(finalNotes);
-                     setIsLoading(false);
-                     isFetching.current = false; // Mark fetching as complete
-                 }
-                 currentSubscription.current = null;
+                // Cache the final accumulated notes
+                console.log(`useMediaNotes (${mediaType}): Caching ${finalNotes.length} notes after EOSE.`);
+                cacheMediaNotes(finalNotes).catch(error => {
+                     console.error(`useMediaNotes (${mediaType}): Error caching notes after EOSE:`, error);
+                });
             });
         };
 

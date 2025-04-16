@@ -21,32 +21,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isMuted
 }) => {
 
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) return;
-
-    if (isPlaying) {
-      videoElement.play().catch(error => console.error("Video playback error:", error));
-    } else {
-      videoElement.pause();
-    }
-  }, [isPlaying, videoRef]);
-
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (videoElement && src) {
-      console.log("VideoPlayer: Setting src to:", src);
-      videoElement.src = src;
-      if (isPlaying) {
-          videoElement.play().catch(error => console.error("Video playback error on src change:", error));
-      }
-    } else if (videoElement) {
-        videoElement.pause();
-        videoElement.removeAttribute('src');
-        videoElement.load();
-    }
-  }, [src, videoRef, isPlaying]);
-
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
       <video 
@@ -54,23 +28,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         className="max-w-full max-h-full object-contain"
         muted
         playsInline
-        onPlay={() => console.log('Video playing')}
-        onPause={() => console.log('Video paused')}
-        onError={(e) => console.error('Video Error:', e)}
-        onEnded={() => console.log('Video ended')}
       >
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay Play/Pause Button - Centered, smaller hit area */}
-      { !isPlaying && (
+      {/* Overlay Play/Pause Button - Show only if autoplay failed */}
+      { autoplayFailed && (
         <button 
           onClick={togglePlayPause}
           tabIndex={0} 
-          className="absolute p-4 z-10 bg-black bg-opacity-40 text-purple-400 rounded-full focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-opacity duration-200 opacity-100 hover:opacity-90"
+          className="absolute p-3 z-10 bg-black bg-opacity-30 text-purple-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-opacity duration-200 opacity-100 hover:opacity-90"
           aria-label="Play Video"
         >
-          <svg className="w-16 h-16 lg:w-24 lg:h-24" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-12 h-12 lg:w-16 lg:h-16" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
           </svg>
         </button>

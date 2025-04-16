@@ -11,12 +11,18 @@ import { useMediaAuthors } from './hooks/useMediaAuthors'; // Import the new hoo
 import { useMediaState } from './hooks/useMediaState'; // Import the new hook
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback'; // <<< Import media playback hook
 import { useMediaNotes } from './hooks/useMediaNotes'; // <<< Import the new hook
+import { useFullscreen } from './hooks/useFullscreen'; // Import the new hook
+import { useKeyboardControls } from './hooks/useKeyboardControls'; // <<< Import the hook
+import { useImageCarousel } from './hooks/useImageCarousel'; // <<< Import the hook
+import { useCurrentAuthor } from './hooks/useCurrentAuthor'; // <<< Import the hook
 // NDKEvent/Filter no longer needed here directly
 // import { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'; 
 // NostrNote type likely still needed for props
 import { NostrNote } from './types/nostr'; // <<< Corrected path
 import { shuffleArray } from './utils/shuffleArray'; // <<< Import shuffle utility
 import { motion, AnimatePresence } from 'framer-motion'; // <<< Import framer-motion
+// <<< NEW: Import Head component for preload link (if using a library like react-helmet-async) >>>
+// import { Helmet } from 'react-helmet-async'; // Or appropriate head manager
 
 // Public key for this TV instance (used for displaying QR code)
 const TV_PUBKEY_NPUB = 'npub1a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsfzzwnyc4s6a66d8';
@@ -39,6 +45,9 @@ function getHexPubkey(npub: string): string | null {
         return null;
     }
 }
+
+// --- Constants ---
+const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 
 function App() {
   // Use the new hook to get NDK instance, authors, and loading state
@@ -82,6 +91,9 @@ function App() {
   // State for podcast saved position
   const [initialPodcastTime, setInitialPodcastTime] = useState<number>(0);
 
+  // <<< NEW: State for preload URL >>>
+  const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
+
   // ---> Declare fetcher functions BEFORE useMediaState <--- 
   const fetchOlderImages = useCallback(() => {
     if (imageNotes.length > 0) {
@@ -102,13 +114,12 @@ function App() {
   // Ref to track previous view mode for fetch trigger
   const previousViewModeRef = useRef<typeof viewMode | undefined>(undefined);
 
-  // ---> Call useMediaState, passing notes directly <--- 
+  // ---> Call useMediaState CORRECTLY <--- 
   const {
     viewMode, 
     currentImageIndex,
     currentPodcastIndex,
     currentVideoIndex,
-    selectedVideoNpub,
     currentItemUrl, 
     handleVideoSelect, 
     handlePrevious,
@@ -118,9 +129,9 @@ function App() {
     isLoadingPodcastNotes: isLoadingPodcastState,
     isLoadingVideoNotes: isLoadingVideoState,
   } = useMediaState({ 
-      initialImageNotes: imageNotes, 
+      initialImageNotes: shuffledImageNotes, 
       initialPodcastNotes: podcastNotes,
-      initialVideoNotes: videoNotes,
+      initialVideoNotes: shuffledVideoNotes,
       fetchOlderImages: fetchOlderImages, 
       fetchOlderVideos: fetchOlderVideos,
       shuffledImageNotesLength: shuffledImageNotes.length,
@@ -140,109 +151,20 @@ function App() {
     setShuffledVideoNotes(shuffleArray([...videoNotes])); // Update shuffled state for UI
   }, [videoNotes]); // Depend only on the fetched notes
 
-  // --- Calculate current author npub --- <<< NEW LOGIC
-  const [currentAuthorNpub, setCurrentAuthorNpub] = useState<string | null>(null);
-  useEffect(() => {
-    let authorPubkey: string | undefined = undefined;
-    if (viewMode === 'imagePodcast' && shuffledImageNotes.length > 0 && currentImageIndex >= 0) {
-        authorPubkey = shuffledImageNotes[currentImageIndex]?.pubkey;
-    } else if (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 0 && currentVideoIndex >= 0) {
-        authorPubkey = shuffledVideoNotes[currentVideoIndex]?.pubkey;
-    }
-
-    if (authorPubkey) {
-        try {
-            const npub = nip19.npubEncode(authorPubkey);
-            setCurrentAuthorNpub(`nostr:${npub}`);
-        } catch (e) {
-            console.error("App: Failed to encode author pubkey:", authorPubkey, e);
-            setCurrentAuthorNpub(null);
-        }
-    } else {
-        setCurrentAuthorNpub(null);
-    }
-  }, [viewMode, currentImageIndex, currentVideoIndex, shuffledImageNotes, shuffledVideoNotes]);
+  // Consolidate loading state - Use correct variable names
+  const isLoadingAnyMedia = isLoadingImages || isLoadingVideoState || isLoadingPodcastState || isLoadingAuthors;
 
   // --- State for Fullscreen Logic ---
-  const [lastMessageTimestamp, setLastMessageTimestamp] = useState<number>(Date.now());
-  const [lastInteractionTimestamp, setLastInteractionTimestamp] = useState<number>(Date.now()); // <<< New state
-  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
-  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null); // <<< Ref for interval timer
+  const { isFullScreen, signalInteraction, signalMessage } = useFullscreen({
+    interactionTimeout: INTERACTION_TIMEOUT,
+    messageTimeout: MESSAGE_TIMEOUT,
+    checkInterval: CHECK_INTERVAL,
+  });
 
-  // --- Callback for MessageBoard ---
+  // --- Callback for MessageBoard (Uses signalMessage) ---
   const handleNewMessage = useCallback(() => {
-      console.log("App: New message received, updating timestamps.");
-      const now = Date.now();
-      setLastMessageTimestamp(now);
-      setLastInteractionTimestamp(now); // <<< Also update interaction time
-      if (isFullScreen) {
-          console.log("App: Exiting fullscreen due to new message.");
-          setIsFullScreen(false); // Exit fullscreen on new message
-      }
-      // No need to manage timer here, the effect handles it
-  }, [isFullScreen]); // <<< Added isFullScreen dependency
-
-  // --- Effect for Fullscreen Checks (Replaces previous timer effect) ---
-  useEffect(() => {
-      // Cleanup function to clear any existing interval
-      const cleanup = () => {
-          if (checkIntervalRef.current) {
-              // console.log("App Fullscreen Effect: Clearing interval timer.");
-              clearInterval(checkIntervalRef.current);
-              checkIntervalRef.current = null;
-          }
-      };
-
-      // If we are already fullscreen, clear any running timer and do nothing else
-      if (isFullScreen) {
-          cleanup();
-          return;
-      }
-
-      // --- If NOT fullscreen, start the periodic check ---
-      const checkFullScreen = () => {
-          const now = Date.now();
-          const timeSinceInteraction = now - lastInteractionTimestamp;
-          const timeSinceMessage = now - lastMessageTimestamp;
-
-          // console.log(`App Fullscreen Check: Interaction=${timeSinceInteraction}ms, Message=${timeSinceMessage}ms`);
-
-          // Check if either condition is met to ENTER fullscreen
-          if (timeSinceInteraction >= INTERACTION_TIMEOUT || timeSinceMessage >= MESSAGE_TIMEOUT) {
-              console.log("App Fullscreen Check: Timeout met, entering fullscreen.");
-              setIsFullScreen(true); // This will trigger the effect cleanup
-          }
-      };
-
-      // Clear any previous interval before starting a new one
-      cleanup();
-      // Start the check immediately and then set the interval
-      checkFullScreen();
-      checkIntervalRef.current = setInterval(checkFullScreen, CHECK_INTERVAL);
-      console.log("App Fullscreen Effect: Started interval timer.");
-
-      // Return the cleanup function to clear interval on unmount or when isFullScreen becomes true
-      return cleanup;
-
-  // Depend on the state variables that affect the check conditions
-  }, [isFullScreen, lastInteractionTimestamp, lastMessageTimestamp]);
-
-  // --- <<< NEW Effect: Fetch older videos on switching TO video mode >>> ---
-  useEffect(() => {
-    // Check if mode just switched *to* videoPlayer
-    if (viewMode === 'videoPlayer' && previousViewModeRef.current !== 'videoPlayer') {
-      console.log("App: View mode just switched to videoPlayer, triggering fetchOlderVideos.");
-      // Check if already fetching to prevent multiple simultaneous requests if switching quickly
-      // (Assuming isLoadingVideoNotes reflects fetching older notes too - might need refinement)
-      if (!isLoadingVideoState) { 
-          fetchOlderVideos(); // Call the fetcher
-      } else {
-           console.log("App: Skipping fetchOlderVideos trigger, already loading videos.");
-      }
-    }
-    // Update previous mode ref *after* the check
-    previousViewModeRef.current = viewMode;
-  }, [viewMode, fetchOlderVideos, isLoadingVideoState]); // Dependencies
+      signalMessage(); 
+  }, [signalMessage]);
 
   // Refs for media elements (will be passed to MediaPanel)
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -297,65 +219,61 @@ function App() {
   // Placeholder for relay status
   const isReceivingData = false; 
 
-  // --- Keyboard Listener (Updated for Fullscreen Exit) ---
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // <<< Update interaction timestamp and exit fullscreen >>>
-      setLastInteractionTimestamp(Date.now());
-      if (isFullScreen) {
-          console.log("App: Exiting fullscreen due to remote interaction.");
-          setIsFullScreen(false);
-          // Decide if you want to prevent the default action. Often not needed just for exiting FS.
-          // event.preventDefault();
-      }
-      // <<< End Fullscreen Exit Logic >>>
-
-      console.log(`App: Key event - Key: ${event.key}, Code: ${event.code}, Mode: ${viewMode}`);
-
-      // --- Existing Key Handling --- (No changes needed below unless desired)
-      if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'Back') {
-          // ... back logic ...
-      }
-      // ... other specific key logic ...
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  // Update dependencies: Add isFullScreen
-  }, [viewMode, setViewMode, togglePlayPause, isFullScreen]); // <<< Added isFullScreen dependency
+  // --- NEW: Use Keyboard Controls Hook ---
+  useKeyboardControls({
+    isFullScreen,
+    signalInteraction, // Pass signal function from useFullscreen
+    onSetViewMode: setViewMode, // Pass setter from useMediaState
+    onTogglePlayPause: togglePlayPause, // Pass handler from useMediaElementPlayback
+    onNext: handleNext, // Pass handler from useMediaState
+    onPrevious: handlePrevious, // Pass handler from useMediaState
+    onFocusToggle: focusImageFeedToggle, // Pass focus handler
+    viewMode, // Pass current viewMode
+  });
 
   // --- Effect to Trigger Play on Mode Switch to Video --- 
   useEffect(() => {
-      // if (viewMode === 'videoPlayer' && currentItemUrl && !isPlaying) { // <<< Correct comparison done
-      // ...
-      // }
-  }, [viewMode, currentItemUrl, play, isPlaying]); // Keep dependencies for play effect
-
-  // --- <<< NEW: Image Carousel Timer Effect >>> ---
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
-    // Start timer only if in image mode and have multiple images
-    if (viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) {
-      console.log("App: Starting image carousel timer (45s).");
-      intervalId = setInterval(() => {
-        console.log("App: Carousel timer fired, calling handleNext.");
-        handleNext(); // Call the existing next handler
-      }, 45000); // 45 seconds
-    }
-
-    // Cleanup function: Clear timer if it exists
-    return () => {
-      if (intervalId) {
-        console.log("App: Clearing image carousel timer.");
-        clearInterval(intervalId);
+      if (viewMode === 'videoPlayer' && currentItemUrl && !isPlaying && !autoplayFailed) { 
+        // Only attempt to play if we have a URL, aren't already playing, and autoplay didn't already fail
+        console.log("App: View mode switched to videoPlayer, attempting to play video.");
+        play(); // <<< Use play() from useMediaElementPlayback
       }
-    };
+  }, [viewMode, currentItemUrl, play, isPlaying, autoplayFailed]); // Keep dependencies for play effect
 
-    // Re-run effect if mode, notes list, or handleNext changes
-  }, [viewMode, shuffledImageNotes.length, handleNext]); 
+  // --- NEW: Use Image Carousel Hook ---
+  const isCarouselActive = viewMode === 'imagePodcast' && shuffledImageNotes.length > 1;
+  useImageCarousel({
+      isActive: isCarouselActive,
+      onTick: handleNext, // handleNext comes from useMediaState
+      intervalDuration: IMAGE_CAROUSEL_INTERVAL,
+  });
+
+  // --- NEW: Use Current Author Hook ---
+  const currentAuthorNpub = useCurrentAuthor({
+      viewMode,
+      imageIndex: currentImageIndex,
+      videoIndex: currentVideoIndex,
+      imageNotes: shuffledImageNotes,
+      videoNotes: shuffledVideoNotes,
+  });
+
+  // <<< NEW: Effect to determine and set the preload URL >>>
+  useEffect(() => {
+    if (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1) {
+      const nextIndex = (currentVideoIndex + 1) % shuffledVideoNotes.length;
+      const nextNote = shuffledVideoNotes[nextIndex];
+      if (nextNote && nextNote.url && nextNote.url !== currentItemUrl) { // Preload if different from current
+        console.log(`App: Setting preload URL to index ${nextIndex}: ${nextNote.url}`);
+        setPreloadVideoUrl(nextNote.url);
+      } else {
+        // Don't preload if next is same as current or invalid
+        setPreloadVideoUrl(null); 
+      }
+    } else {
+      // Clear preload URL if not in video mode or only one video
+      setPreloadVideoUrl(null);
+    }
+  }, [viewMode, currentVideoIndex, shuffledVideoNotes, currentItemUrl]); // Add currentItemUrl dependency
 
   // ... return JSX ...
 
@@ -460,7 +378,7 @@ function App() {
                              togglePlayPause={togglePlayPause}
                              authorNpub={currentAuthorNpub}
                              autoplayFailed={autoplayFailed} // <<< Pass prop
-                             isMuted={isMuted}             // <<< Pass prop
+                             isMuted={isMuted}             // <<< Re-add isMuted prop
                          />
                      </motion.div>
                  ) : null }
@@ -573,7 +491,7 @@ function App() {
                               ndk={ndk}
                               neventToFollow={MAIN_THREAD_NEVENT_URI}
                               authors={mediaAuthors}
-                              onNewMessage={handleNewMessage} // <<< Pass callback
+                              onNewMessage={handleNewMessage} // Pass callback
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center"> {/* Centering placeholder */}
@@ -583,40 +501,32 @@ function App() {
                     </div> {/* End Message Board Container */}
 
                     {/* Interactive Panel Container (Right 1/3) */}
-                    <div className="w-1/3 h-full flex flex-col overflow-hidden ml-2"> {/* Adjusted margin */}
-                        <div className="flex-grow min-h-0 bg-gray-800/80 rounded-lg p-2 backdrop-blur-sm"> {/* Subtle background, padding */}
-                            {ndk ? (
-                                <MediaPanel
-                                    audioRef={audioRef}
-                                    videoRef={videoRef}
-                                    viewMode={viewMode}
-                                    authors={mediaAuthors} // Pass authors if needed by MediaPanel styling/logic
-                                    podcastNotes={podcastNotes} // Original order for list
-                                    videoNotes={shuffledVideoNotes} // Shuffled for list
-                                    isLoadingPodcastNotes={isLoadingPodcastState} // Use state hook loading
-                                    isLoadingVideoNotes={isLoadingVideoState} // Use state hook loading
-                                    isPlaying={isPlaying}
-                                    currentTime={currentTime}
-                                    duration={duration}
-                                    playbackRate={playbackRate}
-                                    currentItemUrl={currentItemUrl} // Needed? Or handled by refs? Check MediaPanel
-                                    setPlaybackRate={setPlaybackRate}
-                                    togglePlayPause={togglePlayPause}
-                                    handleSeek={handleSeek} // Check if MediaPanel uses this directly
-                                    currentPodcastIndex={currentPodcastIndex}
-                                    currentVideoIndex={currentVideoIndex}
-                                    setCurrentPodcastIndex={setCurrentPodcastIndex}
-                                    onVideoSelect={handleVideoSelect}
-                                    setViewMode={setViewMode}
-                                    // Pass focus handlers if needed based on focus-trap-issue.md
-                                    // onFocusBottomEdge={focusImageFeedToggle} // Example if needed
-                                    // onFocusRightEdge={focusImageFeedToggle} // Example if needed
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-400">Initializing...</div>
-                            )}
-                        </div>
-                    </div> {/* End Interactive Panel */}
+                    <div className="w-1/3 h-full flex flex-col">
+                        <MediaPanel
+                            viewMode={viewMode}
+                            audioRef={audioRef} // Pass ref for controls
+                            videoRef={videoRef} // Pass ref for controls
+                            podcastNotes={podcastNotes}
+                            videoNotes={shuffledVideoNotes} // Pass shuffled
+                            isLoadingPodcastNotes={isLoadingPodcastNotes}
+                            isLoadingVideoNotes={isLoadingVideoNotes}
+                            currentPodcastIndex={currentPodcastIndex}
+                            currentVideoIndex={currentVideoIndex}
+                            setCurrentPodcastIndex={setCurrentPodcastIndex}
+                            onVideoSelect={handleVideoSelect} // Pass selection handler
+                            setViewMode={setViewMode} // Pass mode setter
+                            // --- Playback State & Handlers (As defined in MediaPanelProps) ---
+                            isPlaying={isPlaying}
+                            currentTime={currentTime}
+                            duration={duration}
+                            playbackRate={playbackRate}
+                            setPlaybackRate={setPlaybackRate}
+                            togglePlayPause={togglePlayPause}
+                            handleSeek={handleSeek}
+                            currentItemUrl={currentItemUrl} // Pass current URL
+                            authors={mediaAuthors}      // Pass authors list
+                        />
+                    </div>
                  </motion.div>
             )}
         </AnimatePresence>
@@ -632,6 +542,20 @@ function App() {
         relayCount={RELAYS.length} // Pass the count of configured relays
       />
     </div>
+
+    {/* --- Preload Link --- */}
+    {/* Option 1: Using react-helmet-async or similar (Recommended) */}
+    {/* <Helmet>
+      {preloadVideoUrl && (
+        <link rel=\"preload\" href={preloadVideoUrl} as=\"video\" type=\"video/mp4\" /> // Type is a guess
+      )}
+    </Helmet> */}
+
+    {/* Option 2: Directly in body (Browser should still handle it) */}
+    {preloadVideoUrl && (
+        <link rel="preload" href={preloadVideoUrl} as="video" /> 
+        // Note: type attribute omitted for broader compatibility 
+    )}
 
     </>
   );

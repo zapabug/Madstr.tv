@@ -1,4 +1,4 @@
-# TV App Architecture Documentation (LLM Context Version)
+# TV App Architecture Documentation (Updated for Refactoring)
 
 ## 1. Overview
 
@@ -9,7 +9,8 @@ This document describes the architecture of the React-based TV application desig
 *   Content is fetched from Nostr relays based on a list of followed authors.
 *   Image and video feeds are **randomized** on load using `shuffleArray`.
 *   Older content (images/videos) can be fetched dynamically ("infinite scroll" behavior) by navigating past the end of the current list.
-*   Uses a **split-screen layout**.
+*   Uses a **split-screen layout**, hiding the bottom panel in fullscreen mode.
+*   Enters **fullscreen mode** automatically after periods of inactivity or no new messages.
 
 **Operating Modes (`viewMode` state):**
 *   `imagePodcast`: The main/top area displays the `ImageFeed`, while the bottom-right panel displays the `podcastNotes` list and controls.
@@ -18,95 +19,123 @@ This document describes the architecture of the React-based TV application desig
 ## 2. Core Technologies
 
 *   **Frontend Framework:** React (`useState`, `useEffect`, `useRef`, `useCallback`)
-*   **State Management:** Primarily custom hooks (`useMediaAuthors`, `useMediaState`, `useMediaElementPlayback`, `useMediaNotes`) orchestrated by the root `App` component.
-*   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`
+*   **State Management & Side Effects:** Primarily custom hooks (`useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`) orchestrated by the root `App` component.
+*   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`, `nostr-hooks`
 *   **Caching:** IndexedDB via `idb` (`mediaNoteCache`, `profileCache`)
-*   **Styling:** Tailwind CSS
-*   **Utilities:** `shuffleArray`
+*   **Styling:** Tailwind CSS, `framer-motion` (for animations)
+*   **Utilities:** `shuffleArray`, `react-qr-code`
 
 ## 3. Core Component Responsibilities & Layout
 
-The main layout is defined in `App.tsx` and consists of two primary sections within a padded border:
+The main layout is defined in `App.tsx` and consists of two primary sections within a padded border (removed in fullscreen):
 
-*   **A. Top Media Area (`flex-grow`):** Displays the primary visual content.
-*   **B. Bottom Split Panel (`h-1/3`, `flex-row`):** Contains secondary information and list controls.
+*   **A. Top Media Area (`flex-grow`):** Displays the primary visual content (`ImageFeed` or `VideoPlayer`).
+*   **B. Bottom Split Panel (`h-1/3`, `flex-row`, *hidden in fullscreen*):** Contains secondary information and list controls.
     *   **B1. Left Panel (`w-2/3`):** `MessageBoard` component.
     *   **B2. Right Panel (`w-1/3`):** `MediaPanel` component (acting as list/controls).
 
 ---
 
 *   **`App.tsx` (Root Component):**
-    *   **Orchestrator:** Initializes hooks, manages refs, defines layout, fetches data (via hooks), shuffles data, and passes props down.
-    *   **State Held:** `imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`, `shuffledImageNotes`, `shuffledVideoNotes`, `initialPodcastTime`.
+    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), shuffles image/video notes, and passes state/props/callbacks down to child components and hooks.
+    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`).
     *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
     *   **Hook Usage:**
         *   `useMediaAuthors`: Gets `ndk` instance and `mediaAuthors`.
-        *   `useMediaNotes`: Fetches `imageNotes`, `podcastNotes`, `videoNotes` based on authors and fetch parameters.
-        *   `useMediaState`: Manages `viewMode` and indices. Receives initial notes (raw from `useMediaNotes`), fetcher callbacks, and shuffled list lengths. Returns state like `viewMode`, `currentItemUrl`, indices, and handlers.
-        *   `useMediaElementPlayback`: Manages actual playback state (`isPlaying`, `currentTime`, etc.) based on `currentItemUrl` and the active media ref (`audioRef` or `videoRef`).
+        *   `useMediaNotes`: Fetches `imageNotes`, `podcastNotes`, `videoNotes`. Called multiple times.
+        *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives initial notes, fetcher callbacks, and note lengths.
+        *   `useMediaElementPlayback`: Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl`.
+        *   `useFullscreen`: Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
+        *   `useKeyboardControls`: Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`).
+        *   `useImageCarousel`: Manages the image auto-advance timer, receives `isActive` flag and `handleNext` callback.
+        *   `useCurrentAuthor`: Calculates the `npub` of the currently displayed author based on mode and index, receives indices and note lists.
     *   **Data Handling:**
-        *   Receives `imageNotes`, `videoNotes` from `useMediaNotes`.
-        *   Uses `useEffect` to call `shuffleArray` on these notes and updates `shuffledImageNotes`/`shuffledVideoNotes` state. **Shuffling happens here because the UI components need the shuffled order.**
-        *   Uses a `useEffect` hook to monitor `viewMode` changes. When the mode switches to `'videoPlayer'`, it automatically triggers the `fetchOlderVideos` callback to fetch the next batch of older videos in the background.
+        *   Receives raw notes from `useMediaNotes`.
+        *   Uses `useEffect` to shuffle `imageNotes` and `videoNotes` into `shuffledImageNotes`/`shuffledVideoNotes` state. Shuffling happens here before passing to `useMediaState` and components.
+        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks (updates `Until` state) and passes them to `useMediaState`.
     *   **Rendering Logic:**
-        *   Renders an invisible `<audio>` element associated with `audioRef`. This element is controlled by `useMediaElementPlayback`.
-        *   **Top Area (A):** Renders `ImageFeed` (if `viewMode === 'imagePodcast'`) OR `VideoPlayer` (if `viewMode === 'videoPlayer'`). Passes relevant props (e.g., `shuffledImageNotes` to `ImageFeed`, `videoRef`/`currentItemUrl`/playback state to `VideoPlayer`).
-        *   **Bottom Panel (B1):** Renders `MessageBoard`, passing `ndk`, `authors`.
-        *   **Bottom Panel (B2):** Renders `MediaPanel`, passing `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `shuffledVideoNotes`, indices, playback state/handlers, etc.
-    *   **Callbacks:** Defines `fetchOlderImages`/`fetchOlderVideos` (update `until` state) and passes them to `useMediaState`.
-    *   **Global Handlers:** Handles global key events (e.g., Back).
+        *   Renders invisible `<audio>` element (`audioRef`).
+        *   Renders layout structure (Top Area, Bottom Panel).
+        *   Conditionally renders components based on `viewMode` (`ImageFeed` or `VideoPlayer`) in the Top Area.
+        *   Conditionally renders the Bottom Panel based on `isFullScreen`.
+        *   Renders `MessageBoard` and `MediaPanel` within the Bottom Panel.
+        *   Passes necessary props (state, refs, callbacks from hooks) down to child components.
+        *   Handles overall loading state display.
 
 *   **`ImageFeed.tsx`:**
-    *   **Purpose:** Displays the main image feed.
+    *   **Purpose:** Displays the main image feed with author QR code.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'imagePodcast'`.
-    *   **Key Props:** `shuffledImageNotes`, `isLoading`, `currentImageIndex`, `handlePrevious`, `handleNext`.
-    *   **Functionality:** Displays images, handles internal list navigation/focus.
+    *   **Key Props:** `shuffledImageNotes`, `isLoading`, `currentImageIndex`, `handlePrevious`, `handleNext`, `authorNpub`.
+    *   **Functionality:** Displays images, handles internal focus, shows author QR code.
 
 *   **`VideoPlayer.tsx`:**
-    *   **Purpose:** Displays the video player UI.
+    *   **Purpose:** Displays the video player UI with author QR code.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'videoPlayer'`.
-    *   **Key Props:** `videoRef`, `src` (bound to `currentItemUrl`), `isPlaying`, `togglePlayPause`.
-    *   **Functionality:** 
-        * Renders the `<video>` element with `autoPlay`.
-        * Shows a centered, circular overlay play button (`absolute p-4 rounded-full...`) if `isPlaying` is false.
-        * **Note on Dual Play Buttons:** This centered button co-exists with the Play/Pause button in the `MediaPanel`'s control bar. While potentially redundant, the centered button is retained for specific edge cases, such as allowing direct interaction with the video player when controls are hidden or when autoplay fails and immediate user action is desired.
+    *   **Key Props:** `videoRef`, `src` (bound to `currentItemUrl`), `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`.
+    *   **Functionality:** Renders the `<video>` element (using `videoRef`), controls playback state based on props, shows overlay play button, shows author QR code.
 
 *   **`MediaPanel.tsx`:**
     *   **Purpose:** Displays the relevant **list** (Podcasts or Videos) and the **playback controls**. Acts as the interactive panel in the bottom-right.
-    *   **Rendered In:** Bottom-Right Panel (B2) - *Always rendered here*.
-    *   **Key Props:** `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `shuffledVideoNotes`, `isLoadingPodcastNotes`, `isLoadingVideoNotes`, `currentPodcastIndex`, `currentVideoIndex`, `setCurrentPodcastIndex`, `onVideoSelect`, playback state (`isPlaying`, `currentTime`, etc.) and handlers (`togglePlayPause`, `handleSeek`, `setPlaybackRate`, `setViewMode`).
-    *   **Functionality:**
-        *   Uses `viewMode` to determine which list (`podcastNotes` or `shuffledVideoNotes`) and loading state (`isLoading...`) to use.
-        *   Renders the appropriate list items.
-        *   Renders shared playback controls (Play/Pause, Seek, Time, Speed [only for podcasts], Mode Toggle button ["Images"/"Videos"]).
-        *   Connects controls to handlers/state passed from `App` (originating from `useMediaState` and `useMediaElementPlayback`).
-        *   Handles list item selection/navigation (e.g., calls `setCurrentPodcastIndex` or `onVideoSelect`).
-        *   **Does NOT render the `<video>` element.**
-        *   **Does NOT render the `<audio>` element (uses `audioRef` passed from `App` for controls).**
+    *   **Rendered In:** Bottom-Right Panel (B2) - *Rendered only when not fullscreen*.
+    *   **Key Props:** `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `videoNotes` (receives *shuffled* videos), loading states, indices, selection handlers, playback state/handlers (`isPlaying`, `currentTime`, etc.), `setViewMode`, `currentItemUrl`, `authors`.
+    *   **Hook Usage (Internal):** Uses `useProfileData` to fetch profile info (name/pic) for authors in the lists. Uses `useInactivityTimer`.
+    *   **Functionality:** Renders lists, playback controls, connects controls to props from `App`. Handles list item selection/navigation. Does **not** render media elements directly.
 
 *   **`MessageBoard.tsx`:**
     *   **Purpose:** Displays Nostr chat messages for a specific thread.
-    *   **Rendered In:** Bottom-Left Panel (B1).
-    *   **Key Props:** `ndk`, `neventToFollow`, `authors`.
+    *   **Rendered In:** Bottom-Left Panel (B1) - *Rendered only when not fullscreen*.
+    *   **Key Props:** `ndk`, `neventToFollow`, `authors`, `onNewMessage` (callback to signal fullscreen hook).
 
-*   **`RelayStatus.tsx`, `QRCode.tsx`:** Utility components for displaying relay status and QR code.
+*   **`PlaybackControls.tsx` (Assumed Child of `MediaPanel.tsx`):**
+    *   **Purpose:** Renders the actual buttons, sliders, and time displays for media control.
+    *   **Rendered In:** `MediaPanel.tsx`.
+    *   **Key Props:** Likely receives playback state (`isPlaying`, `currentTime`, `duration`, `playbackRate`, `isMuted`) and handlers (`togglePlayPause`, `handleSeek`, `setPlaybackRate`, `toggleMute`) from `MediaPanel`.
 
-*   **`Podcastr.tsx`:** **ASSUMPTION:** This component appears unused in the current implementation. Podcast playback is handled via `App` -> `useMediaElementPlayback` -> `audioRef` -> `MediaPanel` controls.
+*   **`RelayStatus.tsx`, `QRCode.tsx`:** Utility components.
 
 ## 4. Custom Hooks Deep Dive
 
 *   **`useMediaAuthors`:**
-    *   **Input:** None.
+    *   **Input:** `relays` (array of relay URLs).
     *   **Output:** `ndk` instance, `mediaAuthors` (array of pubkeys), `isLoadingAuthors`.
-    *   **Function:** Initializes NDK, connects to RELAYS, fetches user's Kind 3 contact list (pubkeys), returns authors (user + followed) and NDK instance.
+    *   **Function:** Initializes NDK, connects to relays, fetches user's Kind 3 contact list, returns authors (user + followed) and NDK instance.
 
 *   **`useMediaNotes`:**
     *   **Input:** `authors`, `mediaType` ('image', 'podcast', 'video'), `ndk`, `limit` (optional), `until` (optional).
     *   **Output:** `notes` (array of `NostrNote` objects, sorted by created_at descending), `isLoading`.
-    *   **Function:** Fetches Nostr notes based on authors and specified Kinds. Uses `limit`/`until` for pagination. Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes over time if `limit`/`until` changes. Parses URLs/metadata. Caches new notes. **Returns raw, sorted notes.**
-    *   **URL Parsing Logic:**
-        *   For **videos**: Prioritizes checking for an `m` tag (MIME type, e.g., `["m", "video/mp4"]`). If found, it confirms the event as video and looks for the URL in `url` or `media` tags (or content as last resort). If no `m` tag is found, it falls back to checking `url`, `media` tags, and finally event `content` against a regex for video file extensions (`.mp4`, `.mov`, etc.).
-        *   For **podcasts/images**: Primarily checks specific tags (`enclosure`/`image`) and the `url`/`media` tags, falling back to content regex matching audio/image file extensions.
+    *   **Function:** Fetches Nostr notes based on authors and specified Kinds/tags. Uses `limit`/`until` for pagination. Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes. Parses URLs/metadata. Caches new notes. Returns raw, sorted notes.
 
 *   **`useMediaState`:**
-    *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (raw arrays from `useMediaNotes`), `fetchOlderImages`, `
+    *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
+    *   **Output:** `viewMode`, `imageNotes` (internal), `podcastNotes` (internal), `videoNotes` (internal), `isLoadingPodcastNotes`, `isLoadingVideoNotes`, `currentImageIndex`, `currentPodcastIndex`, `currentVideoIndex`, `selectedVideoNpub`, `currentItemUrl`, `handleVideoSelect`, `handlePrevious`, `handleNext`, `setViewMode`, `setCurrentPodcastIndex`.
+    *   **Function:** Core UI state machine. Manages `viewMode`, current indices for each media type, and the `currentItemUrl` based on the mode and index. Handles navigation logic (`handlePrevious`, `handleNext`) respecting list boundaries and triggering fetch callbacks. Manages selection logic (`handleVideoSelect`, `setCurrentPodcastIndex`). Updates internal notes state based on props.
+
+*   **`useMediaElementPlayback`:**
+    *   **Input:** `mediaElementRef` (active `<audio>` or `<video>` ref), `currentItemUrl`, `viewMode`, `onEnded` (callback, usually `handleNext`), `initialTime`.
+    *   **Output:** `isPlaying`, `currentTime`, `duration`, `playbackRate`, `setPlaybackRate`, `togglePlayPause`, `handleSeek`, `play`, `pause`, `isSeeking`, `setIsSeeking`, `isMuted`, `autoplayFailed`, `toggleMute`.
+    *   **Function:** Directly interacts with the HTML media element via the ref. Manages playback state, updates current time/duration, handles seeking, play/pause actions, mute, and playback rate. Detects autoplay failures.
+
+*   **`useFullscreen`:**
+    *   **Input:** `interactionTimeout` (optional), `messageTimeout` (optional), `checkInterval` (optional).
+    *   **Output:** `isFullScreen` (boolean state), `signalInteraction` (callback), `signalMessage` (callback).
+    *   **Function:** Manages fullscreen entry/exit. Tracks `lastInteractionTimestamp` and `lastMessageTimestamp`. Runs an interval timer (`checkInterval`). Enters fullscreen (`setIsFullScreen(true)`) if `interactionTimeout` or `messageTimeout` is exceeded. Exits fullscreen (`setIsFullScreen(false)`) when `signalInteraction` or `signalMessage` is called.
+
+*   **`useKeyboardControls`:**
+    *   **Input:** `isFullScreen`, `signalInteraction`, `onSetViewMode`, `onTogglePlayPause`, `onNext`, `onPrevious`, `onFocusToggle` (optional), `viewMode`.
+    *   **Output:** None (sets up side effect).
+    *   **Function:** Adds a window `keydown` event listener. Calls `signalInteraction` on *any* key press. If *not* fullscreen, it checks the key and calls the appropriate callback (`onSetViewMode`, `onTogglePlayPause`, etc.), preventing default browser actions. If fullscreen, it only signals interaction (which causes `useFullscreen` to exit fullscreen).
+
+*   **`useImageCarousel`:**
+    *   **Input:** `isActive` (boolean), `onTick` (callback, e.g., `handleNext`), `intervalDuration`.
+    *   **Output:** None (sets up side effect).
+    *   **Function:** Sets up an interval timer using `setInterval`. Calls `onTick` every `intervalDuration` milliseconds, but only if `isActive` is true. Clears the interval on cleanup or when `isActive` becomes false.
+
+*   **`useCurrentAuthor`:**
+    *   **Input:** `viewMode`, `imageIndex`, `videoIndex`, `imageNotes` (shuffled), `videoNotes` (shuffled).
+    *   **Output:** `currentAuthorNpub` (string | null).
+    *   **Function:** Determines the currently active note based on `viewMode` and the corresponding index (`imageIndex` or `videoIndex`) within the provided note lists. Extracts the `pubkey` from the active note (if found) and returns its `npub` encoded string (e.g., "npub1..."). Returns `null` if no active note or pubkey is found. Used for displaying QR codes in `ImageFeed`/`VideoPlayer`.
+
+*   **`useProfileData` (Used in `MediaPanel`):**
+    *   **Input:** `notes` (array of `NostrNote`).
+    *   **Output:** `profiles` (Record<string, ProfileData>), `fetchProfile` (function).
+    *   **Function:** Extracts unique pubkeys from input notes. Fetches profile data (Kind 0) for these pubkeys, using caching (`profileCache`) and NDK lookups. Returns a map of pubkeys to profile details (name, picture, etc.).
