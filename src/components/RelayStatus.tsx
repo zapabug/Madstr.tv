@@ -3,9 +3,10 @@ import React from 'react';
 interface RelayStatusProps {
   isReceivingData: boolean; // Simplified prop
   relayCount: number; // <<< Re-add relayCount prop
+  onSettingsClick: () => void; // Add the callback prop
 }
 
-const RelayStatus: React.FC<RelayStatusProps> = ({ isReceivingData, relayCount }) => {
+const RelayStatus: React.FC<RelayStatusProps> = ({ isReceivingData, relayCount, onSettingsClick }) => {
 
   // <<< REMOVE unused getTextColor function >>>
   /*
@@ -43,7 +44,7 @@ const RelayStatus: React.FC<RelayStatusProps> = ({ isReceivingData, relayCount }
                    opacity-0 focus:opacity-100 group-focus-within:opacity-100 
                    transition-opacity duration-150 
                    focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
-        onClick={() => { console.log("Settings button clicked"); /* TODO: Implement settings action */ }}
+        onClick={onSettingsClick}
       >
           {/* Simple Gear SVG (centered by button's flex properties) */}
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

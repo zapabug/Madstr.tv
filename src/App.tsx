@@ -17,6 +17,9 @@ import { useCurrentAuthor } from './hooks/useCurrentAuthor';
 import { NostrNote } from './types/nostr';
 import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
+import SettingsModal from './components/SettingsModal';
+import { useAuth } from './hooks/useAuth';
+import NDK from '@nostr-dev-kit/ndk'; // Import NDK type
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -252,6 +255,19 @@ function App() {
     // and the currentItemUrl (to avoid preloading the same item).
     // Also include preloadVideoUrl in deps to prevent potential redundant sets if the calculated urlToPreload hasn't changed.
   }, [viewMode, currentVideoIndex, shuffledVideoNotes, currentItemUrl, preloadVideoUrl]);
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const auth = useAuth(ndk);
+
+  const handleCloseSettings = useCallback(() => {
+    setIsSettingsOpen(false);
+  }, []);
+
+  // Callback to toggle the settings modal state
+  const toggleSettingsModal = useCallback(() => {
+    setIsSettingsOpen(prev => !prev);
+    signalInteraction(); // Also signal interaction when settings are toggled
+  }, [signalInteraction]);
 
   return (
     <>
@@ -492,6 +508,7 @@ function App() {
       <RelayStatus
         isReceivingData={!!ndk} // Use !!ndk directly
         relayCount={RELAYS.length}
+        onSettingsClick={toggleSettingsModal} // Pass the toggle function
       />
     </div>
 
@@ -499,6 +516,13 @@ function App() {
     {preloadVideoUrl && (
         <link rel="preload" href={preloadVideoUrl} as="video" /> 
     )}
+
+    {/* Settings Modal */}
+    <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={handleCloseSettings}
+        ndkInstance={ndk} // Pass ndk instance here
+    />
 
     </>
   );
