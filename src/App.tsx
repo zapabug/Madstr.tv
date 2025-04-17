@@ -19,7 +19,6 @@ import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
 import { useAuth } from './hooks/useAuth';
-import NDK from '@nostr-dev-kit/ndk'; // Import NDK type
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -33,9 +32,13 @@ function App() {
   // Use the new hook to get NDK instance, authors, and loading state
   const { ndk, mediaAuthors, isLoadingAuthors } = useMediaAuthors();
 
+  // --- Auth Hook --- 
+  const auth = useAuth(ndk); // Pass NDK instance
+  const { followedTags } = auth; // Get followedTags from auth state
+
   // State for fetch parameters
-  const [imageFetchLimit, setImageFetchLimit] = useState<number>(200);
-  const [videoFetchLimit, setVideoFetchLimit] = useState<number>(200);
+  const [imageFetchLimit] = useState<number>(200);
+  const [videoFetchLimit] = useState<number>(200);
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
 
@@ -51,14 +54,16 @@ function App() {
     mediaType: 'video', 
     ndk: ndk || null, 
     limit: videoFetchLimit, 
-    until: videoFetchUntil 
+    until: videoFetchUntil,
+    followedTags: followedTags // Pass followedTags
   });
   const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'image', 
     ndk: ndk || null, 
     limit: imageFetchLimit, 
-    until: imageFetchUntil 
+    until: imageFetchUntil,
+    followedTags: followedTags // Pass followedTags
   });
   
   // State for shuffled notes for display
@@ -66,7 +71,7 @@ function App() {
   const [shuffledVideoNotes, setShuffledVideoNotes] = useState<NostrNote[]>([]);
 
   // State for podcast saved position
-  const [initialPodcastTime, setInitialPodcastTime] = useState<number>(0);
+  const [initialPodcastTime] = useState<number>(0);
 
   // State for preload URL
   const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
@@ -97,9 +102,7 @@ function App() {
     handlePrevious,
     handleNext, 
     setViewMode, 
-    setCurrentPodcastIndex, 
-    isLoadingPodcastNotes: isLoadingPodcastState,
-    isLoadingVideoNotes: isLoadingVideoState,
+    setCurrentPodcastIndex,
   } = useMediaState({ 
       initialImageNotes: shuffledImageNotes, 
       initialPodcastNotes: podcastNotes,
@@ -160,10 +163,8 @@ function App() {
     setPlaybackRate,
     togglePlayPause,
     handleSeek,
-    play,
     isMuted,
     autoplayFailed,
-    toggleMute,
   } = useMediaElementPlayback({
     mediaElementRef: activeMediaRef as React.RefObject<HTMLMediaElement>,
     currentItemUrl: currentItemUrl, 
@@ -257,7 +258,6 @@ function App() {
   }, [viewMode, currentVideoIndex, shuffledVideoNotes, currentItemUrl, preloadVideoUrl]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const auth = useAuth(ndk);
 
   const handleCloseSettings = useCallback(() => {
     setIsSettingsOpen(false);
@@ -521,7 +521,7 @@ function App() {
     <SettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
-        ndkInstance={ndk} // Pass ndk instance here
+        ndkInstance={ndk} // Pass ndk instance to modal
     />
 
     </>

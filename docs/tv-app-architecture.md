@@ -19,9 +19,9 @@ This document describes the architecture of the React-based TV application desig
 ## 2. Core Technologies
 
 *   **Frontend Framework:** React (`useState`, `useEffect`, `useRef`, `useCallback`)
-*   **State Management & Side Effects:** Primarily custom hooks (`useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`) orchestrated by the root `App` component.
-*   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`, `nostr-hooks`
-*   **Caching:** IndexedDB via `idb` (`mediaNoteCache`, `profileCache`)
+*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`) orchestrated by the root `App` component.
+*   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`
+*   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`)
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
 *   **Utilities:** `shuffleArray`, `react-qr-code`
 
@@ -37,28 +37,32 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 ---
 
 *   **`App.tsx` (Root Component):**
-    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), shuffles image/video notes, and passes state/props/callbacks down to child components and hooks.
-    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`).
+    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), shuffles image/video notes, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks.
+    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`), settings modal visibility (`isSettingsOpen`).
     *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
     *   **Hook Usage:**
         *   `useMediaAuthors`: Gets `ndk` instance and `mediaAuthors`.
-        *   `useMediaNotes`: Fetches `imageNotes`, `podcastNotes`, `videoNotes`. Called multiple times.
+        *   `useAuth`: Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, and signing capabilities. Receives `ndk` instance.
+        *   `useMediaNotes`: Fetches `imageNotes`, `podcastNotes`, `videoNotes`. Called multiple times. Receives `ndk`, `mediaAuthors`, and `followedTags` from `useAuth`.
         *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives initial notes, fetcher callbacks, and note lengths.
         *   `useMediaElementPlayback`: Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl`.
         *   `useFullscreen`: Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
-        *   `useKeyboardControls`: Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`).
+        *   `useKeyboardControls`: Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`). **(Note: Settings modal trigger moved to `RelayStatus` button).**
         *   `useImageCarousel`: Manages the image auto-advance timer, receives `isActive` flag and `handleNext` callback.
         *   `useCurrentAuthor`: Calculates the `npub` of the currently displayed author based on mode and index, receives indices and note lists.
     *   **Data Handling:**
         *   Receives raw notes from `useMediaNotes`.
         *   Uses `useEffect` to shuffle `imageNotes` and `videoNotes` into `shuffledImageNotes`/`shuffledVideoNotes` state. Shuffling happens here before passing to `useMediaState` and components.
         *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks (updates `Until` state) and passes them to `useMediaState`.
+        *   Gets `followedTags` from `useAuth` and passes them to image/video `useMediaNotes` calls.
     *   **Rendering Logic:**
         *   Renders invisible `<audio>` element (`audioRef`).
         *   Renders layout structure (Top Area, Bottom Panel).
         *   Conditionally renders components based on `viewMode` (`ImageFeed` or `VideoPlayer`) in the Top Area.
         *   Conditionally renders the Bottom Panel based on `isFullScreen`.
         *   Renders `MessageBoard` and `MediaPanel` within the Bottom Panel.
+        *   Renders `SettingsModal` (conditionally based on `isSettingsOpen`).
+        *   Renders `RelayStatus` (provides trigger for settings modal).
         *   Passes necessary props (state, refs, callbacks from hooks) down to child components.
         *   Handles overall loading state display.
 
@@ -91,9 +95,29 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Rendered In:** `MediaPanel.tsx`.
     *   **Key Props:** Likely receives playback state (`isPlaying`, `currentTime`, `duration`, `playbackRate`, `isMuted`) and handlers (`togglePlayPause`, `handleSeek`, `setPlaybackRate`, `toggleMute`) from `MediaPanel`.
 
-*   **`RelayStatus.tsx`, `QRCode.tsx`:** Utility components.
+*   **`SettingsModal.tsx`:**
+    *   **Purpose:** Provides a UI for managing user identity (nsec generation/login, NIP-46 connection) and application settings (followed hashtags).
+    *   **Rendered By:** `App.tsx` (conditionally).
+    *   **Key Props:** `isOpen`, `onClose`, `ndkInstance`.
+    *   **Hook Usage (Internal):** `useAuth`.
+    *   **Functionality:** Handles user login/logout via nsec or NIP-46, displays QR codes for connection/backup (with warnings), allows adding/removing followed hashtags. Manages focus internally for TV navigation.
+
+*   **`RelayStatus.tsx`, `QRCode.tsx`:** Utility components. `RelayStatus` now includes the button to open the `SettingsModal`.
 
 ## 4. Custom Hooks Deep Dive
+
+*   **`useAuth`:**
+    *   **Input:** `ndkInstance` (NDK | null | undefined).
+    *   **Output:** `UseAuthReturn` (exported interface) containing:
+        *   `currentUserNpub`, `currentUserNsec`: Current user identity.
+        *   `isLoggedIn`: Boolean flag.
+        *   `isLoadingAuth`, `authError`: Loading and error states.
+        *   NIP-46 state: `nip46ConnectUri`, `isGeneratingUri`.
+        *   NIP-46 functions: `initiateNip46Connection`, `cancelNip46Connection`.
+        *   Nsec functions: `generateNewKeys`, `loginWithNsec`, `logout`, `saveNsecToDb`.
+        *   Signer functions: `getNdkSigner`, `signEvent`.
+        *   Hashtag state: `followedTags` (array of strings), `setFollowedTags` (function).
+    *   **Function:** Manages user authentication state. Handles loading credentials (nsec) from IndexedDB, generating new keys, logging in via nsec or NIP-46 (initiation part implemented), logging out. Persists `followedTags` to IndexedDB, merging with defaults on login and resetting on logout. Provides access to the appropriate NDK signer based on login method. Provides a unified `signEvent` function. 
 
 *   **`useMediaAuthors`:**
     *   **Input:** `relays` (array of relay URLs).
@@ -101,9 +125,9 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Function:** Initializes NDK, connects to relays, fetches user's Kind 3 contact list, returns authors (user + followed) and NDK instance.
 
 *   **`useMediaNotes`:**
-    *   **Input:** `authors`, `mediaType` ('image', 'podcast', 'video'), `ndk`, `limit` (optional), `until` (optional).
+    *   **Input:** `authors`, `mediaType` ('image', 'podcast', 'video'), `ndk` (NDK | null), `limit` (optional), `until` (optional), `followedTags` (optional string array).
     *   **Output:** `notes` (array of `NostrNote` objects, sorted by created_at descending), `isLoading`.
-    *   **Function:** Fetches Nostr notes based on authors and specified Kinds/tags. Uses `limit`/`until` for pagination. Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes. Parses URLs/metadata. Caches new notes. Returns raw, sorted notes.
+    *   **Function:** Fetches Nostr notes based on authors and specified Kinds/tags. Uses `limit`/`until` for pagination. If `followedTags` are provided and not empty, adds a `#t` filter to the Nostr query (for 'image' and 'video' types typically). Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes. Parses URLs/metadata. Caches new notes. Returns raw, sorted notes.
 
 *   **`useMediaState`:**
     *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
@@ -123,7 +147,7 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 *   **`useKeyboardControls`:**
     *   **Input:** `isFullScreen`, `signalInteraction`, `onSetViewMode`, `onTogglePlayPause`, `onNext`, `onPrevious`, `onFocusToggle` (optional), `viewMode`.
     *   **Output:** None (sets up side effect).
-    *   **Function:** Adds a window `keydown` event listener. Calls `signalInteraction` on *any* key press. If *not* fullscreen, it checks the key and calls the appropriate callback (`onSetViewMode`, `onTogglePlayPause`, etc.), preventing default browser actions. If fullscreen, it only signals interaction (which causes `useFullscreen` to exit fullscreen).
+    *   **Function:** Adds a window `keydown` event listener. Calls `signalInteraction` on *any* key press. If *not* fullscreen, it checks the key and calls the appropriate callback (`onSetViewMode`, `onTogglePlayPause`, etc.), preventing default browser actions. If fullscreen, it only signals interaction (which causes `useFullscreen` to exit fullscreen). **(Note: Does not handle settings modal toggle anymore).**
 
 *   **`useImageCarousel`:**
     *   **Input:** `isActive` (boolean), `onTick` (callback, e.g., `handleNext`), `intervalDuration`.

@@ -13,6 +13,7 @@ interface UseMediaNotesProps {
     ndk: NDK | null;
     limit?: number; // <<< Renamed from initialLimit, now dynamic
     until?: number; // <<< Added until timestamp (seconds)
+    followedTags?: string[]; // <<< Add optional followedTags
 }
 
 // Define hook return value
@@ -53,6 +54,7 @@ export function useMediaNotes({
     ndk,
     limit = 200, // Default limit if not provided
     until,       // Use provided until timestamp
+    followedTags, // <<< Destructure followedTags prop
 }: UseMediaNotesProps): UseMediaNotesReturn {
     const [notes, setNotes] = useState<NostrNote[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -263,6 +265,13 @@ export function useMediaNotes({
                 filter.until = until;
             }
             
+            // Add hashtag filter if tags are provided and not empty
+            if (followedTags && followedTags.length > 0) {
+                // NDKFilter expects tags as lowercase strings
+                filter['#t'] = followedTags.map(tag => tag.toLowerCase()); 
+                console.log(`useMediaNotes (${mediaType}): Filtering by tags:`, filter['#t']);
+            }
+            
             // Stop previous subscription if it exists
             if (currentSubscription.current) {
                 currentSubscription.current.stop();
@@ -313,12 +322,10 @@ export function useMediaNotes({
                 currentSubscription.current.stop();
                 currentSubscription.current = null;
             }
-            // Reset fetching flag on unmount or dependency change?
-            // No, keep it as is, effect guard handles it.
-            // isFetching.current = false; 
+            isFetching.current = false; // Ensure fetching flag is reset if component unmounts during fetch
         };
     // Re-run effect if ndk, authors, mediaType, limit, or until changes
-    }, [ndk, authors, mediaType, limit, until, processEvent]); 
+    }, [authors, mediaType, ndk, limit, until, followedTags, processEvent]); // <<< Add followedTags to dependency array
 
     return {
         notes,

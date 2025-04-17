@@ -197,25 +197,30 @@ This plan document incorporates decisions made during our conversation and is re
     *   ✅ Implemented basic structure with `framer-motion` for animation.
     *   ✅ Added title, close button, and placeholders for settings sections.
     *   ✅ Basic focusability added (`tabIndex={0}` on close button).
+    *   ✅ Implemented focus trapping and initial focus logic.
 
-*   **Phase 1.2: Modal Trigger and State (`App.tsx`)**
+*   **Phase 1.2: Modal Trigger and State (`App.tsx`, `RelayStatus.tsx`)**
     *   ✅ Added `isSettingsOpen` state to `App.tsx`.
     *   ✅ Conditionally rendered `<SettingsModal />` in `App.tsx`.
     *   ✅ Passed `isOpen` and `onClose` props to `SettingsModal`.
-    *   ❌ *Keyboard trigger in `useKeyboardControls` not yet implemented.*
+    *   ✅ Modal trigger moved to button within `RelayStatus` component.
+    *   ✅ `useKeyboardControls` no longer handles modal toggle.
 
 *   **Phase 1.3: Authentication Logic (`useAuth.ts`)**
     *   ✅ Created `src/hooks/useAuth.ts`.
     *   ✅ Added state for `currentUserNpub`, `currentUserNsec`, `nip46Signer`, `isLoadingAuth`, `authError`, `nip46ConnectUri`, `isGeneratingUri`.
     *   ✅ Implemented `loadNsecFromDb`, `saveNsecToDb`, `clearNsecFromDb` using specific `idb` helpers.
-    *   ✅ Implemented `generateNewKeys` (with checks for `generatePrivateKey` existence).
+    *   ✅ Implemented `generateNewKeys` (with checks for `generateSecretKey` existence).
     *   ✅ Implemented `loginWithNsec`.
     *   ✅ Implemented `logout`.
-    *   ✅ Added structure for `initiateNip46Connection` (URI generation) with checks for `generateConnectUri` existence.
+    *   ✅ Added structure for `initiateNip46Connection` (URI generation) and `cancelNip46Connection`.
     *   ✅ Added placeholder `handleNip46Response`.
     *   ✅ Added `getNdkSigner` to provide appropriate signer (NIP-46 or nsec).
     *   ✅ Added `signEvent` using the current signer.
     *   ✅ Created `src/utils/idb.ts` with specific helper functions for interacting with IndexedDB stores (`settings`, `mediaNoteCache`, `profileCache`).
+    *   ✅ Exported `UseAuthReturn` interface.
+    *   ✅ Added state and persistence logic for `followedTags`.
+    *   ✅ Aligned `ndkInstance` prop type to `NDK | undefined`.
 
 *   **Phase 1.4: Auth UI (`SettingsModal.tsx`)**
     *   ✅ Integrated `useAuth` hook into `SettingsModal`.
@@ -225,26 +230,39 @@ This plan document incorporates decisions made during our conversation and is re
     *   ✅ Added local state (`generatedNpub`, `generatedNsec`, `showNsecQR`, `generateError`) to manage the generation flow.
     *   ✅ Added basic error display (`displayError`).
     *   ✅ Added Logout button.
-    *   ❌ *NIP-46 connection UI (button, QR display) placeholder added, but functionality disabled.*
-    *   ❌ *Login with existing nsec UI placeholder added, but functionality disabled.*
-    *   ❌ *Nsec QR display for logged-in users (3-press confirmation) not yet implemented.*
+    *   ✅ Added NIP-46 connection UI (button, QR display, cancel button).
+    *   ✅ Added UI for Login with existing nsec (input, button).
+    *   ✅ Implemented Nsec QR display for logged-in users (3-press confirmation).
+    *   ✅ Aligned `ndkInstance` prop type to `NDK | undefined`.
 
----
+*   **Phase 2.1: Hashtag Management State & UI (`useAuth.ts`, `SettingsModal.tsx`)**
+    *   ✅ Added `followedTags` state and persistence logic to `useAuth`.
+    *   ✅ Added "Followed Hashtags" section to `SettingsModal` (visible when logged in).
+    *   ✅ Added input field for adding new tags.
+    *   ✅ Added "Add Tag" button.
+    *   ✅ Displayed current `followedTags` list.
+    *   ✅ Implemented tag removal via "OK" press on focused tag.
+    *   ✅ Implemented D-pad navigation for tag input, button, and list.
+
+*   **Phase 2.2: Integrate Hashtags into Data Fetching (`useMediaNotes.ts`, `App.tsx`)**
+    *   ✅ Modified `useMediaNotes` props (`UseMediaNotesProps`) to accept optional `followedTags`.
+    *   ✅ Implemented `#t` filtering logic within `useMediaNotes` based on `followedTags`.
+    *   ✅ Passed `followedTags` from `useAuth` hook down to `useMediaNotes` calls in `App.tsx`.
+
+*   **Phase 3: Nostr Wallet & Tipping (Zaps)**
+    *   ❌ *Not yet implemented.* 
+
+*   **Phase 4: Refinement & Integration**
+    *   ❌ *Context API not yet implemented.*
+    *   ❌ *Dedicated Zap error handling/loading states not yet implemented.*
+    *   ⚠️ *Basic TV Navigation/Focus Polish done for implemented features, further refinement may be needed.* 
+
+--- 
 
 ## ❗ Errors & Roadblocks
 
-*   **Persistent Linter Errors (`src/hooks/useAuth.ts`, `src/App.tsx`):**
-    *   `Module '"nostr-tools"' has no exported member 'generatePrivateKey'.`
-    *   `Property 'generateConnectUri' does not exist on type 'typeof import("/home/jq/gitshit/tvapp/node_modules/nostr-tools/lib/types/nip46")'.`
-    *   `Cannot find module './components/SettingsModal' or its corresponding type declarations.` (in `App.tsx`)
-    *   `Cannot find module './hooks/useAuth' or its corresponding type declarations.` (in `App.tsx`)
-    *   `Cannot find module '../utils/idb' or its corresponding type declarations.` (in `useAuth.ts`)
-    *   **Analysis:** These errors persisted despite multiple attempts to correct imports, type conversions, and file structures. They likely indicate an issue with the installed `nostr-tools` version, TypeScript configuration (`tsconfig.json`), corrupted `node_modules`, or TS server not recognizing file changes/creations properly.
-    *   **Impact:** Blocks implementation of nsec key generation and NIP-46 connection initiation. Module resolution errors prevent `App.tsx` from compiling correctly with the new imports.
-    *   **Next Steps:** Manual investigation required (check `nostr-tools` version, `tsconfig.json`, reinstall dependencies: `rm -rf node_modules && npm install`). Consider temporary workarounds if investigation is blocked.
-
 *   **NIP-46 Implementation:**
-    *   URI generation is coded but blocked by the `generateConnectUri` error.
-    *   Response listening and handling (`handleNip46Response`) is only a placeholder and requires significant implementation (NDK subscription, event decryption, signer setup).
+    *   ✅ URI generation implemented (manual construction in `useAuth`).
+    *   ❌ Response listening and handling (`handleNip46Response` in `useAuth`) is still a placeholder and requires implementation (NDK subscription, event decryption, signer setup).
 
 ---

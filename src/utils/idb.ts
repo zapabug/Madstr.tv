@@ -62,8 +62,6 @@ interface MadstrTvAppDB extends DBSchema {
   };
 }
 
-type AppStoreName = StoreNames<MadstrTvAppDB>;
-
 let dbPromise: Promise<IDBPDatabase<MadstrTvAppDB>> | null = null;
 const DB_NAME = 'MadstrTvAppDB';
 const DB_VERSION = 1;
