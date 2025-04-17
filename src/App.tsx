@@ -108,12 +108,24 @@ function App() {
   });
 
   // Effects for shuffling notes
-  useEffect(() => { 
-    setShuffledImageNotes(shuffleArray([...imageNotes])); 
+  useEffect(() => {
+    setShuffledImageNotes(shuffleArray([...imageNotes]));
   }, [imageNotes]);
 
-  useEffect(() => { 
-    setShuffledVideoNotes(shuffleArray([...videoNotes]));
+  useEffect(() => {
+    // --- Deduplicate video notes by URL, keeping the newest --- 
+    const uniqueVideoNotesMap = new Map<string, NostrNote>();
+    for (const note of videoNotes) {
+        if (note.url && !uniqueVideoNotesMap.has(note.url)) {
+            uniqueVideoNotesMap.set(note.url, note);
+        }
+    }
+    const uniqueVideoNotes = Array.from(uniqueVideoNotesMap.values());
+    console.log(`App: Deduplicated ${videoNotes.length} video notes to ${uniqueVideoNotes.length} unique URLs.`);
+
+    // --- Shuffle the unique video notes --- 
+    setShuffledVideoNotes(shuffleArray(uniqueVideoNotes)); 
+
   }, [videoNotes]);
 
   // Fullscreen hook
@@ -185,13 +197,6 @@ function App() {
     viewMode,
   });
 
-  // Effect to Trigger Play on Mode Switch to Video
-  useEffect(() => {
-      if (viewMode === 'videoPlayer' && currentItemUrl && !isPlaying && !autoplayFailed) { 
-        play(); 
-      }
-  }, [viewMode, currentItemUrl, play, isPlaying, autoplayFailed]); 
-
   // Image Carousel Hook
   const isCarouselActive = viewMode === 'imagePodcast' && shuffledImageNotes.length > 1;
   useImageCarousel({
@@ -211,18 +216,42 @@ function App() {
 
   // Effect to determine and set the preload URL
   useEffect(() => {
-    if (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1) {
-      const nextIndex = (currentVideoIndex + 1) % shuffledVideoNotes.length;
-      const nextNote = shuffledVideoNotes[nextIndex];
-      if (nextNote && nextNote.url && nextNote.url !== currentItemUrl) { 
-        setPreloadVideoUrl(nextNote.url);
+    let urlToPreload: string | null = null;
+
+    if (shuffledVideoNotes.length > 0) {
+      if (viewMode === 'videoPlayer') {
+        // Preload the NEXT video if in video mode and more than one video exists
+        if (shuffledVideoNotes.length > 1) {
+          const nextIndex = (currentVideoIndex + 1) % shuffledVideoNotes.length;
+          const nextNote = shuffledVideoNotes[nextIndex];
+          // Only preload if the next URL is valid and different from the current one
+          if (nextNote?.url && nextNote.url !== currentItemUrl) {
+            urlToPreload = nextNote.url;
+            console.log(`App: Preloading NEXT video (index ${nextIndex}): ${urlToPreload}`);
+          }
+        }
       } else {
-        setPreloadVideoUrl(null); 
+        // Preload the FIRST video if NOT in video mode
+        const firstNote = shuffledVideoNotes[0];
+        if (firstNote?.url) {
+          urlToPreload = firstNote.url;
+          // Avoid logging if it's the same as the current item in podcast mode (can happen)
+          if(viewMode !== 'imagePodcast' || urlToPreload !== currentItemUrl) {
+             console.log(`App: Preloading FIRST video (index 0) while in ${viewMode} mode: ${urlToPreload}`);
+          }
+        }
       }
-    } else {
-      setPreloadVideoUrl(null);
     }
-  }, [viewMode, currentVideoIndex, shuffledVideoNotes, currentItemUrl]);
+
+    // Set the preload URL state only if it has changed
+    if (preloadVideoUrl !== urlToPreload) {
+       setPreloadVideoUrl(urlToPreload);
+    }
+
+    // Dependencies: Need to react to mode changes, video list changes, current index changes (for 'next'),
+    // and the currentItemUrl (to avoid preloading the same item).
+    // Also include preloadVideoUrl in deps to prevent potential redundant sets if the calculated urlToPreload hasn't changed.
+  }, [viewMode, currentVideoIndex, shuffledVideoNotes, currentItemUrl, preloadVideoUrl]);
 
   return (
     <>

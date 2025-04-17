@@ -34,6 +34,6 @@ dist-ssr
 # Environment and API keys
 .cursor-tools.env
 .nostr_keys
-
+.nostr_keys.md 
 # Temporary scripts
 generate-keys.mjs

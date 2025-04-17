@@ -252,6 +252,7 @@ export function useMediaElementPlayback({
     const mediaElement = mediaElementRef.current;
     if (!mediaElement || !currentItemUrl) return;
     console.log(`useMediaElementPlayback: play() called`);
+    console.log(`useMediaElementPlayback: Attempting to play src: ${mediaElement.src}, currentItemUrl prop: ${currentItemUrl}, viewMode: ${viewMode}`);
     if (mediaElement.muted) {
         console.log("useMediaElementPlayback: Unmuting before playing.");
         mediaElement.muted = false;
@@ -260,12 +261,12 @@ export function useMediaElementPlayback({
     try {
         await mediaElement.play();
     } catch (e) {
-        console.error("useMediaElementPlayback: Error in play():", e);
+        console.error(`useMediaElementPlayback: Error in play() for src: ${mediaElement.src}`, e);
         setAutoplayFailed(true);
         setIsPlaying(false);
         setIsMuted(true);
     }
-  }, [mediaElementRef, currentItemUrl]);
+  }, [mediaElementRef, currentItemUrl, viewMode]);
 
   const pause = useCallback(() => {
     const mediaElement = mediaElementRef.current;
@@ -276,14 +277,48 @@ export function useMediaElementPlayback({
 
   const togglePlayPause = useCallback(() => {
     const mediaElement = mediaElementRef.current;
-    if (!mediaElement || !currentItemUrl) return;
-    console.log(`useMediaElementPlayback: togglePlayPause called. Paused: ${mediaElement.paused}, Ended: ${mediaElement.ended}`);
-    if (mediaElement.paused || mediaElement.ended) {
-      play();
-    } else {
-      pause();
+    if (!mediaElement || !currentItemUrl) {
+        console.warn(`useMediaElementPlayback: togglePlayPause called with invalid state. Has media element: ${!!mediaElement}, has currentItemUrl: ${!!currentItemUrl}`);
+        return;
     }
-  }, [mediaElementRef, currentItemUrl, play, pause]);
+
+    // HTMLMediaElement Ready States:
+    // HAVE_NOTHING = 0;
+    // HAVE_METADATA = 1;
+    // HAVE_CURRENT_DATA = 2;
+    // HAVE_FUTURE_DATA = 3;
+    // HAVE_ENOUGH_DATA = 4;
+
+    console.log(`useMediaElementPlayback: togglePlayPause called. Paused: ${mediaElement.paused}, Ended: ${mediaElement.ended}, ReadyState: ${mediaElement.readyState}`);
+
+    if (mediaElement.paused || mediaElement.ended) {
+      // Only attempt to play if the element has enough data
+      if (mediaElement.readyState >= 3) { // HAVE_FUTURE_DATA
+        if (mediaElement.muted) {
+            console.log("useMediaElementPlayback: Unmuting before playing via togglePlayPause.");
+            mediaElement.muted = false;
+        }
+        console.log("useMediaElementPlayback: Attempting mediaElement.play() via togglePlayPause");
+        // Use the native play method directly. The 'play' event listener will update state.
+        mediaElement.play().catch(e => {
+            console.error("useMediaElementPlayback: Error calling mediaElement.play() from togglePlayPause:", e);
+            // Update state if play fails immediately
+            setAutoplayFailed(true);
+            setIsPlaying(false);
+            setIsMuted(true);
+        });
+      } else {
+        console.warn("useMediaElementPlayback: togglePlayPause - Play requested but readyState < 3. Waiting for canplay.");
+        // Optional: Trigger load again if stuck?
+        // mediaElement.load(); 
+      }
+    } else {
+      console.log("useMediaElementPlayback: Attempting mediaElement.pause() via togglePlayPause");
+      // Use the native pause method. The 'pause' event listener will update state.
+      mediaElement.pause();
+    }
+  // Remove hook's play/pause from dependencies, rely on element state
+  }, [mediaElementRef, currentItemUrl]);
 
   const toggleMute = useCallback(() => {
       const mediaElement = mediaElementRef.current;
