@@ -3,10 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 // Removed: import { usePodcastNotes } from '../hooks/usePodcastNotes'; // Data will come via props
-import { useProfileData } from '../hooks/useProfileData'; // Keep for profiles
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback'; // Keep for playback
-
-// Define types for props - This will expand significantly
+// Import useProfile from ndk-hooks
+import { useProfile } from '@nostr-dev-kit/ndk-hooks';
 import { NostrNote } from '../types/nostr'; // Fixed import path
 
 // --- Helper to format time (seconds) into MM:SS ---
@@ -46,8 +45,6 @@ export interface MediaPanelProps {
   // Data
   podcastNotes: NostrNote[];
   videoNotes: NostrNote[];
-  isLoadingPodcastNotes: boolean;
-  isLoadingVideoNotes: boolean;
   
   // Playback State & Handlers (Passed down from App)
   isPlaying: boolean;
@@ -65,9 +62,6 @@ export interface MediaPanelProps {
   currentVideoIndex: number;
   onVideoSelect: (note: NostrNote, index: number) => void; 
 
-  // Profile Data
-  authors: string[]; // <<< Added missing prop
-
   // Optional: For edge navigation (Potentially remove?)
   // handleLeft?: () => void; 
   // handleRight?: () => void;
@@ -84,8 +78,6 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     setViewMode, // <<< Prop type updated in interface
     podcastNotes, 
     videoNotes,
-    isLoadingPodcastNotes,
-    isLoadingVideoNotes,
     isPlaying,
     currentTime,
     duration,
@@ -98,18 +90,13 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     setCurrentPodcastIndex,
     currentVideoIndex,
     onVideoSelect,
-    authors, // <<< Use added prop
 }) => {
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   
   // Determine current notes and loading state based on viewMode
   const notes = viewMode === 'imagePodcast' ? podcastNotes : videoNotes;
-  const isLoadingNotes = viewMode === 'imagePodcast' ? isLoadingPodcastNotes : isLoadingVideoNotes;
   const currentItemIndex = viewMode === 'imagePodcast' ? currentPodcastIndex : currentVideoIndex;
-
-  // Combine notes for profile fetching (using derived 'notes')
-  const { profiles } = useProfileData(notes);
 
   // --- Refs --- 
   const scrollableListRef = useRef<HTMLDivElement>(null);
@@ -121,6 +108,10 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   const mainContainerRef = useRef<HTMLDivElement>(null); 
   const toggleButtonRef = useRef<HTMLButtonElement>(null); // Mode Toggle Button
 
+  // --- Get Author Profile --- 
+  const currentItemPubkey = notes[currentItemIndex]?.pubkey;
+  const profile = useProfile(currentItemPubkey); // Use hook to get profile for the current item's author
+
   // Use inactivity timer (No change)
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
 
@@ -128,7 +119,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
 
   // Focus first list item on notes load (check viewMode dependency?)
   useEffect(() => {
-    if (!isLoadingNotes && notes.length > 0 && listItemRefs.current[0]) {
+    if (notes.length > 0 && listItemRefs.current[0]) {
         console.log(`MediaPanel: Focusing first list item in ${viewMode} mode.`);
         setTimeout(() => { 
             if (listItemRefs.current[0]) {
@@ -136,7 +127,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
             }
         }, 50);
     }
-  }, [viewMode, notes, isLoadingNotes]); // Added viewMode dependency
+  }, [viewMode, notes]); // Added viewMode dependency
 
   // Initialize/Resize list item refs when notes change (No change)
   useEffect(() => {
@@ -336,18 +327,12 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
           aria-label={listAriaLabel} 
           role="listbox"
       >
-        {isLoadingNotes ? (
-            // ... Skeleton Loading State ...
+        {notes.length === 0 ? (
             <>
-                <SkeletonItem />
-                <SkeletonItem />
-                <SkeletonItem />
-                <SkeletonItem />
+                {Array.from({ length: 8 }).map((_, index) => (
+                    <SkeletonItem key={index} />
+                ))}
             </>
-        ) : notes.length === 0 ? (
-             <div className='w-full h-full flex items-center justify-center'>
-                <p className='text-gray-400 text-lg font-medium'>{listEmptyText}</p>
-            </div>
         ) : (
             // Render actual list items based on derived 'notes'
             notes.map((note, index) => {
@@ -361,8 +346,10 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                 }
                 
                 // Profile Data lookup
-                const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
-                const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.substring(0, 10) || 'Anon';
+                const itemPubkey = note.posterPubkey;
+                // Call useProfile hook within the map function
+                const profile = useProfile(itemPubkey, !!itemPubkey);
+                const itemDisplayName = profile?.name || profile?.displayName || itemPubkey?.substring(0, 10) || 'Anon';
                 const itemPictureUrl = profile?.picture;
 
                 return (
@@ -451,7 +438,9 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                 min={0}
                 max={duration || 100}
                 value={currentTime}
-                onChange={handleSeek} // Use prop handler
+                onChange={(e) => {
+                  handleSeek(e);
+                }}
                 className="w-full h-1 bg-purple-600 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
                 aria-label="Seek through media"
                 tabIndex={0} 
@@ -460,6 +449,22 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
               />
               <span className="text-xs text-gray-300 w-10 text-left ml-2 flex-shrink-0">{formatTime(duration)}</span>
           </div>
+
+          {/* --- Author Info Display --- */}
+          {profile && (
+            <div className="flex items-center space-x-2 mt-2 px-2">
+              <img 
+                src={profile.image || profile.picture || 'https://via.placeholder.com/32'} 
+                alt={profile.name || profile.displayName || 'author avatar'}
+                className="w-8 h-8 rounded-full bg-gray-600"
+              />
+              <span className="text-sm text-gray-300 truncate" title={profile.name || profile.displayName}>
+                {/* Check profile properties exist before accessing */}
+                {profile.name || profile.displayName || (typeof profile.npub === 'string' ? profile.npub.substring(0, 12) + '...' : 'Author')}
+              </span>
+            </div>
+          )}
+          {/* --- End Author Info Display --- */}
 
           {/* Speed Button Area (Conditionally render based on viewMode) */}
           <div className="relative flex-shrink-0 mr-1"> 

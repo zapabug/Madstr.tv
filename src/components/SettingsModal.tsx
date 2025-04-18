@@ -4,6 +4,7 @@ import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth p
 import { useWallet, UseWalletReturn } from '../hooks/useWallet'; // Import useWallet
 import QRCode from 'react-qr-code'; // Import QRCode for backup
 import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
+import { useNDK } from '@nostr-dev-kit/ndk-hooks'; // Correct the import path for useNDK
 type NDKInstance = NDK; // Alias NDK class as NDKInstance type
 
 // Helper to truncate npub/nsec
@@ -13,11 +14,12 @@ const truncateKey = (key: string | null, length = 16): string => {
     return `${key.substring(0, length / 2)}...${key.substring(key.length - length / 2)}`;
 };
 
-// Interface for props expected by SettingsModal
-interface SettingsModalProps {
+// Define component props
+export interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    ndkInstance: NDKInstance | undefined; // Align with useAuth input type
+    // REMOVED: ndkInstance prop is no longer needed, use useNDK hook
+    // ndkInstance: NDK | null; 
 }
 
 // Function to truncate npub for display
@@ -27,8 +29,11 @@ const truncateNpub = (npub: string | null): string => {
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance }) => {
-    const auth: UseAuthReturn = useAuth(ndkInstance);
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+    // Get NDK instance via hook
+    const { ndk } = useNDK();
+    // Use auth hook (gets NDK internally)
+    const auth = useAuth();
     const wallet: UseWalletReturn = useWallet(); // Use the wallet hook
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
@@ -72,9 +77,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
 
     // Effect to start/stop deposit listener based on login state and NDK instance
     useEffect(() => {
-        if (isOpen && auth.isLoggedIn && ndkInstance) {
+        if (isOpen && auth.isLoggedIn && ndk) {
             console.log('SettingsModal: Attempting to start deposit listener.');
-            wallet.startDepositListener(auth, ndkInstance);
+            wallet.startDepositListener(auth, ndk);
         } else {
              console.log('SettingsModal: Stopping deposit listener (modal closed, not logged in, or no NDK).');
             wallet.stopDepositListener();
@@ -84,8 +89,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
             console.log('SettingsModal: Cleaning up deposit listener effect.');
             wallet.stopDepositListener();
         };
-        // Dependencies: isOpen, auth object (for isLoggedIn and methods), ndkInstance, wallet hook instance
-    }, [isOpen, auth, ndkInstance, wallet]);
+        // Dependencies: isOpen, auth object (for isLoggedIn and methods), ndk, wallet hook instance
+    }, [isOpen, auth, ndk, wallet]);
 
     // Focus trapping and initial focus
     useEffect(() => {
@@ -426,10 +431,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                              >
                                  {truncateNpub(auth.currentUserNpub)}
                              </div>
-                              {showNsecBackupQR && auth.currentUserNsec && (
+                              {showNsecBackupQR && auth.currentUserNsecForBackup && (
                                  <div className="mt-2 p-3 bg-white rounded shadow flex flex-col items-center">
                                     <p className='text-red-700 font-bold text-center text-sm mb-2'>BACKUP QR - GUARD THIS!</p>
-                                    <QRCode value={auth.currentUserNsec} size={128} level="L" />
+                                    <QRCode value={auth.currentUserNsecForBackup} size={128} level="L" />
                                     <button
                                         onClick={() => setShowNsecBackupQR(false)}
                                         className="mt-3 text-xs text-gray-600 hover:text-black focus:outline-none focus:ring-1 focus:ring-gray-500 rounded px-1"

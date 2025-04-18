@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 // import { usePodcastNotes } from '../hooks/usePodcastNotes'; // <<< REMOVE
-import { useProfileData } from '../hooks/useProfileData';
+import { useNDK, useProfile } from '@nostr-dev-kit/ndk-hooks'; // <<< CHANGE IMPORT PATH
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback';
 import { NostrNote } from '../types/nostr'; // <<< ADD type import
 
@@ -18,6 +18,57 @@ const formatTime = (seconds: number): string => {
     const formattedSeconds = String(remainingSeconds).padStart(2, '0');
     return `${formattedMinutes}:${formattedSeconds}`;
 };
+
+// +++ NEW INTERNAL COMPONENT: PodcastItem +++
+interface PodcastItemProps {
+  note: NostrNote;
+  isSelected: boolean;
+  onClick: () => void;
+  onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
+  itemRef: (el: HTMLDivElement | null) => void; // Function to set the ref
+}
+
+const PodcastItem: React.FC<PodcastItemProps> = ({ note, isSelected, onClick, onKeyDown, itemRef }) => {
+  const { ndk } = useNDK(); // Access NDK if needed, though useProfile handles it
+  const profile = useProfile(note.posterPubkey); // <<< Pass pubkey directly, access profile directly
+
+  let itemBg = 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
+  if (isSelected) {
+    itemBg = 'bg-purple-700 bg-opacity-70';
+  }
+
+  const itemDisplayName = profile?.name || profile?.displayName || (note.posterPubkey ? note.posterPubkey.substring(0, 10) + '...' : 'Unknown');
+  const itemPictureUrl = profile?.picture;
+
+  // Logging removed for brevity in this refactor step
+
+  return (
+    <div
+      key={note.id} // Key remains important here for React
+      id={note.id}
+      ref={itemRef} // Use the passed ref setter
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={0}
+      className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:border focus:border-orange-500`}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+    >
+      {itemPictureUrl ? (
+        <img src={itemPictureUrl} alt={itemDisplayName} className="w-8 h-8 rounded-full mr-3 flex-shrink-0 bg-gray-600" />
+      ) : (
+        <div className="w-8 h-8 rounded-full mr-3 flex-shrink-0 bg-gray-600 flex items-center justify-center text-gray-400 text-xs">
+          {itemDisplayName.substring(0, 2)}
+        </div>
+      )}
+      <div className="flex-grow overflow-hidden whitespace-nowrap text-ellipsis">
+        <p className="text-sm font-medium text-white truncate">{note.title || 'Untitled Podcast'}</p>
+        <p className="text-xs text-gray-400 truncate">{itemDisplayName}</p>
+      </div>
+    </div>
+  );
+};
+// +++ END NEW INTERNAL COMPONENT +++
 
 interface PodcastPlayerProps {
   authors: string[];
@@ -46,7 +97,6 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, notes, isLoadingNotes
   // --- Custom Hooks ---
   // <<< REMOVE internal notes fetching >>>
   // const { notes, isLoading: isLoadingNotes } = usePodcastNotes(authors);
-  const { profiles } = useProfileData(notes); // <<< Use notes prop here
   // Get the current item based on the index *after* notes have loaded
   const currentItem = !isLoadingNotes && notes.length > currentItemIndex ? notes[currentItemIndex] : null;
   // --- Log currentItem and its URL before passing to hook ---
@@ -60,8 +110,9 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, notes, isLoadingNotes
     togglePlayPause,
     handleSeek
   } = useMediaElementPlayback({
-      mediaRef: audioRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
-      currentItemUrl: currentItem?.url || null
+      mediaElementRef: audioRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
+      currentItemUrl: currentItem?.url || null,
+      viewMode: 'imagePodcast'
   });
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
 
@@ -195,38 +246,48 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, notes, isLoadingNotes
       >
         {notes.map((note, index) => {
             const isActuallySelected = index === currentItemIndex;
-            let itemBg = 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
-            if (isActuallySelected) {
-                itemBg = 'bg-purple-700 bg-opacity-70';
-            }
-            const profile = note.posterPubkey ? profiles[note.posterPubkey] : null;
-            const itemDisplayName = profile?.name || profile?.displayName || (note.posterPubkey ? note.posterPubkey.substring(0, 10) + '...' : 'Unknown');
-            const itemPictureUrl = profile?.picture;
-            const itemIsLoadingProfile = profile?.isLoading;
+            // const profile = note.posterPubkey ? profiles[note.posterPubkey] : null; // <<< REMOVE PROFILE LOOKUP HERE
+            // const itemDisplayName = profile?.name || profile?.displayName || (note.posterPubkey ? note.posterPubkey.substring(0, 10) + '...' : 'Unknown'); // <<< REMOVE
+            // const itemPictureUrl = profile?.picture; // <<< REMOVE
+            // const itemIsLoadingProfile = profile?.isLoading; // <<< REMOVE
 
             const handleItemKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-              // --- Log Entry --- 
-              console.log(`PodcastItem ${index} KeyDown Handler Fired. Key: ${event.key}`);
-              // ---
-              console.log(`PodcastItem ${index} KeyDown: ${event.key}`); // Keep existing
+              // Logging removed for brevity
               if (event.key === 'Enter' || event.key === ' ') {
-                console.log(`PodcastItem ${index} Selected`);
-                // --- Log Before State Update ---
-                console.log(`PodcastItem KeyDown: About to call setCurrentItemIndex(${index})`);
-                // ---
                 setCurrentItemIndex(index);
                 event.preventDefault();
               }
             };
 
-            const handleItemFocus = () => {
-                console.log(`PodcastItem ${index} Focused`);
+            // Create onClick specific to this item
+            const handleItemClick = () => {
+                if (index === currentItemIndex) {
+                  if (handleLeft) handleLeft(); // Exit if clicking selected
+                } else {
+                  setCurrentItemIndex(index);
+                }
             };
 
-            const handleItemBlur = () => {
-                console.log(`PodcastItem ${index} Blurred`);
+            // Create ref setter specific to this item
+            const setItemRef = (el: HTMLDivElement | null) => {
+                if (index < listItemRefs.current.length) {
+                    listItemRefs.current[index] = el;
+                }
             };
 
+            // Pass props down to the new PodcastItem component
+            return (
+              <PodcastItem
+                key={note.id} // React key for the list item itself
+                note={note}
+                isSelected={isActuallySelected}
+                onClick={handleItemClick}
+                onKeyDown={handleItemKeyDown}
+                itemRef={setItemRef}
+              />
+            );
+
+            /* <<< REMOVE OLD ITEM RENDERING LOGIC >>>
             return (
                 <div
                     key={note.id}
@@ -250,7 +311,6 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, notes, isLoadingNotes
                                 handleLeft();
                             }
                         } else {
-                            // Normal behavior - select the new item
                             // --- Log Before State Update ---
                             console.log(`PodcastItem Click: About to call setCurrentItemIndex(${index})`);
                             // ---
@@ -260,33 +320,21 @@ const Podcastr: React.FC<PodcastPlayerProps> = ({ authors, notes, isLoadingNotes
                     onKeyDown={handleItemKeyDown}
                     onFocus={handleItemFocus}
                     onBlur={handleItemBlur}
-                    title={note.content || note.url}
                 >
-                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
-                        <span className="text-xs font-semibold text-white">{notes.length - index}</span>
-                    </div>
-                    <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
-                        {itemIsLoadingProfile ? (
-                            <div className="w-full h-full animate-pulse bg-gray-400"></div>
-                        ) : itemPictureUrl ? (
-                            <img 
-                              src={itemPictureUrl} 
-                              alt={itemDisplayName} 
-                              className="w-full h-full object-cover" 
-                            />
-                        ) : (
-                            <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
-                                {itemDisplayName.substring(0, 1)}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex-grow flex flex-col">
-                        <p className="text-sm text-white truncate" title={itemDisplayName}>
-                           {itemDisplayName}
-                        </p>
+                    {itemPictureUrl ? (
+                      <img src={itemPictureUrl} alt={itemDisplayName} className="w-8 h-8 rounded-full mr-3 flex-shrink-0 bg-gray-600" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full mr-3 flex-shrink-0 bg-gray-600 flex items-center justify-center text-gray-400 text-xs">
+                          {itemDisplayName.substring(0, 2)}
+                      </div>
+                    )}
+                    <div className="flex-grow overflow-hidden whitespace-nowrap text-ellipsis">
+                      <p className="text-sm font-medium text-white truncate">{note.title || 'Untitled Podcast'}</p>
+                      <p className="text-xs text-gray-400 truncate">{itemDisplayName}</p>
                     </div>
                 </div>
             );
+            */
         })}
       </div>
 

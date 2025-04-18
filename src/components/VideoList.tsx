@@ -2,13 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNdk } from 'nostr-hooks';
 import { NDKEvent, NDKFilter, NDKSubscription, NDKKind } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
-// Remove profileCache imports if no longer needed
-// import { 
-//     ProfileData, 
-//     getProfileFromCache, 
-//     saveProfileToCache,
-//     parseProfileContent 
-// } from '../utils/profileCache';
 
 // Interface for Video Notes
 export interface VideoNote {
@@ -134,10 +127,6 @@ const VideoList: React.FC<VideoListProps> = ({
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   const scrollableListRef = useRef<HTMLDivElement>(null);
   
-  // State for profiles (optional, but good for display)
-  // const [profiles, setProfiles] = useState<Record<string, ProfileData>>({});
-  // const processingPubkeys = useRef<Set<string>>(new Set());
-
   // Load video notes from cache on mount
   useEffect(() => {
     getVideoNotesFromCache()
