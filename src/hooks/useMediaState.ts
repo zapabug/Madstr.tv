@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { nip19 } from 'nostr-tools';
 import { NostrNote } from '../types/nostr';
 
@@ -87,54 +87,78 @@ export function useMediaState({
     
     const [currentItemUrl, setCurrentItemUrl] = useState<string | null>(null);
 
+    // Refs to store previous prop references
+    const prevInitialImageNotesRef = useRef<NostrNote[] | undefined>(undefined);
+    const prevInitialPodcastNotesRef = useRef<NostrNote[] | undefined>(undefined);
+    const prevInitialVideoNotesRef = useRef<NostrNote[] | undefined>(undefined);
+
     // --- NEW: Effect to process initialImageNotes prop --- 
     useEffect(() => {
-        console.log(`useMediaState: Processing ${initialImageNotes.length} initial image notes.`);
-        // Sort notes received from props
-        const sortedNotes = [...initialImageNotes].sort((a, b) => b.created_at - a.created_at);
-        setImageNotes(sortedNotes);
-        // Reset index if needed
-        if (currentImageIndex >= sortedNotes.length && sortedNotes.length > 0) {
-            setCurrentImageIndex(0);
+        // Only process if the reference has actually changed
+        if (initialImageNotes !== prevInitialImageNotesRef.current) {
+            console.log(`useMediaState: Processing ${initialImageNotes.length} initial image notes (Reference changed).`);
+            const sortedNotes = [...initialImageNotes].sort((a, b) => b.created_at - a.created_at);
+            setImageNotes(sortedNotes);
+            // Reset index if needed
+            if (currentImageIndex >= sortedNotes.length && sortedNotes.length > 0) {
+                setCurrentImageIndex(0);
+            }
+            prevInitialImageNotesRef.current = initialImageNotes; // Update the ref
+        } else {
+          console.log("useMediaState: Skipping image notes processing - reference hasn't changed.");
         }
-        // Assuming loading is finished when notes arrive?
-        // setIsLoadingImageNotes(false); // If we had this state
-    }, [initialImageNotes]); // Depend on the prop
+    }, [initialImageNotes, currentImageIndex]); // Keep currentImageIndex dependency for reset logic
 
     // --- NEW: Effect to process initialPodcastNotes prop --- 
     useEffect(() => {
-        console.log(`useMediaState: Processing ${initialPodcastNotes.length} initial podcast notes.`);
-        const sortedNotes = [...initialPodcastNotes].sort((a, b) => b.created_at - a.created_at);
-        setPodcastNotes(sortedNotes);
-        setIsLoadingPodcastNotes(false); // Set loading false here
-        // Reset index if needed
-        const newIndex = (currentPodcastIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentPodcastIndex;
-        if (newIndex !== currentPodcastIndex) {
-            setCurrentPodcastIndexInternal(newIndex);
+         // Only process if the reference has actually changed
+        if (initialPodcastNotes !== prevInitialPodcastNotesRef.current) {
+            console.log(`useMediaState: Processing ${initialPodcastNotes.length} initial podcast notes (Reference changed).`);
+            const sortedNotes = [...initialPodcastNotes].sort((a, b) => b.created_at - a.created_at);
+            setPodcastNotes(sortedNotes);
+            setIsLoadingPodcastNotes(false); // Set loading false here
+            // Reset index if needed
+            const newIndex = (currentPodcastIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentPodcastIndex;
+            if (newIndex !== currentPodcastIndex) {
+                setCurrentPodcastIndexInternal(newIndex);
+            }
+             prevInitialPodcastNotesRef.current = initialPodcastNotes; // Update the ref
+        } else {
+           console.log("useMediaState: Skipping podcast notes processing - reference hasn't changed.");
+           // Still ensure loading is false if the ref hasn't changed but notes are present
+           if(podcastNotes.length > 0 && isLoadingPodcastNotes) setIsLoadingPodcastNotes(false);
         }
-    }, [initialPodcastNotes]); // Depend on the prop
+    }, [initialPodcastNotes, currentPodcastIndex, podcastNotes.length, isLoadingPodcastNotes]); // Add dependencies for reset and loading logic
 
     // --- NEW: Effect to process initialVideoNotes prop --- 
     useEffect(() => {
-        console.log(`useMediaState: Processing ${initialVideoNotes.length} initial video notes.`);
-        const sortedNotes = [...initialVideoNotes].sort((a, b) => b.created_at - a.created_at);
-        setVideoNotes(sortedNotes);
-        setIsLoadingVideoNotes(false); // Set loading false here
-        // Reset index if needed
-        const newIndex = (currentVideoIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentVideoIndex;
-        if (newIndex !== currentVideoIndex) {
-             setCurrentVideoIndex(newIndex);
+         // Only process if the reference has actually changed
+        if (initialVideoNotes !== prevInitialVideoNotesRef.current) {
+            console.log(`useMediaState: Processing ${initialVideoNotes.length} initial video notes (Reference changed).`);
+            const sortedNotes = [...initialVideoNotes].sort((a, b) => b.created_at - a.created_at);
+            setVideoNotes(sortedNotes);
+            setIsLoadingVideoNotes(false); // Set loading false here
+            // Reset index if needed
+            const newIndex = (currentVideoIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentVideoIndex;
+            if (newIndex !== currentVideoIndex) {
+                 setCurrentVideoIndex(newIndex);
+            }
+             prevInitialVideoNotesRef.current = initialVideoNotes; // Update the ref
+        } else {
+             console.log("useMediaState: Skipping video notes processing - reference hasn't changed.");
+             // Still ensure loading is false if the ref hasn't changed but notes are present
+             if(videoNotes.length > 0 && isLoadingVideoNotes) setIsLoadingVideoNotes(false);
         }
-    }, [initialVideoNotes]); // Depend on the prop
+    }, [initialVideoNotes, currentVideoIndex, videoNotes.length, isLoadingVideoNotes]); // Add dependencies for reset and loading logic
 
     // Update currentItemUrl whenever the relevant source changes
     useEffect(() => {
         let newUrl: string | null = null;
-        console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, pIdx=${currentPodcastIndex}, vIdx=${currentVideoIndex}`);
+        console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, pIdx=${currentPodcastIndex}, vIdx=${currentVideoIndex}, iIdx=${currentImageIndex}`);
 
         if (viewMode === 'imagePodcast') {
-            if (podcastNotes.length > 0 && currentPodcastIndex < podcastNotes.length) {
-                newUrl = podcastNotes[currentPodcastIndex]?.url || null;
+            if (imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
+                newUrl = imageNotes[currentImageIndex]?.url || null;
             }
         } else { // viewMode === 'videoPlayer'
             if (videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
@@ -146,11 +170,12 @@ export function useMediaState({
             console.log(`useMediaState URL Effect: Setting currentItemUrl from ${currentItemUrl} to: ${newUrl}`);
             setCurrentItemUrl(newUrl);
         } else {
-            console.log(`useMediaState URL Effect: currentItemUrl (${currentItemUrl}) already matches newUrl (${newUrl}). No change.`);
+            if (currentItemUrl !== null || newUrl !== null) {
+                console.log(`useMediaState URL Effect: currentItemUrl (${currentItemUrl}) already matches newUrl (${newUrl}). No change.`);
+            }
         }
 
-    // Dependencies: viewMode, indices, notes arrays, currentItemUrl
-    }, [viewMode, currentPodcastIndex, currentVideoIndex, podcastNotes, videoNotes, currentItemUrl]);
+    }, [viewMode, currentPodcastIndex, currentVideoIndex, currentImageIndex, podcastNotes, videoNotes, imageNotes, currentItemUrl]);
 
     // Set Podcast Index (does NOT change viewMode)
     const setCurrentPodcastIndex = useCallback((index: number) => {

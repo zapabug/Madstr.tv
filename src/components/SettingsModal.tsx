@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth provides all necessary states and functions, and exports its return type
+import { useWallet, UseWalletReturn } from '../hooks/useWallet'; // Import useWallet
 import QRCode from 'react-qr-code'; // Import QRCode for backup
 import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
 type NDKInstance = NDK; // Alias NDK class as NDKInstance type
@@ -27,8 +28,8 @@ const truncateNpub = (npub: string | null): string => {
 };
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance }) => {
-    // Use the hook directly, no need to cast now
     const auth: UseAuthReturn = useAuth(ndkInstance);
+    const wallet: UseWalletReturn = useWallet(); // Use the wallet hook
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
     const [showNsecQR, setShowNsecQR] = useState<boolean>(false);
@@ -38,6 +39,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const [npubPressCount, setNpubPressCount] = useState(0); // Counter for nsec reveal
     const [hashtagInput, setHashtagInput] = useState<string>(''); // For adding hashtags
     const [focusedTagIndex, setFocusedTagIndex] = useState<number | null>(null); // For tag list navigation/deletion
+    const [mintUrlInput, setMintUrlInput] = useState<string>(''); // State for Mint URL input
+    const [isSavingMintUrl, setIsSavingMintUrl] = useState<boolean>(false); // Loading state for save button
 
     const modalRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -52,42 +55,75 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const hashtagInputRef = useRef<HTMLInputElement>(null);
     const addTagButtonRef = useRef<HTMLButtonElement>(null);
     const tagListRef = useRef<HTMLUListElement>(null);
+    const mintUrlInputRef = useRef<HTMLInputElement>(null); // Ref for Mint URL input
+    const saveMintUrlButtonRef = useRef<HTMLButtonElement>(null); // Ref for Save Mint URL button
+
+    // Effect to initialize Mint URL input when modal opens or wallet loads
+    useEffect(() => {
+        if (isOpen && auth.isLoggedIn && wallet.configuredMintUrl !== null) {
+            setMintUrlInput(wallet.configuredMintUrl);
+        } else if (isOpen && auth.isLoggedIn) {
+            // If logged in but no URL configured yet, maybe set a default placeholder or empty
+            setMintUrlInput(''); // Or DEFAULT_MINT_URL placeholder?
+        }
+        // Reset saving state when modal opens/closes or URL changes upstream
+        setIsSavingMintUrl(false);
+    }, [isOpen, auth.isLoggedIn, wallet.configuredMintUrl]);
+
+    // Effect to start/stop deposit listener based on login state and NDK instance
+    useEffect(() => {
+        if (isOpen && auth.isLoggedIn && ndkInstance) {
+            console.log('SettingsModal: Attempting to start deposit listener.');
+            wallet.startDepositListener(auth, ndkInstance);
+        } else {
+             console.log('SettingsModal: Stopping deposit listener (modal closed, not logged in, or no NDK).');
+            wallet.stopDepositListener();
+        }
+        // Ensure listener stops when modal closes or user logs out
+        return () => {
+            console.log('SettingsModal: Cleaning up deposit listener effect.');
+            wallet.stopDepositListener();
+        };
+        // Dependencies: isOpen, auth object (for isLoggedIn and methods), ndkInstance, wallet hook instance
+    }, [isOpen, auth, ndkInstance, wallet]);
 
     // Focus trapping and initial focus
     useEffect(() => {
         if (isOpen) {
-            const timer = setTimeout(() => { // Delay focus slightly for animation
-                if (auth.isLoggedIn) {
-                    loggedInNpubRef.current?.focus();
-                } else if (auth.nip46ConnectUri) {
-                    // If QR is shown, maybe focus something else or nothing specific
-                } else if (generatedNpub && !generatedNsec) {
-                    showNsecButtonRef.current?.focus();
-                } else if (generatedNsec && showNsecQR) {
-                    useIdentityButtonRef.current?.focus();
-                } else if (connectSignerButtonRef.current) {
-                     connectSignerButtonRef.current.focus(); // Default focus when logged out: NIP-46 button
+            const timer = setTimeout(() => {
+                if (auth.isLoggedIn && loggedInNpubRef.current) {
+                    loggedInNpubRef.current?.focus(); // Default to npub first
+                 } else if (auth.isLoggedIn && mintUrlInputRef.current) {
+                     // Maybe focus Mint URL input as alternative?
+                     // mintUrlInputRef.current.focus();
                 } else {
-                    generateButtonRef.current?.focus(); // Fallback: Generate button
+                     // ... existing fallback focus logic ...
+                     connectSignerButtonRef.current?.focus();
                 }
-            }, 100); // Adjust delay if needed
+            }, 100);
 
-             // Basic focus trapping (you might need a more robust library like focus-trap-react for complex cases)
             const handleKeyDown = (e: KeyboardEvent) => {
                  if (e.key === 'Tab' && modalRef.current) {
-                     const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+                    // Query ALL focusable elements, including new wallet inputs/buttons
+                    const focusableElements = Array.from(
+                        modalRef.current.querySelectorAll<HTMLElement>(
                          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-                     );
+                       )
+                     ).filter(el => el.offsetParent !== null); // Filter out hidden elements
+
+                     if (focusableElements.length === 0) return;
+
                      const firstElement = focusableElements[0];
                      const lastElement = focusableElements[focusableElements.length - 1];
+                     const currentIndex = focusableElements.findIndex(el => el === document.activeElement);
 
                      if (e.shiftKey) { // Shift + Tab
-                         if (document.activeElement === firstElement) {
+                         if (document.activeElement === firstElement || currentIndex === -1) {
                              lastElement.focus();
                              e.preventDefault();
                          }
                      } else { // Tab
-                         if (document.activeElement === lastElement) {
+                         if (document.activeElement === lastElement || currentIndex === -1) {
                              firstElement.focus();
                              e.preventDefault();
                          }
@@ -103,7 +139,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                  document.removeEventListener('keydown', handleKeyDown);
              };
         }
-    }, [isOpen, auth.isLoggedIn, generatedNpub, generatedNsec, showNsecQR, auth.nip46ConnectUri]);
+    }, [isOpen, auth.isLoggedIn, generatedNpub, generatedNsec, showNsecQR, auth.nip46ConnectUri, wallet.configuredMintUrl]);
 
     const handleClose = useCallback(() => {
         // Reset temporary generation state on close
@@ -115,6 +151,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         setNpubPressCount(0);
         setNsecInput('');
         setHashtagInput('');
+        setMintUrlInput('');
+        setIsSavingMintUrl(false);
         onClose();
     }, [onClose]);
 

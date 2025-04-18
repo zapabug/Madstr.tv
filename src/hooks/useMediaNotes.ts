@@ -62,6 +62,13 @@ export function useMediaNotes({
     const notesById = useRef<Map<string, NostrNote>>(new Map());
     const currentSubscription = useRef<NDKSubscription | null>(null);
     const isFetching = useRef<boolean>(false); // Prevent concurrent fetches
+    // Add refs to track previous dependency values
+    const prevNdkRef = useRef<NDK | null>(ndk);
+    const prevAuthorsRef = useRef<string[]>(authors);
+    const prevMediaTypeRef = useRef<MediaType>(mediaType);
+    const prevLimitRef = useRef<number>(limit);
+    const prevUntilRef = useRef<number | undefined>(until);
+    const prevFollowedTagsRef = useRef<string[] | undefined>(followedTags);
 
     const processEvent = useCallback((event: NDKEvent, _urlRegex: RegExp, type: MediaType): NostrNote | null => {
         // Use specific regex for fallback, but m-tag is primary
@@ -192,6 +199,28 @@ export function useMediaNotes({
     }, []); // No dependencies, it's a pure function based on args
 
     useEffect(() => {
+        // --- Dependency Change Logging --- 
+        let changedDeps: string[] = [];
+        if (prevNdkRef.current !== ndk) changedDeps.push('ndk');
+        // Shallow compare arrays for changes
+        if (JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors)) changedDeps.push('authors');
+        if (prevMediaTypeRef.current !== mediaType) changedDeps.push('mediaType');
+        if (prevLimitRef.current !== limit) changedDeps.push('limit');
+        if (prevUntilRef.current !== until) changedDeps.push('until');
+        if (JSON.stringify(prevFollowedTagsRef.current) !== JSON.stringify(followedTags)) changedDeps.push('followedTags');
+        
+        if (changedDeps.length > 0) {
+            console.log(`useMediaNotes (${mediaType}): Effect triggered by changed dependencies:`, changedDeps.join(', '));
+        }
+        // Update previous value refs *after* comparison
+        prevNdkRef.current = ndk;
+        prevAuthorsRef.current = authors;
+        prevMediaTypeRef.current = mediaType;
+        prevLimitRef.current = limit;
+        prevUntilRef.current = until;
+        prevFollowedTagsRef.current = followedTags;
+        // ---------------------------------
+
         // Debounce or prevent fetch if already fetching or no NDK/authors
         if (isFetching.current || !ndk || authors.length === 0) {
             // If no authors/ndk, clear state
@@ -325,7 +354,7 @@ export function useMediaNotes({
             isFetching.current = false; // Ensure fetching flag is reset if component unmounts during fetch
         };
     // Re-run effect if ndk, authors, mediaType, limit, or until changes
-    }, [authors, mediaType, ndk, limit, until, followedTags, processEvent]); // <<< Add followedTags to dependency array
+    }, [ndk, authors, mediaType, limit, until, followedTags, processEvent]); // <<< Add followedTags to dependency array
 
     return {
         notes,

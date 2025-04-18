@@ -1,16 +1,19 @@
-# TV App Architecture Documentation (Updated for Refactoring)
+# TV App Architecture Documentation (Updated for Refactoring & Wallet Features)
 
 ## 1. Overview
 
-This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation.
+This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication, hashtag filtering, and Cashu-based tipping.
 
 **Key Features:**
 *   Displays images, podcasts (audio), and videos.
-*   Content is fetched from Nostr relays based on a list of followed authors.
+*   Content is fetched from Nostr relays based on a list of followed authors and optional hashtags.
 *   Image and video feeds are **randomized** on load using `shuffleArray`.
 *   Older content (images/videos) can be fetched dynamically ("infinite scroll" behavior) by navigating past the end of the current list.
 *   Uses a **split-screen layout**, hiding the bottom panel in fullscreen mode.
 *   Enters **fullscreen mode** automatically after periods of inactivity or no new messages.
+*   Supports user **authentication** via nsec (generation/login) or NIP-46 remote signer.
+*   Allows users to **follow specific hashtags** (`#t` tags) to filter image/video content.
+*   Includes an internal **Cashu wallet** for receiving deposits via encrypted DMs and **sending tips** (currently simplified, non-Zap standard) to content creators via encrypted DMs. Tipping is triggered by focusing the author QR code and pressing OK/Select.
 
 **Operating Modes (`viewMode` state):**
 *   `imagePodcast`: The main/top area displays the `ImageFeed`, while the bottom-right panel displays the `podcastNotes` list and controls.
@@ -19,10 +22,12 @@ This document describes the architecture of the React-based TV application desig
 ## 2. Core Technologies
 
 *   **Frontend Framework:** React (`useState`, `useEffect`, `useRef`, `useCallback`)
-*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`) orchestrated by the root `App` component.
+*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`, `useWallet`) orchestrated by the root `App` component.
 *   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`
-*   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`)
+*   **Cashu (Ecash) Integration:** `@cashu/cashu-ts`
+*   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`, `cashuProofs`)
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
+*   **Icons:** `react-icons`
 *   **Utilities:** `shuffleArray`, `react-qr-code`
 
 ## 3. Core Component Responsibilities & Layout
@@ -37,17 +42,18 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 ---
 
 *   **`App.tsx` (Root Component):**
-    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), shuffles image/video notes, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks.
+    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), shuffles image/video notes, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks. **Crucially, it initializes `useMediaAuthors` which provides the main `ndk` instance used by many other hooks/components.**
     *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`), settings modal visibility (`isSettingsOpen`).
     *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
     *   **Hook Usage:**
-        *   `useMediaAuthors`: Gets `ndk` instance and `mediaAuthors`.
-        *   `useAuth`: Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, and signing capabilities. Receives `ndk` instance.
+        *   `useMediaAuthors`: Gets **primary `ndk` instance** and `mediaAuthors`. Called early.
+        *   `useAuth`: Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, signing capabilities, and NIP-04 helpers (`encryptDm`/`decryptDm`). Receives `ndk` instance *only if needed for initialization*, otherwise `undefined`. Does **not** provide the main `ndk` instance for general use.
+        *   `useWallet`: Manages internal Cashu wallet state (`proofs`, `balanceSats`), handles DM deposits, and initiates tips (`sendCashuTipWithSplits`). Requires `useAuth` and `ndk` instance *passed to its methods* (`startDepositListener`, `sendCashuTipWithSplits`).
         *   `useMediaNotes`: Fetches `imageNotes`, `podcastNotes`, `videoNotes`. Called multiple times. Receives `ndk`, `mediaAuthors`, and `followedTags` from `useAuth`.
-        *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives initial notes, fetcher callbacks, and note lengths.
+        *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives initial notes, fetcher callbacks, and note lengths. Passes `currentNoteId` up for potential tipping context.
         *   `useMediaElementPlayback`: Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl`.
         *   `useFullscreen`: Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
-        *   `useKeyboardControls`: Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`). **(Note: Settings modal trigger moved to `RelayStatus` button).**
+        *   `useKeyboardControls`: Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`). Settings modal trigger is now in `RelayStatus`.
         *   `useImageCarousel`: Manages the image auto-advance timer, receives `isActive` flag and `handleNext` callback.
         *   `useCurrentAuthor`: Calculates the `npub` of the currently displayed author based on mode and index, receives indices and note lists.
     *   **Data Handling:**
@@ -58,32 +64,34 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Rendering Logic:**
         *   Renders invisible `<audio>` element (`audioRef`).
         *   Renders layout structure (Top Area, Bottom Panel).
-        *   Conditionally renders components based on `viewMode` (`ImageFeed` or `VideoPlayer`) in the Top Area.
+        *   Conditionally renders components based on `viewMode` (`ImageFeed` or `VideoPlayer`) in the Top Area, passing necessary props including `currentNoteId`.
         *   Conditionally renders the Bottom Panel based on `isFullScreen`.
         *   Renders `MessageBoard` and `MediaPanel` within the Bottom Panel.
-        *   Renders `SettingsModal` (conditionally based on `isSettingsOpen`).
+        *   Renders `SettingsModal` (conditionally based on `isSettingsOpen`), passing the `ndkInstance` from `useMediaAuthors`.
         *   Renders `RelayStatus` (provides trigger for settings modal).
         *   Passes necessary props (state, refs, callbacks from hooks) down to child components.
         *   Handles overall loading state display.
 
 *   **`ImageFeed.tsx`:**
-    *   **Purpose:** Displays the main image feed with author QR code.
+    *   **Purpose:** Displays the main image feed with author QR code and tipping interaction.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'imagePodcast'`.
-    *   **Key Props:** `shuffledImageNotes`, `isLoading`, `currentImageIndex`, `handlePrevious`, `handleNext`, `authorNpub`.
-    *   **Functionality:** Displays images, handles internal focus, shows author QR code.
+    *   **Key Props:** `isLoading`, `handlePrevious`, `handleNext`, `currentImageIndex`, `imageNotes`, `authorNpub`.
+    *   **Hook Usage:** Uses `useAuth`, `useWallet`, `useMediaAuthors` (to get `ndk` instance).
+    *   **Functionality:** Displays images. Includes a grouped section for author display name, QR code, and timestamp. The author QR code container is focusable when logged in and tipping is possible (`canTip`). Pressing OK/Select triggers `handleTip` which calls `wallet.sendCashuTipWithSplits`. Displays a custom logged-in icon overlay and a ⚡️ icon overlay on the QR code when tipping is enabled. Shows loading/success/error overlays during/after tipping.
 
 *   **`VideoPlayer.tsx`:**
-    *   **Purpose:** Displays the video player UI with author QR code.
+    *   **Purpose:** Displays the video player UI with author QR code and tipping interaction.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'videoPlayer'`.
-    *   **Key Props:** `videoRef`, `src` (bound to `currentItemUrl`), `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`.
-    *   **Functionality:** Renders the `<video>` element (using `videoRef`), controls playback state based on props, shows overlay play button, shows author QR code.
+    *   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`, `currentNoteId`.
+    *   **Hook Usage:** Uses `useAuth`, `useWallet`, `useMediaAuthors` (to get `ndk` instance).
+    *   **Functionality:** Renders the `<video>` element (`videoRef`), controls playback state based on props, shows overlay play button if autoplay fails. Includes a grouped section for the author QR code. The author QR code container is focusable when logged in and tipping is possible (`canTip`). Pressing OK/Select triggers `handleTip` which calls `wallet.sendCashuTipWithSplits`. Displays a custom logged-in icon overlay and a ⚡️ icon overlay on the QR code when tipping is enabled. Shows loading/success/error overlays during/after tipping.
 
 *   **`MediaPanel.tsx`:**
     *   **Purpose:** Displays the relevant **list** (Podcasts or Videos) and the **playback controls**. Acts as the interactive panel in the bottom-right.
     *   **Rendered In:** Bottom-Right Panel (B2) - *Rendered only when not fullscreen*.
     *   **Key Props:** `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `videoNotes` (receives *shuffled* videos), loading states, indices, selection handlers, playback state/handlers (`isPlaying`, `currentTime`, etc.), `setViewMode`, `currentItemUrl`, `authors`.
     *   **Hook Usage (Internal):** Uses `useProfileData` to fetch profile info (name/pic) for authors in the lists. Uses `useInactivityTimer`.
-    *   **Functionality:** Renders lists, playback controls, connects controls to props from `App`. Handles list item selection/navigation. Does **not** render media elements directly.
+    *   **Functionality:** Renders lists, playback controls, connects controls to props from `App`. Handles list item selection/navigation. Does **not** render media elements directly. **(Note: Currently does not have integrated tipping functionality).**
 
 *   **`MessageBoard.tsx`:**
     *   **Purpose:** Displays Nostr chat messages for a specific thread.
@@ -96,33 +104,34 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Key Props:** Likely receives playback state (`isPlaying`, `currentTime`, `duration`, `playbackRate`, `isMuted`) and handlers (`togglePlayPause`, `handleSeek`, `setPlaybackRate`, `toggleMute`) from `MediaPanel`.
 
 *   **`SettingsModal.tsx`:**
-    *   **Purpose:** Provides a UI for managing user identity (nsec generation/login, NIP-46 connection) and application settings (followed hashtags).
+    *   **Purpose:** Provides a UI for managing user identity (nsec generation/login, NIP-46 connection), application settings (followed hashtags), and the internal Cashu wallet.
     *   **Rendered By:** `App.tsx` (conditionally).
-    *   **Key Props:** `isOpen`, `onClose`, `ndkInstance`.
-    *   **Hook Usage (Internal):** `useAuth`.
-    *   **Functionality:** Handles user login/logout via nsec or NIP-46, displays QR codes for connection/backup (with warnings), allows adding/removing followed hashtags. Manages focus internally for TV navigation.
+    *   **Key Props:** `isOpen`, `onClose`, `ndkInstance` (passed from `App` which gets it from `useMediaAuthors`).
+    *   **Hook Usage (Internal):** `useAuth`, `useWallet`.
+    *   **Functionality:** Handles user login/logout via nsec or NIP-46, displays QR codes for connection/backup (with warnings), allows adding/removing followed hashtags. Includes a "Wallet" section displaying balance, deposit instructions (DM to TV npub), allows configuring the Cashu mint URL, shows wallet status/errors, and includes security warnings about browser-based proof storage. Manages focus internally for TV navigation. Starts/stops the wallet's deposit listener when opened/closed while logged in.
 
 *   **`RelayStatus.tsx`, `QRCode.tsx`:** Utility components. `RelayStatus` now includes the button to open the `SettingsModal`.
 
 ## 4. Custom Hooks Deep Dive
 
 *   **`useAuth`:**
-    *   **Input:** `ndkInstance` (NDK | null | undefined).
+    *   **Input:** `ndkInstance` (NDK | undefined) - *Optional NDK instance for initialization tasks if needed, but not the primary source.*
     *   **Output:** `UseAuthReturn` (exported interface) containing:
         *   `currentUserNpub`, `currentUserNsec`: Current user identity.
         *   `isLoggedIn`: Boolean flag.
         *   `isLoadingAuth`, `authError`: Loading and error states.
-        *   NIP-46 state: `nip46ConnectUri`, `isGeneratingUri`.
+        *   NIP-46 state: `nip46ConnectUri`, `isGeneratingUri`, `nip46UriExpirationTimer`.
         *   NIP-46 functions: `initiateNip46Connection`, `cancelNip46Connection`.
-        *   Nsec functions: `generateNewKeys`, `loginWithNsec`, `logout`, `saveNsecToDb`.
+        *   Nsec functions: `generateNewKeys`, `loginWithNsec`, `logout`.
         *   Signer functions: `getNdkSigner`, `signEvent`.
         *   Hashtag state: `followedTags` (array of strings), `setFollowedTags` (function).
-    *   **Function:** Manages user authentication state. Handles loading credentials (nsec) from IndexedDB, generating new keys, logging in via nsec or NIP-46 (initiation part implemented), logging out. Persists `followedTags` to IndexedDB, merging with defaults on login and resetting on logout. Provides access to the appropriate NDK signer based on login method. Provides a unified `signEvent` function. 
+        *   NIP-04 Helpers: `encryptDm`, `decryptDm` (functions).
+    *   **Function:** Manages user authentication state. Handles loading credentials (nsec) from IndexedDB, generating new keys, logging in via nsec or NIP-46 (initiation part implemented), logging out. Persists `followedTags` to IndexedDB, merging with defaults on login and resetting on logout. Provides access to the appropriate NDK signer based on login method. Provides a unified `signEvent` function and NIP-04 DM encryption/decryption helpers (`encryptDm`, `decryptDm`). **Does not return the main `ndk` instance.**
 
 *   **`useMediaAuthors`:**
-    *   **Input:** `relays` (array of relay URLs).
-    *   **Output:** `ndk` instance, `mediaAuthors` (array of pubkeys), `isLoadingAuthors`.
-    *   **Function:** Initializes NDK, connects to relays, fetches user's Kind 3 contact list, returns authors (user + followed) and NDK instance.
+    *   **Input:** None (uses hardcoded `RELAYS` constant).
+    *   **Output:** **`ndk` instance (primary instance used application-wide)**, `mediaAuthors` (array of pubkeys), `isLoadingAuthors`.
+    *   **Function:** Initializes NDK, connects to relays, fetches user's Kind 3 contact list (if logged in), returns authors (user + followed) and the **primary NDK instance**.
 
 *   **`useMediaNotes`:**
     *   **Input:** `authors`, `mediaType` ('image', 'podcast', 'video'), `ndk` (NDK | null), `limit` (optional), `until` (optional), `followedTags` (optional string array).
@@ -131,8 +140,8 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 
 *   **`useMediaState`:**
     *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
-    *   **Output:** `viewMode`, `imageNotes` (internal), `podcastNotes` (internal), `videoNotes` (internal), `isLoadingPodcastNotes`, `isLoadingVideoNotes`, `currentImageIndex`, `currentPodcastIndex`, `currentVideoIndex`, `selectedVideoNpub`, `currentItemUrl`, `handleVideoSelect`, `handlePrevious`, `handleNext`, `setViewMode`, `setCurrentPodcastIndex`.
-    *   **Function:** Core UI state machine. Manages `viewMode`, current indices for each media type, and the `currentItemUrl` based on the mode and index. Handles navigation logic (`handlePrevious`, `handleNext`) respecting list boundaries and triggering fetch callbacks. Manages selection logic (`handleVideoSelect`, `setCurrentPodcastIndex`). Updates internal notes state based on props.
+    *   **Output:** `viewMode`, `imageNotes` (internal), `podcastNotes` (internal), `videoNotes` (internal), `isLoadingPodcastNotes`, `isLoadingVideoNotes`, `currentImageIndex`, `currentPodcastIndex`, `currentVideoIndex`, `selectedVideoNpub`, `currentItemUrl`, `currentNoteId`, `handleVideoSelect`, `handlePrevious`, `handleNext`, `setViewMode`, `setCurrentPodcastIndex`.
+    *   **Function:** Core UI state machine. Manages `viewMode`, current indices for each media type, and the `currentItemUrl` based on the mode and index. Exposes `currentNoteId` for the currently active image/video. Handles navigation logic (`handlePrevious`, `handleNext`) respecting list boundaries and triggering fetch callbacks. Manages selection logic (`handleVideoSelect`, `setCurrentPodcastIndex`). Updates internal notes state based on props.
 
 *   **`useMediaElementPlayback`:**
     *   **Input:** `mediaElementRef` (active `<audio>` or `<video>` ref), `currentItemUrl`, `viewMode`, `onEnded` (callback, usually `handleNext`), `initialTime`.
@@ -147,7 +156,7 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 *   **`useKeyboardControls`:**
     *   **Input:** `isFullScreen`, `signalInteraction`, `onSetViewMode`, `onTogglePlayPause`, `onNext`, `onPrevious`, `onFocusToggle` (optional), `viewMode`.
     *   **Output:** None (sets up side effect).
-    *   **Function:** Adds a window `keydown` event listener. Calls `signalInteraction` on *any* key press. If *not* fullscreen, it checks the key and calls the appropriate callback (`onSetViewMode`, `onTogglePlayPause`, etc.), preventing default browser actions. If fullscreen, it only signals interaction (which causes `useFullscreen` to exit fullscreen). **(Note: Does not handle settings modal toggle anymore).**
+    *   **Function:** Adds a window `keydown` event listener. Calls `signalInteraction` on *any* key press. If *not* fullscreen, it checks the key and calls the appropriate callback (`onSetViewMode`, `onTogglePlayPause`, etc.), preventing default browser actions. If fullscreen, it only signals interaction (which causes `useFullscreen` to exit fullscreen). Does not handle settings modal toggle.
 
 *   **`useImageCarousel`:**
     *   **Input:** `isActive` (boolean), `onTick` (callback, e.g., `handleNext`), `intervalDuration`.
@@ -159,7 +168,23 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Output:** `currentAuthorNpub` (string | null).
     *   **Function:** Determines the currently active note based on `viewMode` and the corresponding index (`imageIndex` or `videoIndex`) within the provided note lists. Extracts the `pubkey` from the active note (if found) and returns its `npub` encoded string (e.g., "npub1..."). Returns `null` if no active note or pubkey is found. Used for displaying QR codes in `ImageFeed`/`VideoPlayer`.
 
-*   **`useProfileData` (Used in `MediaPanel`):**
+*   **`useProfileData` (Used in `MediaPanel`, `ImageFeed`):**
     *   **Input:** `notes` (array of `NostrNote`).
     *   **Output:** `profiles` (Record<string, ProfileData>), `fetchProfile` (function).
-    *   **Function:** Extracts unique pubkeys from input notes. Fetches profile data (Kind 0) for these pubkeys, using caching (`profileCache`) and NDK lookups. Returns a map of pubkeys to profile details (name, picture, etc.).
+    *   **Function:** Extracts unique pubkeys from input notes. Fetches profile data (Kind 0) for these pubkeys, using caching (`profileCache`) and NDK lookups (via the main `ndk` instance obtained likely via context or props). Returns a map of pubkeys to profile details (name, picture, etc.).
+
+*   **`useWallet`:**
+    *   **Input:** None.
+    *   **Output:** `UseWalletReturn` (exported interface) containing:
+        *   `proofs`: Array of stored Cashu proofs (`Proof & { mintUrl: string }[]`).
+        *   `balanceSats`: Current total wallet balance (number).
+        *   `isListeningForDeposits`: Boolean flag for DM listener status.
+        *   `walletError`: String or null for wallet errors.
+        *   `isLoadingWallet`: Boolean flag for initial loading/processing state.
+        *   `configuredMintUrl`: Currently configured Cashu mint URL (string | null).
+        *   `loadWalletState`: Function to load proofs/balance/mint from IDB.
+        *   `startDepositListener`: Function to start the Nostr DM listener (needs `auth` and `ndk`).
+        *   `stopDepositListener`: Function to stop the DM listener.
+        *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs (needs `SendTipParams` containing recipient, amount, auth, ndk, etc.).
+        *   `setConfiguredMintUrl`: Function to set and save the mint URL.
+    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`redeemToken`, `createTokenForAmount`) for Cashu operations. Listens for incoming Nostr DMs (Kind 4) tagged with the user's pubkey using `ndk.subscribe`. Attempts to decrypt DMs using `auth.decryptDm` and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function to generate tokens (using `configuredMintUrl`) and send them via encrypted DMs (using `auth.encryptDm`, `auth.signEvent`, `ndk.publish`). Requires `UseAuthReturn` and the main `NDK` instance passed into `startDepositListener` and `sendCashuTipWithSplits`.

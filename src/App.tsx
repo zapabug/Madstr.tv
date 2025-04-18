@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
+import ndkInstance from './ndk'; // <-- Import the singleton NDK instance
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import MessageBoard from './components/MessageBoard';
 import MediaPanel from './components/MediaPanel';
@@ -14,6 +15,7 @@ import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
 import { useCurrentAuthor } from './hooks/useCurrentAuthor';
+import { useNDKInit } from './hooks/useNDKInit'; // <-- Import the new hook
 import { NostrNote } from './types/nostr';
 import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,11 +31,15 @@ const CHECK_INTERVAL = 5000; // Check every 5 seconds
 const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 
 function App() {
-  // Use the new hook to get NDK instance, authors, and loading state
-  const { ndk, mediaAuthors, isLoadingAuthors } = useMediaAuthors();
+  // --- NDK Initialization (Using Hook) ---
+  const { isConnecting: isNdkConnecting, connectionError: ndkConnectionError, ndkInstance } = useNDKInit();
+  // Note: ndkInstance returned here is the same singleton, used for clarity if needed
+
+  // Use the authors hook, passing the singleton ndk instance
+  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance });
 
   // --- Auth Hook --- 
-  const auth = useAuth(ndk); // Pass NDK instance
+  const auth = useAuth(ndkInstance); // Pass NDK instance back in, as the hook definition likely still expects it
   const { followedTags } = auth; // Get followedTags from auth state
 
   // State for fetch parameters
@@ -46,24 +52,24 @@ function App() {
   const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'podcast', 
-    ndk: ndk || null, 
+    ndk: ndkInstance, // <-- Pass singleton (no need for || null)
     limit: 200 // Keep podcast limit fixed for now
   });
   const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'video', 
-    ndk: ndk || null, 
+    ndk: ndkInstance, // <-- Pass singleton
     limit: videoFetchLimit, 
     until: videoFetchUntil,
-    followedTags: followedTags // Pass followedTags
+    followedTags: followedTags // Restore tag filtering
   });
   const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'image', 
-    ndk: ndk || null, 
+    ndk: ndkInstance, // <-- Pass singleton
     limit: imageFetchLimit, 
     until: imageFetchUntil,
-    followedTags: followedTags // Pass followedTags
+    followedTags: followedTags // Restore tag filtering
   });
   
   // State for shuffled notes for display
@@ -115,10 +121,12 @@ function App() {
 
   // Effects for shuffling notes
   useEffect(() => {
+    console.log('App.tsx: Effect running: Shuffling imageNotes'); // Log effect run
     setShuffledImageNotes(shuffleArray([...imageNotes]));
   }, [imageNotes]);
 
   useEffect(() => {
+    console.log('App.tsx: Effect running: Deduplicating and shuffling videoNotes'); // Log effect run
     // --- Deduplicate video notes by URL, keeping the newest --- 
     const uniqueVideoNotesMap = new Map<string, NostrNote>();
     for (const note of videoNotes) {
@@ -269,6 +277,27 @@ function App() {
     signalInteraction(); // Also signal interaction when settings are toggled
   }, [signalInteraction]);
 
+  // Global Loading/Error States
+  const isLoading = isNdkConnecting || isLoadingAuthors || isLoadingPodcastNotes || isLoadingVideoNotes || isLoadingImages;
+
+  if (isNdkConnecting) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black text-white">
+        Connecting to Nostr Relays...
+      </div>
+    );
+  }
+
+  if (ndkConnectionError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-black text-red-500">
+        <p>Error connecting to Nostr Relays:</p>
+        <p>{ndkConnectionError.message}</p>
+        <p className="mt-4 text-gray-400 text-sm">Please check console or try refreshing.</p>
+      </div>
+    );
+  }
+
   return (
     <>
     {/* Outermost div */}
@@ -323,7 +352,7 @@ function App() {
                       >
                          Loading author list...
                      </motion.div>
-                 ) : viewMode === 'imagePodcast' ? (
+                 ) : null /* viewMode === 'imagePodcast' ? (
                      <motion.div
                          key="imageFeed"
                          initial={{ opacity: 0 }}
@@ -361,7 +390,7 @@ function App() {
                              isMuted={isMuted}
                          />
                      </motion.div>
-                 ) : null }
+                 ) : null */ }
               </AnimatePresence>
 
               {/* Duplicated Mode Toggle Button (Hide on Fullscreen) */}
@@ -455,18 +484,17 @@ function App() {
                  >
                     {/* Message Board Container */}
                     <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900/80 rounded-lg backdrop-blur-sm p-2">
-                        {ndk ? (
+                         {ndkInstance ? ( 
                             <MessageBoard
-                              ndk={ndk}
+                              ndk={ndkInstance}
                               neventToFollow={MAIN_THREAD_NEVENT_URI}
-                              authors={mediaAuthors}
                               onNewMessage={handleNewMessage}
                             />
-                        ) : (
+                        ) : ( 
                             <div className="w-full h-full flex items-center justify-center">
                                 <p className="text-gray-400">Initializing Nostr connection...</p>
                             </div>
-                        )}
+                        )} 
                     </div>
 
                     {/* Interactive Panel Container (Right 1/3) */}
@@ -506,7 +534,7 @@ function App() {
     {/* Relay Status (Bottom Left) */}
     <div className="absolute bottom-0 left-0 p-2 z-20">
       <RelayStatus
-        isReceivingData={!!ndk} // Use !!ndk directly
+        isReceivingData={!!ndkInstance?.pool?.connectedRelays?.().length} // <-- Call function and check length
         relayCount={RELAYS.length}
         onSettingsClick={toggleSettingsModal} // Pass the toggle function
       />
@@ -521,7 +549,7 @@ function App() {
     <SettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
-        ndkInstance={ndk} // Pass ndk instance to modal
+        ndkInstance={ndkInstance} // <-- Pass singleton
     />
 
     </>

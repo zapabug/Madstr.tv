@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase, StoreNames } from 'idb';
+import { Proof } from '@cashu/cashu-ts'; // Import Proof type
 
 // --- Type Definitions ---
 // Define more specific types if possible
@@ -40,15 +41,27 @@ export interface StoredFollowedTags {
     tags: string[];
 }
 
+// Add interface for Mint URL setting
+export interface StoredMintUrl {
+    id: 'mintUrl'; // Use literal type for the key
+    url: string;
+}
+
+// Use basic Proof type and add mintUrl in helpers if needed
+// export interface StoredProof extends Proof {
+//     id: string; // Concatenation of secret + C ? Or just use 'secret'? 'secret' should be unique per mint.
+//     mintUrl: string; // To group proofs by mint
+// }
+
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags'; // Use literal types for keys
+    key: 'currentUserNsec' | 'followedTags' | 'mintUrl'; // Use literal types for keys
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -60,18 +73,25 @@ interface MadstrTvAppDB extends DBSchema {
     value: ProfileData;
     indexes: { 'name': string };
   };
+  cashuProofs: {
+    key: string; // Proof 'secret'
+    value: Proof & { mintUrl: string }; // Store basic Proof plus mintUrl
+    indexes: { 'mintUrl': string; 'amount': number }; // Index by mint and amount for easier lookup/selection
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<MadstrTvAppDB>> | null = null;
 const DB_NAME = 'MadstrTvAppDB';
-const DB_VERSION = 1;
+const DB_VERSION = 5;
 
 // --- DB Initialization ---
 const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
   if (!dbPromise) {
     dbPromise = openDB<MadstrTvAppDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
-        console.log(`Upgrading DB from version ${oldVersion} to ${DB_VERSION}`);
+      upgrade(db, oldVersion, newVersion, transaction) {
+        console.log(`Upgrading DB from version ${oldVersion} to ${newVersion}`);
+        
+        // Logic for version 1 creation (settings, media, profile)
         if (oldVersion < 1) {
           if (!db.objectStoreNames.contains('settings')) {
             const store = db.createObjectStore('settings', { keyPath: 'id' });
@@ -91,6 +111,29 @@ const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
             console.log("Created 'profileCache' object store.");
           }
         }
+
+        // Logic for version 2 creation (cashuProofs)
+        if (oldVersion < 2) {
+          // Add cashuProofs store if it doesn't already exist
+          if (!db.objectStoreNames.contains('cashuProofs')) {
+            const store = db.createObjectStore('cashuProofs', { keyPath: 'secret' }); // Use 'secret' as the primary key
+            store.createIndex('mintUrl', 'mintUrl'); // Index by mint URL
+            store.createIndex('amount', 'amount'); // Index by amount
+            console.log("Created 'cashuProofs' object store (v2 upgrade).");
+          } else {
+            console.log("'cashuProofs' object store already exists (v2 check).");
+            // If the store exists but needs index changes, do it here using the transaction
+            // Example: 
+            // const proofStore = transaction.objectStore('cashuProofs');
+            // if (!proofStore.indexNames.contains('newIndex')) {
+            //   proofStore.createIndex('newIndex', 'someProperty');
+            //   console.log("Added 'newIndex' to 'cashuProofs'.");
+            // }
+          }
+        }
+        
+        // Add blocks for future versions here (e.g., if (oldVersion < 3) { ... })
+
       },
       blocked: () => console.error("IndexedDB access blocked."),
       blocking: () => console.warn("IndexedDB upgrade blocked."),
@@ -100,88 +143,157 @@ const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
   return dbPromise;
 };
 
-// --- Specific Helper Functions (Recommended Approach) ---
-
-// Settings Store
-const getSetting = async (key: MadstrTvAppDB['settings']['key']): Promise<SettingsValue | undefined> => {
-    const db = await getDb();
-    return db.get('settings', key);
-};
-
-const putSetting = async (value: SettingsValue): Promise<MadstrTvAppDB['settings']['key']> => {
-    const db = await getDb();
-    return db.put('settings', value);
-};
-
-const deleteSetting = async (key: MadstrTvAppDB['settings']['key']): Promise<void> => {
-    const db = await getDb();
-    return db.delete('settings', key);
-};
-
-// Media Note Cache Store
-const getMediaNote = async (key: string): Promise<NostrNote | undefined> => {
-    const db = await getDb();
-    return db.get('mediaNoteCache', key);
-};
-
-const putMediaNote = async (value: NostrNote): Promise<string> => {
-    const db = await getDb();
-    // Ensure the value has the 'id' property used as keyPath
-    if (!value.id) throw new Error("MediaNote must have an 'id' property for IndexedDB keyPath.");
-    return db.put('mediaNoteCache', value);
-};
-
-const getAllMediaNotes = async (): Promise<NostrNote[]> => {
-    const db = await getDb();
-    return db.getAll('mediaNoteCache');
-};
-
-const clearMediaNotes = async (): Promise<void> => {
-    const db = await getDb();
-    return db.clear('mediaNoteCache');
-}
-
-// Profile Cache Store
-const getProfile = async (key: string): Promise<ProfileData | undefined> => {
-    const db = await getDb();
-    return db.get('profileCache', key);
-};
-
-const putProfile = async (value: ProfileData): Promise<string> => {
-    const db = await getDb();
-     // Ensure the value has the 'pubkey' property used as keyPath
-     if (!value.pubkey) throw new Error("ProfileData must have a 'pubkey' property for IndexedDB keyPath.");
-    return db.put('profileCache', value);
-};
-
-const getAllProfiles = async (): Promise<ProfileData[]> => {
-    const db = await getDb();
-    return db.getAll('profileCache');
-};
-
-const clearProfiles = async (): Promise<void> => {
-    const db = await getDb();
-    return db.clear('profileCache');
-}
-
-
-// --- Export ---
+// --- Export consolidated object containing ALL helpers ---
 export const idb = {
     getDbInstance: getDb,
-    // Settings
-    getSetting,
-    putSetting,
-    deleteSetting,
-    // Media Notes
-    getMediaNote,
-    putMediaNote,
-    getAllMediaNotes,
-    clearMediaNotes,
-    // Profiles
-    getProfile,
-    putProfile,
-    getAllProfiles,
-    clearProfiles,
+
+    // --- Settings Store Basic Helpers ---
+    getSetting: async (key: MadstrTvAppDB['settings']['key']): Promise<SettingsValue | undefined> => {
+        const db = await getDb();
+        return db.get('settings', key);
+    },
+
+    putSetting: async (value: SettingsValue): Promise<MadstrTvAppDB['settings']['key']> => {
+        const db = await getDb();
+        return db.put('settings', value);
+    },
+
+    deleteSetting: async (key: MadstrTvAppDB['settings']['key']): Promise<void> => {
+        const db = await getDb();
+        return db.delete('settings', key);
+    },
+
+    // --- Specific Settings Helpers ---
+    saveNsecToDb: async (nsec: string): Promise<void> => {
+        // Use 'this' to refer to other methods within the idb object
+        await idb.putSetting({ id: 'currentUserNsec', nsec });
+    },
+
+    loadNsecFromDb: async (): Promise<string | null> => {
+        const setting = await idb.getSetting('currentUserNsec');
+        return setting && 'nsec' in setting ? setting.nsec : null;
+    },
+
+    clearNsecFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('currentUserNsec');
+    },
+
+    saveFollowedTagsToDb: async (tags: string[]): Promise<void> => {
+        await idb.putSetting({ id: 'followedTags', tags });
+    },
+
+    loadFollowedTagsFromDb: async (): Promise<string[]> => {
+        const setting = await idb.getSetting('followedTags');
+        return setting && 'tags' in setting ? setting.tags : [];
+    },
+
+    saveMintUrlToDb: async (mintUrl: string): Promise<void> => {
+        if (!mintUrl) {
+            console.warn("Attempted to save an empty mint URL. Deleting setting instead.");
+            await idb.deleteSetting('mintUrl');
+            return;
+        }
+        try {
+            new URL(mintUrl);
+        } catch (e) {
+            console.error("Invalid Mint URL provided:", mintUrl, e);
+            throw new Error("Invalid Mint URL format.");
+        }
+        await idb.putSetting({ id: 'mintUrl', url: mintUrl });
+    },
+
+    loadMintUrlFromDb: async (): Promise<string | null> => {
+        const setting = await idb.getSetting('mintUrl');
+        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'mintUrl' && 'url' in setting) {
+            return setting.url;
+        }
+        return null;
+    },
+
+    // --- Media Note Cache Helpers ---
+    getMediaNote: async (key: string): Promise<NostrNote | undefined> => {
+        const db = await getDb();
+        return db.get('mediaNoteCache', key);
+    },
+
+    putMediaNote: async (value: NostrNote): Promise<string> => {
+        const db = await getDb();
+        if (!value.id) throw new Error("MediaNote must have an 'id' property for IndexedDB keyPath.");
+        return db.put('mediaNoteCache', value);
+    },
+
+    getAllMediaNotes: async (): Promise<NostrNote[]> => {
+        const db = await getDb();
+        return db.getAll('mediaNoteCache');
+    },
+
+    clearMediaNotes: async (): Promise<void> => {
+        const db = await getDb();
+        return db.clear('mediaNoteCache');
+    },
+
+    // --- Profile Cache Helpers ---
+    getProfile: async (key: string): Promise<ProfileData | undefined> => {
+        const db = await getDb();
+        return db.get('profileCache', key);
+    },
+
+    putProfile: async (value: ProfileData): Promise<string> => {
+        const db = await getDb();
+        if (!value.pubkey) throw new Error("ProfileData must have a 'pubkey' property for IndexedDB keyPath.");
+        return db.put('profileCache', value);
+    },
+
+    getAllProfiles: async (): Promise<ProfileData[]> => {
+        const db = await getDb();
+        return db.getAll('profileCache');
+    },
+
+    clearProfiles: async (): Promise<void> => {
+        const db = await getDb();
+        return db.clear('profileCache');
+    },
+
+    // --- Cashu Proofs Store Helpers ---
+    addProofs: async (proofs: Proof[], mintUrl: string): Promise<void> => {
+        const db = await getDb();
+        const tx = db.transaction('cashuProofs', 'readwrite');
+        const store = tx.objectStore('cashuProofs');
+        const promises = proofs.map(proof => {
+            const storedProof = { ...proof, mintUrl: mintUrl }; // Add mintUrl here
+            return store.put(storedProof);
+        });
+        await Promise.all(promises);
+        await tx.done;
+        console.log(`Added ${proofs.length} proofs for mint ${mintUrl} to IndexedDB.`);
+    },
+
+    getProofsByMint: async (mintUrl: string): Promise<(Proof & { mintUrl: string })[]> => {
+        const db = await getDb();
+        return db.getAllFromIndex('cashuProofs', 'mintUrl', mintUrl);
+    },
+
+    getAllProofs: async (): Promise<(Proof & { mintUrl: string })[]> => {
+        const db = await getDb();
+        return db.getAll('cashuProofs');
+    },
+
+    removeProofs: async (proofsToRemove: Proof[]): Promise<void> => {
+        if (!proofsToRemove || proofsToRemove.length === 0) return;
+        const db = await getDb();
+        const tx = db.transaction('cashuProofs', 'readwrite');
+        const store = tx.objectStore('cashuProofs');
+        const secretsToRemove = proofsToRemove.map(p => p.secret);
+        const promises = secretsToRemove.map(secret => store.delete(secret));
+        await Promise.all(promises);
+        await tx.done;
+        console.log(`Removed ${proofsToRemove.length} proofs from IndexedDB.`);
+    },
+
+    clearProofs: async (): Promise<void> => {
+        const db = await getDb();
+        return db.clear('cashuProofs');
+    },
 };
 
 // --- Initialize ---

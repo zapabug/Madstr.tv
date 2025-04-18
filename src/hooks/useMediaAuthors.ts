@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { nip19 } from 'nostr-tools';
-import { useNdk } from 'nostr-hooks';
-import { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { RELAYS } from '../constants'; // Adjust path as needed
 import { TV_PUBKEY_NPUB } from '../constants'; // Import separately if needed or combine if exported
 
@@ -20,25 +19,20 @@ function getHexPubkey(npub: string): string | null {
     }
 }
 
-export function useMediaAuthors() {
-    // Initialize NDK
-    const { initNdk, ndk } = useNdk();
+// Define props for the hook
+interface UseMediaAuthorsProps {
+    ndk: NDK | undefined;
+}
+
+export function useMediaAuthors({ ndk }: UseMediaAuthorsProps) {
     const [mediaAuthors, setMediaAuthors] = useState<string[]>([]); // State for media authors
     const [isLoadingAuthors, setIsLoadingAuthors] = useState<boolean>(true); // Loading state for authors
-
-    // Effect to Initialize NDK
-    useEffect(() => {
-        console.log("useMediaAuthors: Initializing NDK...");
-        initNdk({
-            explicitRelayUrls: RELAYS,
-            // debug: true,
-        });
-    }, [initNdk]);
 
     // Effect to Connect NDK and Subscribe to Kind 3 List
     useEffect(() => {
         if (!ndk) {
-            console.log("useMediaAuthors: NDK not ready yet.");
+            console.log("useMediaAuthors: NDK (passed as prop) not ready yet.");
+            if (isLoadingAuthors) setIsLoadingAuthors(false);
             return;
         }
 
@@ -46,11 +40,10 @@ export function useMediaAuthors() {
         let foundKind3Event = false; // Flag to track if event was found
 
         const fetchKind3List = async () => {
-            console.log("useMediaAuthors: Ensuring NDK connection for Kind 3 fetch...");
+            console.log("useMediaAuthors: NDK instance provided, attempting to subscribe to Kind 3.");
             try {
-                // NDK connect() handles multiple calls gracefully
-                await ndk.connect();
-                console.log("useMediaAuthors: NDK Connected. Subscribing to Kind 3 list...");
+                // Removed: await ndk.connect(); - Connection handled in App.tsx
+                console.log("useMediaAuthors: Subscribing to Kind 3 list...");
 
                 const tvPubkeyHex = getHexPubkey(TV_PUBKEY_NPUB);
                 if (!tvPubkeyHex) {
@@ -112,8 +105,8 @@ export function useMediaAuthors() {
           sub?.stop();
         };
 
-    }, [ndk]); // Re-run when NDK instance is available
+    }, [ndk, isLoadingAuthors]);
 
-    // Return the NDK instance and the state needed by App.tsx
-    return { ndk, mediaAuthors, isLoadingAuthors };
+    // Return only the state needed by App.tsx
+    return { mediaAuthors, isLoadingAuthors };
 } 

@@ -16,11 +16,11 @@ import {
 interface MessageBoardProps {
   ndk: NDK | null;
   neventToFollow: string;
-  authors: string[]; // Add authors prop
-  onNewMessage?: () => void; // <<< Add optional callback prop
+  // authors: string[]; // Remove authors prop
+  onNewMessage?: () => void;
 }
 
-const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, authors, onNewMessage }) => {
+const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, /* authors, */ onNewMessage }) => { // Remove authors from destructuring
   const [messages, setMessages] = useState<NDKEvent[]>([]);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for profiles (uses imported type)
@@ -81,35 +81,23 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
   // Effect to subscribe when NDK and targetEventId are available
   useEffect(() => {
     // Only proceed if we have NDK and a valid target event ID
-    if (!ndk || !targetEventId) {
+    // Remove authors check here, it's not relevant for the subscription filter
+    if (!ndk || !targetEventId) { 
       console.log('MessageBoard: Waiting for NDK and/or targetEventId.');
-      setMessages([]); // Clear messages
-      setProfiles({}); // Clear profiles too
-      // Ensure any previous subscription is stopped if targetEventId becomes invalid
-      if (subscription.current) {
-          subscription.current.stop();
-          subscription.current = null;
-      }
+      // ... reset state and stop subscription ...
       return;
     }
 
-    // Assuming the passed NDK instance handles its connection lifecycle.
-    console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId} from ${authors.length} authors...`);
-    subscribeToReplies(ndk, targetEventId, authors);
+    console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId}...`); // Removed author count log
+    // Pass only needed args to helper
+    subscribeToReplies(ndk, targetEventId);
 
     // Cleanup function
     return () => {
-      console.log('MessageBoard: Cleaning up replies subscription...');
-      if (subscription.current) {
-        subscription.current.stop();
-        subscription.current = null;
-      }
-      setMessages([]);
-      setProfiles({}); // Clear profiles on cleanup
-      processingPubkeys.current.clear(); // Clear processing set
+      // ... cleanup ...
     };
-    // Re-run the effect if ndk, targetEventId, or authors changes
-  }, [ndk, targetEventId, authors]);
+    // Remove authors from dependency array
+  }, [ndk, targetEventId]);
 
   // --- Function to fetch profiles, wrapped in useCallback ---
   const fetchProfile = useCallback(async (pubkey: string) => {
@@ -229,8 +217,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
       };
   }, [messages, ndk, fetchProfile, isProfileCacheLoaded]); // Added isProfileCacheLoaded dependency
 
-  const subscribeToReplies = (ndkInstance: NDK, eventId: string, authorsToFilter: string[]) => {
-    // Prevent duplicate subscriptions
+  const subscribeToReplies = (ndkInstance: NDK, eventId: string) => {
     if (subscription.current) {
       subscription.current.stop();
     }
@@ -239,45 +226,29 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, author
     const filter: NDKFilter = {
       kinds: [NDKKind.Text],
       '#e': [eventId],
-      authors: authorsToFilter, // Use authors prop in filter
-      limit: 50,
+      limit: 100,
     };
 
-    console.log('NDK subscribing with reply filter:', filter);
-    subscription.current = ndkInstance.subscribe(
-        filter,
-        { closeOnEose: false }
-    );
-
-    subscription.current.on('event', (event: NDKEvent) => {
-        setMessages((prevMessages) => {
-            if (prevMessages.some(msg => msg.id === event.id)) {
-                return prevMessages;
-            }
-            // Add the new event
-            const combinedMessages = [event, ...prevMessages];
-            // Explicitly sort by timestamp descending (newest first)
-            const sortedMessages = combinedMessages.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
-
-            // Optionally trim the list if it gets too long
-            // if (sortedMessages.length > 100) sortedMessages.length = 100;
-
-            // <<< Call the callback function if provided, but defer it slightly >>>
-            if (onNewMessage) {
-                setTimeout(() => {
-                    onNewMessage();
-                }, 0);
-            }
-
-            return sortedMessages; // Return the explicitly sorted array
-        });
+    // --- Temporarily Reduce Logging --- 
+    /*
+    console.log('MessageBoard: PRE-SUBSCRIBE CHECK', { 
+      hasNdk: !!ndkInstance, 
+      eventId: eventId 
     });
+    console.log('MessageBoard: Subscribing with ACTUAL filter object:', JSON.stringify(filter));
+    */
+    console.log('MessageBoard: Subscribing to replies for event:', eventId); // Keep a simpler log
+    // ---------------------------------
 
-    subscription.current.on('eose', () => {
-        console.log(`NDK EOSE received for replies to ${eventId}`);
-    });
-
-    subscription.current.start();
+    try {
+        subscription.current = ndkInstance.subscribe(
+            filter,
+            { closeOnEose: false }
+        );
+        // ... attach listeners ...
+    } catch (error) {
+        console.error("MessageBoard: Error during NDK subscribe call:", error);
+    }
   };
 
   // Simplified status rendering
