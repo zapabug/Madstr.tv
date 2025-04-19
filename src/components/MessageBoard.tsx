@@ -1,6 +1,6 @@
 // Removed websocket-polyfill import
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKKind, NDKFilter } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools'; // Import nip19 for decoding
 import { useNDK } from '@nostr-dev-kit/ndk-hooks'; // Import useNDK
 import { useSubscribe, useProfile } from '@nostr-dev-kit/ndk-hooks'; // Import useSubscribe and useProfile
@@ -68,8 +68,10 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ neventToFollow, onNewMessag
         console.error('MessageBoard: Failed to decode nevent or extract ID:', cleanNevent);
         setTargetEventId(null);
       } else {
-        console.log('MessageBoard: Decoded nevent ID:', decoded.data.id);
-        setTargetEventId(decoded.data.id);
+        const eventId = decoded.data.id;
+        console.log('MessageBoard: Decoded nevent ID:', eventId); // Log the ID itself
+        setTargetEventId(eventId);
+        console.log('MessageBoard: targetEventId state successfully set to:', eventId); // Log after setting state
       }
     } catch (error) {
       console.error('MessageBoard: Error decoding nevent:', neventToFollow, error);
@@ -77,24 +79,27 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ neventToFollow, onNewMessag
     }
   }, [neventToFollow]);
 
-  // Derive the filter directly using useMemo based on targetEventId
-  const subscriptionFilter = useMemo(() => {
-    if (targetEventId) {
-      console.log('MessageBoard: Creating filter for event:', targetEventId);
-      return [{
-        kinds: [NDKKind.Text],
-        '#e': [targetEventId],
-        limit: 100, // Keep limit or adjust as needed
+  // Calculate the filter directly based on the current targetEventId state
+  let subscriptionFilter: NDKFilter[] = [];
+  if (targetEventId) {
+      console.log('MessageBoard: Calculating filter for event:', targetEventId);
+      subscriptionFilter = [{
+          kinds: [NDKKind.Text],
+          '#e': [targetEventId],
+          limit: 100, // Keep original limit for now
       }];
-    } 
-    console.log('MessageBoard: No targetEventId, returning empty filter array.');
-    return []; // Return empty array if no targetEventId
-  }, [targetEventId]); // Depend only on targetEventId
+  } else {
+      console.log('MessageBoard: targetEventId is null, using empty filter array.');
+  }
+
+  console.log('[MessageBoard] Filter being passed to useSubscribe:', subscriptionFilter); // Log the filter being used
 
   const { events: messages } = useSubscribe(subscriptionFilter, {
     closeOnEose: false,
     groupable: false, // Keep replies separate
-  }); 
+  });
+
+  console.log('[MessageBoard] Passed filter to useSubscribe:', JSON.stringify(subscriptionFilter));
 
   // Effect to call onNewMessage when new messages arrive
   useEffect(() => {
@@ -105,15 +110,14 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ neventToFollow, onNewMessag
     previousMessageCount.current = messages.length;
   }, [messages, onNewMessage]);
 
+  console.log('[MessageBoard] Received messages count:', messages.length); // Log the count of received messages
+
   const renderStatus = () => {
     if (!ndk) {
       return <p className="text-center text-gray-500">Connecting to Nostr...</p>;
     }
     if (!targetEventId) {
         return <p className="text-center text-gray-500">Waiting for target event...</p>;
-    }
-    if (!subscriptionFilter[0]) {
-        return <p className="text-center text-gray-500">Initializing filter...</p>; // Should be brief
     }
     if (messages.length === 0) {
       return <p className="text-center text-gray-500">No replies found yet.</p>;
