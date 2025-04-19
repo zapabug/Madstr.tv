@@ -46,3 +46,145 @@ With these changes:
 4.  The `MessageBoard` now successfully displays messages and **profile images for all authors, including the app itself (TugaTV)**, thanks to the subscription model for profile data that leverages the streaming nature of Nostr.
 
 The application should now be more robust in fetching necessary data from Nostr relays. 
+
+
+
+
+# Refactoring Status & Issues (Post NDK Hooks/Auth/Wallet Integration)
+
+This document summarizes the current state of the application after integrating authentication, hashtag following, a Cashu wallet, and refactoring to use NDK Hooks.
+
+## 1. Current Issues
+
+*   **Fixed:** ~~Persistent `useSubscribe` TypeError:~~ Resolved.
+*   **Fixed:** ~~TypeError: ndk.debug.extend is not a function:~~ Resolved.
+*   **Fixed:** ~~Potential DDoS / Excessive Connection Attempts:~~ Resolved by centralizing connection logic.
+*   **Addressing:** **Relay Connection Failure:** Connection logic simplified further. Moved `connect()` back to `ndk.ts` to ensure it's called once upon module load. Still monitoring connection success.
+*   **Fixed:** ~~No Media Content Loading (Kind 3 Fetch Stall):~~ Logic fixed, awaiting successful relay connections.
+*   **Implemented:** Wallet features implemented.
+*   **Note:** `MessageBoard` component removed during refactoring (see Completed Fixes).
+
+## 2. Implemented Features (Confirmed Working)
+
+*   **NDK Hooks Integration:** Custom hooks replaced with `@nostr-dev-kit/ndk-hooks` (`useSubscribe`, `useProfile`).
+*   **NDK Singleton & Init:** Implemented (`src/ndk.ts`, `useNDK`, `useNDKInit` in `App.tsx`). NDK instance properly passed to hooks.
+*   **Authentication:** Structure implemented (`useAuth`), uses NDK signer. Login/logout flow verified.
+*   **Hashtag Following:** Structure implemented (`SettingsModal`, `useAuth`). Integration with fetching functional.
+*   **Media Fetching Logic (Refactored):** Hook (`useMediaContent`) and filter utilities (`buildMediaFilters`) implemented. Kind 3 fetch logic fixed and media subscriptions re-enabled.
+*   **Internal Cashu Wallet (`useWallet`):** Structure and helpers implemented. Fixed interaction with `useSubscribe` by adding NDK readiness check. Deposit listener re-enabled in `SettingsModal`.
+
+## 3. Completed Fixes
+
+1.  **Fixed `useWallet` / `useSubscribe` Interaction:**
+    *   Modified `useWallet.ts` to accept an NDK instance parameter and check for NDK connectivity before loading wallet state.
+    *   Added an effect in `useWallet` to load wallet state only when NDK is connected.
+    *   Added proper NDK null handling in `App.tsx` and `SettingsModal.tsx`.
+
+2.  **Fixed Kind 3 Fetch Stall:**
+    *   Added a condition in `useMediaContent.ts` to only subscribe to media events when NDK is ready AND Kind 3 loading is complete.
+    *   Made isNdkReady a dependency in the Kind 3 processing effect.
+
+3.  **Re-enabled Media Subscriptions:**
+    *   Uncommented the image, video, and podcast subscriptions in `useMediaContent.ts` with proper conditional filters.
+
+4.  **Re-enabled Wallet Functionality:**
+    *   Re-enabled deposit listener in `SettingsModal.tsx`.
+    *   Wallet now properly depends on NDK readiness.
+
+5.  **MessageBoard Removal (During Debugging/Refactor):**
+    *   The `MessageBoard` component was temporarily removed as part of a larger refactoring and debugging effort focused on resolving NDK hook issues and simplifying the component structure. While initial debugging *did* investigate the `MessageBoard` (see historical sections above), its removal was primarily to isolate other potential problems and was not the direct solution to the underlying connection/fetching issues, which were addressed separately.
+
+6.  **Fixed TypeError: filter is undefined:**
+    *   Implemented properly structured empty filters: `[{ kinds: [], limit: 1 }]` instead of `[]`.
+    *   Added explicit checking for NDK readiness in all components and hooks.
+    *   Added multiple layers of connection status verification before attempting subscriptions.
+    *   Improved log visibility for connection state to aid debugging.
+    *   Added explicit connect() calls in multiple places to ensure connectivity.
+
+7.  **Added Relay Connection Handling:**
+    *   Modified ndk.ts to include explicit connect() call.
+    *   Added connection retry logic in App.tsx and useMediaContent.
+    *   Added event listeners to monitor relay connect/disconnect events.
+
+8.  **Enhanced Relay Connection Debugging:**
+    *   Added direct WebSocket connectivity testing for each relay.
+    *   Implemented individual relay status monitoring.
+    *   Added more detailed connection logging.
+    *   Enabled NDK debug mode to expose underlying connection issues.
+    *   Added connection event listeners to track relay state changes.
+
+9.  **Improved Relay Reliability:**
+    *   Updated relay list to use the most reliable known relays.
+    *   Added fallback relay list to increase connection options.
+    *   Removed potentially problematic relays.
+    *   Implemented sequential connection strategy to maximize connectivity.
+
+10. **Fixed NDK Debug TypeError:**
+    *   Removed the `debug: true` option from the NDK constructor in `src/ndk.ts` to resolve the `ndk.debug.extend is not a function` TypeError.
+
+11. **Centralized NDK Connection Logic (Attempt 1 - In App.tsx):**
+    *   Removed redundant `connect()` calls from `useEffect` hooks in `App.tsx` and `useMediaContent.ts`.
+    *   Attempted to initiate connection from `App.tsx` `useEffect` based on `ndk` availability from `useNDK()`.
+    *   *Result:* This caused timing issues, as the effect ran before the `ndk` instance was fully ready.
+
+12. **Centralized NDK Connection Logic (Attempt 2 - In ndk.ts):**
+    *   Removed the `connect()` `useEffect` from `App.tsx`.
+    *   Restored the single `ndkInstance.connect()` call within `src/ndk.ts` to ensure connection is initiated exactly once when the NDK singleton is created.
+
+## 4. Refactoring Principles Applied
+
+*   **NDK Initialization:** Corrected to use `useEffect` in `App.tsx`. NDK passed as prop to hooks needing it.
+*   **Sequential Loading:** Implemented proper sequence: NDK init → Auth → Wallet → Kind 3 fetch → Media subscriptions.
+*   **Conditional Subscriptions:** Implemented conditional filter creation based on NDK readiness and previous data availability.
+*   **Error Elimination:** Resolved TypeErrors by ensuring proper initialization order and handling potential null values.
+*   **Component Integration:** Properly integrated components with NDK and hooks.
+*   **Safe Defaults:** Used properly structured empty filters to prevent errors when subscriptions aren't ready.
+*   **Connection Resilience:** Added multiple layers of connection checking and retry mechanisms.
+
+## 5. Pending Items & Future Work
+
+1. **Fix Relay Connections:** Investigate why relay connections fail despite explicit connect() calls. Possible causes:
+   * WebSocket failures due to CORS or network issues
+   * Relay URL format issues
+   * Relay server availability issues
+   * WebSocket protocol support in the browser environment
+
+2. **Test Wallet Features:** Test wallet functionality (balance, tipping, mint URL).
+
+3. **Verify Auth/NIP-46:** Confirm login/logout, NIP-46 connection, and session restoration.
+
+4. **Performance Optimization:** Consider optimizing the frequency of state updates and filter rebuilds.
+
+5. **UI Enhancements:** Add loading indicators or placeholders during data fetching.
+
+6. **Error Handling:** Implement comprehensive error handling for network issues.
+
+## 6. Lessons Learned
+
+*   **Initialization Order Matters:** Component and hook initialization sequence affects the behavior of the application.
+*   **NDK Readiness Checks:** Always check NDK connectivity before initiating operations that depend on relay connections.
+*   **Conditional Filter Generation:** Generate filters conditionally to avoid undefined filter errors.
+*   **Sequential Loading:** Structure code to respect dependencies (e.g., Kind 3 → media filters → subscriptions).
+*   **Structured Empty Filters:** Always use properly structured empty filters `[{ kinds: [], limit: 1 }]` instead of `[]` to avoid TypeErrors.
+*   **Connection Verification:** Verify actual connections (not just NDK instance existence) before performing operations.
+*   **Multi-Layer Resilience:** Implement connection logic at multiple levels to ensure reliability.
+*   **Logging Strategy:** Implement detailed logging to aid in troubleshooting connectivity issues.
+
+### 13. Playback Hook and Video Player Refinement
+
+*   **Problem:** Video playback did not reliably pause when requested via the media panel controls. Autoplay behavior for audio vs. video needed explicit control. Linter errors appeared after modifying `useMediaElementPlayback` due to missing props and incorrect hook usage within `VideoPlayer`.
+*   **Solution (`useMediaElementPlayback.ts`):**
+    *   Added `autoplayEnabled` and `next` boolean props to the hook's interface (`UseMediaElementPlaybackProps`).
+    *   Modified `handleCanPlay` to only attempt `play()` if `elementType === 'audio'` and `autoplayEnabled` is true.
+    *   Modified `handleEnded` to call `onEnded` only if `elementType === 'video'` and `next` is true, or if `elementType === 'audio'`.
+    *   Fixed "used before assigned" errors by defining `play` and `pause` callbacks before the event handlers that use them.
+*   **Solution (`App.tsx`):**
+    *   Updated calls to `useMediaElementPlayback` to pass the new `autoplayEnabled` and `next` props (Audio: true/true, Video: false/true).
+*   **Solution (`VideoPlayer.tsx`):**
+    *   **Refactored Context:** Added `ndkInstance`, `isNdkReady`, `auth`, `wallet` to `VideoPlayerProps` and removed internal calls to `useWallet`, `useAuth`, `useMediaAuthors`.
+    *   Updated `App.tsx` to pass this context as props to `<VideoPlayer>`.
+    *   Used passed props for tipping logic and removed invalid `ndk` param from `SendTipParams`.
+    *   Corrected `videoRef` prop type.
+    *   **Removed Redundant Logic:** Deleted internal `useEffect` that duplicated play/pause control, ensuring `useMediaElementPlayback` is the single source of truth for playback state.
+    *   **Overlay Button Fix:** Changed the visibility condition of the overlay play button to `!isPlaying` to correctly show it when paused or when switching to video mode without autoplay.
+*   **Result:** Linter errors resolved. Video playback control is now solely managed by `useMediaElementPlayback`, allowing pausing via the media panel. Autoplay behavior is explicitly controlled. The video overlay button appears correctly when playback is not active. 

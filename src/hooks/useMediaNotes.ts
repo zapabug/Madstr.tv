@@ -70,106 +70,117 @@ export function useMediaNotes({
     const prevUntilRef = useRef<number | undefined>(until);
     const prevFollowedTagsRef = useRef<string[] | undefined>(followedTags);
 
+    // <<< Add logging for image type specifically >>>
+    if (mediaType === 'image') {
+        console.log("useMediaNotes (image): Hook rendering/re-rendering.", { authors, limit, until, followedTags });
+    }
+
     const processEvent = useCallback((event: NDKEvent, _urlRegex: RegExp, type: MediaType): NostrNote | null => {
-        // Use specific regex for fallback, but m-tag is primary
         const urlRegex = getUrlRegexForMediaType(type);
-        console.log(`processEvent (${type}): Checking event ${event.id}`, { content: event.content, tags: event.tags });
+        if (type === 'image') {
+            console.log(`processEvent (image): Checking event ${event.id}`, { content: event.content.substring(0, 100), tags: event.tags });
+        }
 
         let mediaUrl: string | undefined;
         let foundVia: string | null = null;
-        let isVideoByMimeType = false;
 
-        // --- Logic adjusted to prioritize Mime Type ('m' tag) --- 
-
-        // 1. Check for VIDEO MIME type tag ('m') first
-        if (type === 'video') { 
-            const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('video/'));
-            if (mimeTag) {
-                console.log(`processEvent (${type}): Found video MIME type tag:`, mimeTag[1]);
-                isVideoByMimeType = true;
-                // Now find the associated URL, prioritizing specific tags
-                const urlTag = event.tags.find((t) => t[0] === 'url');
-                if (urlTag && urlTag[1]) {
-                    mediaUrl = urlTag[1];
-                    foundVia = 'm tag + url tag';
-                }
-                if (!mediaUrl) {
-                    const mediaTag = event.tags.find((t) => t[0] === 'media');
-                    if (mediaTag && mediaTag[1]) {
-                        mediaUrl = mediaTag[1];
-                        foundVia = 'm tag + media tag';
-                    }
-                }
-                // Fallback to content regex IF mime type was found but no url/media tag
-                if (!mediaUrl) {
-                    const genericUrlRegex = /https?:\/\/\S+/i; // Use generic regex here
-                    const contentMatch = event.content.match(genericUrlRegex);
-                    if (contentMatch) {
-                        mediaUrl = contentMatch[0];
-                        foundVia = 'm tag + content regex';
-                    }
-                }
+        // --- Prioritize specific tags based on type --- 
+        
+        if (type === 'image') {
+            // 1. Prioritize 'image' tag for images
+            const imageTag = event.tags.find((t) => t[0] === 'image');
+            if (imageTag && imageTag[1]?.match(urlRegex)) {
+                mediaUrl = imageTag[1];
+                foundVia = 'image tag';
             }
-        }
-
-        // 2. Fallback: If not identified as video by MIME type OR if type is not video,
-        //    use the original logic (checking tags + regex)
-        if (!mediaUrl) { // Check if URL was found via m-tag path OR if type wasn't video
-            if (isVideoByMimeType) {
-                console.log(`processEvent (${type}): Identified by MIME type but failed to find URL via tags/content.`);
-            } else {
-                 console.log(`processEvent (${type}): No video MIME type found (or not video type), falling back to URL regex checks.`);
+            // 2. Check 'url' tag for image types
+            if (!mediaUrl) {
+                 const urlTag = event.tags.find((t) => t[0] === 'url');
+                 if (urlTag && urlTag[1]?.match(urlRegex)) {
+                     mediaUrl = urlTag[1];
+                     foundVia = 'url tag + image regex';
+                 }
             }
-
-            const urlTag = event.tags.find((t) => t[0] === 'url');
-            if (urlTag && urlTag[1]?.match(urlRegex)) {
-                mediaUrl = urlTag[1];
-                foundVia = 'url tag + regex';
-            }
-
+            // 3. Check 'media' tag for image types
             if (!mediaUrl) {
                  const mediaTag = event.tags.find((t) => t[0] === 'media');
                  if (mediaTag && mediaTag[1]?.match(urlRegex)) {
                      mediaUrl = mediaTag[1];
-                     foundVia = 'media tag + regex';
+                     foundVia = 'media tag + image regex';
                  }
             }
-            
-            // Check type-specific tags only relevant for non-video (keep podcast/image logic here)
-            if (!mediaUrl && type === 'podcast') {
-                const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
-                if (enclosureTag && enclosureTag[1]?.match(urlRegex)) {
-                    mediaUrl = enclosureTag[1];
-                    foundVia = 'enclosure tag + regex';
-                }
-            } else if (!mediaUrl && type === 'image') {
-                const imageTag = event.tags.find((t) => t[0] === 'image');
-                if (imageTag && imageTag[1]?.match(urlRegex)) {
-                    mediaUrl = imageTag[1];
-                    foundVia = 'image tag + regex';
-                }
-            }
-            
-            // Fallback to content regex (using the specific type regex)
+            // 4. Check for image MIME type ('m' tag) + associated 'url' tag
             if (!mediaUrl) {
-                console.log(`processEvent (${type}): Checking content fallback for event ${event.id}. Regex: ${urlRegex}`); // Keep log
-                console.log(`processEvent (${type}): Content to check:`, JSON.stringify(event.content)); // Keep log
-                const contentMatch = event.content.match(urlRegex);
-                console.log(`processEvent (${type}): Content match result:`, contentMatch); // Keep log
-                if (contentMatch) {
-                    mediaUrl = contentMatch[0];
-                    foundVia = 'content regex';
-                }
+                 const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('image/'));
+                 if (mimeTag) {
+                     const associatedUrlTag = event.tags.find((t) => t[0] === 'url');
+                     if (associatedUrlTag && associatedUrlTag[1]?.match(urlRegex)) {
+                         mediaUrl = associatedUrlTag[1];
+                         foundVia = 'm tag (image) + url tag';
+                     }
+                 }
+            }
+        } else if (type === 'video') {
+            // Video logic (prioritizing mime type first, then url/media)
+            const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('video/'));
+            if (mimeTag) {
+                 foundVia = 'm tag (video)';
+                 const urlTag = event.tags.find((t) => t[0] === 'url');
+                 if (urlTag && urlTag[1]) { mediaUrl = urlTag[1]; foundVia += ' + url tag'; }
+                 if (!mediaUrl) {
+                     const mediaTag = event.tags.find((t) => t[0] === 'media');
+                     if (mediaTag && mediaTag[1]) { mediaUrl = mediaTag[1]; foundVia += ' + media tag'; }
+                 }
+                 // Only fallback to content regex if video mime type was found but no URL tag
+                 if (!mediaUrl) {
+                     const genericUrlRegex = /https?:\/\/\S+/i;
+                     const contentMatch = event.content.match(genericUrlRegex);
+                     if (contentMatch) { mediaUrl = contentMatch[0]; foundVia += ' + content regex fallback'; }
+                 }
+            } else {
+                 // Fallback checks if no video mime type
+                 const urlTag = event.tags.find((t) => t[0] === 'url');
+                 if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia = 'url tag + video regex'; }
+                 if (!mediaUrl) {
+                     const mediaTag = event.tags.find((t) => t[0] === 'media');
+                     if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + video regex'; }
+                 }
+            }
+        } else if (type === 'podcast') {
+            // Podcast logic (prioritizing enclosure, then url/media)
+            const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
+            if (enclosureTag && enclosureTag[1]?.match(urlRegex)) { mediaUrl = enclosureTag[1]; foundVia = 'enclosure tag'; }
+            if (!mediaUrl) {
+                 const urlTag = event.tags.find((t) => t[0] === 'url');
+                 if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia = 'url tag + audio regex'; }
+            }
+            if (!mediaUrl) {
+                 const mediaTag = event.tags.find((t) => t[0] === 'media');
+                 if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + audio regex'; }
+            }
+        }
+
+        // --- Fallback to content regex LAST for all types --- 
+        if (!mediaUrl) {
+            const contentMatch = event.content.match(urlRegex);
+            if (contentMatch) {
+                mediaUrl = contentMatch[0];
+                foundVia = 'content regex fallback';
+                console.log(`processEvent (${type}): URL found via CONTENT REGEX fallback for event ${event.id}`);
             }
         }
 
         // --- End of URL Finding Logic --- 
 
         if (!mediaUrl) {
-            console.log(`processEvent (${type}): Skipping event ${event.id} - No valid URL found via m-tag or fallback checks.`);
+            if (type === 'image') {
+                console.log(`processEvent (image): Skipping event ${event.id} - No valid URL found in tags or content.`);
+            }
             return null;
         } else {
-             console.log(`processEvent (${type}): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
+            if (type === 'image') {
+                 console.log(`processEvent (image): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
+            }
         }
 
         // 2. Extract Metadata (Example)
@@ -203,14 +214,22 @@ export function useMediaNotes({
         let changedDeps: string[] = [];
         if (prevNdkRef.current !== ndk) changedDeps.push('ndk');
         // Shallow compare arrays for changes
-        if (JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors)) changedDeps.push('authors');
+        if (JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors)) {
+            changedDeps.push('authors');
+            if (mediaType === 'image') {
+                console.log(`useMediaNotes (image): ** Authors prop changed! ** Prev: ${prevAuthorsRef.current?.length ?? 0}, New: ${authors.length}`);
+            }
+        }
         if (prevMediaTypeRef.current !== mediaType) changedDeps.push('mediaType');
         if (prevLimitRef.current !== limit) changedDeps.push('limit');
         if (prevUntilRef.current !== until) changedDeps.push('until');
         if (JSON.stringify(prevFollowedTagsRef.current) !== JSON.stringify(followedTags)) changedDeps.push('followedTags');
         
-        if (changedDeps.length > 0) {
-            console.log(`useMediaNotes (${mediaType}): Effect triggered by changed dependencies:`, changedDeps.join(', '));
+        if (mediaType === 'image') {
+             if (changedDeps.length > 0) {
+                 console.log(`useMediaNotes (image): Effect triggered by changed dependencies:`, changedDeps.join(', '));
+             }
+             console.log(`useMediaNotes (image): Effect check`, { isFetching: isFetching.current, hasNdk: !!ndk, numAuthors: authors.length });
         }
         // Update previous value refs *after* comparison
         prevNdkRef.current = ndk;
@@ -245,6 +264,12 @@ export function useMediaNotes({
         const urlRegex = getUrlRegexForMediaType(mediaType);
 
         const fetchAndSubscribe = async () => {
+            // ... cache check ...
+            if (mediaType === 'image') {
+                console.log(`useMediaNotes (image): Checking cache for ${authorsList.length} authors.`);
+                // Add more detail on cache results if needed
+            }
+            
             // --- Cache Check (Always read and merge) ---
             console.log(`useMediaNotes (${mediaType}): Checking cache for ${authorsList.length} authors.`);
             // <<< Always try to load from cache >>>
@@ -283,22 +308,22 @@ export function useMediaNotes({
             // <<< End of modified cache handling >>>
             
             // --- Subscription --- 
-            console.log(`useMediaNotes (${mediaType}): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Until: ${until ? new Date(until * 1000).toISOString() : 'N/A'})...`);
             const filter: NDKFilter = {
                 kinds: kindsToFetch,
                 authors: authorsList,
                 limit: limit,
             };
-            // Add until filter if provided
             if (until !== undefined) {
                 filter.until = until;
             }
-            
-            // Add hashtag filter if tags are provided and not empty
             if (followedTags && followedTags.length > 0) {
-                // NDKFilter expects tags as lowercase strings
                 filter['#t'] = followedTags.map(tag => tag.toLowerCase()); 
-                console.log(`useMediaNotes (${mediaType}): Filtering by tags:`, filter['#t']);
+            }
+
+            // <<< Moved logging after filter definition >>>
+            if (mediaType === 'image') {
+                 console.log(`useMediaNotes (image): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Until: ${until ? new Date(until * 1000).toISOString() : 'N/A'})...`);
+                 if (filter['#t']) console.log(`useMediaNotes (image): Filtering by tags:`, filter['#t']);
             }
             
             // Stop previous subscription if it exists
@@ -311,18 +336,25 @@ export function useMediaNotes({
             currentSubscription.current.on('event', (event: NDKEvent) => {
                 const note = processEvent(event, urlRegex, mediaType);
                 if (note && !notesById.current.has(note.id)) {
-                    console.log(`useMediaNotes (${mediaType}): Adding new note ${note.id} from WS`);
+                    // <<< Log note add >>>
+                    if (mediaType === 'image') {
+                         console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
+                    }
                     notesById.current.set(note.id, note);
-                    // Don't update main state here, wait for EOSE to batch updates
                 }
             });
 
             currentSubscription.current.on('eose', () => {
-                console.log(`useMediaNotes (${mediaType}): EOSE received.`);
+                if (mediaType === 'image') {
+                    console.log(`useMediaNotes (image): EOSE received. Total notes in map: ${notesById.current.size}`);
+                }
                 const finalNotes = Array.from(notesById.current.values());
                 const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
                 if (isMounted) {
-                    console.log(`useMediaNotes (${mediaType}): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                    // <<< Log final state update >>>
+                    if (mediaType === 'image') {
+                        console.log(`useMediaNotes (image): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                    }
                     setNotes(sortedFinalNotes);
                     setIsLoading(false);
                     isFetching.current = false;
@@ -356,6 +388,10 @@ export function useMediaNotes({
     // Re-run effect if ndk, authors, mediaType, limit, or until changes
     }, [ndk, authors, mediaType, limit, until, followedTags, processEvent]); // <<< Add followedTags to dependency array
 
+    // <<< Log return value >>>
+    if (mediaType === 'image') {
+        console.log(`useMediaNotes (image): Returning state`, { notesLength: notes.length, isLoading });
+    }
     return {
         notes,
         isLoading,

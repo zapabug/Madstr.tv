@@ -15,12 +15,12 @@ import {
 // Define the props for the component
 interface MessageBoardProps {
   ndk: NDK | null;
-  neventToFollow: string;
-  // authors: string[]; // Remove authors prop
+  threadEventId: string;
   onNewMessage?: () => void;
+  isReady: boolean;
 }
 
-const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, /* authors, */ onNewMessage }) => { // Remove authors from destructuring
+const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMessage, isReady }) => {
   const [messages, setMessages] = useState<NDKEvent[]>([]);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for profiles (uses imported type)
@@ -51,20 +51,19 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, /* aut
       });
   }, []); // Run once on mount
 
-  // Effect to decode the nevent URI
+  // Effect to decode the threadEventId URI
   useEffect(() => {
-    if (!neventToFollow) {
-      console.error('MessageBoard: neventToFollow prop is missing.');
+    if (!threadEventId) {
+      console.error('MessageBoard: threadEventId prop is missing.');
       setTargetEventId(null);
       return;
     }
     try {
-      // Remove "nostr:" prefix if present before decoding
-      const cleanNevent = neventToFollow.startsWith('nostr:') 
-        ? neventToFollow.substring(6) 
-        : neventToFollow;
+      const cleanNevent = threadEventId.startsWith('nostr:') 
+        ? threadEventId.substring(6) 
+        : threadEventId;
         
-      const decoded = nip19.decode(cleanNevent); // Decode the cleaned string
+      const decoded = nip19.decode(cleanNevent);
       if (decoded.type !== 'nevent' || !decoded.data.id) {
         console.error('MessageBoard: Failed to decode nevent or extract ID:', cleanNevent);
         setTargetEventId(null);
@@ -73,31 +72,35 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, neventToFollow, /* aut
         setTargetEventId(decoded.data.id);
       }
     } catch (error) {
-      console.error('MessageBoard: Error decoding nevent:', neventToFollow, error);
+      console.error('MessageBoard: Error decoding nevent:', threadEventId, error);
       setTargetEventId(null);
     }
-  }, [neventToFollow]);
+  }, [threadEventId]);
 
-  // Effect to subscribe when NDK and targetEventId are available
+  // Effect to subscribe when NDK is ready and targetEventId are available
   useEffect(() => {
-    // Only proceed if we have NDK and a valid target event ID
-    // Remove authors check here, it's not relevant for the subscription filter
-    if (!ndk || !targetEventId) { 
-      console.log('MessageBoard: Waiting for NDK and/or targetEventId.');
-      // ... reset state and stop subscription ...
+    if (!isReady || !ndk || !targetEventId) { 
+      console.log('MessageBoard: Waiting for NDK readiness and/or targetEventId.');
+      setMessages([]); // Clear messages if not ready
+      if (subscription.current) {
+          subscription.current.stop();
+          subscription.current = null;
+      }
       return;
     }
 
-    console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId}...`); // Removed author count log
-    // Pass only needed args to helper
+    console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId}...`);
     subscribeToReplies(ndk, targetEventId);
 
     // Cleanup function
     return () => {
-      // ... cleanup ...
+      if (subscription.current) {
+          console.log("MessageBoard: Cleaning up subscription.");
+          subscription.current.stop();
+          subscription.current = null;
+      }
     };
-    // Remove authors from dependency array
-  }, [ndk, targetEventId]);
+  }, [isReady, ndk, targetEventId]);
 
   // --- Function to fetch profiles, wrapped in useCallback ---
   const fetchProfile = useCallback(async (pubkey: string) => {

@@ -72,6 +72,9 @@ export interface MediaPanelProps {
   // handleLeft?: () => void; 
   // handleRight?: () => void;
   // onFocusRightEdge?: () => void; 
+
+  // <<< Add signalInteraction prop >>>
+  signalInteraction: () => void;
 }
 
 // --- The Unified MediaPanel Component (Reverted) ---
@@ -99,6 +102,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     currentVideoIndex,
     onVideoSelect,
     authors, // <<< Use added prop
+    signalInteraction,
 }) => {
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
@@ -121,7 +125,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   const mainContainerRef = useRef<HTMLDivElement>(null); 
   const toggleButtonRef = useRef<HTMLButtonElement>(null); // Mode Toggle Button
 
-  // Use inactivity timer (No change)
+  // <<< Revert useInactivityTimer call >>>
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
 
   // --- Effects --- (Mostly unchanged, check dependencies)

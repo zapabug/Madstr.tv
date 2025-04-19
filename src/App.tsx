@@ -2,7 +2,6 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import ndkInstance from './ndk'; // <-- Import the singleton NDK instance
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
-import MessageBoard from './components/MessageBoard';
 import MediaPanel from './components/MediaPanel';
 import RelayStatus from './components/RelayStatus';
 import VideoPlayer from './components/VideoPlayer';
@@ -21,6 +20,8 @@ import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
 import { useAuth } from './hooks/useAuth';
+import { useWallet } from './hooks/useWallet'; // <<< Import useWallet >>>
+import MessageBoard from './components/MessageBoard'; // <-- Import MessageBoard
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -33,18 +34,21 @@ const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 function App() {
   // --- NDK Initialization (Using Hook) ---
   const { isConnecting: isNdkConnecting, connectionError: ndkConnectionError, ndkInstance } = useNDKInit();
-  // Note: ndkInstance returned here is the same singleton, used for clarity if needed
+  const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
 
   // Use the authors hook, passing the singleton ndk instance
   const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance });
 
   // --- Auth Hook --- 
-  const auth = useAuth(ndkInstance); // Pass NDK instance back in, as the hook definition likely still expects it
-  const { followedTags } = auth; // Get followedTags from auth state
+  const auth = useAuth(ndkInstance);
+  const { followedTags } = auth;
+
+  // --- Wallet Hook --- <<< Initialize useWallet here >>>
+  const wallet = useWallet({ ndkInstance, isNdkReady });
 
   // State for fetch parameters
-  const [imageFetchLimit] = useState<number>(200);
-  const [videoFetchLimit] = useState<number>(200);
+  const [imageFetchLimit] = useState<number>(500);
+  const [videoFetchLimit] = useState<number>(30);
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
 
@@ -52,29 +56,29 @@ function App() {
   const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'podcast', 
-    ndk: ndkInstance, // <-- Pass singleton (no need for || null)
-    limit: 200 // Keep podcast limit fixed for now
+    ndk: ndkInstance, 
+    limit: 25
   });
   const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'video', 
-    ndk: ndkInstance, // <-- Pass singleton
-    limit: videoFetchLimit, 
+    ndk: ndkInstance, 
+    limit: videoFetchLimit,
     until: videoFetchUntil,
-    followedTags: followedTags // Restore tag filtering
+    followedTags: followedTags
   });
   const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'image', 
-    ndk: ndkInstance, // <-- Pass singleton
-    limit: imageFetchLimit, 
+    ndk: ndkInstance, 
+    limit: imageFetchLimit,
     until: imageFetchUntil,
-    followedTags: followedTags // Restore tag filtering
+    followedTags: followedTags
   });
   
   // State for shuffled notes for display
   const [shuffledImageNotes, setShuffledImageNotes] = useState<NostrNote[]>([]);
-  const [shuffledVideoNotes, setShuffledVideoNotes] = useState<NostrNote[]>([]);
+  const [uniqueVideoNotes, setUniqueVideoNotes] = useState<NostrNote[]>([]);
 
   // State for podcast saved position
   const [initialPodcastTime] = useState<number>(0);
@@ -103,20 +107,23 @@ function App() {
     currentImageIndex,
     currentPodcastIndex,
     currentVideoIndex,
-    currentItemUrl, 
     handleVideoSelect, 
     handlePrevious,
     handleNext, 
     setViewMode, 
     setCurrentPodcastIndex,
+    imageNotes: stateImageNotes, 
+    podcastNotes: statePodcastNotes, 
+    videoNotes: stateVideoNotes,
+    currentItemUrl,
   } = useMediaState({ 
       initialImageNotes: shuffledImageNotes, 
       initialPodcastNotes: podcastNotes,
-      initialVideoNotes: shuffledVideoNotes,
+      initialVideoNotes: uniqueVideoNotes,
       fetchOlderImages: fetchOlderImages, 
       fetchOlderVideos: fetchOlderVideos,
       shuffledImageNotesLength: shuffledImageNotes.length,
-      shuffledVideoNotesLength: shuffledVideoNotes.length,
+      shuffledVideoNotesLength: uniqueVideoNotes.length,
   });
 
   // Effects for shuffling notes
@@ -126,19 +133,27 @@ function App() {
   }, [imageNotes]);
 
   useEffect(() => {
-    console.log('App.tsx: Effect running: Deduplicating and shuffling videoNotes'); // Log effect run
+    console.log('App.tsx: Effect running: Deduplicating videoNotes (No Shuffling)'); // Log effect run
     // --- Deduplicate video notes by URL, keeping the newest --- 
     const uniqueVideoNotesMap = new Map<string, NostrNote>();
     for (const note of videoNotes) {
-        if (note.url && !uniqueVideoNotesMap.has(note.url)) {
-            uniqueVideoNotesMap.set(note.url, note);
+        // Ensure URL exists before adding to map
+        if (note.url) { 
+            // If URL not seen, or this note is newer than the one stored, update map
+             if (!uniqueVideoNotesMap.has(note.url) || note.created_at > (uniqueVideoNotesMap.get(note.url)?.created_at ?? 0)) {
+                 uniqueVideoNotesMap.set(note.url, note);
+             }
+        } else {
+             console.warn(`App: Video note ${note.id} missing URL, skipping deduplication.`);
         }
     }
-    const uniqueVideoNotes = Array.from(uniqueVideoNotesMap.values());
-    console.log(`App: Deduplicated ${videoNotes.length} video notes to ${uniqueVideoNotes.length} unique URLs.`);
+    // Sort by created_at descending *after* deduplication
+    const deduplicatedNotes = Array.from(uniqueVideoNotesMap.values())
+                                  .sort((a, b) => b.created_at - a.created_at); 
+    console.log(`App: Deduplicated ${videoNotes.length} video notes to ${deduplicatedNotes.length} unique URLs.`);
 
-    // --- Shuffle the unique video notes --- 
-    setShuffledVideoNotes(shuffleArray(uniqueVideoNotes)); 
+    // --- Set the unique, unshuffled video notes --- 
+    setUniqueVideoNotes(deduplicatedNotes); // <-- No shuffleArray() call
 
   }, [videoNotes]);
 
@@ -149,11 +164,6 @@ function App() {
     checkInterval: CHECK_INTERVAL,
   });
 
-  // Callback for MessageBoard
-  const handleNewMessage = useCallback(() => {
-      signalMessage(); 
-  }, [signalMessage]);
-
   // Refs for media elements
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -162,25 +172,37 @@ function App() {
   const activeMediaRef = viewMode === 'videoPlayer' ? videoRef : audioRef;
   const playbackInitialTime = viewMode === 'imagePodcast' ? initialPodcastTime : 0;
 
-  // Media Playback Hook
-  const {
-    isPlaying,
-    currentTime,
-    duration,
-    playbackRate,
-    setPlaybackRate,
-    togglePlayPause,
-    handleSeek,
-    isMuted,
-    autoplayFailed,
-  } = useMediaElementPlayback({
-    mediaElementRef: activeMediaRef as React.RefObject<HTMLMediaElement>,
-    currentItemUrl: currentItemUrl, 
-    viewMode: viewMode,
-    onEnded: handleNext, 
-    initialTime: playbackInitialTime, 
+  // --- Determine URLs and Active States for Playback Hooks ---
+  const isAudioMode = viewMode === 'imagePodcast';
+  const isVideoMode = viewMode === 'videoPlayer';
+
+  // --- Instantiate Playback Hooks (One for each element) ---
+  const audioPlayback = useMediaElementPlayback({
+    mediaElementRef: audioRef,
+    currentItemUrl: isAudioMode ? currentItemUrl : null,
+    isActiveMode: isAudioMode,
+    elementType: 'audio',
+    onEnded: isAudioMode ? handleNext : undefined, 
+    initialTime: initialPodcastTime, 
+    autoplayEnabled: true,
+    next: true,
   });
 
+  const videoPlayback = useMediaElementPlayback({
+    mediaElementRef: videoRef,
+    currentItemUrl: isVideoMode ? currentItemUrl : null,
+    isActiveMode: isVideoMode,
+    elementType: 'video',
+    onEnded: isVideoMode ? handleNext : undefined, 
+    initialTime: 0, 
+    autoplayEnabled: false,
+    next: true,
+  });
+
+  // ... select activePlayback state/controls ...
+  const activePlayback = isVideoMode ? videoPlayback : audioPlayback;
+  // ... destructure activePlayback ...
+  
   // Ref for ImageFeed component
   const imageFeedRef = useRef<ImageFeedRef>(null);
 
@@ -202,7 +224,7 @@ function App() {
     isFullScreen,
     signalInteraction, 
     onSetViewMode: setViewMode, 
-    onTogglePlayPause: togglePlayPause, 
+    onTogglePlayPause: activePlayback.togglePlayPause,
     onNext: handleNext, 
     onPrevious: handlePrevious, 
     onFocusToggle: focusImageFeedToggle, 
@@ -223,47 +245,31 @@ function App() {
       imageIndex: currentImageIndex,
       videoIndex: currentVideoIndex,
       imageNotes: shuffledImageNotes,
-      videoNotes: shuffledVideoNotes,
+      videoNotes: uniqueVideoNotes,
   });
 
-  // Effect to determine and set the preload URL
+  // --- Effect for Preload URL Calculation ---
   useEffect(() => {
-    let urlToPreload: string | null = null;
-
-    if (shuffledVideoNotes.length > 0) {
+    let urlToPreloadCalc: string | null = null; // Use different variable name
+    if (uniqueVideoNotes.length > 0) { 
       if (viewMode === 'videoPlayer') {
-        // Preload the NEXT video if in video mode and more than one video exists
-        if (shuffledVideoNotes.length > 1) {
-          const nextIndex = (currentVideoIndex + 1) % shuffledVideoNotes.length;
-          const nextNote = shuffledVideoNotes[nextIndex];
-          // Only preload if the next URL is valid and different from the current one
-          if (nextNote?.url && nextNote.url !== currentItemUrl) {
-            urlToPreload = nextNote.url;
-            console.log(`App: Preloading NEXT video (index ${nextIndex}): ${urlToPreload}`);
-          }
+        // Preload NEXT video
+        if (uniqueVideoNotes.length > 1) {
+          const nextIndex = (currentVideoIndex + 1) % uniqueVideoNotes.length;
+          urlToPreloadCalc = uniqueVideoNotes[nextIndex]?.url || null;
+          if (urlToPreloadCalc) console.log(`App: Setting preload URL (next video): ${urlToPreloadCalc}`);
         }
-      } else {
-        // Preload the FIRST video if NOT in video mode
-        const firstNote = shuffledVideoNotes[0];
-        if (firstNote?.url) {
-          urlToPreload = firstNote.url;
-          // Avoid logging if it's the same as the current item in podcast mode (can happen)
-          if(viewMode !== 'imagePodcast' || urlToPreload !== currentItemUrl) {
-             console.log(`App: Preloading FIRST video (index 0) while in ${viewMode} mode: ${urlToPreload}`);
-          }
-        }
+      } else { // imagePodcast mode
+        // Preload FIRST video
+        urlToPreloadCalc = uniqueVideoNotes[0]?.url || null;
+        if (urlToPreloadCalc) console.log(`App: Setting preload URL (first video): ${urlToPreloadCalc}`);
       }
     }
-
-    // Set the preload URL state only if it has changed
-    if (preloadVideoUrl !== urlToPreload) {
-       setPreloadVideoUrl(urlToPreload);
+    // Update state only if changed
+    if (preloadVideoUrl !== urlToPreloadCalc) {
+       setPreloadVideoUrl(urlToPreloadCalc);
     }
-
-    // Dependencies: Need to react to mode changes, video list changes, current index changes (for 'next'),
-    // and the currentItemUrl (to avoid preloading the same item).
-    // Also include preloadVideoUrl in deps to prevent potential redundant sets if the calculated urlToPreload hasn't changed.
-  }, [viewMode, currentVideoIndex, shuffledVideoNotes, currentItemUrl, preloadVideoUrl]);
+  }, [viewMode, currentVideoIndex, uniqueVideoNotes, preloadVideoUrl]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -306,7 +312,6 @@ function App() {
       {/* Invisible Audio Element */}
       <audio
         ref={audioRef}
-        src={viewMode === 'imagePodcast' && currentItemUrl ? currentItemUrl : undefined}
         className="hidden"
       />
       {/* Video is rendered visibly inside VideoPlayer */}
@@ -352,7 +357,7 @@ function App() {
                       >
                          Loading author list...
                      </motion.div>
-                 ) : null /* viewMode === 'imagePodcast' ? (
+                 ) : viewMode === 'imagePodcast' ? (
                      <motion.div
                          key="imageFeed"
                          initial={{ opacity: 0 }}
@@ -369,6 +374,10 @@ function App() {
                              currentImageIndex={currentImageIndex}
                              imageNotes={shuffledImageNotes}
                              authorNpub={currentAuthorNpub}
+                             isPlaying={false}
+                             togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
+                             isFullScreen={isFullScreen}
+                             signalInteraction={signalInteraction}
                          />
                      </motion.div>
                  ) : viewMode === 'videoPlayer' ? (
@@ -382,15 +391,21 @@ function App() {
                      >
                          <VideoPlayer
                              videoRef={videoRef}
-                             src={currentItemUrl}
-                             isPlaying={isPlaying}
-                             togglePlayPause={togglePlayPause}
+                             src={currentItemUrl} 
+                             isPlaying={videoPlayback.isPlaying}
+                             togglePlayPause={videoPlayback.togglePlayPause}
                              authorNpub={currentAuthorNpub}
-                             autoplayFailed={autoplayFailed}
-                             isMuted={isMuted}
+                             autoplayFailed={videoPlayback.autoplayFailed}
+                             isMuted={videoPlayback.isMuted}
+                             currentNoteId={stateVideoNotes[currentVideoIndex]?.id}
+                             // Pass necessary context as props
+                             ndkInstance={ndkInstance}
+                             isNdkReady={isNdkReady}
+                             auth={auth}
+                             wallet={wallet}
                          />
                      </motion.div>
-                 ) : null */ }
+                 ) : null }
               </AnimatePresence>
 
               {/* Duplicated Mode Toggle Button (Hide on Fullscreen) */}
@@ -425,7 +440,7 @@ function App() {
         <AnimatePresence>
           {!isFullScreen && (
             (viewMode === 'imagePodcast' && shuffledImageNotes.length > 1) ||
-            (viewMode === 'videoPlayer' && shuffledVideoNotes.length > 1)
+            (viewMode === 'videoPlayer' && uniqueVideoNotes.length > 1)
           ) && (
              <motion.div
                  key="pagination-buttons"
@@ -482,29 +497,23 @@ function App() {
                     exit={{ y: '100%', opacity: 0 }}
                     transition={{ duration: 0.5, ease: "easeInOut" }}
                  >
-                    {/* Message Board Container */}
-                    <div className="w-2/3 h-full flex-shrink-0 overflow-y-auto bg-gray-900/80 rounded-lg backdrop-blur-sm p-2">
-                         {ndkInstance ? ( 
-                            <MessageBoard
-                              ndk={ndkInstance}
-                              neventToFollow={MAIN_THREAD_NEVENT_URI}
-                              onNewMessage={handleNewMessage}
-                            />
-                        ) : ( 
-                            <div className="w-full h-full flex items-center justify-center">
-                                <p className="text-gray-400">Initializing Nostr connection...</p>
-                            </div>
-                        )} 
+                    {/* Left Side: Message Board */}
+                    <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden"> 
+                        <MessageBoard 
+                            ndk={ndkInstance}
+                            threadEventId={MAIN_THREAD_NEVENT_URI}
+                            onNewMessage={signalMessage}
+                            isReady={isNdkReady}
+                        />
                     </div>
-
-                    {/* Interactive Panel Container (Right 1/3) */}
-                    <div className="w-1/3 h-full flex flex-col">
+                    {/* Right Side: Media Panel - Adjust width */}
+                    <div className="w-1/3 h-full pl-1 flex flex-col"> 
                         <MediaPanel
                             viewMode={viewMode}
                             audioRef={audioRef}
                             videoRef={videoRef}
-                            podcastNotes={podcastNotes}
-                            videoNotes={shuffledVideoNotes}
+                            podcastNotes={statePodcastNotes}
+                            videoNotes={stateVideoNotes}
                             isLoadingPodcastNotes={isLoadingPodcastNotes}
                             isLoadingVideoNotes={isLoadingVideoNotes}
                             currentPodcastIndex={currentPodcastIndex}
@@ -513,15 +522,17 @@ function App() {
                             onVideoSelect={handleVideoSelect}
                             setViewMode={setViewMode}
                             // Playback State & Handlers
-                            isPlaying={isPlaying}
-                            currentTime={currentTime}
-                            duration={duration}
-                            playbackRate={playbackRate}
-                            setPlaybackRate={setPlaybackRate}
-                            togglePlayPause={togglePlayPause}
-                            handleSeek={handleSeek}
+                            isPlaying={activePlayback.isPlaying}
+                            currentTime={activePlayback.currentTime}
+                            duration={activePlayback.duration}
+                            playbackRate={activePlayback.playbackRate}
+                            setPlaybackRate={activePlayback.setPlaybackRate}
+                            togglePlayPause={activePlayback.togglePlayPause}
+                            handleSeek={activePlayback.handleSeek}
                             currentItemUrl={currentItemUrl}
+                            // Re-add missing props
                             authors={mediaAuthors}
+                            signalInteraction={signalInteraction}
                         />
                     </div>
                  </motion.div>
@@ -540,16 +551,12 @@ function App() {
       />
     </div>
 
-    {/* Preload Link */}
-    {preloadVideoUrl && (
-        <link rel="preload" href={preloadVideoUrl} as="video" /> 
-    )}
-
     {/* Settings Modal */}
     <SettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
         ndkInstance={ndkInstance} // <-- Pass singleton
+        wallet={wallet} // <<< Pass wallet instance >>>
     />
 
     </>

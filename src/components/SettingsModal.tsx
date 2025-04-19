@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth provides all necessary states and functions, and exports its return type
-import { useWallet, UseWalletReturn } from '../hooks/useWallet'; // Import useWallet
+import { useWallet, UseWalletReturn, DEFAULT_MINT_URLS } from '../hooks/useWallet'; // Import useWallet return type and DEFAULT_MINT_URLS
 import QRCode from 'react-qr-code'; // Import QRCode for backup
 import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
 type NDKInstance = NDK; // Alias NDK class as NDKInstance type
@@ -17,7 +17,8 @@ const truncateKey = (key: string | null, length = 16): string => {
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    ndkInstance: NDKInstance | undefined; // Align with useAuth input type
+    ndkInstance: NDKInstance | undefined;
+    wallet: UseWalletReturn;
 }
 
 // Function to truncate npub for display
@@ -27,9 +28,8 @@ const truncateNpub = (npub: string | null): string => {
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, wallet }) => {
     const auth: UseAuthReturn = useAuth(ndkInstance);
-    const wallet: UseWalletReturn = useWallet(); // Use the wallet hook
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
     const [showNsecQR, setShowNsecQR] = useState<boolean>(false);
@@ -58,34 +58,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const mintUrlInputRef = useRef<HTMLInputElement>(null); // Ref for Mint URL input
     const saveMintUrlButtonRef = useRef<HTMLButtonElement>(null); // Ref for Save Mint URL button
 
-    // Effect to initialize Mint URL input when modal opens or wallet loads
+    // Effect to initialize Mint URL input (uses wallet prop)
     useEffect(() => {
         if (isOpen && auth.isLoggedIn && wallet.configuredMintUrl !== null) {
             setMintUrlInput(wallet.configuredMintUrl);
         } else if (isOpen && auth.isLoggedIn) {
-            // If logged in but no URL configured yet, maybe set a default placeholder or empty
-            setMintUrlInput(''); // Or DEFAULT_MINT_URL placeholder?
+            setMintUrlInput('');
         }
-        // Reset saving state when modal opens/closes or URL changes upstream
         setIsSavingMintUrl(false);
     }, [isOpen, auth.isLoggedIn, wallet.configuredMintUrl]);
 
-    // Effect to start/stop deposit listener based on login state and NDK instance
+    // Effect to start/stop deposit listener (uses wallet prop)
     useEffect(() => {
-        if (isOpen && auth.isLoggedIn && ndkInstance) {
+        if (isOpen && auth.isLoggedIn) { 
             console.log('SettingsModal: Attempting to start deposit listener.');
-            wallet.startDepositListener(auth, ndkInstance);
+            wallet.startDepositListener(auth);
         } else {
-             console.log('SettingsModal: Stopping deposit listener (modal closed, not logged in, or no NDK).');
+             console.log('SettingsModal: Stopping deposit listener (modal closed or not logged in).');
             wallet.stopDepositListener();
         }
-        // Ensure listener stops when modal closes or user logs out
         return () => {
             console.log('SettingsModal: Cleaning up deposit listener effect.');
             wallet.stopDepositListener();
         };
-        // Dependencies: isOpen, auth object (for isLoggedIn and methods), ndkInstance, wallet hook instance
-    }, [isOpen, auth, ndkInstance, wallet]);
+    }, [isOpen, auth, wallet]); // Depends on modal open state, auth state, and wallet instance
 
     // Focus trapping and initial focus
     useEffect(() => {
@@ -157,6 +153,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     }, [onClose]);
 
     const handleGenerateKeys = async () => {
+        // **NEW:** Confirmation dialog before generation
+        const confirmGeneration = window.confirm(
+            "Generate New TV Identity?\\n\\n" +
+            "This will create a unique Nostr identity (nsec/npub) for this TV. " +
+            "You MUST back up the private key (nsec) shown afterwards, ideally by scanning the QR code with your phone. " +
+            "Losing it means losing control of this TV's Nostr profile and follows.\\n\\n" +
+            "Proceed with generation?"
+        );
+
+        if (!confirmGeneration) {
+            console.log("User cancelled key generation.");
+            return; // Stop if user cancels
+        }
+
         setDisplayError(null);
         setShowNsecQR(false);
         setGeneratedNsec(null); // Clear previous nsec if re-generating
@@ -365,6 +375,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
          }
      }, [focusedTagIndex]);
 
+    // --- Wallet Mint URL Management ---
+    const handleSaveMintUrl = async () => {
+        if (mintUrlInput === wallet.configuredMintUrl) {
+            console.log("Mint URL hasn't changed.");
+            return;
+        }
+        setIsSavingMintUrl(true);
+        setDisplayError(null);
+        try {
+            // Basic validation (more robust could be added)
+            if (mintUrlInput && mintUrlInput.trim()) {
+                new URL(mintUrlInput.trim()); // Check if it's a valid URL format
+            }
+            await wallet.setConfiguredMintUrl(mintUrlInput.trim() || null); // Pass null if empty to use default
+            console.log("SettingsModal: Mint URL saved.");
+            // Optionally add success feedback
+        } catch (error) {
+            console.error("SettingsModal: Error saving mint URL:", error);
+            const message = error instanceof Error ? error.message : String(error);
+            setDisplayError(`Invalid Mint URL: ${message}`);
+        } finally {
+            setIsSavingMintUrl(false);
+        }
+    };
 
     // --- Render Logic ---
 
@@ -564,6 +598,64 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                         </div>
                     )}
                 </div>
+
+                {/* --- Wallet Section --- */}
+                {auth.isLoggedIn && (
+                    <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+                        <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Wallet</h3>
+                        <div className="space-y-3">
+                            <p className="text-sm text-gray-400">Current Balance:</p>
+                            <p className="text-xl font-semibold text-yellow-400">{wallet.balanceSats.toLocaleString()} sats</p>
+
+                            {wallet.walletError && <p className="text-red-400 bg-red-900/40 p-2 rounded text-sm">{wallet.walletError}</p>}
+                            {wallet.isLoadingWallet && <p className="text-purple-400 text-sm">Loading wallet...</p>}
+                            {wallet.isListeningForDeposits && <p className="text-blue-400 text-sm">Listening for deposits...</p>}
+
+                            <div className="pt-2">
+                                <label htmlFor="mintUrlInput" className="block text-sm font-medium text-gray-400 mb-1">
+                                    Cashu Mint URL:
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        ref={mintUrlInputRef}
+                                        id="mintUrlInput"
+                                        type="url"
+                                        value={mintUrlInput}
+                                        onChange={(e) => setMintUrlInput(e.target.value)}
+                                        placeholder={DEFAULT_MINT_URLS[0]} // Show first default as placeholder
+                                        className="flex-grow px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                                        aria-label="Cashu Mint URL"
+                                    />
+                                    <button
+                                        ref={saveMintUrlButtonRef}
+                                        onClick={handleSaveMintUrl}
+                                        disabled={isSavingMintUrl || mintUrlInput === wallet.configuredMintUrl}
+                                        className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 text-sm font-semibold"
+                                    >
+                                        {isSavingMintUrl ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
+                                {/* NEW: Display Default Mints */}
+                                <div className="mt-3">
+                                    <p className="text-xs text-gray-500 mb-1">Recommended Mints:</p>
+                                    <ul className="list-disc list-inside space-y-0.5">
+                                        {/* Filter out the test mint before mapping */}
+                                        {DEFAULT_MINT_URLS.filter(url => url !== 'https://testnut.cashu.space').map(url => (
+                                            <li key={url} className="text-xs text-gray-400 truncate">{url}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-gray-500 pt-2 border-t border-gray-700/50">
+                                Deposit Instructions: Send a Cashu token (e.g., <code>cashuA...</code>) in an encrypted Nostr DM (Kind 4) to your TV's npub. The balance updates automatically when this settings panel is open.
+                            </p>
+                            <p className="text-xs font-bold text-red-500/80 mt-1">
+                                SECURITY WARNING: Storing Cashu tokens in a browser is risky. Do not store large amounts. Use at your own risk.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* --- Hashtag Following Section --- */}
                 <div className="mb-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600">

@@ -31,9 +31,12 @@ const getPlaybackTime = (url: string): number | null => {
 interface UseMediaElementPlaybackProps {
   mediaElementRef: React.RefObject<HTMLMediaElement>;
   currentItemUrl: string | null;
-  viewMode: 'imagePodcast' | 'videoPlayer';
+  isActiveMode: boolean;
+  elementType: 'audio' | 'video';
   onEnded?: () => void;
   initialTime?: number;
+  autoplayEnabled: boolean;
+  next: boolean;
 }
 
 interface UseMediaPlaybackResult {
@@ -56,9 +59,12 @@ interface UseMediaPlaybackResult {
 export function useMediaElementPlayback({
   mediaElementRef,
   currentItemUrl,
-  viewMode,
+  isActiveMode,
+  elementType,
   onEnded,
   initialTime = 0,
+  autoplayEnabled,
+  next,
 }: UseMediaElementPlaybackProps): UseMediaPlaybackResult {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -73,6 +79,38 @@ export function useMediaElementPlayback({
   const hasAttemptedPlayRef = useRef(false);
   const initialPlaySuccessfulRef = useRef(false);
 
+  // Define play/pause early
+  const play = useCallback(async () => {
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+    if (!isActiveMode && elementType === 'video') {
+      console.log(`useMediaElementPlayback (${elementType}): Play called but not active mode, pausing.`);
+      mediaElement.pause();
+      setIsPlaying(false);
+      return;
+    }
+    try {
+      console.log(`useMediaElementPlayback (${elementType}): Attempting play... Current src: ${mediaElement.currentSrc}`);
+      hasAttemptedPlayRef.current = true;
+      await mediaElement.play();
+      console.log(`useMediaElementPlayback (${elementType}): Play command successful.`);
+      initialPlaySuccessfulRef.current = true;
+    } catch (error) {
+      console.error(`useMediaElementPlayback (${elementType}): Playback failed:`, error);
+      setAutoplayFailed(true);
+      setIsPlaying(false);
+      initialPlaySuccessfulRef.current = false;
+    }
+  }, [mediaElementRef, isActiveMode, elementType]);
+
+  const pause = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (mediaElement && !mediaElement.paused) {
+      console.log("useMediaElementPlayback: Pausing media.");
+      mediaElement.pause();
+    }
+  }, [mediaElementRef]);
+
   const updateProgress = useCallback(() => {
     if (mediaElementRef.current && !isSeeking) {
       setCurrentTime(mediaElementRef.current.currentTime);
@@ -80,9 +118,89 @@ export function useMediaElementPlayback({
     }
   }, [mediaElementRef, isSeeking]);
 
+  // Combined Play/Pause handler
+  const togglePlayPause = useCallback(() => {
+    if (mediaElementRef.current) {
+      if (mediaElementRef.current.paused) {
+        play();
+      } else {
+        pause();
+      }
+    }
+  }, [play, pause, mediaElementRef]);
+
+  const handleCanPlay = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+    console.log(`useMediaElementPlayback (${elementType}): handleCanPlay - Media ready. isActiveMode: ${isActiveMode}`);
+
+    const currentDuration = mediaElement.duration;
+    if (isNaN(currentDuration)) {
+      console.warn(`useMediaElementPlayback (${elementType}): Duration is NaN in handleCanPlay.`);
+      return; // Wait for loadedmetadata
+    }
+
+    // Reset state but don't necessarily play
+    setIsPlaying(false);
+    setAutoplayFailed(false);
+    setDuration(currentDuration);
+    setCurrentTime(mediaElement.currentTime); // Ensure currentTime is updated
+
+    if (isActiveMode && autoplayEnabled && elementType === 'audio') {
+      console.log(`useMediaElementPlayback (${elementType}): Autoplaying audio on canplay`);
+      play();
+    } else if (isActiveMode && elementType === 'video') {
+      console.log(`useMediaElementPlayback (${elementType}): Video ready, manual play required.`);
+      // Do nothing, wait for user interaction
+    } else {
+      console.log(`useMediaElementPlayback (${elementType}): Ready, but not active mode or autoplay disabled.`);
+    }
+  }, [mediaElementRef, isActiveMode, elementType, autoplayEnabled, play]);
+
+  const handleEnded = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+
+    console.log(`useMediaElementPlayback (${elementType}): Ended event fired.`);
+    setIsPlaying(false);
+    setCurrentTime(mediaElement.duration);
+    initialPlaySuccessfulRef.current = false;
+
+    // If it's a video and part of a sequence (next=true), and still the active mode, call onEnded to advance.
+    if (elementType === 'video' && next && isActiveMode) {
+      console.log(`useMediaElementPlayback (${elementType}): Video ended, calling onEnded to advance sequence.`);
+      onEnded?.();
+    } else if (elementType === 'audio' && isActiveMode) {
+        // If it's audio and ended, just call the provided onEnded (might stop playback or go to next audio)
+        console.log(`useMediaElementPlayback (${elementType}): Audio ended, calling provided onEnded.`);
+        onEnded?.();
+    } else {
+        console.log(`useMediaElementPlayback (${elementType}): Ended, but not advancing (not video/next or not active mode).`);
+    }
+}, [mediaElementRef, isActiveMode, elementType, next, onEnded]);
+
+  const handleRateChange = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (mediaElement) {
+        console.log(`useMediaElementPlayback: Setting playback rate to ${mediaElement.playbackRate}`);
+        setPlaybackRateState(mediaElement.playbackRate);
+    }
+  }, [mediaElementRef]);
+
+  const handleVolumeChange = () => {
+    console.log("useMediaElementPlayback: VolumeChange event fired. Muted:", mediaElementRef.current?.muted);
+    setIsMuted(mediaElementRef.current?.muted || true);
+  };
+
   useEffect(() => {
     const mediaElement = mediaElementRef.current;
     if (!mediaElement || !currentItemUrl) {
+      if (mediaElement && !currentItemUrl) {
+        console.log("useMediaElementPlayback: currentItemUrl is null, resetting element.");
+        if (!mediaElement.paused) mediaElement.pause();
+        mediaElement.removeAttribute('src');
+        mediaElement.load();
+      }
       setIsPlaying(false);
       setIsMuted(true);
       setAutoplayFailed(false);
@@ -93,21 +211,22 @@ export function useMediaElementPlayback({
       return;
     }
 
-    console.log(`useMediaElementPlayback: Effect triggered. New URL: ${currentItemUrl}, Mode: ${viewMode}, initialTime: ${initialTime}`);
+    console.log(`useMediaElementPlayback (${elementType}): Effect triggered. URL: ${currentItemUrl}, IsActiveMode: ${isActiveMode}, initialTime: ${initialTime}`);
     
     setIsPlaying(false);
     setIsMuted(true);
     mediaElement.muted = true;
     setAutoplayFailed(false);
-    setCurrentTime(initialTime);
     setDuration(0);
     hasAttemptedPlayRef.current = false;
     initialPlaySuccessfulRef.current = false;
+    isProgrammaticSeek.current = false;
+    lastSaveTimeRef.current = Date.now();
 
     const handleLoadedMetadata = () => {
       console.log("useMediaElementPlayback: Metadata loaded, duration:", mediaElement.duration);
       setDuration(mediaElement.duration);
-      if (initialTime > 0 && Math.abs(mediaElement.currentTime - initialTime) > 1) {
+      if (initialTime > 0) {
         console.log(`Applying initial time for ${currentItemUrl} to ${initialTime}`);
         isProgrammaticSeek.current = true;
         mediaElement.currentTime = initialTime;
@@ -151,41 +270,9 @@ export function useMediaElementPlayback({
       setIsPlaying(false);
       setCurrentTime(mediaElement.duration);
       initialPlaySuccessfulRef.current = false;
-      if (onEnded) {
-        console.log("useMediaElementPlayback: Calling onEnded callback.");
+      if (onEnded && isActiveMode) {
+        console.log("useMediaElementPlayback: Calling onEnded callback (isActiveMode=true).");
         onEnded();
-      }
-    };
-
-    const handleRateChange = () => setPlaybackRateState(mediaElement.playbackRate);
-
-    const handleVolumeChange = () => {
-      console.log("useMediaElementPlayback: VolumeChange event fired. Muted:", mediaElement.muted);
-      setIsMuted(mediaElement.muted);
-    };
-
-    const handleCanPlay = async () => {
-      console.log(`useMediaElementPlayback: Canplay event fired. ReadyState: ${mediaElement.readyState}`);
-      if (
-        viewMode === 'videoPlayer' && 
-        !initialPlaySuccessfulRef.current && 
-        !hasAttemptedPlayRef.current &&
-        mediaElement.readyState >= 3
-      ) {
-        hasAttemptedPlayRef.current = true;
-        try {
-          console.log("useMediaElementPlayback: Attempting playback via handleCanPlay...");
-          mediaElement.muted = false;
-          await mediaElement.play();
-          console.log("useMediaElementPlayback: Playback initiated successfully via handleCanPlay.");
-        } catch (error: any) {
-          console.warn("useMediaElementPlayback: Playback attempt failed in handleCanPlay:", error.name, error.message);
-          setIsPlaying(false);
-          mediaElement.muted = true;
-          setIsMuted(true);
-          setAutoplayFailed(true);
-          initialPlaySuccessfulRef.current = false;
-        }
       }
     };
 
@@ -198,15 +285,13 @@ export function useMediaElementPlayback({
     mediaElement.addEventListener('volumechange', handleVolumeChange);
     mediaElement.addEventListener('canplay', handleCanPlay);
 
-    // Set the source *before* calling load()
-    console.log(`useMediaElementPlayback: Setting src to ${currentItemUrl}`);
+    console.log(`useMediaElementPlayback (${elementType}): Setting src to ${currentItemUrl}`);
     mediaElement.src = currentItemUrl;
-
     console.log("useMediaElementPlayback: Explicitly calling load() for new source.");
     mediaElement.load();
 
     return () => {
-      console.log("useMediaElementPlayback: Cleaning up listeners for", currentItemUrl);
+      console.log("useMediaElementPlayback: Cleaning up listeners for URL:", currentItemUrl);
       mediaElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
       mediaElement.removeEventListener('timeupdate', handleTimeUpdate);
       mediaElement.removeEventListener('play', handlePlay);
@@ -221,7 +306,7 @@ export function useMediaElementPlayback({
          mediaElement.pause();
       }
     };
-  }, [currentItemUrl, mediaElementRef, onEnded, isSeeking, initialTime, viewMode]);
+  }, [currentItemUrl, mediaElementRef, onEnded, isSeeking, initialTime, isActiveMode, elementType, autoplayEnabled, duration, play]);
 
   useEffect(() => {
     const mediaElement = mediaElementRef.current;
@@ -247,78 +332,6 @@ export function useMediaElementPlayback({
         }
     }
   }, [mediaElementRef]);
-
-  const play = useCallback(async () => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement || !currentItemUrl) return;
-    console.log(`useMediaElementPlayback: play() called`);
-    console.log(`useMediaElementPlayback: Attempting to play src: ${mediaElement.src}, currentItemUrl prop: ${currentItemUrl}, viewMode: ${viewMode}`);
-    if (mediaElement.muted) {
-        console.log("useMediaElementPlayback: Unmuting before playing.");
-        mediaElement.muted = false;
-        setIsMuted(false);
-    }
-    try {
-        await mediaElement.play();
-    } catch (e) {
-        console.error(`useMediaElementPlayback: Error in play() for src: ${mediaElement.src}`, e);
-        setAutoplayFailed(true);
-        setIsPlaying(false);
-        setIsMuted(true);
-    }
-  }, [mediaElementRef, currentItemUrl, viewMode]);
-
-  const pause = useCallback(() => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement) return;
-    console.log("useMediaElementPlayback: pause() called");
-    mediaElement.pause();
-  }, [mediaElementRef]);
-
-  const togglePlayPause = useCallback(() => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement || !currentItemUrl) {
-        console.warn(`useMediaElementPlayback: togglePlayPause called with invalid state. Has media element: ${!!mediaElement}, has currentItemUrl: ${!!currentItemUrl}`);
-        return;
-    }
-
-    // HTMLMediaElement Ready States:
-    // HAVE_NOTHING = 0;
-    // HAVE_METADATA = 1;
-    // HAVE_CURRENT_DATA = 2;
-    // HAVE_FUTURE_DATA = 3;
-    // HAVE_ENOUGH_DATA = 4;
-
-    console.log(`useMediaElementPlayback: togglePlayPause called. Paused: ${mediaElement.paused}, Ended: ${mediaElement.ended}, ReadyState: ${mediaElement.readyState}`);
-
-    if (mediaElement.paused || mediaElement.ended) {
-      // Only attempt to play if the element has enough data
-      if (mediaElement.readyState >= 3) { // HAVE_FUTURE_DATA
-        if (mediaElement.muted) {
-            console.log("useMediaElementPlayback: Unmuting before playing via togglePlayPause.");
-            mediaElement.muted = false;
-        }
-        console.log("useMediaElementPlayback: Attempting mediaElement.play() via togglePlayPause");
-        // Use the native play method directly. The 'play' event listener will update state.
-        mediaElement.play().catch(e => {
-            console.error("useMediaElementPlayback: Error calling mediaElement.play() from togglePlayPause:", e);
-            // Update state if play fails immediately
-            setAutoplayFailed(true);
-            setIsPlaying(false);
-            setIsMuted(true);
-        });
-      } else {
-        console.warn("useMediaElementPlayback: togglePlayPause - Play requested but readyState < 3. Waiting for canplay.");
-        // Optional: Trigger load again if stuck?
-        // mediaElement.load(); 
-      }
-    } else {
-      console.log("useMediaElementPlayback: Attempting mediaElement.pause() via togglePlayPause");
-      // Use the native pause method. The 'pause' event listener will update state.
-      mediaElement.pause();
-    }
-  // Remove hook's play/pause from dependencies, rely on element state
-  }, [mediaElementRef, currentItemUrl]);
 
   const toggleMute = useCallback(() => {
       const mediaElement = mediaElementRef.current;

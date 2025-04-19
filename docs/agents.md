@@ -1,4 +1,4 @@
-# LLM Agent Roles for TV App (MadTrips)
+# LLM Agent Roles for TV App (Mad⚡tr.tv)
 
 ## 🧠 Master Agent ("Architect")
 **Role:** Oversees all sub-agents. Coordinates workflows between builder, debugger, UX, and domain agents.

@@ -157,8 +157,8 @@ export function useMediaState({
         console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, pIdx=${currentPodcastIndex}, vIdx=${currentVideoIndex}, iIdx=${currentImageIndex}`);
 
         if (viewMode === 'imagePodcast') {
-            if (imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
-                newUrl = imageNotes[currentImageIndex]?.url || null;
+            if (podcastNotes.length > 0 && currentPodcastIndex < podcastNotes.length) {
+                newUrl = podcastNotes[currentPodcastIndex]?.url || null;
             }
         } else { // viewMode === 'videoPlayer'
             if (videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
@@ -175,7 +175,7 @@ export function useMediaState({
             }
         }
 
-    }, [viewMode, currentPodcastIndex, currentVideoIndex, currentImageIndex, podcastNotes, videoNotes, imageNotes, currentItemUrl]);
+    }, [viewMode, currentPodcastIndex, currentVideoIndex, podcastNotes, videoNotes, currentItemUrl]);
 
     // Set Podcast Index (does NOT change viewMode)
     const setCurrentPodcastIndex = useCallback((index: number) => {
