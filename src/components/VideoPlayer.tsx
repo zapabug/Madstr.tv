@@ -87,7 +87,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         amountSats: DEFAULT_TIP_AMOUNT,
         auth: auth,
         eventIdToZap: currentNoteId,
-        comment: `📺⚡️ Tip from MadTrips TV App (Video)!`
+        comment: `📺⚡️ Tip from Mad⚡tr.tv TV App (Video)!`
     };
     try {
         const success = await wallet.sendCashuTipWithSplits(params);

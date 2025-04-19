@@ -192,7 +192,7 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
         amountSats: DEFAULT_TIP_AMOUNT,
         auth: auth, // Pass the auth object
         eventIdToZap: currentNoteId, 
-        comment: `📺⚡️ Tip from MadTrips TV App!` 
+        comment: `📺⚡️ Tip from Mad⚡tr.tv TV App!` 
     };
 
     try {

@@ -1,8 +1,8 @@
-# MadTrips TV App Debugging & Refactoring Context
+# Mad⚡tr.tv TV App Debugging & Refactoring Context
 
 ## Project Overview
 
-*   **Application:** MadTrips TV App
+*   **Application:** Mad⚡tr.tv TV App
 *   **Framework:** React, TypeScript, Vite
 *   **Styling:** TailwindCSS
 *   **Core Functionality:** Displaying Nostr-based media (images, podcasts, videos) with remote control navigation.
