@@ -37,6 +37,7 @@ export interface MediaFeedProps {
   currentImageIndex: number;
   imageNotes: NostrNote[]; 
   authorNpub: string | null; // Added
+  authorProfilePictureUrl: string | null; // <<< Added >>>
   // onNotesLoaded: (notes: NostrNote[]) => void; // Removed
   isPlaying: boolean;
   togglePlayPause: () => void;
@@ -86,6 +87,7 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
     currentImageIndex,
     imageNotes, 
     authorNpub, // Added
+    authorProfilePictureUrl, // <<< Destructure new prop >>>
     // onNotesLoaded, // Removed
     isPlaying,
     togglePlayPause,
@@ -259,99 +261,114 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
-      {isLoading && !imageUrl && (
-        <p className="text-gray-400">Loading images...</p>
-      )}
-
-      <AnimatePresence initial={false} mode="wait">
-        {imageUrl ? (
-          <motion.img
-            key={imageUrl}
-            src={imageUrl}
-            alt={`Nostr post ${currentImageNote?.id || 'image'}`}
-            className="block max-w-full max-h-full object-contain select-none"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.3 }}
-            onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                console.error(`ImageFeed: Error loading image ${imageUrl}`, e);
-            }}
-          />
-        ) : (
-          <motion.div 
-            key="no-image-placeholder"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="w-full h-full flex items-center justify-center text-gray-500"
+    <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
+      {/* Image Container with Animation */}
+      <AnimatePresence initial={false} mode='wait'>
+          <motion.div
+            key={currentImageNote?.id} 
+            className="absolute inset-0 flex items-center justify-center"
+            initial={{ opacity: 0, scale: 0.9 }} // Start slightly scaled down and faded
+            animate={{ opacity: 1, scale: 1 }}     // Animate to full size and opacity
+            exit={{ opacity: 0, scale: 0.95 }}    // Exit by fading and slightly scaling down
+            transition={{ duration: 0.5, ease: "easeInOut" }} // Smooth transition
           >
-            {!isLoading && imageNotes.length > 0 && (
-                <span>Image URL missing for note {currentNoteId}</span>
-            )}
+            <img
+              id={`media-item-${currentImageNote?.id}`}
+              src={imageUrl}
+              alt={currentImageNote?.content || 'Nostr Image'}
+              className="max-w-full max-h-full object-contain"
+              onLoad={() => console.log("Image loaded:", imageUrl)} // Log image load
+              onError={() => console.error("Error loading image:", imageUrl)} // Log image errors
+            />
+          </motion.div>
+      </AnimatePresence>
+
+      {/* Image Meta Info Overlay (Hide on Fullscreen) */}
+      <AnimatePresence>
+        {!isFullScreen && (
+           <motion.div
+             key="meta-overlay"
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             exit={{ opacity: 0, y: 20 }}
+             transition={{ duration: 0.3, delay: 0.2 }}
+             className="absolute bottom-1 left-1 z-10 p-2 bg-black bg-opacity-70 rounded-lg text-left pointer-events-none text-xs"
+           >
+              {/* <<< REMOVED author display name paragraph >>> */}
+              {/* <p className="font-semibold text-purple-400 break-all" title={currentImageNote?.posterPubkey}>{displayName}</p> */}
+              <p className="text-gray-400 text-xs">{timestamp}</p>
+              <p className="text-gray-500 mt-1">Image {currentImageIndex + 1} of {imageNotes.length}</p>
+           </motion.div>
+         )
+      }
+      </AnimatePresence>
+
+      {/* --- Grouped Author Info Container (with Tipping interaction) --- */}
+      {/* Show only when not fullscreen */}
+      <AnimatePresence>
+        {authorNpub && (
+          <motion.div
+            key="author-qr-container"
+            ref={authorContainerRef}
+            className={`absolute bottom-2 right-2 z-20 flex flex-col items-center space-y-0.5 transition-all duration-200 ease-in-out
+                        ${canTip ? 'cursor-pointer focus:outline-none focus:ring-4 focus:ring-purple-600 focus:ring-opacity-75 rounded-lg p-1 bg-black/30' : 'p-1 bg-black/40 rounded'}`}
+            tabIndex={canTip ? 0 : -1}
+            onKeyDown={handleAuthorKeyDown}
+            title={canTip ? `Press OK to tip ${DEFAULT_TIP_AMOUNT} sats` : 'Image Author'}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Author QR Code + Overlays */}
+            <div className="relative bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
+                 <QRCode
+                    value={`nostr:${authorNpub}`} // <<< Use nostr: prefix >>>
+                    size={256}
+                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                    viewBox={`0 0 256 256`}
+                    level="H" // <<< Use Level H like VideoPlayer >>>
+                    bgColor="#FFFFFF"
+                    fgColor="#000000"
+                 />
+                 {/* --- Overlays Container --- */}
+                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                     {auth.isLoggedIn && (
+                         <div className="absolute w-1/3 h-1/3 opacity-80">
+                             <CustomLoggedInIcon />
+                         </div>
+                     )}
+                     {canTip && !isTipping && (
+                         <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-sm">
+                             <FiZap className="w-3/5 h-3/5 text-yellow-400 opacity-90 filter drop-shadow(0 1px 1px rgba(0,0,0,0.7))" />
+                         </div>
+                     )}
+                 </div>
+                 {/* --- Tipping Status Overlays --- */} 
+                 <div className="absolute inset-0 pointer-events-none">
+                     <AnimatePresence>
+                         {isTipping && (
+                             <motion.div key="tipping" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-sm">
+                                 <svg className="animate-spin h-6 w-6 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                             </motion.div>
+                         )}
+                         {tipStatus === 'success' && (
+                             <motion.div key="success" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-green-600/80 rounded-sm">
+                                 <svg className="h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                             </motion.div>
+                         )}
+                         {tipStatus === 'error' && (
+                             <motion.div key="error" initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 10, opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-red-600/80 rounded-sm">
+                                 <svg className="h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                             </motion.div>
+                         )}
+                     </AnimatePresence>
+                 </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Author/Tip Info Overlay */}
-      {currentImageNote && !isFullScreen && (
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ duration: 0.2 }}
-                ref={authorContainerRef} 
-                tabIndex={canTip ? 0 : -1} 
-                onKeyDown={handleAuthorKeyDown}
-                aria-label={`Post by ${displayName}. ${canTip ? 'Press OK to tip.' : ''}`}
-                className={`absolute bottom-4 left-4 z-20 p-2 max-w-[calc(100%-150px)] bg-black/70 rounded-lg backdrop-blur-sm cursor-pointer ${canTip ? 'focus:outline-none focus:ring-2 focus:ring-yellow-400 hover:bg-black/80' : 'cursor-default'} transition-all`}
-                onClick={canTip ? handleTip : undefined}
-            >
-                <div className="flex items-center">
-                    {/* Avatar */} 
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 overflow-hidden mr-2">
-                        {profile?.picture ? (
-                            <img src={profile.picture} alt={displayName} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
-                                {displayName?.substring(0, 2) || '??'}
-                            </span>
-                        )}
-                    </div>
-                    {/* Name & Timestamp */}
-                    <div className="flex flex-col min-w-0">
-                        <p className="text-sm font-semibold text-white truncate" title={displayName}>{displayName}</p>
-                        <p className="text-xs text-gray-400 truncate" title={timestamp}>{timestamp}</p>
-                    </div>
-                    {/* Tip Button / Icon */} 
-                    {canTip && !isTipping && tipStatus === null && (
-                        <button 
-                            onClick={handleTip} 
-                            className="ml-3 p-1 rounded-full bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/40 hover:text-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-colors"
-                            aria-label={`Tip ${DEFAULT_TIP_AMOUNT} sats`}
-                        >
-                            <FiZap className="w-4 h-4" />
-                        </button>
-                    )}
-                     {isTipping && (<span className="text-yellow-400 text-xs ml-2 animate-pulse">Zapping...</span>)}
-                     {/* Display Tip Status */} 
-                     {tipStatus === 'success' && <span className="text-green-400 text-xs ml-2">Tipped!⚡️</span>}
-                     {tipStatus === 'error' && <span className="text-red-400 text-xs ml-2">Tip Failed!</span>}
-                </div>
-             </motion.div>
-       )}
-
-      {/* Hidden Toggle Button (Keep outside the info container) */}
-      <button
-        ref={toggleButtonRef}
-        className="absolute opacity-0 pointer-events-none" // Make it truly hidden
-        aria-hidden="true"
-        tabIndex={-1} // Prevent tabbing
-      >
-        Focus Target
-      </button>
     </div>
   );
 });

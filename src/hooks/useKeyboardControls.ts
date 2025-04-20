@@ -23,43 +23,54 @@ export const useKeyboardControls = ({
 }: KeyboardControlsProps) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Always signal interaction on any key press
+      // Always signal interaction on any key press to potentially exit fullscreen
       signalInteraction(); 
 
-      // If fullscreen, interaction signal is enough, don't process other keys
       if (isFullScreen) {
         console.log(`useKeyboardControls: Key event (Fullscreen) - Key: ${event.key}`);
+        // Prevent default browser actions for specific keys even in fullscreen
+        // to ensure they ONLY signal interaction and don't scroll/etc.
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+        }
+        // Interaction signal is enough, don't process other specific app actions
         return; 
       }
 
-      // --- Process keys only if NOT in fullscreen ---
+      // --- Process keys only if NOT in fullscreen --- Simulate D-pad ---
       console.log(`useKeyboardControls: Key event (Not Fullscreen) - Key: ${event.key}, Code: ${event.code}`);
 
       switch (event.key) {
-        // REMOVING ArrowUp/ArrowDown cases - Rely on browser focus navigation
-        /*
         case 'ArrowUp':
         case 'ArrowDown':
-          // Toggle between modes
+          // Toggle between modes (like Channel Up/Down?)
           onSetViewMode(viewMode === 'imagePodcast' ? 'videoPlayer' : 'imagePodcast');
-          event.preventDefault();
+          event.preventDefault(); // Prevent page scroll
           break;
-        */
-        // REMOVING Escape/Backspace/Back cases - Rely on browser focus navigation/handling
-        /*
+        case 'ArrowLeft':
+          onPrevious();
+          event.preventDefault(); // Prevent browser back/forward
+          break;
+        case 'ArrowRight':
+          onNext();
+          event.preventDefault(); // Prevent browser back/forward
+          break;
+        case 'Enter':
+        case ' ': // Space bar
+          onTogglePlayPause(); // OK/Select toggles play/pause
+          event.preventDefault(); // Prevent button clicks/space scroll
+          break;
         case 'Escape':
         case 'Backspace':
-        case 'Back': // Common on some TV remotes
-          console.log("useKeyboardControls: Back/Escape key pressed.");
-          // Optional: Call focus callback if provided
+          // Maybe use Backspace/Escape to trigger the focus toggle?
           onFocusToggle?.(); 
           event.preventDefault(); 
           break;
-        */
+        // Consider adding 'Back' key code if needed for specific remotes
+
         default:
-          // Allow browser default behavior for ALL keys when not fullscreen
-          console.log(`useKeyboardControls: Allowing default behavior for key: ${event.key}`);
-          // We no longer call preventDefault() here, let the browser handle it.
+          // Don't prevent default for unhandled keys (allows typing in inputs if ever added)
+          console.log(`useKeyboardControls: Allowing default behavior for unhandled key: ${event.key}`);
           break;
       }
     };
@@ -68,6 +79,5 @@ export const useKeyboardControls = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-    // Dependencies: Include all functions/state used inside the effect
   }, [isFullScreen, signalInteraction, onSetViewMode, onTogglePlayPause, onNext, onPrevious, onFocusToggle, viewMode]); 
 }; 

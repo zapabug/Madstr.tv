@@ -25,6 +25,9 @@ export interface VideoPlayerProps {
   src: string | null;
   isPlaying: boolean;
   togglePlayPause: () => void;
+  pause: () => void;
+  play: () => void;
+  toggleMute: () => void;
   authorNpub: string | null;
   autoplayFailed: boolean;
   isMuted: boolean;
@@ -42,6 +45,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   src,
   isPlaying,
   togglePlayPause,
+  pause,
+  play,
+  toggleMute,
   authorNpub,
   autoplayFailed,
   isMuted,
@@ -115,6 +121,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
      }
   };
 
+  // --- Conditional Click Handler for Overlay Button ---
+  const handleOverlayButtonClick = useCallback(() => {
+    // Action: Unmute and Play
+    console.log("VideoPlayer: Overlay button clicked (when paused and muted). Unmuting and Playing.");
+    toggleMute();
+    play();
+  }, [toggleMute, play]);
+  // ----------------------------------------------------
+
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
       <video 
@@ -126,15 +141,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay Play/Pause Button - Show when not playing */}
-      { !isPlaying && (
+      {/* Overlay Play/Pause Button - UPDATED Visibility and Logic */}
+      { (!isPlaying && isMuted) && ( // <<< Show only if Paused AND Muted
         <button 
           ref={playButtonRef}
-          onClick={togglePlayPause}
-          tabIndex={0} 
+          onClick={handleOverlayButtonClick} // <-- Use updated handler
+          tabIndex={0}
           className="absolute p-3 z-10 bg-black bg-opacity-50 text-purple-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-opacity duration-200 opacity-80 hover:opacity-100"
-          aria-label="Play Video"
+          aria-label="Unmute and Play Video" // <-- Updated aria-label
         >
+          {/* You might want a different icon here, like play + speaker? Keeping play icon for now. */}
           <svg className="w-12 h-12 lg:w-16 lg:h-16" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
           </svg>

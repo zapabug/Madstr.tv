@@ -343,17 +343,27 @@ export function useMediaElementPlayback({
 
   const handleSeek = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const mediaElement = mediaElementRef.current;
-    if (!mediaElement) return;
+    if (!mediaElement || !duration || duration <= 0) return;
+    
     const seekTime = parseFloat(event.target.value);
-    if (isFinite(seekTime)) {
-        mediaElement.currentTime = seekTime;
-        setCurrentTime(seekTime);
-        if (currentItemUrl) {
-            savePlaybackTime(currentItemUrl, seekTime);
-            lastSaveTimeRef.current = Date.now();
-        }
+    console.log(`useMediaElementPlayback (${elementType}): Seek input changed to ${seekTime}`);
+    
+    if (!isNaN(seekTime)) {
+      setCurrentTime(seekTime); // Update state immediately for visual feedback
+      if (!isSeeking) setIsSeeking(true); // Indicate seeking is active
+      
+      // Actual seek on the element
+      mediaElement.currentTime = seekTime;
+      
+      // We might want a mechanism to set isSeeking back to false
+      // after the element finishes seeking, but for now, 
+      // updating the currentTime state might be enough visually.
+      // A simple approach: assume seek is done quickly.
+      // setTimeout(() => setIsSeeking(false), 100); // Optional debounce/delay
+    } else {
+      console.warn(`useMediaElementPlayback (${elementType}): Invalid seek value:`, event.target.value);
     }
-  }, [mediaElementRef, currentItemUrl]);
+  }, [mediaElementRef, isSeeking, setIsSeeking, duration, elementType]);
 
   const setPlaybackRateControl = useCallback((rate: number) => {
     const mediaElement = mediaElementRef.current;

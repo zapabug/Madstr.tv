@@ -1,5 +1,6 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import QRCode from 'react-qr-code';
+import { nip19 } from 'nostr-tools';
 import ndkInstance from './ndk'; // <-- Import the singleton NDK instance
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import MediaPanel from './components/MediaPanel';
@@ -15,6 +16,7 @@ import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
 import { useCurrentAuthor } from './hooks/useCurrentAuthor';
 import { useNDKInit } from './hooks/useNDKInit'; // <-- Import the new hook
+import { useUserProfile } from './hooks/useUserProfile'; // <<< Import useUserProfile >>>
 import { NostrNote } from './types/nostr';
 import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,6 +45,11 @@ function App() {
   const auth = useAuth(ndkInstance);
   const { followedTags } = auth;
 
+  // --- MEMOIZE authors and tags before passing to useMediaNotes ---
+  const memoizedMediaAuthors = useMemo(() => mediaAuthors, [mediaAuthors]);
+  const memoizedFollowedTags = useMemo(() => followedTags, [followedTags]);
+  // ---------------------------------------------------------------
+
   // --- Wallet Hook --- <<< Initialize useWallet here >>>
   const wallet = useWallet({ ndkInstance, isNdkReady });
 
@@ -54,26 +61,26 @@ function App() {
 
   // Fetch notes using dynamic parameters
   const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({ 
-    authors: mediaAuthors, 
+    authors: memoizedMediaAuthors,
     mediaType: 'podcast', 
     ndk: ndkInstance, 
     limit: 25
   });
   const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
-    authors: mediaAuthors, 
+    authors: memoizedMediaAuthors,
     mediaType: 'video', 
     ndk: ndkInstance, 
     limit: videoFetchLimit,
     until: videoFetchUntil,
-    followedTags: followedTags
+    followedTags: memoizedFollowedTags
   });
   const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
-    authors: mediaAuthors, 
+    authors: memoizedMediaAuthors,
     mediaType: 'image', 
     ndk: ndkInstance, 
     limit: imageFetchLimit,
     until: imageFetchUntil,
-    followedTags: followedTags
+    followedTags: memoizedFollowedTags
   });
   
   // State for shuffled notes for display
@@ -213,12 +220,6 @@ function App() {
     }
   }, []);
 
-  // Use the nevent URI directly for the QR code value
-  const qrValue = MAIN_THREAD_NEVENT_URI || '';
-  if (!qrValue) {
-      console.warn("App.tsx: MAIN_THREAD_NEVENT_URI is not set in constants.ts. QR code will be empty.");
-  }
-
   // Keyboard Controls Hook
   useKeyboardControls({
     isFullScreen,
@@ -247,6 +248,25 @@ function App() {
       imageNotes: shuffledImageNotes,
       videoNotes: uniqueVideoNotes,
   });
+
+  // --- NEW: Fetch Current Author Profile --- 
+  const currentAuthorHexPubkey = useMemo(() => {
+    if (!currentAuthorNpub) return null;
+    try {
+      return nip19.decode(currentAuthorNpub).data as string;
+    } catch (e) {
+      console.error("Error decoding currentAuthorNpub:", e);
+      return null;
+    }
+  }, [currentAuthorNpub]);
+
+  const { profile: currentAuthorProfile, isLoading: isLoadingAuthorProfile } = useUserProfile(
+    currentAuthorHexPubkey,
+    ndkInstance
+  );
+
+  const authorProfilePictureUrl = currentAuthorProfile?.picture || null;
+  // -----------------------------------------
 
   // --- Effect for Preload URL Calculation ---
   useEffect(() => {
@@ -321,30 +341,20 @@ function App() {
         Mad⚡tr.tv
       </h2>
 
-      {/* Bottom Left Area (QR Code) */}
-       <div className="absolute bottom-4 left-4 z-10 flex flex-col items-center">
-           {/* Reply QR Code Container */}
-           <div className="bg-white p-1.5 rounded-md shadow-lg w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 mb-1">
-               {qrValue ? (
-                 <QRCode
-                   value={qrValue}
-                   size={256}
-                   style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                   viewBox={`0 0 256 256`}
-                   level="L"
-                 />
-               ) : (
-                 <div className="w-full h-full flex items-center justify-center text-black text-xs text-center">No Thread ID</div>
-               )}
-           </div>
-           <p className="text-xs text-gray-400 font-semibold">Reply here</p>
-       </div>
-
       {/* Inner wrapper */}
       <div className="relative flex flex-col flex-grow min-h-0 overflow-hidden">
 
         {/* MediaFeed Area (Top Section) */}
          <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
+              {/* <<< NEW: Author Profile Picture (Always Visible) >>> */}
+              {authorProfilePictureUrl && (
+                <img
+                  src={authorProfilePictureUrl}
+                  alt="Author profile"
+                  className="absolute top-2 left-2 z-30 w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-purple-600 shadow-lg pointer-events-none"
+                />
+              )}
+              {/* <<< End New Element >>> */}
               <AnimatePresence mode='wait'>
                  {isLoadingAuthors ? (
                      <motion.div
@@ -374,6 +384,7 @@ function App() {
                              currentImageIndex={currentImageIndex}
                              imageNotes={shuffledImageNotes}
                              authorNpub={currentAuthorNpub}
+                             authorProfilePictureUrl={authorProfilePictureUrl}
                              isPlaying={false}
                              togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
                              isFullScreen={isFullScreen}
@@ -394,7 +405,11 @@ function App() {
                              src={currentItemUrl} 
                              isPlaying={videoPlayback.isPlaying}
                              togglePlayPause={videoPlayback.togglePlayPause}
+                             pause={videoPlayback.pause}
+                             play={videoPlayback.play}
+                             toggleMute={videoPlayback.toggleMute}
                              authorNpub={currentAuthorNpub}
+                             // authorProfilePictureUrl={authorProfilePictureUrl} // <<< Pass picture URL - Commented out until VideoPlayer supports it >>>
                              autoplayFailed={videoPlayback.autoplayFailed}
                              isMuted={videoPlayback.isMuted}
                              currentNoteId={stateVideoNotes[currentVideoIndex]?.id}

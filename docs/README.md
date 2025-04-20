@@ -13,7 +13,7 @@ If you are developing a production application, we recommend using TypeScript an
 
 ---
 
-# TugaTV Nostr Display Application
+# Mad⚡tr.tv Nostr Display Application
 
 This application is designed to run on a display (like a TV) and show content from the Nostr network, including media slideshows, podcast episodes, and message boards.
 

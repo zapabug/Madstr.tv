@@ -40,10 +40,11 @@ export interface SendTipParams {
 
 // NEW: List of default mints
 const DEFAULT_MINT_URLS: string[] = [
-    'https://mint.minibits.cash', // First entry is the initial default
+    'https://testnut.cashu.space', // Test mint first for default
+    'https://mint.minibits.cash',
     'https://mint.coinos.io',
-    'https://mint.cashu.me',
-    'https://testnut.cashu.space' // Test mint - Keep for internal use/testing
+    'https://mint.npub.cash' // Added npub.cash
+    // 'https://mint.cashu.me', // Removed cashu.me
 ];
 
 // Export the list for use elsewhere

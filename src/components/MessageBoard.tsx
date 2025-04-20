@@ -2,6 +2,10 @@ import 'websocket-polyfill'; // Keep polyfill for now, though likely not needed 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import NDK, { NDKEvent, NDKFilter, NDKKind, NDKSubscription, NDKUserProfile } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools'; // Import nip19 for decoding
+// Import useAuth
+import { useAuth } from '../hooks/useAuth';
+// Import ABOUT.md content
+import aboutContent from '/ABOUT.md?raw';
 // Import shared profile cache utilities
 import { 
     ProfileData, 
@@ -27,6 +31,8 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
   const subscription = useRef<NDKSubscription | null>(null);
   const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
   const [isProfileCacheLoaded, setIsProfileCacheLoaded] = useState(false);
+  // Get auth state
+  const auth = useAuth(ndk ?? undefined); // Pass ndk instance or undefined
 
   // Load profiles from shared cache on component mount
   useEffect(() => {
@@ -262,49 +268,62 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
       return null;
   }
 
+  // --- Conditional rendering based on login state ---
+  if (!auth.isLoggedIn) {
+    return (
+      <div className="flex flex-col h-full overflow-y-auto p-4 bg-gray-800 text-gray-300 rounded-lg shadow-inner">
+        <h2 className="text-xl font-semibold text-purple-400 mb-4">Welcome to Mad⚡tr.tv!</h2>
+        <pre className="whitespace-pre-wrap text-sm font-mono">
+          {aboutContent}
+        </pre>
+      </div>
+    );
+  }
+
+  // --- Render the Message List if logged in ---
   return (
-    <div className="h-full overflow-y-auto scroll-smooth p-2">
-      {messages.length === 0 && !renderStatus() && (
-          <p className="text-gray-500 text-center mt-6 text-lg lg:text-xl">No replies yet...</p>
-      )}
+    <div className="flex flex-col h-full overflow-hidden bg-gray-800 rounded-lg shadow-inner">
+      {/* Status Bar (Optional) */}
+      {/* {renderStatus()} */}
 
-      {messages.length > 0 && (
-        <ul className="w-full space-y-1 pl-32">
-          {messages.map((msg, index) => {
-              const profile = profiles[msg.pubkey];
-              const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...';
-              const pictureUrl = profile?.picture;
-              const isLoadingProfile = profile?.isLoading;
+      {/* Message List */}
+      <div className="flex-grow overflow-y-auto px-4 pb-4 pt-2 space-y-3">
+        {messages.length === 0 && (
+          <div className="text-center text-gray-500 pt-4">No messages yet...</div>
+        )}
+        {messages
+          .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)) // Sort newest first
+          .map((msg) => {
+            const profile = profiles[msg.pubkey];
+            const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...';
+            const profilePicture = profile?.picture;
 
-              return (
-                <li 
-                  key={msg.id} 
-                  className={`flex flex-row items-start space-x-2 transition-colors duration-100 py-1 lg:py-1.5 px-3 lg:px-4 bg-gray-900/60 rounded-lg`}
-                >
-                  <div className="flex-shrink-0 w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-gray-600/80 overflow-hidden mt-1">
-                      {isLoadingProfile ? (
-                          <div className="w-full h-full animate-pulse bg-gray-500"></div>
-                      ) : pictureUrl ? (
-                          <img src={pictureUrl} alt={displayName || 'avatar'} className="w-full h-full object-cover" onError={() => console.error(`Failed to load ${pictureUrl}`)} />
-                      ) : (
-                          <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
-                              {displayName?.substring(0, 2) || '??'}
-                          </span>
-                      )}
+            return (
+              <div key={msg.id} className="flex items-start space-x-2 p-2 bg-gray-750 rounded-md shadow">
+                {/* Profile Picture */}
+                {profilePicture ? (
+                  <img
+                    src={profilePicture}
+                    alt={`${displayName}'s avatar`}
+                    className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-600 object-cover flex-shrink-0"
+                    onError={(e) => (e.currentTarget.style.display = 'none')} // Hide if image fails
+                  />
+                ) : (
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-purple-700 flex items-center justify-center text-white text-xs lg:text-sm font-bold flex-shrink-0">
+                    {displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div className={`flex-grow min-w-0 mt-0.5`}>
-                      <span className="font-medium text-purple-600 text-sm lg:text-base mr-1.5" title={profile?.name ? msg.pubkey : undefined}>
-                          {displayName}:
-                      </span>
-                      <span className="text-sm lg:text-base text-gray-200 break-words">
-                          {msg.content}
-                      </span>
-                  </div>
-                </li>
-              );
+                )}
+                {/* Message Content */}
+                <div className="flex-grow text-sm lg:text-base">
+                  <span className="font-medium text-purple-600 text-sm lg:text-base mr-1.5" title={profile?.name ? msg.pubkey : undefined}>
+                    {displayName}
+                  </span>
+                  <span className="text-gray-300">{msg.content}</span>
+                </div>
+              </div>
+            );
           })}
-        </ul>
-      )}
+      </div>
     </div>
   );
 };

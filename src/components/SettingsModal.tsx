@@ -4,7 +4,22 @@ import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth p
 import { useWallet, UseWalletReturn, DEFAULT_MINT_URLS } from '../hooks/useWallet'; // Import useWallet return type and DEFAULT_MINT_URLS
 import QRCode from 'react-qr-code'; // Import QRCode for backup
 import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
+import { FiRefreshCw } from 'react-icons/fi'; // Import FiRefreshCw for refresh icon
 type NDKInstance = NDK; // Alias NDK class as NDKInstance type
+
+// RE-ADD SVG component definition
+const CustomLoggedInIcon = () => (
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <path 
+      d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" 
+      fill="#8B5CF6" // Purple fill
+      stroke="#F7931A" // Orange stroke
+      strokeWidth="1.5"
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 // Helper to truncate npub/nsec
 const truncateKey = (key: string | null, length = 16): string => {
@@ -57,6 +72,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const tagListRef = useRef<HTMLUListElement>(null);
     const mintUrlInputRef = useRef<HTMLInputElement>(null); // Ref for Mint URL input
     const saveMintUrlButtonRef = useRef<HTMLButtonElement>(null); // Ref for Save Mint URL button
+    const refreshDepositsButtonRef = useRef<HTMLButtonElement>(null); // Ref for Refresh Deposits button
 
     // Effect to initialize Mint URL input (uses wallet prop)
     useEffect(() => {
@@ -72,10 +88,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     useEffect(() => {
         if (isOpen && auth.isLoggedIn) { 
             console.log('SettingsModal: Attempting to start deposit listener.');
-            wallet.startDepositListener(auth);
+            wallet.startDepositListener(auth); // <-- RE-ENABLED
         } else {
              console.log('SettingsModal: Stopping deposit listener (modal closed or not logged in).');
-            wallet.stopDepositListener();
+             wallet.stopDepositListener();
         }
         return () => {
             console.log('SettingsModal: Cleaning up deposit listener effect.');
@@ -158,7 +174,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
             "Generate New TV Identity?\\n\\n" +
             "This will create a unique Nostr identity (nsec/npub) for this TV. " +
             "You MUST back up the private key (nsec) shown afterwards, ideally by scanning the QR code with your phone. " +
-            "Losing it means losing control of this TV's Nostr profile and follows.\\n\\n" +
+            "Losing it means losing control of this TV's Nostr profile and the ability to set up follows.\\n\\n" +
             "Proceed with generation?"
         );
 
@@ -202,14 +218,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
             setDisplayError(null);
             try {
                 // Attempt to save and login
-        const success = await auth.loginWithNsec(generatedNsec);
-        if (success) {
+                const success = await auth.loginWithNsec(generatedNsec);
+                if (success) {
                      console.log("Successfully logged in with generated identity.");
+                     // **NEW**: Automatically set the default mint URL for the new identity
+                     try {
+                         console.log(`Attempting to set default mint: ${DEFAULT_MINT_URLS[0]}`)
+                         await wallet.setConfiguredMintUrl(DEFAULT_MINT_URLS[0]);
+                         console.log("Default mint URL set successfully.");
+                     } catch (mintError) {
+                         console.error("Error setting default mint URL:", mintError);
+                         // Optionally display a non-blocking error to the user?
+                         // setDisplayError("Logged in, but failed to set default wallet mint.");
+                     }
                      // Optional: Prompt immediate backup after first save
                      alert("Identity Saved! It's highly recommended to back up this nsec NOW using the QR code shown after login.");
                      setShowNsecBackupQR(true); // Trigger backup QR display immediately after login
                      setGeneratedNpub(null); // Clear generation state
-            setGeneratedNsec(null);
+                     setGeneratedNsec(null);
                      setShowNsecQR(false);
                     // Focus should shift to logged-in state view
                 } else {
@@ -423,7 +449,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         >
             {/* Header */}
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-purple-400">Settings</h2>
+                    <h2 className="text-xl font-bold text-purple-400">Mad⚡tr.tv Settings</h2>
                 <button
                         ref={closeButtonRef}
                         onClick={handleClose}
@@ -444,36 +470,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
 
                 {/* --- Authentication Section --- */}
                  <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
-                    <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Identity</h3>
-
                     {auth.isLoggedIn ? (
-                        // --- Logged In View ---
-                        <div className="space-y-3">
-                             <p className="text-sm text-gray-400">Logged in as:</p>
-                             <div
-                                 ref={loggedInNpubRef}
-                                 tabIndex={0} // Make it focusable
-                                 className="text-md font-mono p-2 bg-gray-800 rounded border border-transparent focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 cursor-pointer transition-transform duration-100"
-                                 onClick={() => handleNpubKeyDown({ key: 'Enter', preventDefault: () => {}, stopPropagation: () => {} } as any)} // Allow click too
-                                 onKeyDown={handleNpubKeyDown}
-                                 aria-label={`Logged in as ${truncateNpub(auth.currentUserNpub)}. Press OK 3 times to show backup QR.`}
-                             >
-                                 {truncateNpub(auth.currentUserNpub)}
-                             </div>
-                              {showNsecBackupQR && auth.currentUserNsec && (
-                                 <div className="mt-2 p-3 bg-white rounded shadow flex flex-col items-center">
-                                    <p className='text-red-700 font-bold text-center text-sm mb-2'>BACKUP QR - GUARD THIS!</p>
-                                    <QRCode value={auth.currentUserNsec} size={128} level="L" />
-                                    <button
-                                        onClick={() => setShowNsecBackupQR(false)}
-                                        className="mt-3 text-xs text-gray-600 hover:text-black focus:outline-none focus:ring-1 focus:ring-gray-500 rounded px-1"
-                                        aria-label="Hide Backup QR Code"
-                                    >
-                                        Hide QR
-                                    </button>
-                                 </div>
-                             )}
-
+                        // --- Simplified Logged In View ---
+                        <div className="space-y-3 text-center"> {/* Centered content */}                            
                             <button
                                 ref={logoutButtonRef}
                                 onClick={handleLogout}
@@ -481,11 +480,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             >
                                 Logout
                             </button>
+                            {/* Logout Warning */}                            
+                            <p className="text-xs text-yellow-500/80 pt-2">
+                                Warning: Logging out without backing up your nsec will result in loss of access to your followed tags and possible loss of wallet balance.
+                            </p>
                         </div>
                      ) : (
-                         // --- Logged Out View ---
+                         // --- Logged Out View ---                         
                          <div className="space-y-4">
-
+                            <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Connect or Login</h3>                             
                             {/* NIP-46 Connection */}
                             <div className='text-center'>
                                 <button
@@ -507,8 +510,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                           >
                                               Cancel
                                           </button>
-                                 </div>
-                             )}
+                                     </div>
+                                 )}
                              </div>
 
                              <p className="text-center text-xs text-gray-500">- OR -</p>
@@ -553,23 +556,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                          </div>
                                      )}
                                      {generatedNsec && ( // Only show 'Use' button if nsec is generated
-                             <button
+                                         <button
                                               ref={useIdentityButtonRef}
                                               onClick={handleUseGeneratedIdentity}
                                               disabled={auth.isLoadingAuth}
                                               className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
-                            >
-                                 Use This Identity
-                             </button>
+                                        >
+                                             Use This Identity
+                                         </button>
                                      )}
-                              <button
+                                      <button
                                          onClick={() => { setGeneratedNpub(null); setGeneratedNsec(null); setShowNsecQR(false); setDisplayError(null); setTimeout(() => generateButtonRef.current?.focus(), 50); }}
                                          className="w-full text-xs text-gray-400 hover:text-white mt-1 focus:outline-none focus:underline"
                                          aria-label="Cancel generation"
                                      >
                                          Cancel Generation
-                             </button>
-                         </div>
+                                     </button>
+                                 </div>
                              )}
 
                              {/* Login with Existing Nsec */}
@@ -585,33 +588,55 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 mb-2"
                                          aria-label="Enter your nsec private key"
                                      />
-                            <button
+                                    <button
                                          ref={loginNsecButtonRef}
                                          onClick={handleLoginWithNsec}
                                          disabled={auth.isLoadingAuth || !nsecInput.trim()}
                                          className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
                                      >
                                          Login with Nsec
-                            </button>
+                                    </button>
                                  </div>
                             )}
-                        </div>
-                    )}
-                </div>
+                        </div> // This closes the Logged Out View div
+                     ) // This closes the ternary operator
+                    } 
+                </div> {/* This closes the Authentication Section div */}            
 
                 {/* --- Wallet Section --- */}
                 {auth.isLoggedIn && (
                     <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
-                        <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Wallet</h3>
-                        <div className="space-y-3">
-                            <p className="text-sm text-gray-400">Current Balance:</p>
-                            <p className="text-xl font-semibold text-yellow-400">{wallet.balanceSats.toLocaleString()} sats</p>
+                        <div className="space-y-1">
+                            {/* Balance Label as Section Title */}                            {/* FIXED Syntax & Applied Title Styles */}                            <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Wallet Balance:</h3>                            
+                            {/* Value and Refresh Button Row */}                            
+                            <div className="flex justify-between items-center">                                
+                                <p className="text-xl font-semibold text-yellow-400">
+                                    {wallet.balanceSats.toLocaleString()} sats
+                                </p>
+                                {/* Refresh Button (conditionally rendered) */}
+                                {auth.isLoggedIn && (
+                                    <button
+                                        ref={refreshDepositsButtonRef}
+                                        onClick={() => {
+                                            console.log('Manual deposit refresh triggered.');
+                                            wallet.stopDepositListener();
+                                            setTimeout(() => wallet.startDepositListener(auth), 100); 
+                                        }}
+                                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                                        aria-label="Refresh Deposit Check"
+                                        title="Check for new deposits"
+                                    >
+                                        <FiRefreshCw className="h-5 w-5" />
+                                    </button>
+                                )}
+                            </div>
 
-                            {wallet.walletError && <p className="text-red-400 bg-red-900/40 p-2 rounded text-sm">{wallet.walletError}</p>}
-                            {wallet.isLoadingWallet && <p className="text-purple-400 text-sm">Loading wallet...</p>}
-                            {wallet.isListeningForDeposits && <p className="text-blue-400 text-sm">Listening for deposits...</p>}
+                            {/* Removed Listening text */}
+                            {wallet.walletError && <p className="text-red-400 bg-red-900/40 p-2 rounded text-sm mt-2">{wallet.walletError}</p>}
+                            {wallet.isLoadingWallet && <p className="text-purple-400 text-sm mt-2">Loading wallet...</p>}
 
-                            <div className="pt-2">
+                            {/* Mint URL Input Section */}
+                            <div className="pt-3 mt-3 border-t border-gray-700/30">
                                 <label htmlFor="mintUrlInput" className="block text-sm font-medium text-gray-400 mb-1">
                                     Cashu Mint URL:
                                 </label>
@@ -635,20 +660,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                         {isSavingMintUrl ? 'Saving...' : 'Save'}
                                     </button>
                                 </div>
-                                {/* NEW: Display Default Mints */}
-                                <div className="mt-3">
-                                    <p className="text-xs text-gray-500 mb-1">Recommended Mints:</p>
-                                    <ul className="list-disc list-inside space-y-0.5">
-                                        {/* Filter out the test mint before mapping */}
-                                        {DEFAULT_MINT_URLS.filter(url => url !== 'https://testnut.cashu.space').map(url => (
-                                            <li key={url} className="text-xs text-gray-400 truncate">{url}</li>
-                                        ))}
-                                    </ul>
+                                {/* RE-ADDED: Display Default Mints & Deposit QR side-by-side */}                                <div className="mt-3 flex items-start gap-4"> {/* Flex container */}                                    <div className="flex-1"> {/* Container for mints list */}                                        <p className="text-xs text-gray-500 mb-1">Recommended Mints:</p>                                        <ul className="list-disc list-inside space-y-0.5">                                            {/* Filter out the test mint before mapping */}                                            {DEFAULT_MINT_URLS.filter(url => url !== 'https://testnut.cashu.space').map(url => (
+                                                <li key={url} className="text-xs text-gray-400 truncate">{url}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    {/* RE-ADDED: Deposit QR Code with Logo */}                                    {auth.currentUserNpub && (
+                                        <div className="relative p-1 bg-white rounded shadow self-start"> {/* Wrapper for positioning */}                                            <QRCode value={`nostr:${auth.currentUserNpub}`} size={80} level="H" /> {/* Added nostr: prefix, Level H */}                                            {/* --- Logo Overlay --- */}                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <div className="w-1/3 h-1/3 opacity-90">                                                     <CustomLoggedInIcon />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
-                            <p className="text-xs text-gray-500 pt-2 border-t border-gray-700/50">
-                                Deposit Instructions: Send a Cashu token (e.g., <code>cashuA...</code>) in an encrypted Nostr DM (Kind 4) to your TV's npub. The balance updates automatically when this settings panel is open.
+                            <p className="text-xs text-gray-500 pt-3 border-t border-gray-700/50"> {/* Adjusted pt */}                                Deposit Instructions: Create a Cashu token and send it as a DM  to the address shown in the QR code.
                             </p>
                             <p className="text-xs font-bold text-red-500/80 mt-1">
                                 SECURITY WARNING: Storing Cashu tokens in a browser is risky. Do not store large amounts. Use at your own risk.

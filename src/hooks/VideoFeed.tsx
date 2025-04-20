@@ -45,9 +45,13 @@ const VideoFeed: React.FC<VideoFeedProps> = ({ url, posterNpub, onEnded, interac
     togglePlayPause,
     handleSeek,
   } = useMediaElementPlayback({
-    mediaRef: videoRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
+    mediaElementRef: videoRef as React.RefObject<HTMLAudioElement | HTMLVideoElement>,
     currentItemUrl: url,
     onEnded: onEnded,
+    isActiveMode: true,
+    elementType: 'video',
+    autoplayEnabled: true,
+    next: true,
   });
 
   // --- Effects for Play/Pause state communication ---

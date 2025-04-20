@@ -210,6 +210,18 @@ export function useMediaNotes({
     }, []); // No dependencies, it's a pure function based on args
 
     useEffect(() => {
+        // <<< START ADDED LOGGING >>>
+        console.log(`useMediaNotes (${mediaType}): useEffect RUNNING. Props:`, { 
+            authors: authors?.map(a => a.substring(0, 8)), // Log snippets for brevity
+            mediaType, 
+            limit, 
+            until, 
+            followedTags, 
+            ndkExists: !!ndk,
+            isFetching: isFetching.current 
+        });
+        // <<< END ADDED LOGGING >>>
+
         // --- Dependency Change Logging --- 
         let changedDeps: string[] = [];
         if (prevNdkRef.current !== ndk) changedDeps.push('ndk');
@@ -228,6 +240,9 @@ export function useMediaNotes({
         if (mediaType === 'image') {
              if (changedDeps.length > 0) {
                  console.log(`useMediaNotes (image): Effect triggered by changed dependencies:`, changedDeps.join(', '));
+             } else {
+                 // <<< ADDED: Log if effect runs but NO deps changed (for image mode) >>>
+                 console.log(`useMediaNotes (image): Effect running, but NO dependency changes detected.`);
              }
              console.log(`useMediaNotes (image): Effect check`, { isFetching: isFetching.current, hasNdk: !!ndk, numAuthors: authors.length });
         }
@@ -242,6 +257,8 @@ export function useMediaNotes({
 
         // Debounce or prevent fetch if already fetching or no NDK/authors
         if (isFetching.current || !ndk || authors.length === 0) {
+            // <<< ADDED LOGGING >>>
+            console.log(`useMediaNotes (${mediaType}): useEffect SKIPPING fetch. Conditions:`, { isFetching: isFetching.current, ndkExists: !!ndk, numAuthors: authors.length });
             // If no authors/ndk, clear state
             if (!ndk || authors.length === 0) {
                  setNotes([]);
@@ -331,7 +348,7 @@ export function useMediaNotes({
                 currentSubscription.current.stop();
             }
             
-            currentSubscription.current = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
+            currentSubscription.current = ndk.subscribe(filter, { closeOnEose: true, groupable: false });
 
             currentSubscription.current.on('event', (event: NDKEvent) => {
                 const note = processEvent(event, urlRegex, mediaType);
