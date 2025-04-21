@@ -78,12 +78,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [src, videoRef]);
 
   // --- Calculate canTip --- 
-  const canTip = isNdkReady && !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && authorNpub && auth.isLoggedIn && !!ndkInstance;
+  const canTip = !!wallet &&
+                 isNdkReady && 
+                 !wallet.isLoadingWallet && 
+                 wallet.balanceSats >= DEFAULT_TIP_AMOUNT && 
+                 authorNpub && 
+                 auth.isLoggedIn &&
+                 !!ndkInstance;
 
   // --- Tipping Handler (Similar to ImageFeed) ---
   const handleTip = useCallback(async () => {
-    if (!canTip || !authorNpub || !ndkInstance || !auth ) {
-        console.warn('VideoPlayer: Cannot tip:', { canTip, authorNpub, ndkInstanceExists: !!ndkInstance, authExists: !!auth });
+    if (!canTip || !authorNpub || !ndkInstance || !auth || !wallet ) {
+        console.warn('VideoPlayer: Cannot tip:', { canTip, authorNpub, ndkInstanceExists: !!ndkInstance, authExists: !!auth, walletExists: !!wallet });
         return;
     }
     setIsTipping(true);
@@ -123,12 +129,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // --- Conditional Click Handler for Overlay Button ---
   const handleOverlayButtonClick = useCallback(() => {
-    // Action: Unmute and Play
-    console.log("VideoPlayer: Overlay button clicked (when paused and muted). Unmuting and Playing.");
-    toggleMute();
-    play();
-  }, [toggleMute, play]);
-  // ----------------------------------------------------
+    // Action: Just Play (the play function now handles unmute attempt)
+    console.log("VideoPlayer: Overlay button clicked. Calling handleOverlayButtonClick -> play().");
+    // toggleMute(); // <<< REMOVED toggleMute() call
+    play();       // <<< Only call play()
+  }, [play]); // <<< Updated dependencies
+
+  // --- Video Element Error Handler ---
+  const handleVideoError = useCallback((e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const videoElement = e.currentTarget;
+    console.error("VideoPlayer Error Event:", {
+        code: videoElement.error?.code, 
+        message: videoElement.error?.message,
+        source: videoElement.currentSrc
+    });
+    // Optionally, you could try to load the next video or show a message
+  }, []);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
@@ -137,22 +153,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         className="max-w-full max-h-full object-contain"
         muted={isMuted}
         playsInline
+        onError={handleVideoError}
       >
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay Play/Pause Button - UPDATED Visibility and Logic */}
-      { (!isPlaying && isMuted) && ( // <<< Show only if Paused AND Muted
+      {/* Overlay Button - Reverting to: Visible ONLY if Paused */}
+      { !isPlaying && ( // <<< Show ONLY if Paused 
         <button 
           ref={playButtonRef}
-          onClick={handleOverlayButtonClick} // <-- Use updated handler
+          onClick={handleOverlayButtonClick} // <<< Always call unmute and play handler 
           tabIndex={0}
           className="absolute p-3 z-10 bg-black bg-opacity-50 text-purple-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-opacity duration-200 opacity-80 hover:opacity-100"
-          aria-label="Unmute and Play Video" // <-- Updated aria-label
+          aria-label="Unmute and Play Video" 
         >
-          {/* You might want a different icon here, like play + speaker? Keeping play icon for now. */}
+          {/* Use Play icon since it only shows when paused */}
           <svg className="w-12 h-12 lg:w-16 lg:h-16" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
           </svg>
         </button>
       )}

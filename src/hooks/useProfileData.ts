@@ -93,26 +93,32 @@ export function useProfileData(notes: NostrNote[]): UseProfileDataResult {
     } finally {
         processingPubkeys.current.delete(pubkey);
     }
-  }, [ndk, profiles]); // Depend on NDK and profiles state to avoid re-fetching if profile already loaded
+  }, [ndk]); // Depend on NDK and profiles state to avoid re-fetching if profile already loaded
 
   // --- Effect to Trigger Profile Fetches --- 
   useEffect(() => {
-    if (notes.length > 0) {
-        // Filter out notes without a posterPubkey before creating the Set
+    if (notes.length > 0 && ndk) {
         const validPubkeysInNotes = notes
             .map(note => note.posterPubkey)
             .filter((pubkey): pubkey is string => typeof pubkey === 'string' && pubkey.length > 0);
         
         const uniquePubkeysInNotes = new Set(validPubkeysInNotes);
+        let fetchedAny = false; // Track if we initiated any fetch this run
 
         uniquePubkeysInNotes.forEach(pubkey => {
             // Fetch logic remains the same: check if profile needs fetching
             if (!profiles[pubkey]?.name && !processingPubkeys.current.has(pubkey)) {
+                console.log(`useProfileData Effect: Triggering fetchProfile for ${pubkey.substring(0,8)}`);
                 fetchProfile(pubkey);
+                fetchedAny = true;
             }
       });
+      // Optional: Log if no new fetches were triggered
+      // if (!fetchedAny) { 
+      //   console.log("useProfileData Effect: Ran, but no new profiles needed fetching based on current notes.");
+      // }
     }
-  }, [notes, profiles, fetchProfile]);
+  }, [notes, ndk, fetchProfile]);
 
   return { profiles, fetchProfile };
 } 

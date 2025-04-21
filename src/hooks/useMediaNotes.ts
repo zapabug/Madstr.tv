@@ -58,7 +58,6 @@ export function useMediaNotes({
 }: UseMediaNotesProps): UseMediaNotesReturn {
     const [notes, setNotes] = useState<NostrNote[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    // notesById now accumulates across fetches triggered by prop changes
     const notesById = useRef<Map<string, NostrNote>>(new Map());
     const currentSubscription = useRef<NDKSubscription | null>(null);
     const isFetching = useRef<boolean>(false); // Prevent concurrent fetches
@@ -69,9 +68,22 @@ export function useMediaNotes({
     const prevLimitRef = useRef<number>(limit);
     const prevUntilRef = useRef<number | undefined>(until);
     const prevFollowedTagsRef = useRef<string[] | undefined>(followedTags);
+    // <<< Add ref to track previous authors instance >>>
+    const prevAuthorsInstanceRef = useRef<string[]>(authors);
+    // <<< Add ref to track previous NDK instance >>>
+    const prevNdkInstanceRef = useRef<NDK | null>(ndk);
 
     // <<< Add logging for image type specifically >>>
     if (mediaType === 'image') {
+        // <<< Log reference change check BEFORE useEffect >>>
+        const authorsReferenceChanged = prevAuthorsInstanceRef.current !== authors;
+        const ndkReferenceChanged = prevNdkInstanceRef.current !== ndk; // <<< Check NDK ref change >>>
+        console.log(`useMediaNotes (image): RENDER CHECK. Authors ref changed: ${authorsReferenceChanged}, NDK ref changed: ${ndkReferenceChanged}`); // <<< Add NDK check to log >>>
+        
+        // Update the refs *after* the check for the next render
+        prevAuthorsInstanceRef.current = authors;
+        prevNdkInstanceRef.current = ndk; // <<< Update NDK ref >>>
+        
         console.log("useMediaNotes (image): Hook rendering/re-rendering.", { authors, limit, until, followedTags });
     }
 
@@ -269,70 +281,80 @@ export function useMediaNotes({
         }
 
         let isMounted = true;
-        // Do NOT clear notesById.current here - we want to accumulate
         setIsLoading(true);
-        isFetching.current = true; // Mark as fetching
-        // Don't clear displayed notes immediately unless authors/type changed significantly?
-        // Maybe only clear if until is undefined (meaning a fresh load)?
-        // For simplicity, let's keep existing notes displayed while loading more.
+        isFetching.current = true; 
+        // <<< Clear the notesById map ONLY when starting a completely new fetch cycle >>>
+        notesById.current.clear();
+        // The notes state will persist until the fetch completes in EOSE
 
         const authorsList = authors;
         const kindsToFetch = getKindsForMediaType(mediaType);
         const urlRegex = getUrlRegexForMediaType(mediaType);
 
         const fetchAndSubscribe = async () => {
-            // ... cache check ...
-            if (mediaType === 'image') {
-                console.log(`useMediaNotes (image): Checking cache for ${authorsList.length} authors.`);
-                // Add more detail on cache results if needed
-            }
-            
-            // --- Cache Check (Always read and merge) ---
-            console.log(`useMediaNotes (${mediaType}): Checking cache for ${authorsList.length} authors.`);
-            // <<< Always try to load from cache >>>
-            const cachedNotes = await getCachedNotesByAuthors(authorsList);
-            console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`); 
-            const relevantCachedNotes: NostrNote[] = [];
-            let newNotesAddedFromCache = false;
-            if (cachedNotes.length > 0) {
-                cachedNotes.forEach(note => {
-                    // Filter for relevance (kind, matching URL regex for the *current* mediaType)
-                    if (kindsToFetch.includes(note.kind) && note.url && note.url.match(urlRegex)) { 
+            // <<< START: Check cache for newest timestamp >>>
+            let newestCachedTimestamp: number | undefined = undefined;
+            let relevantCachedNotes: NostrNote[] = []; // Store notes valid for this mediaType
+            try {
+                console.log(`useMediaNotes (${mediaType}): Checking cache for authors:`, authorsList.map(a => a.substring(0,8)));
+                const cachedNotes = await getCachedNotesByAuthors(authorsList);
+                console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`);
+                if (cachedNotes && cachedNotes.length > 0) {
+                    // Filter cached notes for this mediaType
+                    relevantCachedNotes = cachedNotes.filter(note => 
+                        kindsToFetch.includes(note.kind) && 
+                        note.url && 
+                        note.url.match(urlRegex)
+                    );
+                    
+                    console.log(`useMediaNotes (${mediaType}): Found ${relevantCachedNotes.length} relevant notes in cache after filtering.`);
+                    
+                    // Pre-populate the map with relevant cached notes
+                    relevantCachedNotes.forEach(note => {
                         if (!notesById.current.has(note.id)) {
                             notesById.current.set(note.id, note);
-                            relevantCachedNotes.push(note);
-                            newNotesAddedFromCache = true;
-                        }    
+                        }
+                    });
+                    console.log(`useMediaNotes (${mediaType}): Added ${notesById.current.size} notes from cache to internal map.`);
+
+                    // Find newest timestamp *among the relevant cached notes*
+                    if (relevantCachedNotes.length > 0) {
+                        // Sort MUTATES the array, do it once
+                        relevantCachedNotes.sort((a, b) => b.created_at - a.created_at);
+                        newestCachedTimestamp = relevantCachedNotes[0].created_at;
+                        console.log(`useMediaNotes (${mediaType}): Newest relevant cached timestamp: ${newestCachedTimestamp} (${new Date(newestCachedTimestamp * 1000).toISOString()})`);
                     } 
-                });
-                if (newNotesAddedFromCache) {
-                    console.log(`useMediaNotes (${mediaType}): Added ${relevantCachedNotes.length} relevant notes from cache to map.`); 
-                    // <<< Update UI immediately with combined notes from map >>>
-                    const allNotesFromMap = Array.from(notesById.current.values());
-                    const sortedNotes = allNotesFromMap.sort((a, b) => b.created_at - a.created_at);
-                    if (isMounted) {
-                        console.log(`useMediaNotes (${mediaType}): Updating state immediately with ${sortedNotes.length} notes from cache/map.`);
-                        setNotes(sortedNotes); 
-                        // Maybe set isLoading false briefly if only cache was hit?
-                        // setIsLoading(false); // Consider implications
-                    }
                 } else {
-                    console.log(`useMediaNotes (${mediaType}): No *new* relevant notes found in cache after filtering.`);
+                    console.log(`useMediaNotes (${mediaType}): Cache was empty for these authors.`);
                 }
-            } else {
-                 console.log(`useMediaNotes (${mediaType}): Cache was empty for these authors.`);
+            } catch (error) {
+                console.error(`useMediaNotes (${mediaType}): Error reading/processing cache:`, error);
             }
-            // <<< End of modified cache handling >>>
+             // <<< If cache was populated, update state immediately BEFORE network fetch >>>
+            if (relevantCachedNotes.length > 0) {
+                 // Use the already sorted relevantCachedNotes
+                 console.log(`useMediaNotes (${mediaType}): Pre-populating state with ${relevantCachedNotes.length} notes from cache.`);
+                 // Don't set isLoading false yet, network fetch might still happen
+                 setNotes(relevantCachedNotes); 
+            }
+            // <<< END: Cache Check Logic >>>
             
-            // --- Subscription --- 
             const filter: NDKFilter = {
                 kinds: kindsToFetch,
                 authors: authorsList,
-                limit: limit,
+                limit: limit, // Limit applies to the network fetch
             };
             if (until !== undefined) {
-                filter.until = until;
+                filter.until = until; // For pagination
             }
+            // <<< USE CACHED TIMESTAMP FOR SINCE FILTER >>>
+            if (newestCachedTimestamp !== undefined && !until) { // Don't use since if paginating backwards
+                // Add 1 second to avoid refetching the exact same newest note
+                filter.since = newestCachedTimestamp + 1;
+                console.log(`useMediaNotes (${mediaType}): Applying SINCE filter: ${filter.since} (${new Date(filter.since * 1000).toISOString()})`);
+            }
+            // <<< END SINCE FILTER LOGIC >>>
+
             if (followedTags && followedTags.length > 0) {
                 filter['#t'] = followedTags.map(tag => tag.toLowerCase()); 
             }
@@ -358,6 +380,7 @@ export function useMediaNotes({
                          console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
                     }
                     notesById.current.set(note.id, note);
+                    // <<< DO NOT setNotes here on individual events >>>
                 }
             });
 
@@ -368,15 +391,14 @@ export function useMediaNotes({
                 const finalNotes = Array.from(notesById.current.values());
                 const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
                 if (isMounted) {
-                    // <<< Log final state update >>>
                     if (mediaType === 'image') {
-                        console.log(`useMediaNotes (image): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                        console.log(`useMediaNotes (image): Updating state ONCE with ${sortedFinalNotes.length} notes after EOSE.`);
                     }
+                    // <<< The single state update point >>>
                     setNotes(sortedFinalNotes);
                     setIsLoading(false);
                     isFetching.current = false;
                 }
-                // Cache the final accumulated notes
                 console.log(`useMediaNotes (${mediaType}): Caching ${finalNotes.length} notes after EOSE.`);
                 cacheMediaNotes(finalNotes).catch(error => {
                      console.error(`useMediaNotes (${mediaType}): Error caching notes after EOSE:`, error);

@@ -99,15 +99,19 @@ export function useMediaState({
             console.log(`useMediaState: Processing ${initialImageNotes.length} initial image notes (Reference changed).`);
             const sortedNotes = [...initialImageNotes].sort((a, b) => b.created_at - a.created_at);
             setImageNotes(sortedNotes);
-            // Reset index if needed
-            if (currentImageIndex >= sortedNotes.length && sortedNotes.length > 0) {
-                setCurrentImageIndex(0);
-            }
+            // Reset index if needed (Read current state directly)
+            setImageNotes(currentNotes => {
+                const newIndex = (currentImageIndex >= currentNotes.length && currentNotes.length > 0) ? 0 : currentImageIndex;
+                if (newIndex !== currentImageIndex) {
+                    setCurrentImageIndex(0); // Always reset to 0 if out of bounds
+                }
+                return sortedNotes; // Return the new sorted notes
+            });
             prevInitialImageNotesRef.current = initialImageNotes; // Update the ref
         } else {
           console.log("useMediaState: Skipping image notes processing - reference hasn't changed.");
         }
-    }, [initialImageNotes, currentImageIndex]); // Keep currentImageIndex dependency for reset logic
+    }, [initialImageNotes]); // <<< REMOVED internal state deps >>>
 
     // --- NEW: Effect to process initialPodcastNotes prop --- 
     useEffect(() => {
@@ -115,20 +119,22 @@ export function useMediaState({
         if (initialPodcastNotes !== prevInitialPodcastNotesRef.current) {
             console.log(`useMediaState: Processing ${initialPodcastNotes.length} initial podcast notes (Reference changed).`);
             const sortedNotes = [...initialPodcastNotes].sort((a, b) => b.created_at - a.created_at);
+            // Use functional updates to avoid dependency issues
             setPodcastNotes(sortedNotes);
-            setIsLoadingPodcastNotes(false); // Set loading false here
-            // Reset index if needed
-            const newIndex = (currentPodcastIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentPodcastIndex;
-            if (newIndex !== currentPodcastIndex) {
+            setIsLoadingPodcastNotes(false); 
+            // Read current index state directly for comparison
+            const currentIdx = currentPodcastIndex; 
+            const newIndex = (currentIdx >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentIdx;
+            if (newIndex !== currentIdx) {
                 setCurrentPodcastIndexInternal(newIndex);
             }
-             prevInitialPodcastNotesRef.current = initialPodcastNotes; // Update the ref
+            prevInitialPodcastNotesRef.current = initialPodcastNotes; // Update the ref
         } else {
            console.log("useMediaState: Skipping podcast notes processing - reference hasn't changed.");
-           // Still ensure loading is false if the ref hasn't changed but notes are present
-           if(podcastNotes.length > 0 && isLoadingPodcastNotes) setIsLoadingPodcastNotes(false);
+           // Set loading false if needed, but avoid triggering effect run
+           if (initialPodcastNotes.length > 0 && isLoadingPodcastNotes) setIsLoadingPodcastNotes(false);
         }
-    }, [initialPodcastNotes, currentPodcastIndex, podcastNotes.length, isLoadingPodcastNotes]); // Add dependencies for reset and loading logic
+    }, [initialPodcastNotes]); // <<< REMOVED internal state deps, kept isLoadingPodcastNotes check logic separate >>>
 
     // --- NEW: Effect to process initialVideoNotes prop --- 
     useEffect(() => {
@@ -136,20 +142,22 @@ export function useMediaState({
         if (initialVideoNotes !== prevInitialVideoNotesRef.current) {
             console.log(`useMediaState: Processing ${initialVideoNotes.length} initial video notes (Reference changed).`);
             const sortedNotes = [...initialVideoNotes].sort((a, b) => b.created_at - a.created_at);
+            // Use functional updates
             setVideoNotes(sortedNotes);
-            setIsLoadingVideoNotes(false); // Set loading false here
-            // Reset index if needed
-            const newIndex = (currentVideoIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentVideoIndex;
-            if (newIndex !== currentVideoIndex) {
+            setIsLoadingVideoNotes(false);
+             // Read current index state directly for comparison
+            const currentIdx = currentVideoIndex;
+            const newIndex = (currentIdx >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentIdx;
+            if (newIndex !== currentIdx) {
                  setCurrentVideoIndex(newIndex);
             }
-             prevInitialVideoNotesRef.current = initialVideoNotes; // Update the ref
+            prevInitialVideoNotesRef.current = initialVideoNotes; // Update the ref
         } else {
              console.log("useMediaState: Skipping video notes processing - reference hasn't changed.");
-             // Still ensure loading is false if the ref hasn't changed but notes are present
-             if(videoNotes.length > 0 && isLoadingVideoNotes) setIsLoadingVideoNotes(false);
+             // Set loading false if needed, but avoid triggering effect run
+             if (initialVideoNotes.length > 0 && isLoadingVideoNotes) setIsLoadingVideoNotes(false);
         }
-    }, [initialVideoNotes, currentVideoIndex, videoNotes.length, isLoadingVideoNotes]); // Add dependencies for reset and loading logic
+    }, [initialVideoNotes]); // <<< REMOVED internal state deps, kept isLoadingVideoNotes check logic separate >>>
 
     // Update currentItemUrl whenever the relevant source changes
     useEffect(() => {

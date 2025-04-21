@@ -70,18 +70,34 @@ export function useMediaAuthors({ ndk }: UseMediaAuthorsProps) {
                         console.log("useMediaAuthors: Kind 3 event ignored (already processed).");
                         return;
                     }
-                    foundKind3Event = true;
-                    if (timeoutRef.current) {
-                         clearTimeout(timeoutRef.current);
-                         timeoutRef.current = null;
-                    }
+                    const currentAuthorsString = mediaAuthors.slice().sort().join(','); // Get current state
                     const followed = kind3Event.tags
                         .filter(tag => tag[0] === 'p' && tag[1])
                         .map(tag => tag[1]);
-                    const authors = Array.from(new Set([tvPubkeyHex, ...followed])); 
-                    console.log(`useMediaAuthors: Setting mediaAuthors state with ${authors.length} authors.`, authors);
-                    setMediaAuthors(authors);
-                    setIsLoadingAuthors(false); 
+                    const newAuthors = Array.from(new Set([tvPubkeyHex, ...followed]));
+                    const newAuthorsString = newAuthors.slice().sort().join(','); // Get new list
+                    
+                    if (currentAuthorsString !== newAuthorsString) {
+                        console.log(`useMediaAuthors: Kind 3 changed! Setting mediaAuthors state with ${newAuthors.length} authors.`, newAuthors);
+                        foundKind3Event = true; // Mark found only if changed?
+                        if (timeoutRef.current) {
+                            clearTimeout(timeoutRef.current);
+                            timeoutRef.current = null;
+                        }
+                        setMediaAuthors(newAuthors);
+                        setIsLoadingAuthors(false); 
+                    } else {
+                        console.log("useMediaAuthors: Received Kind 3 event, but authors list is identical. Skipping state update.");
+                        // Still clear timeout and set loading false if it was the *first* event received
+                        if (!foundKind3Event) {
+                            foundKind3Event = true;
+                            if (timeoutRef.current) {
+                                clearTimeout(timeoutRef.current);
+                                timeoutRef.current = null;
+                            }
+                            if (isLoadingAuthors) setIsLoadingAuthors(false);
+                        }
+                    }
                 });
 
                 sub.on('eose', () => {

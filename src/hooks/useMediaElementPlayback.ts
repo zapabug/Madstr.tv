@@ -82,6 +82,7 @@ export function useMediaElementPlayback({
   // Define play/pause early
   const play = useCallback(async () => {
     const mediaElement = mediaElementRef.current;
+    console.log(`useMediaElementPlayback (${elementType}): play() function called.`);
     if (!mediaElement) return;
     if (!isActiveMode && elementType === 'video') {
       console.log(`useMediaElementPlayback (${elementType}): Play called but not active mode, pausing.`);
@@ -89,27 +90,45 @@ export function useMediaElementPlayback({
       setIsPlaying(false);
       return;
     }
+
     try {
-      console.log(`useMediaElementPlayback (${elementType}): Attempting play... Current src: ${mediaElement.currentSrc}`);
+      console.log(`useMediaElementPlayback (${elementType}): Attempting play... Current src: ${mediaElement.currentSrc}, Element Muted: ${mediaElement.muted}`);
       hasAttemptedPlayRef.current = true;
+      setAutoplayFailed(false);
       await mediaElement.play();
       console.log(`useMediaElementPlayback (${elementType}): Play command successful.`);
+      setIsPlaying(true);
       initialPlaySuccessfulRef.current = true;
+
+      console.log(`useMediaElementPlayback (${elementType}): Attempting to unmute after successful play.`);
+      mediaElement.muted = false;
+      const finalMutedState = mediaElement.muted;
+      setIsMuted(finalMutedState);
+      if (finalMutedState) {
+          console.warn(`useMediaElementPlayback (${elementType}): Browser prevented unmuting. Video will play muted.`);
+      } else {
+          console.log(`useMediaElementPlayback (${elementType}): Unmute successful or was already unmuted.`);
+      }
+
     } catch (error) {
-      console.error(`useMediaElementPlayback (${elementType}): Playback failed:`, error);
-      setAutoplayFailed(true);
+      console.error(`useMediaElementPlayback (${elementType}): play() failed:`, error);
       setIsPlaying(false);
+      setAutoplayFailed(true);
       initialPlaySuccessfulRef.current = false;
+      if (mediaElement) {
+          setIsMuted(mediaElement.muted);
+      }
     }
   }, [mediaElementRef, isActiveMode, elementType]);
 
   const pause = useCallback(() => {
     const mediaElement = mediaElementRef.current;
+    console.log(`useMediaElementPlayback (${elementType}): pause() function called.`);
     if (mediaElement && !mediaElement.paused) {
       console.log("useMediaElementPlayback: Pausing media.");
       mediaElement.pause();
     }
-  }, [mediaElementRef]);
+  }, [mediaElementRef, elementType]);
 
   const updateProgress = useCallback(() => {
     if (mediaElementRef.current && !isSeeking) {
@@ -170,6 +189,15 @@ export function useMediaElementPlayback({
     if (elementType === 'video' && next && isActiveMode) {
       console.log(`useMediaElementPlayback (${elementType}): Video ended, calling onEnded to advance sequence.`);
       onEnded?.();
+      console.log(`useMediaElementPlayback (${elementType}): Scheduling play() for the next video.`);
+      setTimeout(() => {
+          console.log(`useMediaElementPlayback (${elementType}): setTimeout triggered, calling play() for next video.`);
+          if (isActiveMode) {
+              play();
+          } else {
+               console.log(`useMediaElementPlayback (${elementType}): Mode changed during timeout, not playing next video.`);
+          }
+      }, 100);
     } else if (elementType === 'audio' && isActiveMode) {
         // If it's audio and ended, just call the provided onEnded (might stop playback or go to next audio)
         console.log(`useMediaElementPlayback (${elementType}): Audio ended, calling provided onEnded.`);
@@ -177,7 +205,7 @@ export function useMediaElementPlayback({
     } else {
         console.log(`useMediaElementPlayback (${elementType}): Ended, but not advancing (not video/next or not active mode).`);
     }
-}, [mediaElementRef, isActiveMode, elementType, next, onEnded]);
+}, [mediaElementRef, isActiveMode, elementType, next, onEnded, play]);
 
   const handleRateChange = useCallback(() => {
     const mediaElement = mediaElementRef.current;
@@ -188,8 +216,16 @@ export function useMediaElementPlayback({
   }, [mediaElementRef]);
 
   const handleVolumeChange = () => {
-    console.log("useMediaElementPlayback: VolumeChange event fired. Muted:", mediaElementRef.current?.muted);
-    setIsMuted(mediaElementRef.current?.muted || true);
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+    const currentMutedState = mediaElement.muted;
+    console.log(`useMediaElementPlayback (${elementType}): VolumeChange event fired. Element muted: ${currentMutedState}. Current isMuted state: ${isMuted}`);
+    if (currentMutedState !== isMuted) {
+        console.log(`useMediaElementPlayback (${elementType}): Updating isMuted state to ${currentMutedState}`);
+        setIsMuted(currentMutedState);
+    } else {
+        console.log(`useMediaElementPlayback (${elementType}): isMuted state already matches element.`);
+    }
   };
 
   useEffect(() => {
@@ -202,26 +238,31 @@ export function useMediaElementPlayback({
         mediaElement.load();
       }
       setIsPlaying(false);
-      setIsMuted(true);
+      // setIsMuted(true); // Keep state consistent if reset
       setAutoplayFailed(false);
       setCurrentTime(0);
       setDuration(0);
       hasAttemptedPlayRef.current = false;
       initialPlaySuccessfulRef.current = false;
+      // <<< Ensure isMuted state is true if we reset >>>
+      if (!mediaElement?.src) setIsMuted(true);
+      console.log(`useMediaElementPlayback (${elementType}): Effect cleanup/reset. Setting isMuted=${!mediaElement?.src}`);
       return;
     }
 
-    console.log(`useMediaElementPlayback (${elementType}): Effect triggered. URL: ${currentItemUrl}, IsActiveMode: ${isActiveMode}, initialTime: ${initialTime}`);
-    
-    setIsPlaying(false);
-    setIsMuted(true);
-    mediaElement.muted = true;
+    // <<< REMOVED forced muting >>>
+    // console.log(`useMediaElementPlayback (${elementType}): Effect triggered for new URL. Setting initial isMuted=true`);
+    // setIsMuted(true);           
+    // mediaElement.muted = true; 
     setAutoplayFailed(false);
     setDuration(0);
     hasAttemptedPlayRef.current = false;
     initialPlaySuccessfulRef.current = false;
     isProgrammaticSeek.current = false;
     lastSaveTimeRef.current = Date.now();
+    // <<< Sync state with the element's actual muted status >>>
+    setIsMuted(mediaElement.muted);
+    console.log(`useMediaElementPlayback (${elementType}): Effect triggered for new URL. Initial element muted status: ${mediaElement.muted}`);
 
     const handleLoadedMetadata = () => {
       console.log("useMediaElementPlayback: Metadata loaded, duration:", mediaElement.duration);
@@ -259,9 +300,14 @@ export function useMediaElementPlayback({
     };
 
     const handlePause = () => {
-      console.log("useMediaElementPlayback: Pause event fired.");
+      const mediaElement = mediaElementRef.current;
+      if (!mediaElement) return;
+      console.log(`useMediaElementPlayback (${elementType}): Pause event fired. Paused: ${mediaElement.paused}, ProgrammaticSeek: ${isProgrammaticSeek.current}`);
       if (!isProgrammaticSeek.current) {
+        console.log(`useMediaElementPlayback (${elementType}): Setting isPlaying=false due to pause event.`);
         setIsPlaying(false);
+      } else {
+        console.log(`useMediaElementPlayback (${elementType}): Pause event ignored for state update (programmatic seek).`);
       }
     }
 
@@ -306,7 +352,7 @@ export function useMediaElementPlayback({
          mediaElement.pause();
       }
     };
-  }, [currentItemUrl, mediaElementRef, onEnded, isSeeking, initialTime, isActiveMode, elementType, autoplayEnabled, duration, play]);
+  }, [currentItemUrl, mediaElementRef, onEnded, initialTime, isActiveMode, elementType, autoplayEnabled, play]);
 
   useEffect(() => {
     const mediaElement = mediaElementRef.current;
@@ -337,9 +383,10 @@ export function useMediaElementPlayback({
       const mediaElement = mediaElementRef.current;
       if (!mediaElement) return;
       const currentlyMuted = mediaElement.muted;
-      console.log(`useMediaElementPlayback: toggleMute() called. Currently muted: ${currentlyMuted}`);
-      mediaElement.muted = !currentlyMuted;
-  }, [mediaElementRef]);
+      const newMutedState = !currentlyMuted;
+      console.log(`useMediaElementPlayback (${elementType}): toggleMute() called. Current element muted: ${currentlyMuted}. Setting element muted to ${newMutedState}`);
+      mediaElement.muted = newMutedState;
+  }, [mediaElementRef, elementType]);
 
   const handleSeek = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const mediaElement = mediaElementRef.current;
@@ -349,21 +396,22 @@ export function useMediaElementPlayback({
     console.log(`useMediaElementPlayback (${elementType}): Seek input changed to ${seekTime}`);
     
     if (!isNaN(seekTime)) {
-      setCurrentTime(seekTime); // Update state immediately for visual feedback
-      if (!isSeeking) setIsSeeking(true); // Indicate seeking is active
+      console.log(`useMediaElementPlayback (${elementType}): Setting isSeeking=true`);
+      setIsSeeking(true);
+      setCurrentTime(seekTime);
       
-      // Actual seek on the element
       mediaElement.currentTime = seekTime;
       
-      // We might want a mechanism to set isSeeking back to false
-      // after the element finishes seeking, but for now, 
-      // updating the currentTime state might be enough visually.
-      // A simple approach: assume seek is done quickly.
-      // setTimeout(() => setIsSeeking(false), 100); // Optional debounce/delay
+      const timerId = setTimeout(() => {
+          console.log(`useMediaElementPlayback (${elementType}): Seek timeout finished. Setting isSeeking=false.`);
+          setIsSeeking(false);
+      }, 150);
+
     } else {
       console.warn(`useMediaElementPlayback (${elementType}): Invalid seek value:`, event.target.value);
+      setIsSeeking(false);
     }
-  }, [mediaElementRef, isSeeking, setIsSeeking, duration, elementType]);
+  }, [mediaElementRef, duration, elementType, setCurrentTime]);
 
   const setPlaybackRateControl = useCallback((rate: number) => {
     const mediaElement = mediaElementRef.current;

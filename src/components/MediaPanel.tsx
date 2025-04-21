@@ -8,6 +8,7 @@ import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback'; // K
 
 // Define types for props - This will expand significantly
 import { NostrNote } from '../types/nostr'; // Fixed import path
+import type NDK from '@nostr-dev-kit/ndk'; // Import NDK type
 
 // --- Helper to format time (seconds) into MM:SS ---
 const formatTime = (seconds: number): string => {
@@ -75,6 +76,9 @@ export interface MediaPanelProps {
 
   // <<< Add signalInteraction prop >>>
   signalInteraction: () => void;
+
+  // <<< Add ndkInstance prop >>>
+  ndkInstance: NDK | undefined;
 }
 
 // --- The Unified MediaPanel Component (Reverted) ---
@@ -103,6 +107,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     onVideoSelect,
     authors, // <<< Use added prop
     signalInteraction,
+    ndkInstance, // <<< Destructure ndkInstance
 }) => {
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
@@ -366,7 +371,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                 
                 // Profile Data lookup
                 const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
-                const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.substring(0, 10) || 'Anon';
+                const itemDisplayName = profile?.displayName || profile?.name || note.posterPubkey?.substring(0, 10) || 'Anon'; // Prioritize displayName
                 const itemPictureUrl = profile?.picture;
 
                 return (
@@ -387,7 +392,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                            }
                         }}
                         onKeyDown={(e) => handleItemKeyDown(e, note, index)}
-                        title={note.content || note.url} // Basic title
+                        title={`${itemDisplayName}: ${note.content || note.url}`} // Improved title
                     >
                         {/* Item Content (No change needed) */}
                         <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
@@ -395,13 +400,18 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                         </div>
                         <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
                              {itemPictureUrl ? (
-                                <img src={itemPictureUrl} alt={itemDisplayName} className="w-full h-full object-cover" />
+                                <img 
+                                  src={itemPictureUrl} 
+                                  alt={itemDisplayName} 
+                                  className="w-full h-full object-cover" 
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; /* Hide img on error */ }}
+                                />
                             ) : (
                                 <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">{itemDisplayName.substring(0, 1)}</span>
                             )}
                         </div>
                         <div className="flex-grow flex flex-col">
-                            <p className="text-sm text-white truncate" title={itemDisplayName}>
+                            <p className="text-sm text-white truncate font-medium" title={itemDisplayName}>
                                {itemDisplayName} 
                             </p>
                         </div>

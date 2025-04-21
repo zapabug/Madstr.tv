@@ -86,7 +86,7 @@ Here's a proposed plan of action, walking through the thought process for each s
 *   **Step 3.2: Implement DM Deposit Listener (`useWallet.ts`, requires `useAuth`)**
     *   **Thought Process:** The wallet needs to receive funds via encrypted Nostr DMs (Kind 4) containing `cashuA...` tokens. `useWallet` needs `useAuth` for decryption.
     *   **Implementation (`useWallet.ts`):**
-        *   Add internal function `handleIncomingDm` (defined within `startDepositListener`) to decrypt DMs using `auth.decryptDm`, find tokens via regex, redeem them using `cashuHelper.redeemToken`, add new proofs via `idb.addProofs`, and reload wallet state.
+        *   Add internal function `handleIncomingDm` (defined within `startDepositListener`) to decrypt DMs using `auth.decryptDm`, find tokens via regex, redeem them using `cashuHelper.redeemToken`, add new proofs via `idb.addProofs`, pand reload wallet state.
         *   Add function `startDepositListener(auth: UseAuthReturn, ndk: NDK)`: Checks login status, subscribes via NDK to Kind 4 DMs to the user's pubkey, calls `handleIncomingDm` on events, handles EOSE and close events.
         *   Add function `stopDepositListener()`: Unsubscribes from NDK.
         *   Add `useEffect` cleanup to call `stopDepositListener` on unmount.

@@ -159,7 +159,7 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
   // <<< Get profile data needed for display >>>
   const profile = currentImageNote?.posterPubkey ? profiles[currentImageNote.posterPubkey] : undefined;
   const displayName = profile?.name || profile?.displayName || currentImageNote?.posterPubkey?.substring(0, 10) || 'Anon';
-  const timestamp = currentImageNote?.created_at ? new Date(currentImageNote.created_at * 1000).toLocaleString() : 'Date unknown';
+  const timestamp = currentImageNote?.created_at ? new Date(currentImageNote.created_at * 1000).toLocaleDateString() : 'Date unknown';
 
   const currentNoteId = currentImageNote?.id;
   // Ensure ndkInstance is checked for canTip
@@ -294,10 +294,11 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
              transition={{ duration: 0.3, delay: 0.2 }}
              className="absolute bottom-1 left-1 z-10 p-2 bg-black bg-opacity-70 rounded-lg text-left pointer-events-none text-xs"
            >
-              {/* <<< REMOVED author display name paragraph >>> */}
+              {/* Author Info placeholder - can add author name/pic here later if desired */}
               {/* <p className="font-semibold text-purple-400 break-all" title={currentImageNote?.posterPubkey}>{displayName}</p> */}
+              
+              {/* Timestamp Display - Corrected */}
               <p className="text-gray-400 text-xs">{timestamp}</p>
-              <p className="text-gray-500 mt-1">Image {currentImageIndex + 1} of {imageNotes.length}</p>
            </motion.div>
          )
       }

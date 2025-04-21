@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Define default timeouts and check interval (you might want to move these to constants)
-const DEFAULT_INTERACTION_TIMEOUT = 180000; // 3 minutes
-const DEFAULT_MESSAGE_TIMEOUT = 300000;   // 5 minutes
+// Define default timeouts and check interval (Restore original values if known, otherwise use placeholders)
+const DEFAULT_INTERACTION_TIMEOUT = 180000; // 3 minutes (Adjust if original was different)
+const DEFAULT_MESSAGE_TIMEOUT = 300000;   // 5 minutes (Adjust if original was different)
 const CHECK_INTERVAL = 5000;             // Check every 5 seconds
 
 interface UseFullscreenProps {
@@ -17,6 +17,7 @@ interface UseFullscreenReturn {
   signalMessage: () => void;
 }
 
+// Original implementation (State management only)
 export const useFullscreen = ({
   interactionTimeout = DEFAULT_INTERACTION_TIMEOUT,
   messageTimeout = DEFAULT_MESSAGE_TIMEOUT,
@@ -27,21 +28,20 @@ export const useFullscreen = ({
   const [lastInteractionTimestamp, setLastInteractionTimestamp] = useState<number>(Date.now());
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Function to signal user interaction or a new message, updating timestamps and exiting fullscreen
+  // Function to signal user interaction or a new message, updating timestamps and exiting fullscreen state
   const signalActivity = useCallback((isMessage: boolean) => {
-    console.log(`useFullscreen: ${isMessage ? 'Message' : 'Interaction'} detected.`);
+    console.log(`useFullscreen (Original): ${isMessage ? 'Message' : 'Interaction'} detected.`);
     const now = Date.now();
     if (isMessage) {
       setLastMessageTimestamp(now);
     }
-    // Both messages and interactions count as interactions
-    setLastInteractionTimestamp(now);
+    setLastInteractionTimestamp(now); // Update interaction time for both
 
     if (isFullScreen) {
-      console.log(`useFullscreen: Exiting fullscreen due to ${isMessage ? 'new message' : 'interaction'}.`);
-      setIsFullScreen(false);
+      console.log(`useFullscreen (Original): Exiting fullscreen state due to ${isMessage ? 'new message' : 'interaction'}.`);
+      setIsFullScreen(false); // Only change internal state
     }
-  }, [isFullScreen]); // Depend on isFullScreen to ensure correct state check
+  }, [isFullScreen]);
 
   const signalInteraction = useCallback(() => {
     signalActivity(false);
@@ -51,48 +51,38 @@ export const useFullscreen = ({
     signalActivity(true);
   }, [signalActivity]);
 
-  // Effect for Fullscreen Checks
+  // Effect for Fullscreen Timeout Checks (Original logic)
   useEffect(() => {
     const cleanup = () => {
       if (checkIntervalRef.current) {
-        // console.log("useFullscreen Effect: Clearing interval timer.");
         clearInterval(checkIntervalRef.current);
         checkIntervalRef.current = null;
       }
     };
 
-    // If we are already fullscreen, clear any running timer and do nothing else
     if (isFullScreen) {
-      cleanup();
+      cleanup(); // Stop checking if we think we are fullscreen
       return;
     }
 
-    // --- If NOT fullscreen, start the periodic check ---
     const checkFullScreen = () => {
       const now = Date.now();
       const timeSinceInteraction = now - lastInteractionTimestamp;
       const timeSinceMessage = now - lastMessageTimestamp;
 
-      // console.log(`useFullscreen Check: Interaction=${timeSinceInteraction}ms, Message=${timeSinceMessage}ms`);
-
-      // Check if either condition is met to ENTER fullscreen
       if (timeSinceInteraction >= interactionTimeout || timeSinceMessage >= messageTimeout) {
-        console.log("useFullscreen Check: Timeout met, entering fullscreen.");
-        setIsFullScreen(true); // This will trigger the effect cleanup
+        console.log("useFullscreen (Original): Timeout met, entering fullscreen state.");
+        setIsFullScreen(true); // Only change internal state
       }
     };
 
-    // Clear any previous interval before starting a new one
-    cleanup();
-    // Start the check immediately and then set the interval
-    checkFullScreen();
+    cleanup(); // Clear previous interval
+    checkFullScreen(); // Initial check
     checkIntervalRef.current = setInterval(checkFullScreen, checkInterval);
-    console.log("useFullscreen Effect: Started interval timer.");
+    console.log("useFullscreen (Original): Started interval timer.");
 
-    // Return the cleanup function to clear interval on unmount or when isFullScreen becomes true
-    return cleanup;
+    return cleanup; // Cleanup interval on unmount or when isFullScreen becomes true
 
-  // Depend on the state variables that affect the check conditions and the timeout props
   }, [isFullScreen, lastInteractionTimestamp, lastMessageTimestamp, interactionTimeout, messageTimeout, checkInterval]);
 
   return { isFullScreen, signalInteraction, signalMessage };
