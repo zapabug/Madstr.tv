@@ -35,6 +35,8 @@ const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 const FULLSCREEN_INACTIVITY_TIMEOUT = 45000; // 45 seconds for fullscreen inactivity
 const VIDEO_PLAYLIST_INITIAL_LIMIT = 15;
 const VIDEO_PLAYLIST_LOAD_BATCH_SIZE = 15;
+const IMAGE_TAG_FETCH_LIMIT = 30; // <<< Add constant for tag image limit
+const VIDEO_TAG_FETCH_LIMIT = 15; // <<< New constant for video tag limit
 
 function App() {
   // --- NDK Initialization (Using Hook) ---
@@ -44,9 +46,9 @@ function App() {
   // Use the authors hook, passing the singleton ndk instance
   const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance });
 
-  // --- Auth Hook --- 
+  // --- Auth Hook ---
   const auth = useAuth(ndkInstance);
-  const { followedTags } = auth;
+  const { followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled } = auth;
 
   // --- MEMOIZE authors and tags before passing to useMediaNotes ---
   const memoizedMediaAuthors = useMemo(() => mediaAuthors, [mediaAuthors]);
@@ -55,13 +57,14 @@ function App() {
 
   // Stable reference for empty authors array for tag-only fetches
   const emptyAuthors = useMemo(() => [], []);
+  const emptyTags = useMemo(() => [], []);
 
   // --- Wallet Hook --- <<< Initialize useWallet here >>>
   const wallet = useWallet({ ndkInstance, isNdkReady });
 
-  // State for fetch parameters - Temporarily Reduced Limits
-  const [imageFetchLimit] = useState<number>(50); // TEMP: Reduced from 500
-  const [videoFetchLimit] = useState<number>(50); // TEMP: Reduced from 30
+  // State for fetch parameters - Set initial image limits to 30
+  const [imageFetchLimit] = useState<number>(30); // <<< Change from 50 to 30
+  const [videoFetchLimit] = useState<number>(15); // <<< Change initial video limit to 15
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
   const [imageTagsFetchUntil, setImageTagsFetchUntil] = useState<number | undefined>(undefined); // New state for tag pagination
@@ -85,12 +88,17 @@ function App() {
     ndk: ndkInstance,
     limit: videoFetchLimit,
     until: videoFetchUntil,
-    // No followedTags here
   });
 
-  // No followedTags here
-  const tagVideoNotes: NostrNote[] = [];
-  const isLoadingTagVideoNotes = false;
+  // --- Fetch VIDEO notes from TAGS (Conditional) ---
+  const { notes: tagVideoNotes, isLoading: isLoadingTagVideoNotes } = useMediaNotes({
+    followedTags: fetchVideosByTagEnabled ? memoizedFollowedTags : emptyTags,
+    mediaType: 'video',
+    ndk: ndkInstance,
+    limit: VIDEO_TAG_FETCH_LIMIT,
+    until: videoTagsFetchUntil,
+    authors: emptyAuthors,
+  });
 
   // --- Fetch IMAGE notes from AUTHORS ---
   const { notes: authorImageNotes, isLoading: isLoadingAuthorImages } = useMediaNotes({
@@ -102,9 +110,15 @@ function App() {
     // No followedTags here
   });
 
-  // No followedTags here
-  const tagImageNotes: NostrNote[] = [];
-  const isLoadingTagImages = false;
+  // --- Fetch IMAGE notes from TAGS (Conditional) ---
+  const { notes: tagImageNotes, isLoading: isLoadingTagImages } = useMediaNotes({
+    followedTags: fetchImagesByTagEnabled ? memoizedFollowedTags : emptyTags,
+    mediaType: 'image',
+    ndk: ndkInstance,
+    limit: IMAGE_TAG_FETCH_LIMIT,
+    until: imageTagsFetchUntil,
+    authors: emptyAuthors,
+  });
 
   // --- State for COMBINED and DEDUPLICATED notes ---
   const [combinedVideoNotes, setCombinedVideoNotes] = useState<NostrNote[]>([]);
@@ -189,48 +203,45 @@ function App() {
 
   // Fetcher functions - Reverted -> Updated for combined logic
   const fetchOlderImages = useCallback(() => {
-    // Fetch older from *both* sources if needed
+    // Fetch older from authors
     if (authorImageNotes.length > 0) {
       const oldestTimestamp = authorImageNotes[authorImageNotes.length - 1].created_at;
       setImageFetchUntil(oldestTimestamp);
-      console.log("App: Fetching older author images...");
+      console.log("App: Fetching older author images (next 30)...");
     }
-    if (tagImageNotes.length > 0) {
+    // <<< Fetch older from tags ONLY if enabled >>>
+    if (fetchImagesByTagEnabled && tagImageNotes.length > 0) {
       const oldestTagTimestamp = tagImageNotes[tagImageNotes.length - 1].created_at;
-      setImageTagsFetchUntil(oldestTagTimestamp); // Use separate state
-      console.log("App: Fetching older tag images...");
+      setImageTagsFetchUntil(oldestTagTimestamp);
+      console.log("App: Fetching older tag images (next 30)...");
     }
-  }, [authorImageNotes, tagImageNotes]); // Depend on both source arrays
+    // <<< Add fetchImagesByTagEnabled to dependencies >>>
+  }, [authorImageNotes, tagImageNotes, fetchImagesByTagEnabled]);
 
   const fetchOlderVideos = useCallback(() => {
     if (uniqueVideoNotes.length > visibleVideoCount) {
-      // Case 1: More videos available locally, expand the visible window
+      // Case 1: Expand visible window
       const newCount = Math.min(visibleVideoCount + VIDEO_PLAYLIST_LOAD_BATCH_SIZE, uniqueVideoNotes.length);
       console.log(`App: Expanding visible video count from ${visibleVideoCount} to ${newCount}`);
       setVisibleVideoCount(newCount);
     } else {
-      // Case 2: No more local videos, fetch older ones from relays
-      console.log(`App: Reached end of local videos (${uniqueVideoNotes.length}), fetching older from relays...`);
-      // --- Original logic to fetch older from relays ---
+      // Case 2: Fetch older from relays (BOTH sources now)
+      console.log(`App: Reached end of local videos (${uniqueVideoNotes.length}), fetching older (15+15) from relays...`);
+      // Fetch older from authors
       if (authorVideoNotes.length > 0) {
         const oldestTimestamp = authorVideoNotes[authorVideoNotes.length - 1].created_at;
         setVideoFetchUntil(oldestTimestamp);
-        console.log("App: Fetching older author videos...");
+        console.log("App: Fetching older author videos (next 15)...");
       }
-      if (tagVideoNotes.length > 0) { // Keep fetching older tags too if applicable
+      // <<< Fetch older from tags >>>
+      if (fetchVideosByTagEnabled && tagVideoNotes.length > 0) {
           const oldestTagTimestamp = tagVideoNotes[tagVideoNotes.length - 1].created_at;
           setVideoTagsFetchUntil(oldestTagTimestamp);
-          console.log("App: Fetching older tag videos...");
+          console.log("App: Fetching older tag videos (next 15)...");
       }
-      // --- End original logic ---
     }
-  }, [
-      uniqueVideoNotes, // Need full list length
-      visibleVideoCount, // Need current visible count
-      authorVideoNotes, // Need for fetching older
-      tagVideoNotes, // Need for fetching older
-      // setVideoFetchUntil, setVideoTagsFetchUntil // Setters don't need to be deps
-  ]); // Added dependencies
+    // <<< Dependencies updated >>>
+  }, [ uniqueVideoNotes, visibleVideoCount, authorVideoNotes, tagVideoNotes, fetchVideosByTagEnabled ]);
 
   // <<< Memoize the shuffled COMBINED image notes >>>
   const shuffledImageNotes = useMemo(() => {
@@ -501,8 +512,8 @@ function App() {
   const isLoading = isNdkConnecting ||
                     isLoadingAuthors ||
                     isLoadingPodcastNotes ||
-                    isLoadingAuthorVideoNotes || isLoadingTagVideoNotes || // Check both video loading states
-                    isLoadingAuthorImages || isLoadingTagImages; // Check both image loading states
+                    isLoadingAuthorVideoNotes || (fetchVideosByTagEnabled && isLoadingTagVideoNotes) ||
+                    isLoadingAuthorImages || (fetchImagesByTagEnabled && isLoadingTagImages);
 
   if (isNdkConnecting) {
     return (
@@ -754,7 +765,7 @@ function App() {
                             podcastNotes={statePodcastNotes} // from useMediaState (original podcast fetch)
                             videoNotes={stateVideoNotes} // from useMediaState (uniqueVideoNotes derived from combined)
                             isLoadingPodcastNotes={isLoadingPodcastNotes}
-                            isLoadingVideoNotes={isLoadingAuthorVideoNotes || isLoadingTagVideoNotes} // Check both video loading states
+                            isLoadingVideoNotes={isLoadingAuthorVideoNotes || (fetchVideosByTagEnabled && isLoadingTagVideoNotes)}
                             currentPodcastIndex={currentPodcastIndex}
                             currentVideoIndex={currentVideoIndex} // Index within uniqueVideoNotes
                             setCurrentPodcastIndex={setCurrentPodcastIndex}

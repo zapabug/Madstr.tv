@@ -188,3 +188,25 @@ This document summarizes the current state of the application after integrating 
     *   **Removed Redundant Logic:** Deleted internal `useEffect` that duplicated play/pause control, ensuring `useMediaElementPlayback` is the single source of truth for playback state.
     *   **Overlay Button Fix:** Changed the visibility condition of the overlay play button to `!isPlaying` to correctly show it when paused or when switching to video mode without autoplay.
 *   **Result:** Linter errors resolved. Video playback control is now solely managed by `useMediaElementPlayback`, allowing pausing via the media panel. Autoplay behavior is explicitly controlled. The video overlay button appears correctly when playback is not active. 
+
+### 14. Video Playlist Infinite Loop and Continuous Playback Refinements
+
+*   **Problem 1 (Infinite Loop):** Switching to video mode caused an infinite loop of logs, primarily `useMediaNotes (video): Effect triggered...` and `%%% Playback (video): Effect 3 (Core Listeners) RUNNING...`. This occurred even when only fetching videos based on followed tags.
+*   **Cause 1:** The `processEvent` function within `useMediaNotes` was defined with `useCallback` but had an empty dependency array `[]`. Since `getUrlRegexForMediaType` inside it depends on the `mediaType` prop, the callback reference changed on every render. As `processEvent` was a dependency of the main `useEffect` in `useMediaNotes`, this caused the effect to re-run constantly for the video tag fetch, creating new `tagVideoNotes` arrays, triggering updates in `App.tsx` and eventually restarting Effect 3 in `useMediaElementPlayback`.
+*   **Solution 1:** Added `mediaType` to the dependency array of the `useCallback` for `processEvent` in `useMediaNotes.ts`. Tested by temporarily commenting out the tag video fetch in `App.tsx` (which stopped the loop) and then uncommenting it after the fix (loop remained stopped).
+
+*   **Problem 2 (Playlist UX):** The initial video playlist could be very long, and playback stopped after each video.
+*   **Request:** Limit the initial playlist size (e.g., 15 items) and load more on demand from the fetched cache. Implement proactive preloading of the *next* video and enable automatic continuous playback.
+*   **Solution 2a (Playlist Limiting):**
+    *   Added state (`visibleVideoCount`) and constants (`VIDEO_PLAYLIST_INITIAL_LIMIT`, `VIDEO_PLAYLIST_LOAD_BATCH_SIZE`) to `App.tsx`.
+    *   Created a memoized slice (`visibleUniqueVideoNotes`) of the full `uniqueVideoNotes` array.
+    *   Modified the `fetchOlderVideos` callback passed to `useMediaState`: it now first attempts to increase `visibleVideoCount` if more local videos are available before falling back to fetching older videos from relays.
+    *   Updated `useMediaState` props to use the sliced array and its length.
+*   **Solution 2b (Preloading):**
+    *   Added a hidden `<video>` element (`preloadVideoRef`) to `App.tsx`.
+    *   Added a `useEffect` hook in `App.tsx` that listens for changes to `preloadVideoUrl` (calculated in another effect based on the next video in `uniqueVideoNotes`). When the URL changes, it sets the `src` of the hidden video element and calls `.load()` to initiate the download.
+*   **Solution 2c (Continuous Playback):**
+    *   Added `isEndedRef` (a `useRef`) to `useMediaElementPlayback.ts`.
+    *   Modified the `handleEnded` listener (in Effect 3) for videos: when a video ends, it sets `isEndedRef.current = true` *before* calling the `onEnded` prop (which triggers `handleNext` in `useMediaState` and eventually changes `currentItemUrl`).
+    *   Modified Effect 1 (Load Source URL) in `useMediaElementPlayback`: if the `currentItemUrl` changes *and* `isEndedRef.current` is true, it adds a one-time `canplay` listener to the element. When this listener fires (meaning the *next* video is ready), it calls `play()` and resets `isEndedRef`.
+*   **Result:** The infinite loop is resolved. Video playlists start limited and expand from the cache before fetching older ones. The next video is proactively preloaded using a hidden element. Videos now play back-to-back automatically. 

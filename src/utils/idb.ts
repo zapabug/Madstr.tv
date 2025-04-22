@@ -47,21 +47,36 @@ export interface StoredMintUrl {
     url: string;
 }
 
-// Use basic Proof type and add mintUrl in helpers if needed
-// export interface StoredProof extends Proof {
-//     id: string; // Concatenation of secret + C ? Or just use 'secret'? 'secret' should be unique per mint.
-//     mintUrl: string; // To group proofs by mint
-// }
+// <<< NEW: Add interface for Image Fetch Toggle setting >>>
+export interface StoredFetchImagesByTagEnabled {
+    id: 'fetchImagesByTagEnabled'; // Use literal type for the key
+    enabled: boolean;
+}
+// <<< END NEW >>>
+
+// <<< NEW: Add interface for NIP-46 Signer Pubkey setting >>>
+export interface StoredNip46SignerPubkey {
+    id: 'nip46SignerPubkey'; // Use literal type for the key
+    pubkey: string; // Store the hex pubkey
+}
+// <<< END NEW >>>
+
+// <<< NEW: Add interface for Video Fetch Toggle setting >>>
+export interface StoredFetchVideosByTagEnabled {
+    id: 'fetchVideosByTagEnabled'; // Use literal type for the key
+    enabled: boolean;
+}
+// <<< END NEW >>>
 
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl | StoredFetchImagesByTagEnabled | StoredNip46SignerPubkey | StoredFetchVideosByTagEnabled;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'mintUrl'; // Use literal types for keys
+    key: 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled';
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -209,6 +224,68 @@ export const idb = {
         }
         return null;
     },
+
+    // <<< NEW: Add specific helpers for the toggle setting >>>
+    saveFetchImagesByTagEnabledToDb: async (enabled: boolean): Promise<void> => {
+        await idb.putSetting({ id: 'fetchImagesByTagEnabled', enabled });
+    },
+
+    loadFetchImagesByTagEnabledFromDb: async (): Promise<boolean> => {
+        const setting = await idb.getSetting('fetchImagesByTagEnabled');
+        // Check if the loaded setting is the correct type and has the 'enabled' property
+        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'fetchImagesByTagEnabled' && 'enabled' in setting) {
+            return setting.enabled;
+        }
+        // Return the default value if not found or invalid
+        return true; // Or use the constant DEFAULT_FETCH_IMAGES_BY_TAG defined elsewhere if preferred
+    },
+    // <<< END NEW >>>
+
+    // <<< NEW: Add specific helpers for NIP-46 Signer Pubkey setting >>>
+    saveNip46SignerPubkeyToDb: async (pubkey: string): Promise<void> => {
+        // Basic validation: Ensure it's a 64-char hex string
+        if (typeof pubkey !== 'string' || pubkey.length !== 64 || !/^[0-9a-fA-F]+$/.test(pubkey)) {
+            console.error("Invalid NIP-46 hex pubkey format provided:", pubkey);
+            throw new Error("Invalid NIP-46 hex pubkey format.");
+        }
+        await idb.putSetting({ id: 'nip46SignerPubkey', pubkey });
+    },
+
+    loadNip46SignerPubkeyFromDb: async (): Promise<string | null> => {
+        const setting = await idb.getSetting('nip46SignerPubkey');
+        // Check if the loaded setting is the correct type and has the 'pubkey' property
+        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'nip46SignerPubkey' && 'pubkey' in setting) {
+            // Add validation here too? Or assume save ensures format.
+            if (typeof setting.pubkey === 'string' && setting.pubkey.length === 64) {
+                return setting.pubkey;
+            } else {
+                console.warn("Stored NIP-46 pubkey has invalid format, ignoring.", setting.pubkey);
+                // Optionally clear the invalid setting here
+                // await idb.deleteSetting('nip46SignerPubkey');
+            }
+        }
+        return null; // Not found or invalid
+    },
+
+    clearNip46SignerPubkeyFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('nip46SignerPubkey');
+    },
+    // <<< END NEW >>>
+
+    // <<< NEW: Add specific helpers for Video Fetch Toggle setting >>>
+    saveFetchVideosByTagEnabledToDb: async (enabled: boolean): Promise<void> => {
+        await idb.putSetting({ id: 'fetchVideosByTagEnabled', enabled });
+    },
+
+    loadFetchVideosByTagEnabledFromDb: async (): Promise<boolean> => {
+        const setting = await idb.getSetting('fetchVideosByTagEnabled');
+        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'fetchVideosByTagEnabled' && 'enabled' in setting) {
+            return setting.enabled;
+        }
+        // Default to true for videos as well, matching initial implementation in App.tsx
+        return true;
+    },
+    // <<< END NEW >>>
 
     // --- Media Note Cache Helpers ---
     getMediaNote: async (key: string): Promise<NostrNote | undefined> => {

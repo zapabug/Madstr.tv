@@ -57,6 +57,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const [mintUrlInput, setMintUrlInput] = useState<string>(''); // State for Mint URL input
     const [isSavingMintUrl, setIsSavingMintUrl] = useState<boolean>(false); // Loading state for save button
 
+    // <<< Add ref for the new toggle switch >>>
+    const fetchImagesToggleRef = useRef<HTMLButtonElement>(null);
+    // <<< Add ref for the video toggle switch >>>
+    const fetchVideosToggleRef = useRef<HTMLButtonElement>(null);
+
     const modalRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const generateButtonRef = useRef<HTMLButtonElement>(null);
@@ -426,6 +431,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         }
     };
 
+    // <<< NEW: Handler for the toggle switch >>>
+    const handleToggleFetchImagesByTag = useCallback(() => {
+        auth.setFetchImagesByTagEnabled(!auth.fetchImagesByTagEnabled);
+    }, [auth]); // Dependency: auth object containing the state and setter
+
+    // <<< NEW: Handler for the video toggle switch >>>
+    const handleToggleFetchVideosByTag = useCallback(() => {
+        auth.setFetchVideosByTagEnabled(!auth.fetchVideosByTagEnabled);
+    }, [auth]);
+
     // --- Render Logic ---
 
     if (!isOpen) return null;
@@ -737,7 +752,56 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                     )}
                 </div>
 
-                {/* Add other settings sections here (e.g., Tipping, Relays) */}
+                {/* <<< NEW: Fetch Images by Tag Toggle >>> */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-700 mt-4"> {/* Added top border/margin for separation */}
+                    <label htmlFor="fetchImagesToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4"> {/* Added padding right */}
+                        Fetch images by followed hashtags
+                    </label>
+                    <button
+                        ref={fetchImagesToggleRef}
+                        id="fetchImagesToggle"
+                        role="switch"
+                        aria-checked={auth.fetchImagesByTagEnabled}
+                        onClick={handleToggleFetchImagesByTag}
+                        className={`${
+                            auth.fetchImagesByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'
+                        } relative inline-flex flex-shrink-0 items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500`}
+                    >
+                        <span className="sr-only">Use setting</span> {/* For accessibility */}
+                        <span
+                            aria-hidden="true"
+                            className={`${
+                                auth.fetchImagesByTagEnabled ? 'translate-x-6' : 'translate-x-1'
+                            } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
+                        />
+                    </button>
+                </div>
+
+                {/* <<< NEW: Fetch Videos by Tag Toggle >>> */}
+                <div className="flex items-center justify-between pt-2"> {/* No top border needed if directly below */}
+                    <label htmlFor="fetchVideosToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4">
+                        Fetch videos by followed hashtags
+                    </label>
+                    <button
+                        ref={fetchVideosToggleRef}
+                        id="fetchVideosToggle"
+                        role="switch"
+                        aria-checked={auth.fetchVideosByTagEnabled}
+                        onClick={handleToggleFetchVideosByTag}
+                        className={`${ // <<< Re-added template literal for styles >>>
+                            auth.fetchVideosByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'
+                        } relative inline-flex flex-shrink-0 items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500`}
+                    >
+                        <span className="sr-only">Use setting</span>
+                        <span
+                            aria-hidden="true"
+                            className={`${ // <<< Re-added template literal for styles >>>
+                                auth.fetchVideosByTagEnabled ? 'translate-x-6' : 'translate-x-1'
+                            } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
+                        />
+                    </button>
+                </div>
+                {/* <<< END NEW SECTION >>> */}
 
                  {/* Footer - Maybe Save button if needed later */}
                  {/* <div className="mt-auto pt-4 border-t border-gray-600">

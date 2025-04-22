@@ -9,6 +9,9 @@ This document describes the architecture of the React-based TV application desig
 *   Content is fetched from Nostr relays based on a list of followed authors (fetched via Kind 3, with improved reliability using a timeout) and optional hashtags.
 *   **Image feeds** are **randomized** on load using `shuffleArray` for variety. Fetches a larger batch (e.g., 500) initially.
 *   **Video feeds** are **deduplicated** by URL (keeping newest) and displayed **sequentially** (sorted by creation date). Fetches a smaller batch (e.g., 30) initially.
+*   **Video playlist limited:** Initially shows a subset (e.g., 15) of videos, loading more from the cache on demand.
+*   **Video preloading:** Proactively loads the next video in the sequence using a hidden video element.
+*   **Continuous video playback:** Automatically plays the next video after the current one finishes.
 *   Older content (images/videos) can be fetched dynamically ("infinite scroll" behavior) by navigating past the end of the current list.
 *   Uses a **split-screen layout**, hiding the bottom panel in fullscreen mode.
 *   Enters **fullscreen mode** automatically after periods of inactivity or no new messages.
@@ -43,28 +46,32 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 ---
 
 *   **`App.tsx` (Root Component):**
-    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), handles image shuffling and video deduplication/sorting, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks. **Crucially, it initializes `useMediaAuthors` which provides the main `ndk` instance used by many other hooks/components.**
-    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit` = 500, `videoFetchLimit` = 30, `imageFetchUntil`, `videoFetchUntil`), shuffled image notes (`shuffledImageNotes`), deduplicated/sorted video notes (`uniqueVideoNotes`), initial podcast time (`initialPodcastTime`), settings modal visibility (`isSettingsOpen`).
-    *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
+    *   **Orchestrator:** Initializes core hooks, manages media element refs (`audioRef`, `videoRef`, `preloadVideoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes`), handles image shuffling and video deduplication/sorting, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks. **Crucially, it initializes `useMediaAuthors` which provides the main `ndk` instance used by many other hooks/components.**
+    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit` = 500, `videoFetchLimit` = 30, `imageFetchUntil`, `videoFetchUntil`), shuffled image notes (`shuffledImageNotes`), deduplicated/sorted video notes (`uniqueVideoNotes`), visible video count (`visibleVideoCount`), initial podcast time (`initialPodcastTime`), preload URL (`preloadVideoUrl`), settings modal visibility (`isSettingsOpen`).
+    *   **Refs Created:** `audioRef`, `videoRef`, `preloadVideoRef`, `imageFeedRef`.
     *   **Hook Usage:**
         *   `useMediaAuthors`: Gets **primary `ndk` instance** and `mediaAuthors`. Called early. (Kind 3 fetching logic improved).
         *   `useAuth`: Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, signing capabilities, and NIP-04 helpers (`encryptDm`/`decryptDm`).
         *   `useWallet`: Manages internal Cashu wallet state.
         *   `useMediaNotes`: Fetches `imageNotes`, `podcastNotes`, `videoNotes` using adjusted limits (Podcasts: 25).
-        *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives shuffled images and sequential videos.
-        *   `useMediaElementPlayback`: Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl` (passed directly from `useMediaState`).
+        *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives shuffled images and a *slice* of sequential videos (`visibleUniqueVideoNotes`). Uses modified `fetchOlderVideos` callback.
+        *   `useMediaElementPlayback`: Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref, `currentItemUrl` (passed directly from `useMediaState`), and props for controlling autoplay/continuous play (`autoplayEnabled`, `next`).
         *   `useFullscreen`: Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
         *   `useKeyboardControls`: Sets up global keyboard listener, uses correct `togglePlayPause` callback.
         *   `useImageCarousel`: Manages the image auto-advance timer.
         *   `useCurrentAuthor`: Calculates the `npub` of the currently displayed author.
     *   **Data Handling:**
         *   Receives raw notes from `useMediaNotes`.
-        *   Uses `useEffect` to shuffle `imageNotes` into `shuffledImageNotes` state.
-        *   Uses `useEffect` to deduplicate `videoNotes` by URL and sort by date into `uniqueVideoNotes` state (no shuffling).
-        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks (updates `Until` state) and passes them to `useMediaState`.
+        *   Uses `useEffect` to combine/deduplicate author and tag notes into `combinedImageNotes` / `combinedVideoNotes`.
+        *   Uses `useMemo` to shuffle `combinedImageNotes` into `shuffledImageNotes` state.
+        *   Uses `useEffect` to deduplicate `combinedVideoNotes` by URL and sort by date into `uniqueVideoNotes` state (no shuffling).
+        *   Uses `useState` (`visibleVideoCount`) and `useMemo` (`visibleUniqueVideoNotes`) to limit the video playlist shown.
+        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks and passes them to `useMediaState`. `fetchOlderVideos` now handles expanding the visible video count from cache before fetching from relays.
+        *   Uses `useEffect` to calculate the next video URL (`preloadVideoUrl`) based on `viewMode` and `currentVideoIndex`.
+        *   Uses `useEffect` to set the `src` of the hidden `preloadVideoRef` and call `.load()` when `preloadVideoUrl` changes.
         *   Gets `followedTags` from `useAuth` and passes them to image/video `useMediaNotes` calls.
     *   **Rendering Logic:**
-        *   Renders invisible `<audio>` element (`audioRef`).
+        *   Renders invisible `<audio>` element (`audioRef`) and hidden `<video>` element (`preloadVideoRef`).
         *   Renders layout structure (Top Area, Bottom Panel).
         *   Conditionally renders `ImageFeed` or `VideoPlayer` based on `viewMode` (uncommented/fixed).
         *   Passes `currentItemUrl` from `useMediaState` directly to playback hooks and `VideoPlayer`.
@@ -136,14 +143,14 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Function:** Fetches Nostr notes based on authors and specified Kinds/tags. Uses `limit`/`until` for pagination/initial fetch size. Adds `#t` filter if `followedTags` are provided. Checks IndexedDB cache first, then subscribes via NDK. Accumulates notes. Parses URLs/metadata. Caches new notes. Returns raw, sorted notes.
 
 *   **`useMediaState`:**
-    *   **Input:** `initialImageNotes` (shuffled), `initialPodcastNotes`, `initialVideoNotes` (deduplicated, sequential), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength` (length of sequential videos).
-    *   **Output:** `viewMode`, `imageNotes` (internal, shuffled), `podcastNotes` (internal), `videoNotes` (internal, sequential), loading states, indices, `selectedVideoNpub`, `currentItemUrl`, `currentNoteId`, navigation/selection handlers.
-    *   **Function:** Core UI state machine. Manages `viewMode`, current indices for each media type, and the `currentItemUrl` (passed directly to playback hooks). Handles navigation logic (`handlePrevious`, `handleNext`) respecting list boundaries and triggering fetch callbacks based on the correct list lengths (shuffled images, sequential videos). Updates internal notes state based on props (using ref comparison to avoid unnecessary updates).
+    *   **Input:** `initialImageNotes` (shuffled), `initialPodcastNotes`, `initialVideoNotes` (deduplicated, *sliced*), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength` (length of *sliced* videos).
+    *   **Output:** `viewMode`, `imageNotes` (internal, shuffled), `podcastNotes` (internal), `videoNotes` (internal, sequential, *sliced*), loading states, indices, `selectedVideoNpub`, `currentItemUrl`, `currentNoteId`, navigation/selection handlers.
+    *   **Function:** Core UI state machine. Manages `viewMode`, current indices for each media type, and the `currentItemUrl` (passed directly to playback hooks). Handles navigation logic (`handlePrevious`, `handleNext`) respecting list boundaries and triggering fetch callbacks. The `fetchOlderVideos` callback is now responsible for expanding the visible video list from cache before fetching from relays. Updates internal notes state based on props (using ref comparison to avoid unnecessary updates).
 
 *   **`useMediaElementPlayback`:**
     *   **Input:** `mediaElementRef`, `currentItemUrl` (receives URL directly from `useMediaState` via `App`), `elementType`, `isActiveMode`, `onEnded`, `initialTime`, `autoplayEnabled`, `next`.
     *   **Output:** Playback state (`isPlaying`, `currentTime`, etc.) and controls (`togglePlayPause`, `handleSeek`, etc.).
-    *   **Function:** Directly interacts with the HTML media element. Manages playback state. Receives `currentItemUrl` directly. Handles autoplay and auto-advance logic based on props.
+    *   **Function:** Directly interacts with the HTML media element. Manages playback state. Receives `currentItemUrl` directly. Handles autoplay (audio) and auto-advance logic based on props. Implements continuous video playback using an internal `isEndedRef` flag and a one-time `canplay` listener to automatically call `play()` on the next video after the previous one finishes.
 
 *   **`useFullscreen`:**
     *   **Input:** `interactionTimeout` (optional), `messageTimeout` (optional), `checkInterval` (optional).
@@ -184,4 +191,4 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
         *   `stopDepositListener`: Function to stop the DM listener.
         *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs (needs `SendTipParams` containing recipient, amount, auth, ndk, etc.).
         *   `setConfiguredMintUrl`: Function to set and save the mint URL.
-    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`redeemToken`, `createTokenForAmount`) for Cashu operations. Listens for incoming Nostr DMs (Kind 4) tagged with the user's pubkey using `ndk.subscribe`. Attempts to decrypt DMs using `auth.decryptDm` and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function to generate tokens (using `configuredMintUrl`) and send them via encrypted DMs (using `auth.encryptDm`, `auth.signEvent`, `ndk.publish`). Requires `UseAuthReturn` and the main `NDK` instance passed into `startDepositListener` and `sendCashuTipWithSplits`.
+    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`redeemToken`, `createTokenForAmount`) for Cashu operations. Listens for incoming Nostr DMs (Kind 4) tagged with the user's pubkey using `ndk.subscribe`. Attempts to decrypt DMs using `
