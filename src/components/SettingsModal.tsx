@@ -4,7 +4,8 @@ import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth p
 import { useWallet, UseWalletReturn, DEFAULT_MINT_URLS } from '../hooks/useWallet'; // Import useWallet return type and DEFAULT_MINT_URLS
 import QRCode from 'react-qr-code'; // Import QRCode for backup
 import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
-import { FiRefreshCw } from 'react-icons/fi'; // Import FiRefreshCw for refresh icon
+import { FiRefreshCw, FiSettings, FiHeart } from 'react-icons/fi'; // Import FiRefreshCw for refresh icon, FiSettings, FiHeart
+import { TV_PUBKEY_NPUB } from '../constants'; // Import the app's npub
 type NDKInstance = NDK; // Alias NDK class as NDKInstance type
 
 // RE-ADD SVG component definition
@@ -43,6 +44,9 @@ const truncateNpub = (npub: string | null): string => {
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
+// Define the preset tip amounts
+const PRESET_TIP_AMOUNTS = [210, 1000, 2121];
+
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, wallet }) => {
     const auth: UseAuthReturn = useAuth(ndkInstance);
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
@@ -54,12 +58,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const [npubPressCount, setNpubPressCount] = useState(0); // Counter for nsec reveal
     const [hashtagInput, setHashtagInput] = useState<string>(''); // For adding hashtags
     const [focusedTagIndex, setFocusedTagIndex] = useState<number | null>(null); // For tag list navigation/deletion
-    const [mintUrlInput, setMintUrlInput] = useState<string>(''); // State for Mint URL input
-    const [isSavingMintUrl, setIsSavingMintUrl] = useState<boolean>(false); // Loading state for save button
+    const [mintUrlInput, setMintUrlInput] = useState<string>('');
+    const [isSavingMintUrl, setIsSavingMintUrl] = useState<boolean>(false);
+    const [isTippingDevs, setIsTippingDevs] = useState(false);
+    const [tipDevStatus, setTipDevStatus] = useState<'success' | 'error' | null>(null);
+    // <<< NEW: State for locally selected default tip amount >>>
+    const [selectedDefaultTipAmount, setSelectedDefaultTipAmount] = useState<number>(auth.defaultTipAmount);
 
-    // <<< Add ref for the new toggle switch >>>
+    // <<< Add refs for the new toggle switches >>>
     const fetchImagesToggleRef = useRef<HTMLButtonElement>(null);
-    // <<< Add ref for the video toggle switch >>>
     const fetchVideosToggleRef = useRef<HTMLButtonElement>(null);
 
     const modalRef = useRef<HTMLDivElement>(null);
@@ -78,16 +85,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const mintUrlInputRef = useRef<HTMLInputElement>(null); // Ref for Mint URL input
     const saveMintUrlButtonRef = useRef<HTMLButtonElement>(null); // Ref for Save Mint URL button
     const refreshDepositsButtonRef = useRef<HTMLButtonElement>(null); // Ref for Refresh Deposits button
+    const walletMoreOptionsButtonRef = useRef<HTMLButtonElement>(null);
+    const tipDevsButtonRef = useRef<HTMLButtonElement>(null);
+    // <<< Refs for default tip amount buttons >>>
+    const defaultTipButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
-    // Effect to initialize Mint URL input (uses wallet prop)
+    // Effect to initialize Mint URL input & selected tip amount
     useEffect(() => {
-        if (isOpen && auth.isLoggedIn && wallet.configuredMintUrl !== null) {
-            setMintUrlInput(wallet.configuredMintUrl);
-        } else if (isOpen && auth.isLoggedIn) {
+        if (isOpen && auth.isLoggedIn) {
+            setMintUrlInput(wallet.configuredMintUrl ?? '');
+            // <<< Initialize local state from persisted auth state >>>
+            setSelectedDefaultTipAmount(auth.defaultTipAmount);
+        } else if (isOpen) {
             setMintUrlInput('');
         }
         setIsSavingMintUrl(false);
-    }, [isOpen, auth.isLoggedIn, wallet.configuredMintUrl]);
+    }, [isOpen, auth.isLoggedIn, wallet.configuredMintUrl, auth.defaultTipAmount]);
 
     // Effect to start/stop deposit listener (uses wallet prop)
     useEffect(() => {
@@ -156,7 +169,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                  document.removeEventListener('keydown', handleKeyDown);
              };
         }
-    }, [isOpen, auth.isLoggedIn, generatedNpub, generatedNsec, showNsecQR, auth.nip46ConnectUri, wallet.configuredMintUrl]);
+    }, [isOpen, auth.isLoggedIn, generatedNpub, generatedNsec, showNsecQR, auth.nip46ConnectUri, wallet.configuredMintUrl, selectedDefaultTipAmount]);
 
     const handleClose = useCallback(() => {
         // Reset temporary generation state on close
@@ -170,6 +183,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         setHashtagInput('');
         setMintUrlInput('');
         setIsSavingMintUrl(false);
+        // Don't reset selectedDefaultTipAmount here, keep persisted value
         onClose();
     }, [onClose]);
 
@@ -441,6 +455,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         auth.setFetchVideosByTagEnabled(!auth.fetchVideosByTagEnabled);
     }, [auth]);
 
+    const handleWalletMoreOptions = () => {
+        console.log("Wallet 'More Options' clicked - Placeholder");
+        alert("Wallet 'More Options' - Not yet implemented.");
+    };
+
+    // <<< NEW: Handler for selecting default tip amount >>>
+    const handleSelectDefaultTip = (amount: number) => {
+        setSelectedDefaultTipAmount(amount);
+        auth.setDefaultTipAmount(amount); // Persist the change
+    };
+
+    // --- Tip Devs Handler ---
+    const handleTipDevs = useCallback(async () => {
+        // ... existing handler using fixed amount ...
+    }, [wallet, auth, ndkInstance]);
+
     // --- Render Logic ---
 
     if (!isOpen) return null;
@@ -621,9 +651,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                 {/* --- Wallet Section --- */}
                 {auth.isLoggedIn && (
                     <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
-                        <div className="space-y-1">
-                            {/* Balance Label as Section Title */}                            {/* FIXED Syntax & Applied Title Styles */}                            <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Wallet Balance:</h3>                            
-                            {/* Value and Refresh Button Row */}                            
+                        <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Wallet</h3>
+                        <div className="space-y-3"> {/* Increased spacing slightly */} 
+                            {/* Balance Display */}
                             <div className="flex justify-between items-center">                                
                                 <p className="text-xl font-semibold text-yellow-400">
                                     {wallet.balanceSats.toLocaleString()} sats
@@ -649,6 +679,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             {/* Removed Listening text */}
                             {wallet.walletError && <p className="text-red-400 bg-red-900/40 p-2 rounded text-sm mt-2">{wallet.walletError}</p>}
                             {wallet.isLoadingWallet && <p className="text-purple-400 text-sm mt-2">Loading wallet...</p>}
+
+                            {/* --- NEW: Default Tip Amount Selection --- */} 
+                            <div className="pt-3 mt-3 border-t border-gray-700/30">
+                                <label className="block text-sm font-medium text-gray-400 mb-2"> 
+                                    Default Tip Amount (sats):
+                                </label>
+                                <div className="flex items-center justify-around gap-2"> 
+                                    {PRESET_TIP_AMOUNTS.map((amount, index) => (
+                                        <button
+                                            key={amount}
+                                            ref={el => defaultTipButtonsRef.current[index] = el} // Assign ref
+                                            onClick={() => handleSelectDefaultTip(amount)}
+                                            className={`flex-1 px-3 py-1.5 rounded text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 transition-colors duration-150 ${ 
+                                                selectedDefaultTipAmount === amount
+                                                    ? 'bg-purple-600 text-white ring-2 ring-purple-400' 
+                                                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500 focus:ring-gray-500'
+                                            }`}
+                                        >
+                                            {amount.toLocaleString()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            {/* --- END: Default Tip Amount Selection --- */} 
 
                             {/* Mint URL Input Section */}
                             <div className="pt-3 mt-3 border-t border-gray-700/30">
@@ -695,6 +749,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             <p className="text-xs font-bold text-red-500/80 mt-1">
                                 SECURITY WARNING: Storing Cashu tokens in a browser is risky. Do not store large amounts. Use at your own risk.
                             </p>
+
+                            {/* More Options Button */}
+                            <div className="pt-3 mt-3 border-t border-gray-700/30">
+                                <button
+                                    ref={walletMoreOptionsButtonRef}
+                                    onClick={handleWalletMoreOptions}
+                                    className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
+                                >
+                                    More Options
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

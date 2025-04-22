@@ -68,15 +68,22 @@ export interface StoredFetchVideosByTagEnabled {
 }
 // <<< END NEW >>>
 
+// <<< NEW: Add interface for Default Tip Amount setting >>>
+export interface StoredDefaultTipAmount {
+    id: 'defaultTipAmount'; // Use literal type for the key
+    amount: number;
+}
+// <<< END NEW >>>
+
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl | StoredFetchImagesByTagEnabled | StoredNip46SignerPubkey | StoredFetchVideosByTagEnabled;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl | StoredFetchImagesByTagEnabled | StoredNip46SignerPubkey | StoredFetchVideosByTagEnabled | StoredDefaultTipAmount;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled';
+    key: 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled' | 'defaultTipAmount';
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled' | 'defaultTipAmount' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -225,7 +232,7 @@ export const idb = {
         return null;
     },
 
-    // <<< NEW: Add specific helpers for the toggle setting >>>
+    // <<< NEW: Add specific helpers for the image toggle setting >>>
     saveFetchImagesByTagEnabledToDb: async (enabled: boolean): Promise<void> => {
         await idb.putSetting({ id: 'fetchImagesByTagEnabled', enabled });
     },
@@ -253,18 +260,10 @@ export const idb = {
 
     loadNip46SignerPubkeyFromDb: async (): Promise<string | null> => {
         const setting = await idb.getSetting('nip46SignerPubkey');
-        // Check if the loaded setting is the correct type and has the 'pubkey' property
         if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'nip46SignerPubkey' && 'pubkey' in setting) {
-            // Add validation here too? Or assume save ensures format.
-            if (typeof setting.pubkey === 'string' && setting.pubkey.length === 64) {
-                return setting.pubkey;
-            } else {
-                console.warn("Stored NIP-46 pubkey has invalid format, ignoring.", setting.pubkey);
-                // Optionally clear the invalid setting here
-                // await idb.deleteSetting('nip46SignerPubkey');
-            }
+            return setting.pubkey;
         }
-        return null; // Not found or invalid
+        return null;
     },
 
     clearNip46SignerPubkeyFromDb: async (): Promise<void> => {
@@ -272,7 +271,7 @@ export const idb = {
     },
     // <<< END NEW >>>
 
-    // <<< NEW: Add specific helpers for Video Fetch Toggle setting >>>
+    // <<< NEW: Add specific helpers for the video toggle setting >>>
     saveFetchVideosByTagEnabledToDb: async (enabled: boolean): Promise<void> => {
         await idb.putSetting({ id: 'fetchVideosByTagEnabled', enabled });
     },
@@ -282,8 +281,33 @@ export const idb = {
         if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'fetchVideosByTagEnabled' && 'enabled' in setting) {
             return setting.enabled;
         }
-        // Default to true for videos as well, matching initial implementation in App.tsx
-        return true;
+        return true; // Or use DEFAULT_FETCH_VIDEOS_BY_TAG
+    },
+    // <<< NEW: Add corresponding clear function >>>
+    clearFetchVideosByTagEnabledFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('fetchVideosByTagEnabled');
+    },
+    // <<< END NEW >>>
+
+    // <<< NEW: Add specific helpers for Default Tip Amount setting >>>
+    saveDefaultTipAmountToDb: async (amount: number): Promise<void> => {
+        if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
+             console.error("Invalid default tip amount provided for saving:", amount);
+             throw new Error("Invalid default tip amount.");
+        }
+        await idb.putSetting({ id: 'defaultTipAmount', amount });
+    },
+
+    loadDefaultTipAmountFromDb: async (): Promise<number> => {
+        const setting = await idb.getSetting('defaultTipAmount');
+        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'defaultTipAmount' && 'amount' in setting && typeof setting.amount === 'number' && setting.amount > 0) {
+            return setting.amount;
+        }
+        return 210; // Return the default value (use constant if defined elsewhere)
+    },
+
+    clearDefaultTipAmountFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('defaultTipAmount');
     },
     // <<< END NEW >>>
 
@@ -371,6 +395,16 @@ export const idb = {
         const db = await getDb();
         return db.clear('cashuProofs');
     },
+
+    // --- Add missing clear functions --- 
+    clearFollowedTagsFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('followedTags');
+    },
+
+    clearFetchImagesByTagEnabledFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('fetchImagesByTagEnabled');
+    },
+    // --- End added clear functions ---
 };
 
 // --- Initialize ---

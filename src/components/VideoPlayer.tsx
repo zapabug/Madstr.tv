@@ -36,9 +36,8 @@ export interface VideoPlayerProps {
   isNdkReady: boolean;
   auth: UseAuthReturn;
   wallet: UseWalletReturn;
+  defaultTipAmount: number;
 }
-
-const DEFAULT_TIP_AMOUNT = 121; // Sats
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   videoRef, 
@@ -55,7 +54,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   ndkInstance,
   isNdkReady,
   auth,
-  wallet 
+  wallet,
+  defaultTipAmount
 }) => {
   const [isTipping, setIsTipping] = useState(false);
   const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
@@ -81,7 +81,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const canTip = !!wallet &&
                  isNdkReady && 
                  !wallet.isLoadingWallet && 
-                 wallet.balanceSats >= DEFAULT_TIP_AMOUNT && 
+                 wallet.balanceSats >= defaultTipAmount &&
                  authorNpub && 
                  auth.isLoggedIn &&
                  !!ndkInstance;
@@ -94,9 +94,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
     setIsTipping(true);
     setTipStatus(null);
+    console.log(`Attempting to tip ${defaultTipAmount} sats to ${authorNpub}`);
     const params: SendTipParams = {
         primaryRecipientNpub: authorNpub,
-        amountSats: DEFAULT_TIP_AMOUNT,
+        amountSats: defaultTipAmount,
         auth: auth,
         eventIdToZap: currentNoteId,
         comment: `📺⚡️ Tip from Mad⚡tr.tv TV App (Video)!`
@@ -111,7 +112,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setIsTipping(false);
         setTimeout(() => setTipStatus(null), 2000);
     }
-  }, [canTip, authorNpub, ndkInstance, auth, wallet, currentNoteId]);
+  }, [canTip, authorNpub, ndkInstance, auth, wallet, currentNoteId, defaultTipAmount]);
 
   // --- Keyboard Handler for Tipping ---
   const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -182,7 +183,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                        ${canTip ? 'cursor-pointer focus:outline-none focus:ring-4 focus:ring-purple-600 focus:ring-opacity-75 rounded-lg p-1 bg-black/30' : 'p-1 bg-black/40 rounded'}`}
           tabIndex={canTip ? 0 : -1}
           onKeyDown={handleAuthorKeyDown}
-          title={canTip ? `Press OK to tip ${DEFAULT_TIP_AMOUNT} sats` : 'Video Author'}
+          title={canTip ? `Press OK to tip ${defaultTipAmount} sats` : 'Video Author'}
         >
           {/* Author QR Code + Overlays */} 
           <div className="relative bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">

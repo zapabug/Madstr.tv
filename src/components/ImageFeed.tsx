@@ -38,6 +38,10 @@ export interface MediaFeedProps {
   imageNotes: NostrNote[]; 
   authorNpub: string | null; // Added
   authorProfilePictureUrl: string | null; // <<< Added >>>
+  // <<< Add auth, wallet, and tip amount >>>
+  auth: UseAuthReturn;
+  wallet: UseWalletReturn;
+  defaultTipAmount: number;
   // onNotesLoaded: (notes: NostrNote[]) => void; // Removed
   isPlaying: boolean;
   togglePlayPause: () => void;
@@ -88,6 +92,10 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
     imageNotes, 
     authorNpub, // Added
     authorProfilePictureUrl, // <<< Destructure new prop >>>
+    // <<< Destructure new props >>>
+    auth,
+    wallet,
+    defaultTipAmount,
     // onNotesLoaded, // Removed
     isPlaying,
     togglePlayPause,
@@ -104,16 +112,9 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
   const { profiles } = useProfileData(imageNotes); // Keep profile fetching based on notes prop
 
-  // --- Hooks ---
-  // <<< Get NDK instance and readiness >>>
+  // --- Get NDK Instance (No longer needed directly if passed in auth/wallet) ---
   const { ndkInstance, isConnecting: isNdkConnecting, connectionError: ndkConnectionError } = useNDKInit();
-  // <<< Derive isNdkReady correctly >>>
   const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
-  
-  // <<< Pass NDK props to useWallet >>>
-  const wallet: UseWalletReturn = useWallet({ ndkInstance, isNdkReady }); 
-  // <<< Pass NDK instance to useAuth >>>
-  const auth: UseAuthReturn = useAuth(ndkInstance);
   
   const [isTipping, setIsTipping] = useState(false);
   const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
@@ -163,7 +164,7 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
 
   const currentNoteId = currentImageNote?.id;
   // Ensure ndkInstance is checked for canTip
-  const canTip = !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && authorNpub && auth.isLoggedIn && !!ndkInstance && isNdkReady;
+  const canTip = !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= defaultTipAmount && authorNpub && auth.isLoggedIn && isNdkReady;
 
   // <<< Log received props and derived values >>>
   console.log("ImageFeed Render:", {
@@ -174,6 +175,7 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
       imageUrl,
       authorNpub,
       displayName,
+      defaultTipAmount, // Log the passed tip amount
       isPlaying // Log playback state received
   });
 
@@ -187,11 +189,11 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
 
     setIsTipping(true);
     setTipStatus(null);
-    console.log(`Attempting to tip ${DEFAULT_TIP_AMOUNT} sats to ${authorNpub}`);
+    console.log(`Attempting to tip ${defaultTipAmount} sats to ${authorNpub}`); // Use defaultTipAmount
 
     const params: SendTipParams = {
         primaryRecipientNpub: authorNpub,
-        amountSats: DEFAULT_TIP_AMOUNT,
+        amountSats: defaultTipAmount, // Use defaultTipAmount
         auth: auth, // Pass the auth object
         eventIdToZap: currentNoteId, 
         comment: `📺⚡️ Tip from Mad⚡tr.tv TV App!` 
@@ -218,7 +220,7 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
         // Clear status after a short delay
         setTimeout(() => setTipStatus(null), 2000);
     }
-  }, [canTip, authorNpub, auth, wallet, currentNoteId, ndkInstance, isNdkReady]);
+  }, [canTip, authorNpub, auth, wallet, currentNoteId, ndkInstance, isNdkReady, defaultTipAmount]); // Added defaultTipAmount to deps
 
   // --- Keyboard Handler for Tipping ---
   const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {

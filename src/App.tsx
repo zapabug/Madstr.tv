@@ -620,6 +620,9 @@ function App() {
                              imageNotes={shuffledImageNotes} // <<< Use SHUFFLED notes >>>
                              authorNpub={currentAuthorNpub}
                              authorProfilePictureUrl={authorProfilePictureUrl}
+                             defaultTipAmount={auth.defaultTipAmount} // Pass default tip amount
+                             auth={auth} // Pass full auth object for checks
+                             wallet={wallet} // Pass wallet object for checks
                              isPlaying={false} // Audio playback is separate
                              togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
                              isFullScreen={isFullScreen}
@@ -644,6 +647,7 @@ function App() {
                              play={videoPlayback.play}
                              toggleMute={videoPlayback.toggleMute}
                              authorNpub={currentAuthorNpub}
+                             defaultTipAmount={auth.defaultTipAmount} // Pass default tip amount
                              // authorProfilePictureUrl={authorProfilePictureUrl} // <<< Pass picture URL - Commented out until VideoPlayer supports it >>>
                              autoplayFailed={videoPlayback.autoplayFailed}
                              isMuted={videoPlayback.isMuted}
