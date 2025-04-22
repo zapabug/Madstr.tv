@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import * as nip19 from 'nostr-tools/nip19';
 import * as nip04 from 'nostr-tools/nip04';
 // import * as nip46 from 'nostr-tools/nip46'; // Removed unused import
@@ -110,7 +110,6 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
          setFollowedTagsState(tags);
          saveFollowedTags(tags);
      }, [saveFollowedTags]);
-
 
     // --- Nsec Handling ---
 
@@ -611,6 +610,9 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
     }, [getNdkSigner, ndkInstance]);
 
+    // <<< Memoize the returned followedTags array >>>
+    const memoizedFollowedTags = useMemo(() => followedTags, [followedTags]);
+
     // Return the hook's state and functions
     return {
         currentUserNpub,
@@ -621,17 +623,17 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         nip46ConnectUri,
         isGeneratingUri,
         initiateNip46Connection,
-        cancelNip46Connection, // Added cancel function
+        cancelNip46Connection,
         generateNewKeys,
         loginWithNsec,
         logout,
-        saveNsecToDb, // Expose explicit save if needed elsewhere
+        saveNsecToDb,
         getNdkSigner,
         signEvent,
-        // Hashtag state
-        followedTags,
+        // Hashtag state and setter
+        followedTags: memoizedFollowedTags,
         setFollowedTags,
-        encryptDm, // Add new method
-        decryptDm, // Add new method
+        encryptDm,
+        decryptDm,
     };
 }; 

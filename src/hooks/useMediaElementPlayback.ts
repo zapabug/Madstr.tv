@@ -56,16 +56,18 @@ interface UseMediaPlaybackResult {
   setIsSeeking: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-export function useMediaElementPlayback({
-  mediaElementRef,
-  currentItemUrl,
-  isActiveMode,
-  elementType,
-  onEnded,
-  initialTime = 0,
-  autoplayEnabled,
-  next,
-}: UseMediaElementPlaybackProps): UseMediaPlaybackResult {
+export function useMediaElementPlayback(props: UseMediaElementPlaybackProps): UseMediaPlaybackResult {
+  const {
+    mediaElementRef,
+    currentItemUrl,
+    isActiveMode,
+    elementType,
+    onEnded,
+    initialTime = 0,
+    autoplayEnabled,
+    next,
+  } = props;
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [autoplayFailed, setAutoplayFailed] = useState(false);
@@ -78,6 +80,7 @@ export function useMediaElementPlayback({
   const SAVE_INTERVAL = 5000;
   const hasAttemptedPlayRef = useRef(false);
   const initialPlaySuccessfulRef = useRef(false);
+  const isEndedRef = useRef(false);
 
   // Define play/pause early
   const play = useCallback(async () => {
@@ -139,6 +142,7 @@ export function useMediaElementPlayback({
 
   // Combined Play/Pause handler
   const togglePlayPause = useCallback(() => {
+    console.log(`%%% Playback (${elementType}): togglePlayPause called. Paused state: ${mediaElementRef.current?.paused}`);
     if (mediaElementRef.current) {
       if (mediaElementRef.current.paused) {
         play();
@@ -151,7 +155,7 @@ export function useMediaElementPlayback({
   const handleCanPlay = useCallback(() => {
     const mediaElement = mediaElementRef.current;
     if (!mediaElement) return;
-    console.log(`useMediaElementPlayback (${elementType}): handleCanPlay - Media ready. isActiveMode: ${isActiveMode}`);
+    console.log(`%%% Playback (${elementType}): handleCanPlay event. isActiveMode: ${isActiveMode}`);
 
     const currentDuration = mediaElement.duration;
     if (isNaN(currentDuration)) {
@@ -166,7 +170,7 @@ export function useMediaElementPlayback({
     setCurrentTime(mediaElement.currentTime); // Ensure currentTime is updated
 
     if (isActiveMode && autoplayEnabled && elementType === 'audio') {
-      console.log(`useMediaElementPlayback (${elementType}): Autoplaying audio on canplay`);
+      console.log(`%%% Playback (${elementType}): Attempting autoplay...`);
       play();
     } else if (isActiveMode && elementType === 'video') {
       console.log(`useMediaElementPlayback (${elementType}): Video ready, manual play required.`);
@@ -176,265 +180,305 @@ export function useMediaElementPlayback({
     }
   }, [mediaElementRef, isActiveMode, elementType, autoplayEnabled, play]);
 
-  const handleEnded = useCallback(() => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement) return;
-
-    console.log(`useMediaElementPlayback (${elementType}): Ended event fired.`);
-    setIsPlaying(false);
-    setCurrentTime(mediaElement.duration);
-    initialPlaySuccessfulRef.current = false;
-
-    // If it's a video and part of a sequence (next=true), and still the active mode, call onEnded to advance.
-    if (elementType === 'video' && next && isActiveMode) {
-      console.log(`useMediaElementPlayback (${elementType}): Video ended, calling onEnded to advance sequence.`);
-      onEnded?.();
-      console.log(`useMediaElementPlayback (${elementType}): Scheduling play() for the next video.`);
-      setTimeout(() => {
-          console.log(`useMediaElementPlayback (${elementType}): setTimeout triggered, calling play() for next video.`);
-          if (isActiveMode) {
-              play();
-          } else {
-               console.log(`useMediaElementPlayback (${elementType}): Mode changed during timeout, not playing next video.`);
-          }
-      }, 100);
-    } else if (elementType === 'audio' && isActiveMode) {
-        // If it's audio and ended, just call the provided onEnded (might stop playback or go to next audio)
-        console.log(`useMediaElementPlayback (${elementType}): Audio ended, calling provided onEnded.`);
-        onEnded?.();
-    } else {
-        console.log(`useMediaElementPlayback (${elementType}): Ended, but not advancing (not video/next or not active mode).`);
-    }
-}, [mediaElementRef, isActiveMode, elementType, next, onEnded, play]);
-
-  const handleRateChange = useCallback(() => {
-    const mediaElement = mediaElementRef.current;
-    if (mediaElement) {
-        console.log(`useMediaElementPlayback: Setting playback rate to ${mediaElement.playbackRate}`);
-        setPlaybackRateState(mediaElement.playbackRate);
-    }
-  }, [mediaElementRef]);
-
-  const handleVolumeChange = () => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement) return;
-    const currentMutedState = mediaElement.muted;
-    console.log(`useMediaElementPlayback (${elementType}): VolumeChange event fired. Element muted: ${currentMutedState}. Current isMuted state: ${isMuted}`);
-    if (currentMutedState !== isMuted) {
-        console.log(`useMediaElementPlayback (${elementType}): Updating isMuted state to ${currentMutedState}`);
-        setIsMuted(currentMutedState);
-    } else {
-        console.log(`useMediaElementPlayback (${elementType}): isMuted state already matches element.`);
-    }
-  };
-
+  // --- Effect 1: Load Source URL & Reset State ---
   useEffect(() => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement || !currentItemUrl) {
-      if (mediaElement && !currentItemUrl) {
-        console.log("useMediaElementPlayback: currentItemUrl is null, resetting element.");
-        if (!mediaElement.paused) mediaElement.pause();
-        mediaElement.removeAttribute('src');
-        mediaElement.load();
-      }
+    console.log(`%%% Playback (${elementType}): Effect 1 (Load Source) RUNNING for URL: ${currentItemUrl}`);
+    const element = mediaElementRef.current;
+    if (!element) {
+      console.log(`%%% Playback (${elementType}): Effect 1 Aborting - No media element.`);
+      return;
+    }
+
+    // --- Reset logic if URL is null ---
+    if (!currentItemUrl) {
+      console.log(`%%% Playback (${elementType}): Effect 1 - currentItemUrl is null, resetting element.`);
+      if (!element.paused) element.pause();
+      element.removeAttribute('src');
+      element.load(); // Reset the element state
+      // Reset hook state
       setIsPlaying(false);
-      // setIsMuted(true); // Keep state consistent if reset
+      setIsMuted(true);
       setAutoplayFailed(false);
       setCurrentTime(0);
       setDuration(0);
       hasAttemptedPlayRef.current = false;
       initialPlaySuccessfulRef.current = false;
-      // <<< Ensure isMuted state is true if we reset >>>
-      if (!mediaElement?.src) setIsMuted(true);
-      console.log(`useMediaElementPlayback (${elementType}): Effect cleanup/reset. Setting isMuted=${!mediaElement?.src}`);
+      isEndedRef.current = false;
       return;
     }
 
-    // <<< REMOVED forced muting >>>
-    // console.log(`useMediaElementPlayback (${elementType}): Effect triggered for new URL. Setting initial isMuted=true`);
-    // setIsMuted(true);           
-    // mediaElement.muted = true; 
-    setAutoplayFailed(false);
-    setDuration(0);
-    hasAttemptedPlayRef.current = false;
-    initialPlaySuccessfulRef.current = false;
-    isProgrammaticSeek.current = false;
-    lastSaveTimeRef.current = Date.now();
-    // <<< Sync state with the element's actual muted status >>>
-    setIsMuted(mediaElement.muted);
-    console.log(`useMediaElementPlayback (${elementType}): Effect triggered for new URL. Initial element muted status: ${mediaElement.muted}`);
-
-    const handleLoadedMetadata = () => {
-      console.log("useMediaElementPlayback: Metadata loaded, duration:", mediaElement.duration);
-      setDuration(mediaElement.duration);
-      if (initialTime > 0) {
-        console.log(`Applying initial time for ${currentItemUrl} to ${initialTime}`);
-        isProgrammaticSeek.current = true;
-        mediaElement.currentTime = initialTime;
-      } else {
-        setCurrentTime(mediaElement.currentTime);
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      if (!isSeeking) {
-        setCurrentTime(mediaElement.currentTime);
-      }
-      if (isProgrammaticSeek.current && Math.abs(mediaElement.currentTime - initialTime) < 0.5) {
-         isProgrammaticSeek.current = false;
-      }
-      const now = Date.now();
-      if (currentItemUrl && now - lastSaveTimeRef.current > SAVE_INTERVAL && !mediaElement.seeking && mediaElement.currentTime > 0) {
-          savePlaybackTime(currentItemUrl, mediaElement.currentTime);
-          lastSaveTimeRef.current = now;
-      }
-    };
-
-    const handlePlay = () => {
-      console.log("useMediaElementPlayback: Play event fired.");
-      setIsPlaying(true);
-      setIsMuted(mediaElement.muted);
+    // --- Logic when URL is valid ---
+    // Only set src and load if it's actually different
+    if (element.currentSrc !== currentItemUrl) {
+      console.log(`%%% Playback (${elementType}): Effect 1 - Setting new src: ${currentItemUrl}`);
+      element.src = currentItemUrl;
+      element.load(); // Load the new source
+      // Reset state on source change
+      setIsPlaying(false);
+      setIsMuted(true);
       setAutoplayFailed(false);
-      hasAttemptedPlayRef.current = true;
-      initialPlaySuccessfulRef.current = true;
-    };
-
-    const handlePause = () => {
-      const mediaElement = mediaElementRef.current;
-      if (!mediaElement) return;
-      console.log(`useMediaElementPlayback (${elementType}): Pause event fired. Paused: ${mediaElement.paused}, ProgrammaticSeek: ${isProgrammaticSeek.current}`);
-      if (!isProgrammaticSeek.current) {
-        console.log(`useMediaElementPlayback (${elementType}): Setting isPlaying=false due to pause event.`);
-        setIsPlaying(false);
-      } else {
-        console.log(`useMediaElementPlayback (${elementType}): Pause event ignored for state update (programmatic seek).`);
-      }
-    }
-
-    const handleEnded = () => {
-      console.log("useMediaElementPlayback: Ended event fired.");
-      setIsPlaying(false);
-      setCurrentTime(mediaElement.duration);
-      initialPlaySuccessfulRef.current = false;
-      if (onEnded && isActiveMode) {
-        console.log("useMediaElementPlayback: Calling onEnded callback (isActiveMode=true).");
-        onEnded();
-      }
-    };
-
-    mediaElement.addEventListener('loadedmetadata', handleLoadedMetadata);
-    mediaElement.addEventListener('timeupdate', handleTimeUpdate);
-    mediaElement.addEventListener('play', handlePlay);
-    mediaElement.addEventListener('pause', handlePause);
-    mediaElement.addEventListener('ended', handleEnded);
-    mediaElement.addEventListener('ratechange', handleRateChange);
-    mediaElement.addEventListener('volumechange', handleVolumeChange);
-    mediaElement.addEventListener('canplay', handleCanPlay);
-
-    console.log(`useMediaElementPlayback (${elementType}): Setting src to ${currentItemUrl}`);
-    mediaElement.src = currentItemUrl;
-    console.log("useMediaElementPlayback: Explicitly calling load() for new source.");
-    mediaElement.load();
-
-    return () => {
-      console.log("useMediaElementPlayback: Cleaning up listeners for URL:", currentItemUrl);
-      mediaElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      mediaElement.removeEventListener('timeupdate', handleTimeUpdate);
-      mediaElement.removeEventListener('play', handlePlay);
-      mediaElement.removeEventListener('pause', handlePause);
-      mediaElement.removeEventListener('ended', handleEnded);
-      mediaElement.removeEventListener('ratechange', handleRateChange);
-      mediaElement.removeEventListener('volumechange', handleVolumeChange);
-      mediaElement.removeEventListener('canplay', handleCanPlay);
-      
-      if (!mediaElement.paused) {
-         console.log("useMediaElementPlayback: Pausing media during cleanup.");
-         mediaElement.pause();
-      }
-    };
-  }, [currentItemUrl, mediaElementRef, onEnded, initialTime, isActiveMode, elementType, autoplayEnabled, play]);
-
-  useEffect(() => {
-    const mediaElement = mediaElementRef.current;
-    if (mediaElement) {
-      mediaElement.playbackRate = playbackRate;
-    }
-  }, [playbackRate, mediaElementRef]);
-
-  useEffect(() => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement) return;
-
-    const handleError = (e: Event) => {
-      console.error("useMediaElementPlayback: Media Element Error:", mediaElement.error, e);
-      setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
-    };
-    mediaElement.addEventListener('error', handleError);
-    return () => {
-        if (mediaElement) {
-            mediaElement.removeEventListener('error', handleError);
+      hasAttemptedPlayRef.current = false;
+      initialPlaySuccessfulRef.current = false;
+
+      if (isEndedRef.current && elementType === 'video') {
+        console.log(`%%% Playback (${elementType}): isEndedRef is true, setting up one-time canplay listener for autoplay.`);
+        const handleCanPlayForAutoplay = () => {
+          console.log(`%%% Playback (${elementType}): CanPlay listener (for ended autoplay) fired.`);
+          play();
+          isEndedRef.current = false;
+          element.removeEventListener('canplay', handleCanPlayForAutoplay);
+        };
+        element.addEventListener('canplay', handleCanPlayForAutoplay);
+      } else {
+         isEndedRef.current = false;
+      }
+
+    } else {
+        console.log(`%%% Playback (${elementType}): Effect 1 - currentItemUrl is same as currentSrc, skipping src set/load.`);
+    }
+
+  }, [currentItemUrl, mediaElementRef, elementType, play]);
+
+  // --- Effect 2: Set Initial Time & Restore Saved Position ---
+  useEffect(() => {
+    console.log(`%%% Playback (${elementType}): Effect 2 (Initial Time) RUNNING`);
+    const element = mediaElementRef.current;
+    if (!element || !currentItemUrl) {
+        console.log(`%%% Playback (${elementType}): Effect 2 Aborting - No element or URL.`);
+        return;
+    }
+
+    const restoredTime = elementType === 'audio' ? getPlaybackTime(currentItemUrl) : null;
+    const timeToSet = restoredTime !== null ? restoredTime : initialTime;
+
+    console.log(`%%% Playback (${elementType}): Effect 2 - Time to set: ${timeToSet} (Restored: ${restoredTime}, Initial: ${initialTime})`);
+
+    if (timeToSet > 0 && element.duration > 0 && timeToSet < element.duration) {
+        const handleSeeked = () => {
+            console.log(`%%% Playback (${elementType}): Effect 2 - Seeked to ${timeToSet} successfully.`);
+            element.removeEventListener('seeked', handleSeeked);
+            isProgrammaticSeek.current = false;
+        };
+        const handleCanPlay = () => {
+            console.log(`%%% Playback (${elementType}): Effect 2 - CanPlay received, attempting seek to ${timeToSet}.`);
+            element.removeEventListener('canplay', handleCanPlay);
+            if (Math.abs(element.currentTime - timeToSet) > 0.1) {
+                isProgrammaticSeek.current = true;
+                element.addEventListener('seeked', handleSeeked);
+                element.currentTime = timeToSet;
+                console.log(`%%% Playback (${elementType}): Effect 2 - Setting currentTime to ${timeToSet}.`);
+            } else {
+                console.log(`%%% Playback (${elementType}): Effect 2 - Already at or near target time ${timeToSet}, skipping seek.`);
+            }
+        };
+
+        if (element.readyState >= 2 /* HAVE_CURRENT_DATA */) {
+            console.log(`%%% Playback (${elementType}): Effect 2 - ReadyState sufficient, attempting seek immediately.`);
+            if (Math.abs(element.currentTime - timeToSet) > 0.1) {
+                isProgrammaticSeek.current = true;
+                element.addEventListener('seeked', handleSeeked);
+                element.currentTime = timeToSet;
+                console.log(`%%% Playback (${elementType}): Effect 2 - Setting currentTime to ${timeToSet}.`);
+            } else {
+                 console.log(`%%% Playback (${elementType}): Effect 2 - Already at or near target time ${timeToSet}, skipping seek.`);
+            }
+        } else {
+            console.log(`%%% Playback (${elementType}): Effect 2 - Waiting for 'canplay' before seeking.`);
+            element.addEventListener('canplay', handleCanPlay);
         }
+    } else {
+        console.log(`%%% Playback (${elementType}): Effect 2 - Not seeking (timeToSet=0 or invalid).`);
+    }
+
+    return () => {
+        element.removeEventListener('canplay', handleCanPlay);
+        // element.removeEventListener('seeked', handleSeeked); // <<< handleSeeked is local, cannot remove here directly. Seek logic handles removal.
+        isProgrammaticSeek.current = false;
+    };
+
+  }, [currentItemUrl, initialTime, mediaElementRef, elementType]);
+
+  // --- Effect 3: Core Event Listeners ---
+  useEffect(() => {
+    console.log(`%%% Playback (${elementType}): Effect 3 (Core Listeners) RUNNING`);
+    const element = mediaElementRef.current;
+    if (!element) {
+      console.log(`%%% Playback (${elementType}): Effect 3 Aborting - No media element.`);
+      return;
+    }
+
+    const handleLoadedMetadata = () => {
+      console.log(`%%% Playback (${elementType}): handleLoadedMetadata event`);
+      const currentDuration = element.duration;
+      if (!isNaN(currentDuration)) {
+        setDuration(currentDuration);
+      } else {
+        console.warn(`useMediaElementPlayback (${elementType}): Duration is NaN in loadedmetadata.`);
+      }
+      setCurrentTime(element.currentTime);
+    };
+    const handlePlay = () => { console.log(`%%% Playback (${elementType}): handlePlay event`); setIsPlaying(true); setAutoplayFailed(false); };
+    const handlePause = () => { console.log(`%%% Playback (${elementType}): handlePause event`); setIsPlaying(false); };
+    const handleEnded = () => {
+        console.log(`%%% Playback (${elementType}): handleEnded event fired.`);
+        setIsPlaying(false);
+        initialPlaySuccessfulRef.current = false;
+        if (element) setCurrentTime(element.duration);
+
+        if (isActiveMode && next) {
+             if (elementType === 'video') {
+                 console.log(`%%% Playback (video): Ended, setting isEndedRef=true and calling onEnded prop.`);
+                 isEndedRef.current = true;
+                 onEnded?.();
+             } else if (elementType === 'audio') {
+                 console.log(`%%% Playback (audio): Ended, calling onEnded prop directly.`);
+                 onEnded?.();
+             }
+        } else {
+            console.log(`%%% Playback (${elementType}): Ended, but not advancing (inactive mode or next=false).`);
+             isEndedRef.current = false;
+        }
+    };
+    const handleError = (e: Event) => {
+        console.error(`%%% Playback (${elementType}): handleError event`, element.error, e);
+        setIsPlaying(false);
+        setAutoplayFailed(true);
+        setCurrentTime(0);
+        setDuration(0);
+    };
+    const handleVolumeChangeLocal = () => {
+        console.log(`%%% Playback (${elementType}): handleVolumeChange event`);
+        if (element) setIsMuted(element.muted);
+    };
+    const handleRateChangeLocal = () => {
+        console.log(`%%% Playback (${elementType}): handleRateChange event`);
+        if (element) setPlaybackRateState(element.playbackRate);
+    };
+    const handleTimeUpdate = updateProgress;
+
+    console.log(`%%% Playback (${elementType}): Effect 3 - Adding core listeners.`);
+    element.addEventListener('loadedmetadata', handleLoadedMetadata);
+    element.addEventListener('play', handlePlay);
+    element.addEventListener('pause', handlePause);
+    element.addEventListener('ended', handleEnded);
+    element.addEventListener('error', handleError);
+    element.addEventListener('volumechange', handleVolumeChangeLocal);
+    element.addEventListener('ratechange', handleRateChangeLocal);
+    element.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      console.log(`%%% Playback (${elementType}): Effect 3 - Cleaning up core listeners.`);
+      element.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      element.removeEventListener('play', handlePlay);
+      element.removeEventListener('pause', handlePause);
+      element.removeEventListener('ended', handleEnded);
+      element.removeEventListener('error', handleError);
+      element.removeEventListener('volumechange', handleVolumeChangeLocal);
+      element.removeEventListener('ratechange', handleRateChangeLocal);
+      element.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [mediaElementRef, updateProgress, elementType, onEnded, isActiveMode, next]);
+
+  // --- Effect 4: Time Saving ---
+  useEffect(() => {
+    console.log(`%%% Playback (${elementType}): Effect 4 (Time Saving) RUNNING`);
+    const element = mediaElementRef.current;
+    if (!element || elementType !== 'audio' || !currentItemUrl) {
+        console.log(`%%% Playback (${elementType}): Effect 4 Aborting - Not applicable.`);
+        return;
+    }
+
+    const intervalId = setInterval(() => {
+      if (element.currentTime > 0 && !element.paused && isPlaying) {
+        const now = Date.now();
+        if (now - lastSaveTimeRef.current > SAVE_INTERVAL) {
+          console.log(`%%% Playback (${elementType}): Effect 4 - Saving time: ${element.currentTime} for ${currentItemUrl}`);
+          savePlaybackTime(currentItemUrl, element.currentTime);
+          lastSaveTimeRef.current = now;
+        }
+      }
+    }, SAVE_INTERVAL / 2);
+
+    return () => {
+      console.log(`%%% Playback (${elementType}): Effect 4 - Cleaning up time saving interval.`);
+      clearInterval(intervalId);
+      if (element.currentTime > 0 && !element.paused && isPlaying) {
+        console.log(`%%% Playback (${elementType}): Effect 4 - Saving final time on cleanup: ${element.currentTime}`);
+        savePlaybackTime(currentItemUrl, element.currentTime);
+      }
+    };
+  }, [mediaElementRef, isPlaying, currentItemUrl, elementType]);
+
+  // --- Utility Functions ---
+  const setPlaybackRate = useCallback((rate: number) => {
+    const element = mediaElementRef.current;
+    if (element) {
+      element.playbackRate = rate;
+      setPlaybackRateState(rate);
     }
   }, [mediaElementRef]);
 
   const toggleMute = useCallback(() => {
-      const mediaElement = mediaElementRef.current;
-      if (!mediaElement) return;
-      const currentlyMuted = mediaElement.muted;
-      const newMutedState = !currentlyMuted;
-      console.log(`useMediaElementPlayback (${elementType}): toggleMute() called. Current element muted: ${currentlyMuted}. Setting element muted to ${newMutedState}`);
-      mediaElement.muted = newMutedState;
+    const element = mediaElementRef.current;
+    if (element) {
+      const newMutedState = !element.muted;
+      console.log(`%%% Playback (${elementType}): Toggling mute. Current: ${element.muted}, New: ${newMutedState}`);
+      element.muted = newMutedState;
+    }
   }, [mediaElementRef, elementType]);
 
   const handleSeek = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement || !duration || duration <= 0) return;
-    
-    const seekTime = parseFloat(event.target.value);
-    console.log(`useMediaElementPlayback (${elementType}): Seek input changed to ${seekTime}`);
-    
-    if (!isNaN(seekTime)) {
-      console.log(`useMediaElementPlayback (${elementType}): Setting isSeeking=true`);
-      setIsSeeking(true);
-      setCurrentTime(seekTime);
-      
-      mediaElement.currentTime = seekTime;
-      
-      const timerId = setTimeout(() => {
-          console.log(`useMediaElementPlayback (${elementType}): Seek timeout finished. Setting isSeeking=false.`);
-          setIsSeeking(false);
-      }, 150);
+    const element = mediaElementRef.current;
+    if (element) {
+      const seekTime = parseFloat(event.target.value);
+      console.log(`%%% Playback (${elementType}): handleSeek - Seek target value: ${seekTime}`);
+      if (!isNaN(seekTime)) {
+        setCurrentTime(seekTime);
+        if (!isSeeking) {
+          setIsSeeking(true);
+          isProgrammaticSeek.current = true;
+        }
 
-    } else {
-      console.warn(`useMediaElementPlayback (${elementType}): Invalid seek value:`, event.target.value);
-      setIsSeeking(false);
-    }
-  }, [mediaElementRef, duration, elementType, setCurrentTime]);
+        const performSeek = () => {
+            element.currentTime = seekTime;
+            element.removeEventListener('seeked', seekedListener);
+            isProgrammaticSeek.current = false;
+            setIsSeeking(false);
+             console.log(`%%% Playback (${elementType}): handleSeek - Seeked complete.`);
+        };
 
-  const setPlaybackRateControl = useCallback((rate: number) => {
-    const mediaElement = mediaElementRef.current;
-    if (mediaElement) {
-        console.log(`useMediaElementPlayback: Setting playback rate to ${rate}`);
-        setPlaybackRateState(rate);
+        const seekedListener = () => {
+           // No action needed here, just used for event removal
+        };
+
+        if (element.readyState >= 2 /* HAVE_CURRENT_DATA */) {
+            console.log(`%%% Playback (${elementType}): handleSeek - ReadyState sufficient, seeking immediately.`);
+            element.addEventListener('seeked', seekedListener);
+            performSeek();
+        } else {
+            console.warn(`%%% Playback (${elementType}): handleSeek - Element not ready to seek, seek might be delayed or fail.`);
+            setIsSeeking(false);
+        }
+      }
     }
-  }, [mediaElementRef]);
+  }, [mediaElementRef, isSeeking, elementType]);
 
   return {
     isPlaying,
     currentTime,
     duration,
     playbackRate,
-    setPlaybackRate: setPlaybackRateControl,
+    isSeeking,
+    isMuted,
+    autoplayFailed,
+    setPlaybackRate,
     togglePlayPause,
     toggleMute,
     handleSeek,
     play,
     pause,
-    isSeeking,
     setIsSeeking,
-    isMuted,
-    autoplayFailed,
   };
 } 

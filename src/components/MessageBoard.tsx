@@ -249,15 +249,29 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
     console.log('MessageBoard: Subscribing to replies for event:', eventId); // Keep a simpler log
     // ---------------------------------
 
-    try {
-        subscription.current = ndkInstance.subscribe(
-            filter,
-            { closeOnEose: false }
-        );
-        // ... attach listeners ...
-    } catch (error) {
-        console.error("MessageBoard: Error during NDK subscribe call:", error);
-    }
+    subscription.current = ndkInstance.subscribe(filter, {
+      closeOnEose: false, // Keep listening for new messages
+      groupable: true, // Allow NDK grouping for potentially better performance
+      // Add subId for debugging
+      subId: `msgboard-${eventId.substring(0, 5)}` 
+    });
+
+    subscription.current.on('event', (event: NDKEvent) => {
+      console.log(`%%% MessageBoard: Received event ${event.id} from WS for thread ${eventId}`);
+      // Check if the event ID already exists in the current state
+      setMessages((prevMessages) => {
+        if (!prevMessages.some((msg) => msg.id === event.id)) {
+          // Defer state update in parent to avoid warning
+          if (onNewMessage) {
+              setTimeout(onNewMessage, 0);
+          }
+          // Add the new event and re-sort
+          const newMessages = [...prevMessages, event].sort((a, b) => a.created_at! - b.created_at!); // Sort oldest first
+          return newMessages;
+        }
+        return prevMessages; // Return previous state if duplicate
+      });
+    });
   };
 
   // Simplified status rendering

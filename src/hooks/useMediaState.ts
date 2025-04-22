@@ -183,7 +183,7 @@ export function useMediaState({
             }
         }
 
-    }, [viewMode, currentPodcastIndex, currentVideoIndex, podcastNotes, videoNotes, currentItemUrl]);
+    }, [viewMode, currentPodcastIndex, currentVideoIndex, podcastNotes, videoNotes]);
 
     // Set Podcast Index (does NOT change viewMode)
     const setCurrentPodcastIndex = useCallback((index: number) => {

@@ -8,7 +8,7 @@ export type MediaType = 'podcast' | 'video' | 'image';
 
 // Define hook props
 interface UseMediaNotesProps {
-    authors: string[];
+    authors?: string[]; // <<< Make authors optional
     mediaType: MediaType;
     ndk: NDK | null;
     limit?: number; // <<< Renamed from initialLimit, now dynamic
@@ -63,35 +63,25 @@ export function useMediaNotes({
     const isFetching = useRef<boolean>(false); // Prevent concurrent fetches
     // Add refs to track previous dependency values
     const prevNdkRef = useRef<NDK | null>(ndk);
-    const prevAuthorsRef = useRef<string[]>(authors);
+    const prevAuthorsRef = useRef<string[] | undefined>(authors);
     const prevMediaTypeRef = useRef<MediaType>(mediaType);
     const prevLimitRef = useRef<number>(limit);
     const prevUntilRef = useRef<number | undefined>(until);
     const prevFollowedTagsRef = useRef<string[] | undefined>(followedTags);
     // <<< Add ref to track previous authors instance >>>
-    const prevAuthorsInstanceRef = useRef<string[]>(authors);
+    const prevAuthorsInstanceRef = useRef<string[]>(authors || []);
     // <<< Add ref to track previous NDK instance >>>
     const prevNdkInstanceRef = useRef<NDK | null>(ndk);
+    // <<< Add ref for processEvent >>>
+    const prevProcessEventRef = useRef<((event: NDKEvent, _urlRegex: RegExp, type: MediaType) => NostrNote | null) | null>(null);
 
-    // <<< Add logging for image type specifically >>>
-    if (mediaType === 'image') {
-        // <<< Log reference change check BEFORE useEffect >>>
-        const authorsReferenceChanged = prevAuthorsInstanceRef.current !== authors;
-        const ndkReferenceChanged = prevNdkInstanceRef.current !== ndk; // <<< Check NDK ref change >>>
-        console.log(`useMediaNotes (image): RENDER CHECK. Authors ref changed: ${authorsReferenceChanged}, NDK ref changed: ${ndkReferenceChanged}`); // <<< Add NDK check to log >>>
-        
-        // Update the refs *after* the check for the next render
-        prevAuthorsInstanceRef.current = authors;
-        prevNdkInstanceRef.current = ndk; // <<< Update NDK ref >>>
-        
-        console.log("useMediaNotes (image): Hook rendering/re-rendering.", { authors, limit, until, followedTags });
-    }
+    // <<< Removed verbose render logging >>>
 
     const processEvent = useCallback((event: NDKEvent, _urlRegex: RegExp, type: MediaType): NostrNote | null => {
         const urlRegex = getUrlRegexForMediaType(type);
-        if (type === 'image') {
-            console.log(`processEvent (image): Checking event ${event.id}`, { content: event.content.substring(0, 100), tags: event.tags });
-        }
+        // if (type === 'image') {
+        //      console.log(`processEvent (image): Checking event ${event.id}`); // Keep commented out
+        // }
 
         let mediaUrl: string | undefined;
         let foundVia: string | null = null;
@@ -178,21 +168,21 @@ export function useMediaNotes({
             if (contentMatch) {
                 mediaUrl = contentMatch[0];
                 foundVia = 'content regex fallback';
-                console.log(`processEvent (${type}): URL found via CONTENT REGEX fallback for event ${event.id}`);
+                // console.log(`processEvent (${type}): URL found via CONTENT REGEX fallback for event ${event.id}`);
             }
         }
 
         // --- End of URL Finding Logic --- 
 
         if (!mediaUrl) {
-            if (type === 'image') {
-                console.log(`processEvent (image): Skipping event ${event.id} - No valid URL found in tags or content.`);
-            }
+            // if (type === 'image') { // Keep commented out
+            //     console.log(`processEvent (image): Skipping event ${event.id} - No valid URL found in tags or content.`);
+            // }
             return null;
         } else {
-            if (type === 'image') {
-                 console.log(`processEvent (image): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
-            }
+            // if (type === 'image') { // Keep commented out
+            //      console.log(`processEvent (image): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
+            // }
         }
 
         // 2. Extract Metadata (Example)
@@ -219,44 +209,40 @@ export function useMediaNotes({
         };
         return note;
 
-    }, []); // No dependencies, it's a pure function based on args
+    }, [mediaType]); // No dependencies, it's a pure function based on args
 
     useEffect(() => {
         // <<< START ADDED LOGGING >>>
-        console.log(`useMediaNotes (${mediaType}): useEffect RUNNING. Props:`, { 
-            authors: authors?.map(a => a.substring(0, 8)), // Log snippets for brevity
-            mediaType, 
-            limit, 
-            until, 
-            followedTags, 
-            ndkExists: !!ndk,
-            isFetching: isFetching.current 
-        });
+        // console.log(`useMediaNotes (${mediaType}): useEffect RUNNING.`); // Keep commented
         // <<< END ADDED LOGGING >>>
 
-        // --- Dependency Change Logging --- 
+        // <<< Detailed Dependency Check >>>
         let changedDeps: string[] = [];
         if (prevNdkRef.current !== ndk) changedDeps.push('ndk');
-        // Shallow compare arrays for changes
-        if (JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors)) {
-            changedDeps.push('authors');
-            if (mediaType === 'image') {
-                console.log(`useMediaNotes (image): ** Authors prop changed! ** Prev: ${prevAuthorsRef.current?.length ?? 0}, New: ${authors.length}`);
-            }
+        // Use JSON.stringify for robust array comparison, handle undefined
+        const authorsStringified = JSON.stringify(authors);
+        if (JSON.stringify(prevAuthorsRef.current) !== authorsStringified) {
+            console.log(`%%% useMediaNotes (${mediaType}): Dependency Change Detected - authors`); changedDeps.push('authors');
         }
-        if (prevMediaTypeRef.current !== mediaType) changedDeps.push('mediaType');
-        if (prevLimitRef.current !== limit) changedDeps.push('limit');
-        if (prevUntilRef.current !== until) changedDeps.push('until');
-        if (JSON.stringify(prevFollowedTagsRef.current) !== JSON.stringify(followedTags)) changedDeps.push('followedTags');
-        
-        if (mediaType === 'image') {
-             if (changedDeps.length > 0) {
-                 console.log(`useMediaNotes (image): Effect triggered by changed dependencies:`, changedDeps.join(', '));
-             } else {
-                 // <<< ADDED: Log if effect runs but NO deps changed (for image mode) >>>
-                 console.log(`useMediaNotes (image): Effect running, but NO dependency changes detected.`);
-             }
-             console.log(`useMediaNotes (image): Effect check`, { isFetching: isFetching.current, hasNdk: !!ndk, numAuthors: authors.length });
+        if (prevMediaTypeRef.current !== mediaType) {
+            console.log(`%%% useMediaNotes (${mediaType}): Dependency Change Detected - mediaType`);
+            changedDeps.push('mediaType');
+        }
+        if (prevLimitRef.current !== limit) {
+            console.log(`%%% useMediaNotes (${mediaType}): Dependency Change Detected - limit`);
+            changedDeps.push('limit');
+        }
+        if (prevUntilRef.current !== until) {
+            console.log(`%%% useMediaNotes (${mediaType}): Dependency Change Detected - until`);
+            changedDeps.push('until');
+        }
+        // Use JSON.stringify for robust array comparison, handle undefined
+        const followedTagsStringified = JSON.stringify(followedTags);
+        if (JSON.stringify(prevFollowedTagsRef.current) !== followedTagsStringified) {
+            console.log(`%%% useMediaNotes (${mediaType}): Dependency Change Detected - followedTags`); changedDeps.push('followedTags');
+        }
+        if (prevProcessEventRef.current !== processEvent) {
+            console.log(`%%% useMediaNotes (${mediaType}): Dependency Change Detected - processEvent`); changedDeps.push('processEvent');
         }
         // Update previous value refs *after* comparison
         prevNdkRef.current = ndk;
@@ -265,19 +251,34 @@ export function useMediaNotes({
         prevLimitRef.current = limit;
         prevUntilRef.current = until;
         prevFollowedTagsRef.current = followedTags;
+        prevProcessEventRef.current = processEvent; // Store processEvent ref
         // ---------------------------------
 
-        // Debounce or prevent fetch if already fetching or no NDK/authors
-        if (isFetching.current || !ndk || authors.length === 0) {
-            // <<< ADDED LOGGING >>>
-            console.log(`useMediaNotes (${mediaType}): useEffect SKIPPING fetch. Conditions:`, { isFetching: isFetching.current, ndkExists: !!ndk, numAuthors: authors.length });
-            // If no authors/ndk, clear state
-            if (!ndk || authors.length === 0) {
+        if (changedDeps.length > 0) {
+            console.log(`%%% useMediaNotes (${mediaType}): Effect actually running due to changed dependencies:`, changedDeps.join(', '));
+        }
+
+        // Determine if we have valid filter criteria to proceed
+        const hasAuthors = authors && authors.length > 0;
+        const hasTags = followedTags && followedTags.length > 0;
+        const canFetch = ndk && (hasAuthors || hasTags); // Can fetch if NDK is ready AND (we have authors OR we have tags)
+
+        // <<< Log when effect is triggered AND has criteria >>>
+        if (canFetch && !isFetching.current) {
+            console.log(`useMediaNotes (${mediaType}): Effect triggered with fetch criteria. HasAuthors: ${hasAuthors}, HasTags: ${hasTags}`);
+        }
+
+        // Debounce or prevent fetch if already fetching or no valid criteria
+        if (isFetching.current || !canFetch) {
+            // console.log(`useMediaNotes (${mediaType}): useEffect SKIPPING fetch.`); // Keep commented
+            // Clear state and stop loading if criteria become invalid (e.g., NDK disconnects, authors/tags become empty)
+            if (!canFetch) {
                  setNotes([]);
-                 notesById.current.clear(); // Clear map if authors/ndk removed
+                 notesById.current.clear();
                  setIsLoading(false);
             }
-            return; 
+            // Don't reset isFetching.current here if skip was due to already fetching
+            return;
         }
 
         let isMounted = true;
@@ -287,7 +288,7 @@ export function useMediaNotes({
         notesById.current.clear();
         // The notes state will persist until the fetch completes in EOSE
 
-        const authorsList = authors;
+        const authorsList = authors || [];
         const kindsToFetch = getKindsForMediaType(mediaType);
         const urlRegex = getUrlRegexForMediaType(mediaType);
 
@@ -296,9 +297,9 @@ export function useMediaNotes({
             let newestCachedTimestamp: number | undefined = undefined;
             let relevantCachedNotes: NostrNote[] = []; // Store notes valid for this mediaType
             try {
-                console.log(`useMediaNotes (${mediaType}): Checking cache for authors:`, authorsList.map(a => a.substring(0,8)));
+                // console.log(`useMediaNotes (${mediaType}): Checking cache...`); // Keep commented
                 const cachedNotes = await getCachedNotesByAuthors(authorsList);
-                console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`);
+                // console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`); // Keep commented
                 if (cachedNotes && cachedNotes.length > 0) {
                     // Filter cached notes for this mediaType
                     relevantCachedNotes = cachedNotes.filter(note => 
@@ -307,7 +308,7 @@ export function useMediaNotes({
                         note.url.match(urlRegex)
                     );
                     
-                    console.log(`useMediaNotes (${mediaType}): Found ${relevantCachedNotes.length} relevant notes in cache after filtering.`);
+                    // console.log(`useMediaNotes (${mediaType}): Found ${relevantCachedNotes.length} relevant notes in cache after filtering.`); // Keep commented
                     
                     // Pre-populate the map with relevant cached notes
                     relevantCachedNotes.forEach(note => {
@@ -315,17 +316,17 @@ export function useMediaNotes({
                             notesById.current.set(note.id, note);
                         }
                     });
-                    console.log(`useMediaNotes (${mediaType}): Added ${notesById.current.size} notes from cache to internal map.`);
+                    // console.log(`useMediaNotes (${mediaType}): Added ${notesById.current.size} notes from cache.`); // Keep commented
 
                     // Find newest timestamp *among the relevant cached notes*
                     if (relevantCachedNotes.length > 0) {
                         // Sort MUTATES the array, do it once
                         relevantCachedNotes.sort((a, b) => b.created_at - a.created_at);
                         newestCachedTimestamp = relevantCachedNotes[0].created_at;
-                        console.log(`useMediaNotes (${mediaType}): Newest relevant cached timestamp: ${newestCachedTimestamp} (${new Date(newestCachedTimestamp * 1000).toISOString()})`);
+                        // console.log(`useMediaNotes (${mediaType}): Newest relevant cached timestamp: ${newestCachedTimestamp}`); // Keep commented
                     } 
                 } else {
-                    console.log(`useMediaNotes (${mediaType}): Cache was empty for these authors.`);
+                    // console.log(`useMediaNotes (${mediaType}): Cache was empty.`); // Keep commented
                 }
             } catch (error) {
                 console.error(`useMediaNotes (${mediaType}): Error reading/processing cache:`, error);
@@ -333,7 +334,7 @@ export function useMediaNotes({
              // <<< If cache was populated, update state immediately BEFORE network fetch >>>
             if (relevantCachedNotes.length > 0) {
                  // Use the already sorted relevantCachedNotes
-                 console.log(`useMediaNotes (${mediaType}): Pre-populating state with ${relevantCachedNotes.length} notes from cache.`);
+                 // console.log(`useMediaNotes (${mediaType}): Pre-populating state with ${relevantCachedNotes.length} notes from cache.`); // Keep commented
                  // Don't set isLoading false yet, network fetch might still happen
                  setNotes(relevantCachedNotes); 
             }
@@ -341,9 +342,14 @@ export function useMediaNotes({
             
             const filter: NDKFilter = {
                 kinds: kindsToFetch,
-                authors: authorsList,
                 limit: limit, // Limit applies to the network fetch
             };
+
+            // Conditionally add authors to the filter
+            if (hasAuthors) {
+                filter.authors = authorsList;
+            }
+
             if (until !== undefined) {
                 filter.until = until; // For pagination
             }
@@ -351,18 +357,18 @@ export function useMediaNotes({
             if (newestCachedTimestamp !== undefined && !until) { // Don't use since if paginating backwards
                 // Add 1 second to avoid refetching the exact same newest note
                 filter.since = newestCachedTimestamp + 1;
-                console.log(`useMediaNotes (${mediaType}): Applying SINCE filter: ${filter.since} (${new Date(filter.since * 1000).toISOString()})`);
+                // console.log(`useMediaNotes (${mediaType}): Applying SINCE filter: ${filter.since}`); // Keep commented
             }
             // <<< END SINCE FILTER LOGIC >>>
 
-            if (followedTags && followedTags.length > 0) {
-                filter['#t'] = followedTags.map(tag => tag.toLowerCase()); 
+            // Conditionally add tags to the filter
+            if (hasTags) {
+                filter['#t'] = followedTags.map(tag => tag.toLowerCase());
             }
 
             // <<< Moved logging after filter definition >>>
             if (mediaType === 'image') {
-                 console.log(`useMediaNotes (image): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Until: ${until ? new Date(until * 1000).toISOString() : 'N/A'})...`);
-                 if (filter['#t']) console.log(`useMediaNotes (image): Filtering by tags:`, filter['#t']);
+                // console.log(`useMediaNotes (image): Subscribing...`, filter); // Keep commented
             }
             
             // Stop previous subscription if it exists
@@ -375,31 +381,27 @@ export function useMediaNotes({
             currentSubscription.current.on('event', (event: NDKEvent) => {
                 const note = processEvent(event, urlRegex, mediaType);
                 if (note && !notesById.current.has(note.id)) {
-                    // <<< Log note add >>>
-                    if (mediaType === 'image') {
-                         console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
-                    }
+                    // if (mediaType === 'image') {
+                    //     console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
+                    // }
                     notesById.current.set(note.id, note);
                     // <<< DO NOT setNotes here on individual events >>>
                 }
             });
 
             currentSubscription.current.on('eose', () => {
-                if (mediaType === 'image') {
-                    console.log(`useMediaNotes (image): EOSE received. Total notes in map: ${notesById.current.size}`);
-                }
+                console.log(`%%% useMediaNotes (${mediaType}): EOSE received. Setting isLoading to false.`); // <<< ADD THIS LOG
+                // console.log(`useMediaNotes (${mediaType}): EOSE received. Total notes in map: ${notesById.current.size}`); // Keep commented
                 const finalNotes = Array.from(notesById.current.values());
                 const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
                 if (isMounted) {
-                    if (mediaType === 'image') {
-                        console.log(`useMediaNotes (image): Updating state ONCE with ${sortedFinalNotes.length} notes after EOSE.`);
-                    }
+                    // console.log(`useMediaNotes (${mediaType}): Updating state with ${sortedFinalNotes.length} notes after EOSE.`); // Keep commented
                     // <<< The single state update point >>>
                     setNotes(sortedFinalNotes);
                     setIsLoading(false);
                     isFetching.current = false;
                 }
-                console.log(`useMediaNotes (${mediaType}): Caching ${finalNotes.length} notes after EOSE.`);
+                // console.log(`useMediaNotes (${mediaType}): Caching ${finalNotes.length} notes after EOSE.`); // Keep commented
                 cacheMediaNotes(finalNotes).catch(error => {
                      console.error(`useMediaNotes (${mediaType}): Error caching notes after EOSE:`, error);
                 });
@@ -408,6 +410,7 @@ export function useMediaNotes({
 
         fetchAndSubscribe().catch(err => {
             console.error(`useMediaNotes (${mediaType}): Error fetching notes:`, err);
+            console.log(`%%% useMediaNotes (${mediaType}): Fetch error. Setting isLoading to false.`); // <<< ADD THIS LOG
             if (isMounted) {
                  setIsLoading(false);
                  isFetching.current = false; // Mark fetching complete on error
@@ -417,20 +420,16 @@ export function useMediaNotes({
         // Cleanup
         return () => {
             isMounted = false;
-            if (currentSubscription.current) {
-                console.log(`useMediaNotes (${mediaType}): Cleaning up subscription.`);
-                currentSubscription.current.stop();
-                currentSubscription.current = null;
-            }
+            currentSubscription.current?.stop(); // Use optional chaining for stop
+            currentSubscription.current = null;
+            // console.log(`useMediaNotes (${mediaType}): Cleaned up subscription.`); // Keep commented
             isFetching.current = false; // Ensure fetching flag is reset if component unmounts during fetch
         };
     // Re-run effect if ndk, authors, mediaType, limit, or until changes
     }, [ndk, authors, mediaType, limit, until, followedTags, processEvent]); // <<< Add followedTags to dependency array
 
     // <<< Log return value >>>
-    if (mediaType === 'image') {
-        console.log(`useMediaNotes (image): Returning state`, { notesLength: notes.length, isLoading });
-    }
+    // console.log(`useMediaNotes (${mediaType}): Returning state`, { notesLength: notes.length, isLoading }); // Keep commented
     return {
         notes,
         isLoading,

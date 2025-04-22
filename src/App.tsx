@@ -33,6 +33,8 @@ const CHECK_INTERVAL = 5000;
 // --- Constants ---
 const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 const FULLSCREEN_INACTIVITY_TIMEOUT = 45000; // 45 seconds for fullscreen inactivity
+const VIDEO_PLAYLIST_INITIAL_LIMIT = 15;
+const VIDEO_PLAYLIST_LOAD_BATCH_SIZE = 15;
 
 function App() {
   // --- NDK Initialization (Using Hook) ---
@@ -51,128 +53,257 @@ function App() {
   const memoizedFollowedTags = useMemo(() => followedTags, [followedTags]);
   // ---------------------------------------------------------------
 
+  // Stable reference for empty authors array for tag-only fetches
+  const emptyAuthors = useMemo(() => [], []);
+
   // --- Wallet Hook --- <<< Initialize useWallet here >>>
   const wallet = useWallet({ ndkInstance, isNdkReady });
 
-  // State for fetch parameters - Reverted
-  const [imageFetchLimit] = useState<number>(500);
-  const [videoFetchLimit] = useState<number>(30);
+  // State for fetch parameters - Temporarily Reduced Limits
+  const [imageFetchLimit] = useState<number>(50); // TEMP: Reduced from 500
+  const [videoFetchLimit] = useState<number>(50); // TEMP: Reduced from 30
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
+  const [imageTagsFetchUntil, setImageTagsFetchUntil] = useState<number | undefined>(undefined); // New state for tag pagination
+  const [videoTagsFetchUntil, setVideoTagsFetchUntil] = useState<number | undefined>(undefined); // New state for tag pagination
 
-  // --- Fetch PODCAST notes (Keep using useMediaNotes) ---
-  const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({ 
+  // --- Fetch PODCAST notes (assuming authors only for podcasts) ---
+  const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({
     authors: memoizedMediaAuthors,
-    mediaType: 'podcast', 
-    ndk: ndkInstance, 
+    mediaType: 'podcast',
+    ndk: ndkInstance,
     limit: 25 // Keep separate limit for podcasts
   });
 
-  // --- REVERTED to using useMediaNotes for VIDEO ---
-  const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
+  // <<< Memoize podcast notes before passing to useMediaState >>>
+  const memoizedPodcastNotes = useMemo(() => podcastNotes, [podcastNotes]);
+
+  // --- Fetch VIDEO notes from AUTHORS ---
+  const { notes: authorVideoNotes, isLoading: isLoadingAuthorVideoNotes } = useMediaNotes({
     authors: memoizedMediaAuthors,
-    mediaType: 'video', 
-    ndk: ndkInstance, 
+    mediaType: 'video',
+    ndk: ndkInstance,
     limit: videoFetchLimit,
     until: videoFetchUntil,
-    followedTags: memoizedFollowedTags
+    // No followedTags here
   });
 
-  // --- REVERTED to using useMediaNotes for IMAGE ---
-  const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
+  // No followedTags here
+  const tagVideoNotes: NostrNote[] = [];
+  const isLoadingTagVideoNotes = false;
+
+  // --- Fetch IMAGE notes from AUTHORS ---
+  const { notes: authorImageNotes, isLoading: isLoadingAuthorImages } = useMediaNotes({
     authors: memoizedMediaAuthors,
-    mediaType: 'image', 
-    ndk: ndkInstance, 
+    mediaType: 'image',
+    ndk: ndkInstance,
     limit: imageFetchLimit,
     until: imageFetchUntil,
-    followedTags: memoizedFollowedTags
+    // No followedTags here
   });
-  
-  // State for shuffled notes for display
-  const [uniqueVideoNotes, setUniqueVideoNotes] = useState<NostrNote[]>([]);
+
+  // No followedTags here
+  const tagImageNotes: NostrNote[] = [];
+  const isLoadingTagImages = false;
+
+  // --- State for COMBINED and DEDUPLICATED notes ---
+  const [combinedVideoNotes, setCombinedVideoNotes] = useState<NostrNote[]>([]);
+  const [combinedImageNotes, setCombinedImageNotes] = useState<NostrNote[]>([]);
+
+  // --- Effect to COMBINE and DEDUPLICATE VIDEO notes ---
+  useEffect(() => {
+    // console.log("App: Combining and deduplicating video notes..."); // Keep commented
+    // Start with existing notes to append/merge new ones
+    const combinedMap = new Map<string, NostrNote>(
+      combinedVideoNotes.map(note => [note.id, note]) // Initialize map with current state
+    );
+
+    // Add author notes (will overwrite duplicates based on ID, keeping the one from this fetch if ID matches)
+    authorVideoNotes.forEach(note => {
+      combinedMap.set(note.id, note); // Use set to add/update
+    });
+
+    // Add tag notes (will overwrite duplicates based on ID)
+    tagVideoNotes.forEach(note => {
+      combinedMap.set(note.id, note); // Use set to add/update
+    });
+
+    const newCombinedNotes = Array.from(combinedMap.values())
+      .sort((a, b) => b.created_at - a.created_at); // Sort newest first
+
+    // Update state only if the actual content changed (compare IDs)
+    const currentIds = combinedVideoNotes.map(n => n.id).join(',');
+    const newIds = newCombinedNotes.map(n => n.id).join(',');
+    if (currentIds !== newIds) {
+      console.log(`App: Combined video notes updated. Total: ${newCombinedNotes.length}`);
+      setCombinedVideoNotes(newCombinedNotes);
+    } else {
+      // console.log("App: Combined video notes are the same, skipping update."); // Keep commented
+    }
+  }, [authorVideoNotes, tagVideoNotes]); // Keep deps as inputs only
+
+  // --- Effect to COMBINE and DEDUPLICATE IMAGE notes ---
+  useEffect(() => {
+    // console.log("App: Combining and deduplicating image notes..."); // Keep commented
+    // Start with existing notes
+    const combinedMap = new Map<string, NostrNote>(
+      combinedImageNotes.map(note => [note.id, note]) // Initialize map with current state
+    );
+
+    // Add author notes
+    authorImageNotes.forEach(note => {
+      combinedMap.set(note.id, note); // Use set to add/update
+    });
+
+    // Add tag notes
+    tagImageNotes.forEach(note => {
+      combinedMap.set(note.id, note); // Use set to add/update
+    });
+
+    const newCombinedNotes = Array.from(combinedMap.values())
+      .sort((a, b) => b.created_at - a.created_at); // Sort newest first
+
+    // Update state only if content changed
+    const currentIds = combinedImageNotes.map(n => n.id).join(',');
+    const newIds = newCombinedNotes.map(n => n.id).join(',');
+    if (currentIds !== newIds) {
+      console.log(`App: Combined image notes updated. Total: ${newCombinedNotes.length}`);
+      setCombinedImageNotes(newCombinedNotes);
+    } else {
+      // console.log("App: Combined image notes are the same, skipping update."); // Keep commented
+    }
+  }, [authorImageNotes, tagImageNotes]); // Keep deps as inputs only
+
+  // State for shuffled notes for display (use combined notes)
+  const [uniqueVideoNotes, setUniqueVideoNotes] = useState<NostrNote[]>([]); // Keep for URL deduplication
+
+  // State for limiting the visible video playlist
+  const [visibleVideoCount, setVisibleVideoCount] = useState(VIDEO_PLAYLIST_INITIAL_LIMIT);
 
   // State for podcast saved position
   const [initialPodcastTime] = useState<number>(0);
 
   // State for preload URL
+  const preloadVideoRef = useRef<HTMLVideoElement>(null); // <<< Ref for hidden preload element
   const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
 
-  // Fetcher functions - Reverted
+  // Fetcher functions - Reverted -> Updated for combined logic
   const fetchOlderImages = useCallback(() => {
-    if (imageNotes.length > 0) {
-      const oldestTimestamp = imageNotes[imageNotes.length - 1].created_at;
-      setImageFetchUntil(oldestTimestamp); 
+    // Fetch older from *both* sources if needed
+    if (authorImageNotes.length > 0) {
+      const oldestTimestamp = authorImageNotes[authorImageNotes.length - 1].created_at;
+      setImageFetchUntil(oldestTimestamp);
+      console.log("App: Fetching older author images...");
     }
-  }, [imageNotes]); // Depend on imageNotes
+    if (tagImageNotes.length > 0) {
+      const oldestTagTimestamp = tagImageNotes[tagImageNotes.length - 1].created_at;
+      setImageTagsFetchUntil(oldestTagTimestamp); // Use separate state
+      console.log("App: Fetching older tag images...");
+    }
+  }, [authorImageNotes, tagImageNotes]); // Depend on both source arrays
 
   const fetchOlderVideos = useCallback(() => {
-    if (videoNotes.length > 0) {
-      const oldestTimestamp = videoNotes[videoNotes.length - 1].created_at;
-      setVideoFetchUntil(oldestTimestamp); 
+    if (uniqueVideoNotes.length > visibleVideoCount) {
+      // Case 1: More videos available locally, expand the visible window
+      const newCount = Math.min(visibleVideoCount + VIDEO_PLAYLIST_LOAD_BATCH_SIZE, uniqueVideoNotes.length);
+      console.log(`App: Expanding visible video count from ${visibleVideoCount} to ${newCount}`);
+      setVisibleVideoCount(newCount);
+    } else {
+      // Case 2: No more local videos, fetch older ones from relays
+      console.log(`App: Reached end of local videos (${uniqueVideoNotes.length}), fetching older from relays...`);
+      // --- Original logic to fetch older from relays ---
+      if (authorVideoNotes.length > 0) {
+        const oldestTimestamp = authorVideoNotes[authorVideoNotes.length - 1].created_at;
+        setVideoFetchUntil(oldestTimestamp);
+        console.log("App: Fetching older author videos...");
+      }
+      if (tagVideoNotes.length > 0) { // Keep fetching older tags too if applicable
+          const oldestTagTimestamp = tagVideoNotes[tagVideoNotes.length - 1].created_at;
+          setVideoTagsFetchUntil(oldestTagTimestamp);
+          console.log("App: Fetching older tag videos...");
+      }
+      // --- End original logic ---
     }
-  }, [videoNotes]); // Depend on videoNotes
+  }, [
+      uniqueVideoNotes, // Need full list length
+      visibleVideoCount, // Need current visible count
+      authorVideoNotes, // Need for fetching older
+      tagVideoNotes, // Need for fetching older
+      // setVideoFetchUntil, setVideoTagsFetchUntil // Setters don't need to be deps
+  ]); // Added dependencies
 
-  // <<< Memoize the shuffled image notes >>>
+  // <<< Memoize the shuffled COMBINED image notes >>>
   const shuffledImageNotes = useMemo(() => {
-    console.log('App.tsx: Memoizing shuffledImageNotes...');
-    // Ensure we shuffle a copy
-    return shuffleArray([...imageNotes]); 
-  }, [imageNotes]); // Only re-shuffle when the imageNotes array reference changes
+    console.log('App.tsx: Memoizing shuffled COMBINED ImageNotes...');
+    // Ensure we shuffle a copy of the combined notes
+    return shuffleArray([...combinedImageNotes]);
+  }, [combinedImageNotes]); // Depend on the combined state
 
-  // Media state hook (pass memoized shuffled notes)
+  // <<< Create memoized slice of unique video notes >>>
+  const visibleUniqueVideoNotes = useMemo(() => {
+    console.log(`App: Slicing uniqueVideoNotes (${uniqueVideoNotes.length}) to ${visibleVideoCount}`);
+    return uniqueVideoNotes.slice(0, visibleVideoCount);
+  }, [uniqueVideoNotes, visibleVideoCount]);
+
+  // Media state hook (pass memoized shuffled combined notes)
   const {
-    viewMode, 
+    viewMode,
     currentImageIndex,
     currentPodcastIndex,
     currentVideoIndex,
-    handleVideoSelect, 
+    handleVideoSelect,
     handlePrevious,
-    handleNext, 
-    setViewMode, 
+    handleNext,
+    setViewMode,
     setCurrentPodcastIndex,
     imageNotes: stateImageNotes, // Prop name might differ from internal state name
-    podcastNotes: statePodcastNotes, 
-    videoNotes: stateVideoNotes,
+    podcastNotes: statePodcastNotes,
+    videoNotes: stateVideoNotes, // This will now receive uniqueVideoNotes derived from combinedVideoNotes
     currentItemUrl,
-  } = useMediaState({ 
-      initialImageNotes: shuffledImageNotes, // Pass shuffled images 
-      initialPodcastNotes: podcastNotes,
-      initialVideoNotes: uniqueVideoNotes, // Pass unique (deduplicated) videos
-      fetchOlderImages: fetchOlderImages, 
-      fetchOlderVideos: fetchOlderVideos,
-      shuffledImageNotesLength: shuffledImageNotes.length, // Pass length of shuffled images
-      shuffledVideoNotesLength: uniqueVideoNotes.length, // Pass length of unique videos
+  } = useMediaState({
+      initialImageNotes: shuffledImageNotes,
+      initialPodcastNotes: memoizedPodcastNotes,
+      initialVideoNotes: visibleUniqueVideoNotes, // <<< Pass sliced array
+      fetchOlderImages: fetchOlderImages,
+      fetchOlderVideos: fetchOlderVideos, // Pass the modified callback
+      shuffledImageNotesLength: shuffledImageNotes.length,
+      shuffledVideoNotesLength: visibleUniqueVideoNotes.length, // <<< Pass length of sliced array
   });
 
-  // Effect for deduplicating video notes (using videoNotes from useMediaNotes)
+  // Effect for deduplicating video notes BY URL (using combinedVideoNotes)
   useEffect(() => {
-    console.log('App.tsx: Effect running: Deduplicating videoNotes (No Shuffling)');
-    // --- Deduplicate video notes by URL, keeping the newest --- 
+    console.log('%%% App.tsx: Video Dedupe Effect RUNNING'); // <<< Add log
+    // --- Deduplicate video notes by URL, keeping the newest ---
     const uniqueVideoNotesMap = new Map<string, NostrNote>();
-    // <<< Use videoNotes directly from the hook >>>
-    for (const note of videoNotes) { 
-        if (note.url) { 
-             if (!uniqueVideoNotesMap.has(note.url) || note.created_at > (uniqueVideoNotesMap.get(note.url)?.created_at ?? 0)) {
-                 uniqueVideoNotesMap.set(note.url, note);
-             }
-        } else {
-             console.warn(`App: Video note ${note.id} missing URL, skipping deduplication.`);
+    // <<< Use combinedVideoNotes now >>>
+    for (const note of combinedVideoNotes) {
+      if (note.url) {
+        if (!uniqueVideoNotesMap.has(note.url) || note.created_at > (uniqueVideoNotesMap.get(note.url)?.created_at ?? 0)) {
+          uniqueVideoNotesMap.set(note.url, note);
         }
+      } else {
+        console.warn(`App: Video note ${note.id} missing URL, skipping URL deduplication.`);
+      }
     }
     const deduplicatedNotes = Array.from(uniqueVideoNotesMap.values())
-                                  .sort((a, b) => b.created_at - a.created_at); 
-    console.log(`App: Deduplicated ${videoNotes.length} video notes to ${deduplicatedNotes.length} unique URLs.`);
+      .sort((a, b) => b.created_at - a.created_at);
+    console.log(`App: Deduplicated ${combinedVideoNotes.length} combined video notes to ${deduplicatedNotes.length} unique URLs.`);
 
-    // Compare and set uniqueVideoNotes state
+    // Compare and set uniqueVideoNotes state (which feeds into useMediaState)
     const currentIds = uniqueVideoNotes.map(note => note.id).join(',');
     const newIds = deduplicatedNotes.map(note => note.id).join(',');
+
+    // <<< Add logging before potential state update >>>
+    console.log(`%%% App.tsx: Video Dedupe Check. Current IDs: ${currentIds.substring(0,50)}..., New IDs: ${newIds.substring(0,50)}...`);
+
     if (currentIds !== newIds) {
-        console.log('App: Video note content changed, updating state.');
-        setUniqueVideoNotes(deduplicatedNotes);
+      console.log('%%% App.tsx: Video Dedupe Effect - UPDATING uniqueVideoNotes state.');
+      setUniqueVideoNotes(deduplicatedNotes);
     } else {
-        console.log('App: Video note content is the same, skipping state update.');
+      console.log('%%% App.tsx: Video Dedupe Effect - Skipping uniqueVideoNotes update.');
     }
-  }, [videoNotes, uniqueVideoNotes]); // Depend on videoNotes from hook and uniqueVideoNotes state
+    // Depend only on the input combinedVideoNotes state
+  }, [combinedVideoNotes]); // Remove uniqueVideoNotes from deps
 
   // --- Inactivity Timer Setup ---
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -192,12 +323,12 @@ function App() {
     }
     // Only set the timer if *not* currently fullscreen
     if (!isFullScreen) {
-       inactivityTimerRef.current = setTimeout(() => {
-         console.log("App: Inactivity timeout reached. Entering fullscreen.");
-         if (!document.fullscreenElement) { // Double check before requesting
-             signalInteraction(); // Enter fullscreen
-         }
-       }, FULLSCREEN_INACTIVITY_TIMEOUT);
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log("App: Inactivity timeout reached. Entering fullscreen.");
+        if (!document.fullscreenElement) { // Double check before requesting
+          signalInteraction(); // Enter fullscreen
+        }
+      }, FULLSCREEN_INACTIVITY_TIMEOUT);
     }
   }, [isFullScreen, signalInteraction]); // Add dependencies
 
@@ -239,8 +370,8 @@ function App() {
     currentItemUrl: isAudioMode ? currentItemUrl : null,
     isActiveMode: isAudioMode,
     elementType: 'audio',
-    onEnded: isAudioMode ? handleNext : undefined, 
-    initialTime: initialPodcastTime, 
+    onEnded: isAudioMode ? handleNext : undefined,
+    initialTime: initialPodcastTime,
     autoplayEnabled: false,
     next: true,
   });
@@ -250,8 +381,8 @@ function App() {
     currentItemUrl: isVideoMode ? currentItemUrl : null,
     isActiveMode: isVideoMode,
     elementType: 'video',
-    onEnded: isVideoMode ? handleNext : undefined, 
-    initialTime: 0, 
+    onEnded: isVideoMode ? handleNext : undefined,
+    initialTime: 0,
     autoplayEnabled: false,
     next: true,
   });
@@ -273,34 +404,34 @@ function App() {
   // Keyboard Controls Hook - Pass toggleFullScreen
   useKeyboardControls({
     isFullScreen,
-    signalInteraction, 
-    onSetViewMode: setViewMode, 
+    signalInteraction,
+    onSetViewMode: setViewMode,
     onTogglePlayPause: activePlayback.togglePlayPause,
-    onNext: handleNext, 
-    onPrevious: handlePrevious, 
-    onFocusToggle: focusImageFeedToggle, 
+    onNext: handleNext,
+    onPrevious: handlePrevious,
+    onFocusToggle: focusImageFeedToggle,
     viewMode,
     onToggleFullScreen: signalInteraction,
   });
 
-  // Image Carousel Hook (uses shuffledImageNotes)
-  const isCarouselActive = viewMode === 'imagePodcast' && imageNotes.length > 1;
+  // Image Carousel Hook (uses shuffledImageNotes derived from combinedImageNotes)
+  const isCarouselActive = viewMode === 'imagePodcast' && combinedImageNotes.length > 1; // Check combined length
   useImageCarousel({
       isActive: isCarouselActive,
-      onTick: handleNext, 
+      onTick: handleNext,
       intervalDuration: IMAGE_CAROUSEL_INTERVAL,
   });
 
-  // Current Author Hook (uses shuffledImageNotes)
+  // Current Author Hook (uses combinedImageNotes and uniqueVideoNotes)
   const currentAuthorNpub = useCurrentAuthor({
       viewMode,
       imageIndex: currentImageIndex,
       videoIndex: currentVideoIndex,
-      imageNotes: imageNotes,
-      videoNotes: uniqueVideoNotes,
+      imageNotes: combinedImageNotes, // Use combined images
+      videoNotes: uniqueVideoNotes,   // Use unique URL videos
   });
 
-  // --- NEW: Fetch Current Author Profile --- 
+  // --- NEW: Fetch Current Author Profile ---
   const currentAuthorHexPubkey = useMemo(() => {
     if (!currentAuthorNpub) return null;
     try {
@@ -319,10 +450,10 @@ function App() {
   const authorProfilePictureUrl = currentAuthorProfile?.picture || null;
   // -----------------------------------------
 
-  // --- Effect for Preload URL Calculation ---
+  // --- Effect for Preload URL Calculation (uses uniqueVideoNotes) ---
   useEffect(() => {
     let urlToPreloadCalc: string | null = null; // Use different variable name
-    if (uniqueVideoNotes.length > 0) { 
+    if (uniqueVideoNotes.length > 0) {
       if (viewMode === 'videoPlayer') {
         // Preload NEXT video
         if (uniqueVideoNotes.length > 1) {
@@ -333,7 +464,7 @@ function App() {
       } else { // imagePodcast mode
         // Preload FIRST video
         urlToPreloadCalc = uniqueVideoNotes[0]?.url || null;
-        if (urlToPreloadCalc) console.log(`App: Setting preload URL (first video): ${urlToPreloadCalc}`);
+        // if (urlToPreloadCalc) console.log(`App: Setting preload URL (first video): ${urlToPreloadCalc}`); // Less noisy log
       }
     }
     // Update state only if changed
@@ -341,6 +472,18 @@ function App() {
        setPreloadVideoUrl(urlToPreloadCalc);
     }
   }, [viewMode, currentVideoIndex, uniqueVideoNotes, preloadVideoUrl]);
+
+  // --- Effect to ACTUALLY PRELOAD the video --- <<< NEW EFFECT >>>
+  useEffect(() => {
+    if (preloadVideoUrl && preloadVideoRef.current) {
+        console.log(`>>> App: Initiating preload for: ${preloadVideoUrl}`);
+        preloadVideoRef.current.src = preloadVideoUrl;
+        preloadVideoRef.current.load(); // Start loading metadata and potentially data
+        // Optional: Add listeners to preloadVideoRef.current for debugging preload progress ('progress', 'canplay', 'error')
+    } else {
+        // console.log(">>> App: No preload URL or ref not ready.");
+    }
+  }, [preloadVideoUrl]); // Only run when the URL to preload changes
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -355,7 +498,11 @@ function App() {
   }, [signalInteraction]);
 
   // Global Loading/Error States
-  const isLoading = isNdkConnecting || isLoadingAuthors || isLoadingPodcastNotes || isLoadingVideoNotes || isLoadingImages;
+  const isLoading = isNdkConnecting ||
+                    isLoadingAuthors ||
+                    isLoadingPodcastNotes ||
+                    isLoadingAuthorVideoNotes || isLoadingTagVideoNotes || // Check both video loading states
+                    isLoadingAuthorImages || isLoadingTagImages; // Check both image loading states
 
   if (isNdkConnecting) {
     return (
@@ -375,12 +522,38 @@ function App() {
     );
   }
 
+  // <<< Add diagnostic logging before render >>>
+  console.log(`App Render Diagnostics (Image Mode: ${viewMode === 'imagePodcast'}):`, {
+    combinedImageNotesLength: combinedImageNotes.length,
+    shuffledImageNotesLength: shuffledImageNotes.length,
+    currentImageIndex: currentImageIndex,
+    noteToDisplay: viewMode === 'imagePodcast' && currentImageIndex < shuffledImageNotes.length ? shuffledImageNotes[currentImageIndex] : 'N/A',
+    isFeedLoading: isLoadingAuthorImages || isLoadingTagImages,
+  });
+
+  // <<< Add diagnostic logging for loading flags >>>
+  console.log(`App Render Loading Flags:`, {
+    isLoadingAuthorImages,
+    isLoadingTagImages,
+  });
+
+  // <<< Add logging for playback hook dependencies >>>
+  console.log(`App Render Playback Deps:`, {
+    viewMode,
+    isAudioMode, // -> isActiveMode for audio
+    isVideoMode, // -> isActiveMode for video
+    currentItemUrl,
+  });
+
+  // --- JSX Structure ---
   return (
     <>
     {/* Outermost div */}
     <div className="relative flex flex-col min-h-screen h-screen text-white border-2 border-purple-900 bg-gradient-radial from-gray-900 via-black to-black">
 
       {/* Invisible Audio Element */}
+      {/* <<< Hidden video element for preloading >>> */}
+      <video ref={preloadVideoRef} className="hidden" muted playsInline preload="metadata"></video>
       <audio
         ref={audioRef}
         className="hidden"
@@ -407,16 +580,16 @@ function App() {
               )}
               {/* <<< End New Element >>> */}
               <AnimatePresence mode='wait'>
-                 {isLoadingAuthors ? (
+                 {isLoadingAuthors || isLoadingAuthorImages || isLoadingTagImages || isLoadingAuthorVideoNotes || isLoadingTagVideoNotes ? ( // Check all relevant loading states
                      <motion.div
-                         key="loading-authors"
+                         key="loading-notes" // Changed key to reflect general media loading
                          initial={{ opacity: 0 }}
                          animate={{ opacity: 1 }}
                          exit={{ opacity: 0 }}
                          transition={{ duration: 0.3 }}
                          className="text-gray-400"
                       >
-                         Loading author list...
+                         {isLoadingAuthors ? "Loading author list..." : "Loading media..."}
                      </motion.div>
                  ) : viewMode === 'imagePodcast' ? (
                      <motion.div
@@ -429,14 +602,14 @@ function App() {
                      >
                          <ImageFeed
                              ref={imageFeedRef}
-                             isLoading={isLoadingImages}
+                             isLoading={isLoadingAuthorImages || isLoadingTagImages} // Check both image loading states
                              handlePrevious={handlePrevious}
                              handleNext={handleNext}
                              currentImageIndex={currentImageIndex}
-                             imageNotes={imageNotes}
+                             imageNotes={shuffledImageNotes} // <<< Use SHUFFLED notes >>>
                              authorNpub={currentAuthorNpub}
                              authorProfilePictureUrl={authorProfilePictureUrl}
-                             isPlaying={false}
+                             isPlaying={false} // Audio playback is separate
                              togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
                              isFullScreen={isFullScreen}
                              signalInteraction={signalInteraction}
@@ -453,7 +626,7 @@ function App() {
                      >
                          <VideoPlayer
                              videoRef={videoRef}
-                             src={currentItemUrl} 
+                             src={currentItemUrl} // Derived from uniqueVideoNotes via useMediaState
                              isPlaying={videoPlayback.isPlaying}
                              togglePlayPause={videoPlayback.togglePlayPause}
                              pause={videoPlayback.pause}
@@ -463,7 +636,7 @@ function App() {
                              // authorProfilePictureUrl={authorProfilePictureUrl} // <<< Pass picture URL - Commented out until VideoPlayer supports it >>>
                              autoplayFailed={videoPlayback.autoplayFailed}
                              isMuted={videoPlayback.isMuted}
-                             currentNoteId={stateVideoNotes[currentVideoIndex]?.id}
+                             currentNoteId={stateVideoNotes[currentVideoIndex]?.id} // stateVideoNotes is uniqueVideoNotes
                              // Pass necessary context as props
                              ndkInstance={ndkInstance}
                              isNdkReady={isNdkReady}
@@ -505,8 +678,8 @@ function App() {
         {/* Prev/Next Buttons (Hide on Fullscreen) */}
         <AnimatePresence>
           {!isFullScreen && (
-            (viewMode === 'imagePodcast' && imageNotes.length > 1) ||
-            (viewMode === 'videoPlayer' && uniqueVideoNotes.length > 1)
+            (viewMode === 'imagePodcast' && combinedImageNotes.length > 1) || // <<< Check combined length >>>
+            (viewMode === 'videoPlayer' && uniqueVideoNotes.length > 1) // uniqueVideoNotes length is correct here
           ) && (
              <motion.div
                  key="pagination-buttons"
@@ -564,8 +737,8 @@ function App() {
                     transition={{ duration: 0.5, ease: "easeInOut" }}
                  >
                     {/* Left Side: Message Board */}
-                    <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden"> 
-                        <MessageBoard 
+                    <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden">
+                        <MessageBoard
                             ndk={ndkInstance}
                             threadEventId={MAIN_THREAD_NEVENT_URI}
                             onNewMessage={signalMessage}
@@ -573,19 +746,19 @@ function App() {
                         />
                     </div>
                     {/* Right Side: Media Panel - Adjust width */}
-                    <div className="w-1/3 h-full pl-1 flex flex-col"> 
+                    <div className="w-1/3 h-full pl-1 flex flex-col">
                         <MediaPanel
                             viewMode={viewMode}
                             audioRef={audioRef}
                             videoRef={videoRef}
-                            podcastNotes={statePodcastNotes}
-                            videoNotes={stateVideoNotes}
+                            podcastNotes={statePodcastNotes} // from useMediaState (original podcast fetch)
+                            videoNotes={stateVideoNotes} // from useMediaState (uniqueVideoNotes derived from combined)
                             isLoadingPodcastNotes={isLoadingPodcastNotes}
-                            isLoadingVideoNotes={isLoadingVideoNotes}
+                            isLoadingVideoNotes={isLoadingAuthorVideoNotes || isLoadingTagVideoNotes} // Check both video loading states
                             currentPodcastIndex={currentPodcastIndex}
-                            currentVideoIndex={currentVideoIndex}
+                            currentVideoIndex={currentVideoIndex} // Index within uniqueVideoNotes
                             setCurrentPodcastIndex={setCurrentPodcastIndex}
-                            onVideoSelect={handleVideoSelect}
+                            onVideoSelect={handleVideoSelect} // Selects from uniqueVideoNotes
                             setViewMode={setViewMode}
                             // Playback State & Handlers
                             isPlaying={activePlayback.isPlaying}
@@ -596,7 +769,7 @@ function App() {
                             togglePlayPause={activePlayback.togglePlayPause}
                             handleSeek={activePlayback.handleSeek}
                             currentItemUrl={currentItemUrl}
-                            authors={mediaAuthors}
+                            authors={mediaAuthors} // Keep original authors list for potential display/filtering in panel
                             signalInteraction={signalInteraction}
                             ndkInstance={ndkInstance}
                         />
