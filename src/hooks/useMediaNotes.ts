@@ -31,8 +31,8 @@ const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
 // Helper to get Kinds based on MediaType
 function getKindsForMediaType(mediaType: MediaType): number[] {
     switch (mediaType) {
-        case 'podcast': return [30402, 1, 31234]; // NIP-101 + Kind 1 fallback + User's Kind
-        case 'video': return [1]; // Primarily Kind 1 for simple links
+        case 'podcast': return [1, 31234]; // Keep Kind 1 fallback + User's Kind
+        case 'video': return [1, 21, 22]; // Kind 1 fallback + NIP-71 Kinds
         case 'image': return [1]; // Primarily Kind 1 for simple links
         default: return [1];
     }

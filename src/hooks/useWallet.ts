@@ -3,7 +3,7 @@ import { Proof } from '@cashu/cashu-ts';
 import { idb } from '../utils/idb'; // Use the consolidated idb export
 import { cashuHelper } from '../utils/cashu';
 import { UseAuthReturn } from './useAuth';
-import NDK, { NDKEvent, NDKFilter, NDKSubscription, NDKUser, NostrEvent } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent, NDKFilter, NDKSubscription, NDKUser, NostrEvent, NDKKind } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
 
 // <<< Define props for the hook >>>
@@ -21,10 +21,11 @@ export interface UseWalletReturn {
     isLoadingWallet: boolean;
     configuredMintUrl: string | null;
     // loadWalletState is now internal, triggered by NDK readiness
-    startDepositListener: (auth: UseAuthReturn) => void; // NDK passed via props
+    startDepositListener: (isLoggedIn: boolean, currentUserNpub: string | null, decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>) => void; // NDK passed via props
     stopDepositListener: () => void;
     sendCashuTipWithSplits: (params: SendTipParams) => Promise<boolean>; // Returns true on success
     setConfiguredMintUrl: (url: string | null) => Promise<void>;
+    exportUnspentProofs: () => Promise<string | null>;
 }
 
 export interface SendTipParams {
@@ -61,6 +62,8 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
 
     const depositSubRef = useRef<NDKSubscription | null>(null);
     const isMountedRef = useRef(true); // Track component mount status
+    // <<< Ref to store the last checked timestamp >>>
+    const lastCheckedTimestampRef = useRef<number | null>(null);
 
     // --- Core State Management ---
 
@@ -72,14 +75,18 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             const allProofs = await idb.getAllProofs();
             const currentBalance = cashuHelper.getProofsBalance(allProofs);
             const savedMintUrl = await idb.loadMintUrlFromDb();
+            // <<< Load the timestamp >>>
+            const lastTimestamp = await idb.loadLastCheckedDmTimestamp();
 
-            console.log('useWallet: Loaded proofs:', allProofs.length, 'Balance:', currentBalance, 'Mint URL:', savedMintUrl);
+            console.log('useWallet: Loaded proofs:', allProofs.length, 'Balance:', currentBalance, 'Mint URL:', savedMintUrl, 'Last Check:', lastTimestamp);
 
             if (isMountedRef.current) {
                 setProofs(allProofs);
                 setBalanceSats(currentBalance);
                 // Use the first default URL if none saved
                 _setConfiguredMintUrl(savedMintUrl ?? DEFAULT_MINT_URLS[0]);
+                // <<< Store timestamp in ref >>>
+                lastCheckedTimestampRef.current = lastTimestamp;
             }
         } catch (error) {
             console.error('useWallet: Error loading wallet state:', error);
@@ -116,7 +123,7 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
                 new URL(urlToSave);
                 await idb.saveMintUrlToDb(urlToSave);
                 _setConfiguredMintUrl(urlToSave);
-                 console.log('Saved Mint URL:', urlToSave);
+                 console.log('Saved Mint URLcash:', urlToSave);
             } else {
                 // If URL is null or empty, remove it from DB and revert to default
                 await idb.deleteSetting('mintUrl');
@@ -133,7 +140,7 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
 
     // --- Deposit Listener --- 
 
-    const stopDepositListener = useCallback(() => {
+    const stopDepositListener = useCallback(async () => { // <<< Make async >>>
         if (depositSubRef.current) {
             console.log('Stopping deposit listener...');
             depositSubRef.current.stop();
@@ -141,18 +148,29 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
              if (isMountedRef.current) {
                  setIsListeningForDeposits(false);
              }
+            // <<< Save timestamp when stopping >>>
+            try {
+                const nowTimestamp = Math.floor(Date.now() / 1000);
+                await idb.saveLastCheckedDmTimestamp(nowTimestamp);
+                lastCheckedTimestampRef.current = nowTimestamp; // Update ref immediately
+                console.log(`useWallet: Saved last checked timestamp: ${nowTimestamp}`);
+            } catch (error) {
+                console.error('useWallet: Failed to save last checked timestamp:', error);
+                // Handle error? Maybe set an error state?
+            }
         }
-    }, []);
+    }, []); // No dependencies needed here as it uses refs and idb
 
     // <<< Update startDepositListener signature and logic >>>
-    const startDepositListener = useCallback((auth: UseAuthReturn) => {
+    const startDepositListener = useCallback((isLoggedIn: boolean, currentUserNpub: string | null, decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>) => {
         // <<< Check isNdkReady and ndkInstance from props >>>
         if (!isNdkReady || !ndkInstance) {
             console.warn('useWallet: Cannot start deposit listener: NDK not ready.');
             // Don't set wallet error here, App level should indicate NDK issues
             return;
         }
-        if (!auth.isLoggedIn || !auth.currentUserNpub) {
+        // <<< Use passed-in parameters >>>
+        if (!isLoggedIn || !currentUserNpub) {
             console.warn('useWallet: Cannot start deposit listener: User not logged in.');
             // setWalletError('Login required to listen for deposits.'); // Keep this?
             return;
@@ -162,78 +180,121 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             return;
         }
 
-        console.log('useWallet: Starting deposit listener for pubkey:', auth.currentUserNpub);
+        // <<< Use passed-in parameter >>>
+        console.log('useWallet: Starting deposit listener for pubkey:', currentUserNpub);
         if (isMountedRef.current) {
             setIsListeningForDeposits(true);
             setWalletError(null);
         }
 
-        const userHexPubkey = nip19.decode(auth.currentUserNpub).data as string;
-        const filter: NDKFilter = { kinds: [4], '#p': [userHexPubkey], since: Math.floor(Date.now() / 1000) - 60 * 60 }; // Check last hour
+        // <<< Use passed-in parameter >>>
+        const userHexPubkey = nip19.decode(currentUserNpub).data as string;
+
+        // <<< Calculate dynamic since timestamp >>>
+        const defaultLookbackDuration = 24 * 60 * 60; // 24 hours
+        const lastCheck = lastCheckedTimestampRef.current;
+        // Look back slightly before the last check to avoid missing events due to clock skew
+        const lookbackBuffer = 60; // 60 seconds
+        const sinceTimestamp = lastCheck 
+            ? Math.max(0, lastCheck - lookbackBuffer) // Go back buffer seconds from last check
+            : Math.floor(Date.now() / 1000) - defaultLookbackDuration; // Or default lookback
+        
+        console.log(`useWallet: Subscribing for DMs since timestamp: ${sinceTimestamp} (Last check: ${lastCheck})`);
+
+        const filter: NDKFilter = {
+            kinds: [4],
+            '#p': [userHexPubkey],
+            since: sinceTimestamp
+        };
+
+        // <-- ADD LOGGING HERE -->
+        console.log('useWallet: Filter object being passed to ndk.subscribe:', JSON.stringify(filter));
 
         const handleIncomingDm = async (event: NDKEvent) => {
-            if (!auth.decryptDm || !configuredMintUrl) {
-                console.warn('Decryption function or mint URL not available.');
-                return; 
+            // <<< Use passed-in parameters >>>
+            if (!decryptDm || !currentUserNpub) {
+                console.warn(
+                    'WALLET: Received DM event but auth parameters are missing, skipping.',
+                    event.id,
+                );
+                return;
             }
-            console.log('Received potential deposit DM:', event.id);
+            // Avoid processing own events if filter didn't catch it
+             // <<< Use passed-in parameter >>>
+            if (event.pubkey === userHexPubkey) return; // Compare hex pubkeys
+
+            console.log(`WALLET: Received potential DM event ${event.id} from ${event.pubkey}`); // <-- ADDED LOG
 
             try {
-                const plaintext = await auth.decryptDm(event.content, event.pubkey);
+                console.log(`WALLET: Attempting to decrypt DM ${event.id}...`); // <-- ADDED LOG
+                 // <<< Use passed-in parameter >>>
+                const decryptedContent = await decryptDm(
+                    event.content, // Ciphertext is event.content
+                    event.pubkey,  // Sender is event.pubkey
+                );
+                console.log(`WALLET: DM ${event.id} decrypted successfully.`); // <-- ADDED LOG
+                console.log(`WALLET: Decrypted content (preview): ${decryptedContent.substring(0, 100)}...`); // <-- ADDED LOG
 
-                if (plaintext) {
-                    console.log('Decrypted DM content:', plaintext); // Careful logging plaintext
-                    const tokenMatch = plaintext.match(/(cashuA[A-Za-z0-9_-]+)/);
-                    if (tokenMatch && tokenMatch[1]) {
-                        const token = tokenMatch[1];
-                        console.log('Found Cashu token in DM:', token);
-                        setWalletError('Processing incoming deposit...'); // Indicate activity
+                // Basic regex to find Cashu tokens (adjust if needed)
+                const tokenRegex = /(cashuA[A-Za-z0-9_-]+)/g;
+                const matches = decryptedContent.match(tokenRegex);
 
-                        try {
-                            const { proofs: redeemedProofs } = 
-                                await cashuHelper.redeemToken(token);
-                            
-                            if (redeemedProofs && redeemedProofs.length > 0) {
-                                console.log(`Successfully redeemed ${redeemedProofs.length} proofs from token.`);
-                                await idb.addProofs(redeemedProofs, configuredMintUrl);
-                                await loadWalletState(); // Reload state
-                                setWalletError(null);
-                            } else {
-                                console.warn('Token redeemed but resulted in 0 proofs.');
-                            }
-                        } catch (redeemError) {
-                            console.error('Error redeeming Cashu token:', redeemError);
-                            const message = redeemError instanceof Error ? redeemError.message : String(redeemError);
-                             if (isMountedRef.current) {
-                                 setWalletError(`Failed to redeem deposit: ${message}`);
-                             }
-                        }
+                if (matches && matches.length > 0) {
+                    const tokenString = matches[0]; // Assume first match is the main token
+                    console.log(`WALLET: Found Cashu token in DM ${event.id}: ${tokenString.substring(0, 15)}...`); // <-- ADDED LOG
+
+                    setIsLoadingWallet(true); // Indicate processing
+                    setWalletError(null);
+
+                    try {
+                        console.log(`WALLET: Calling cashuHelper.redeemToken for token from DM ${event.id}...`); // <-- ADDED LOG
+                        const redeemResult = await cashuHelper.redeemToken(tokenString);
+                        const { proofs } = redeemResult;
+                        const mintUrl = redeemResult.mintUrl;
+
+                        console.log(
+                            `WALLET: Successfully redeemed token from DM ${event.id}, received ${proofs.length} new proofs from mint ${mintUrl}.`, // <-- ADDED LOG
+                        );
+                        await idb.addProofs(proofs, mintUrl);
+                        await loadWalletState(); // Reload state to reflect new balance
+                        console.log(`WALLET: Wallet state reloaded after redemption from DM ${event.id}.`); // <-- ADDED LOG
+                    } catch (redeemError) {
+                        console.error(
+                            `WALLET: Failed to redeem Cashu token from DM ${event.id}:`, // <-- UPDATED LOG
+                            redeemError,
+                        );
+                        setWalletError(
+                            `Failed to redeem token: ${
+                                redeemError instanceof Error ? redeemError.message : String(redeemError)
+                            }`,
+                        );
+                    } finally {
+                        setIsLoadingWallet(false);
                     }
                 } else {
-                    console.log('Failed to decrypt DM or plaintext was empty.');
+                    console.log(`WALLET: No Cashu token found in decrypted content of DM ${event.id}.`); // <-- ADDED LOG
                 }
             } catch (decryptError) {
-                console.error('Error decrypting DM:', decryptError);
-                // Don't show decryption errors usually, could be spam or unrelated DMs
+                console.error(`WALLET: Failed to decrypt DM ${event.id}:`, decryptError); // <-- UPDATED LOG
+                // Don't set walletError for decryption failures of random DMs
             }
         };
 
         // <<< Use ndkInstance from props >>>
         depositSubRef.current = ndkInstance.subscribe(filter, { closeOnEose: false });
-        depositSubRef.current.on('event', handleIncomingDm);
-        depositSubRef.current.on('eose', () => console.log('useWallet: Deposit listener initial EOSE received.'));
-        depositSubRef.current.on('close', (reason) => {
-            console.log('useWallet: Deposit listener subscription closed:', reason);
-            if (depositSubRef.current && isMountedRef.current) { // Avoid race conditions on unmount
-                depositSubRef.current = null;
-                setIsListeningForDeposits(false);
-                // Optionally try to restart? Or indicate disconnected state?
-                // setWalletError('Deposit listener disconnected.');
-            }
+        console.log('useWallet: Deposit listener subscription created.');
+
+        // Add EOSE handling if needed
+        depositSubRef.current.on('eose', () => {
+            console.log('useWallet: Deposit listener received EOSE.');
+            // Optionally save timestamp here as well?
+            // const nowTimestamp = Math.floor(Date.now() / 1000);
+            // idb.saveLastCheckedDmTimestamp(nowTimestamp);
+            // lastCheckedTimestampRef.current = nowTimestamp;
         });
 
-    // <<< Update dependencies for useCallback >>>
-    }, [isNdkReady, ndkInstance, configuredMintUrl, loadWalletState]);
+    // <<< Fix dependencies: Only include variables from the hook's scope >>>
+    }, [isNdkReady, ndkInstance, loadWalletState]);
 
     // --- Tipping / Sending --- 
 
@@ -344,6 +405,25 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
     // <<< Fix dependencies: remove auth as it's passed in params >>>
     }, [proofs, configuredMintUrl, isNdkReady, ndkInstance, loadWalletState]);
 
+    // <<< NEW: Function to export unspent proofs >>>
+    const exportUnspentProofs = useCallback(async (): Promise<string | null> => {
+        console.log("useWallet: Exporting unspent proofs...");
+        if (!proofs || proofs.length === 0) {
+            console.log("useWallet: No proofs to export.");
+            return null;
+        }
+        try {
+            // Serialize the current proofs array into a JSON string
+            const proofsString = JSON.stringify(proofs);
+            console.log(`useWallet: Exported ${proofs.length} proofs.`);
+            return proofsString;
+        } catch (error) {
+            console.error("useWallet: Error serializing proofs for export:", error);
+            setWalletError("Failed to prepare proofs for backup.");
+            return null;
+        }
+    }, [proofs]); // Dependency on proofs state
+
     // --- Lifecycle --- 
 
     useEffect(() => {
@@ -370,5 +450,6 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
         stopDepositListener,
         sendCashuTipWithSplits,
         setConfiguredMintUrl,
+        exportUnspentProofs,
     };
 };

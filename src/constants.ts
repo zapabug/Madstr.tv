@@ -1,10 +1,13 @@
 export const RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.primal.net',
-  'wss://nos.lol',
-  'wss://nostr.wine',
-  'wss://purplepag.es',
+  `wss://relay.nsec.app`,
+  `wss://nostr.mom`,
+  `wss://purplerelay.com`,
   'wss://relay.nostr.band',
+  'wss://purplepag.es',
+  'wss://nostr.wine',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://relay.damus.io'
 ];
 
 // !!! IMPORTANT !!!
@@ -23,4 +26,7 @@ export const TV_PUBKEY_NPUB = 'npub1a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsf
 // export const TV_PUBKEY_HEX = 'a5ve7g6q34lepmrns7c6jcrat93w4cd6lzayy89cvjsfzzwnyc4s6a66d8';
 
 // New Main Post Content
-export const MAIN_POST_CONTENT = "Hi, this is TugaTv welcome to the new chat line"; 
+export const MAIN_POST_CONTENT = "Hi, this is TugaTv welcome to the new chat line";
+
+// <<< Add Default Tip Amount Constant >>>
+export const DEFAULT_TIP_AMOUNT_SATS = 210; 

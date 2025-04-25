@@ -77,6 +77,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [src, videoRef]);
 
+  // --- Focus overlay button when it appears ---
+  useEffect(() => {
+    if (!isPlaying && playButtonRef.current) {
+      console.log("VideoPlayer: Video is paused, focusing overlay play button.");
+      playButtonRef.current.focus();
+    }
+  }, [isPlaying]); // Run whenever isPlaying changes
+
   // --- Calculate canTip --- 
   const canTip = !!wallet &&
                  isNdkReady && 

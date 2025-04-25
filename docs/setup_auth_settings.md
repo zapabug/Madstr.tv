@@ -46,10 +46,16 @@ Here's a proposed plan of action, walking through the thought process for each s
         *   In `SettingsModal.tsx`, import and use the `useAuth` hook.
         *   Conditionally display UI based on `isLoggedIn`:
             *   **If Logged Out:** Show "Generate New Keys" button and potentially an input field + "Login with Nsec" button (manual nsec input is awkward on TV, consider alternatives like NIP-07 bridging if possible later).
-            *   **If Logged In:** Show "Logged in as: {currentUserNpub}", "Show Private Key (nsec) QR", and "Logout" button.
+            *   **If Logged In:** Display sections in order: Wallet Balance, Wallet Settings, Fetch Toggles, Hashtag Following, Default Tip Amount, Tip Devs. Place the "Logout" button at the very bottom.
         *   **Key Generation:** Wire the "Generate New Keys" button to call `generateNewKeys`. After generation, perhaps briefly show the nsec QR code with strong warnings.
-        *   **Nsec QR Code Display:** Add a section (initially hidden) containing the `<QRCode />` component. When the "Show Private Key QR" button is pressed (after confirmation/warning), display the QR code containing the `nsec` string. Add *very prominent warnings* about the security risk of someone photographing this code.
-        *   **Logout:** Wire the "Logout" button to call `logout`.
+        *   **Nsec QR Code Display:** Add a section (initially hidden) containing the `<QRCode />` component. When the "Show Private Key QR" button is pressed (after confirmation/warning), display the QR code containing the `nsec` string. Add *very prominent warnings* about the security risk of someone photographing this code. (Also triggered by 3 OK presses on npub).
+        *   **Logout:** Wire the "Logout" button to the `handleLogout` function which now implements the backup/timer/confirmation flow:
+            *   Calls `wallet.exportUnspentProofs()`.
+            *   If proofs exist, shows a modal overlay with a QR code of the proofs (serialized JSON string) and a 45s countdown.
+            *   After the countdown, hides the QR/timer and shows "Log Out" / "Cancel" buttons.
+            *   Clicking "Log Out" calls the `finalizeLogout` function (which calls `auth.logout()`).
+            *   Clicking "Cancel" aborts the logout process.
+            *   If no proofs existed, `finalizeLogout` is called directly.
 
 **Phase 2: Hashtag Following**
 
@@ -136,15 +142,16 @@ Here's a proposed plan of action, walking through the thought process for each s
 *   **Step 3.5: Settings Modal Wallet UI (`SettingsModal.tsx`)**
     *   **Thought Process:** Display wallet info and deposit instructions clearly.
     *   **Implementation:**
-        *   Add a "Wallet" section (visible when `auth.isLoggedIn`).
-        *   Display TV's Identity: `auth.currentUserNpub`.
-        *   Display Balance: `wallet.currentBalanceSats` sats.
-        *   Display Instructions: "Deposit Instructions: Send a Cashu token (e.g., `cashuA...`) in an encrypted Nostr DM to the TV npub displayed above. Your balance will update automatically."
-        *   Display Wallet Error: Show `wallet.walletError` if present.
-        *   Display Loading State: Indicate if `isListeningForDeposits` is active or if deposit processing is happening.
-        *   *(Optional)* Add button to manually check DMs (if real-time listener is unreliable).
-        *   *(Optional)* Add setting to configure the `configuredMintUrl` for the TV's internal wallet.
-        *   **Add prominent security warning text about storing funds in the browser.**
+        *   Add a "Wallet Settings" section (visible when `auth.isLoggedIn`). Place this section near the top, after the initial balance display.
+        *   Inside Wallet Settings:
+            *   Display Instructions: "Deposit Instructions: Send a Cashu token (e.g., `cashuA...`) in an encrypted Nostr DM to the TV npub displayed above. Your balance will update automatically."
+            *   Add setting to configure the `configuredMintUrl` for the TV's internal wallet (with Save button).
+            *   Display recommended mints and a Deposit QR code (TV's npub).
+            *   **Add prominent security warning text about storing funds in the browser.**
+            *   Include a "More Options" button (currently placeholder).
+        *   Wallet Balance is displayed separately at the top when logged in.
+        *   Display Wallet Error: Show `wallet.walletError` if present (logic might be inside Wallet Settings section or globally).
+        *   *(Removed)* Loading State for deposit listener is not explicitly shown in this section.
 
 *   **Step 3.6: `useAuth` Enhancements**
     *   **Thought Process:** Need robust DM encryption/decryption helpers.
@@ -182,44 +189,59 @@ Here's a proposed plan of action, walking through the thought process for each s
 Answers based on current implementation:
 
 **(Authentication & Security - `useAuth.ts`)**
-1.  NIP-46 Permissions: `get_public_key`, `sign_event:4`, `nip04_encrypt`, `nip04_decrypt`. (Kind 9735 permission not needed as Zap Receipts aren't implemented).
-2.  NIP-46 Timeout: 75 seconds (Hardcoded in `useAuth`).
-3.  NIP-46 Relays: Uses `wss://nsec.app` + others specified in connect URI params (Handled by `useAuth`).
-4.  Nsec Re-Display Policy: Yes, via 3 OK presses on focused npub in Settings, with warnings (Implemented).
+1.  NIP-46 Permissions: `get_public_key`, `sign_event:4`, `nip04_encrypt`, `nip04_decrypt`. (Kind 9735 permission not needed as Zap Receipts aren't implemented). ✅ Implemented as specified.
+2.  NIP-46 Timeout: 75 seconds (Hardcoded in `useAuth`). ✅ Implemented.
+3.  NIP-46 Relays: Uses `wss://relay.nsec.app` + others specified in connect URI params (Handled by `useAuth`). ✅ Implemented.
+4.  Nsec Re-Display Policy: Yes, via 3 OK presses on focused npub in Settings, with warnings (Implemented). ✅ Implemented.
 
 **(Hashtag Following - `#t`)**
-5.  Tag Merging/Replacement: Merge on login, OK press removes focused tag (Implemented).
-6.  Tag Input: Store without '#', add one keyword at a time, list items focusable for deletion via OK press (Implemented).
+5.  Tag Merging/Replacement: Merge on login, OK press removes followed tag / adds suggested tag. ✅ Implemented.
+6.  Tag Input: Store without '#', add one keyword at a time, list items focusable for deletion/addition via OK press. Suggestions shown when list empty. ✅ Implemented.
 
 **(Internal Cashu Wallet & DM Tipping - `useWallet.ts` / UI)**
-7.  **Default Mint URL:** Currently hardcoded (`DEFAULT_MINT_URL` in `useWallet.ts`). User can change this in settings. **[Current Default: `https://8333.space:3338` - CONFIRM IF THIS IS OK]**
-8.  **Zapsplit Source & Defaults:** Zapsplits are NOT implemented. Tip goes 100% to the primary recipient npub.
-9.  **Tip Amounts:** Only the default `DEFAULT_TIP_AMOUNT` (currently 121 sats) is used via the focus+OK interaction. No UI for selecting other amounts. **[CONFIRM IF 121 SATS IS OK]**
-10. **Deposit DM Check:** Continuous listener implemented (`startDepositListener` in `useWallet.ts`), started/stopped by `SettingsModal`.
-11. **Transaction History:** Not implemented.
+7.  **Default Mint URL:** Currently hardcoded (`DEFAULT_MINT_URL` in `useWallet.ts`). User can change this in settings. ✅ Implemented. **[CONFIRM IF `https://8333.space:3338` IS OK]**
+8.  **Zapsplit Source & Defaults:** ❌ Zapsplits are NOT implemented. Tip goes 100% to the primary recipient npub.
+9.  **Tip Amounts:** Uses the default tip amount set in settings (via preset buttons) for the focus+OK interaction. ✅ Default amount implemented. ❌ No UI for selecting other amounts during tip action. **[CONFIRM IF `DEFAULT_TIP_AMOUNT_SATS` (currently 21) IS OK for initial default]**
+10. **Deposit DM Check:** Continuous listener implemented (`startDepositListener` in `useWallet.ts`), started/stopped by `SettingsModal`. ✅ Implemented. ❌ Manual "Sync DMs" button not implemented.
+11. **Transaction History:** ❌ Not implemented.
 
 **(General UI/UX)**
-12. Profanity Warning Text (nsec): Current text used in `alert()` calls.
-13. **Warning Text (Cashu Proofs):** Implemented in `SettingsModal`.
+12. Profanity Warning Text (nsec): Current text used in `alert()` calls. ✅ Implemented.
+13. **Warning Text (Cashu Proofs):** Implemented in `SettingsModal`. ✅ Implemented.
 
 ---
 
-## 🛠️ Implementations (As of [Current Date/Time])
+## 🛠️ Implementations (As of [Current Date/Time] - Updated)
 
 *   **Phase 1.1 - 1.4 (Auth Foundation & UI):** ✅ Completed.
-*   **Phase 2.1 - 2.2 (Hashtag Following):** ✅ Completed.
+*   **Phase 2.1 - 2.2 (Hashtag Following):** ✅ Completed (with suggestions).
 *   **Phase 3 (Internal Cashu Wallet & DM Tipping):**
     *   ✅ Step 3.1: Wallet Structure Setup.
     *   ✅ Step 3.2: DM Deposit Listener.
-    *   ✅ Step 3.3: Tipping Function (Simplified).
-    *   ✅ Step 3.4: Tipping UI Integration (`ImageFeed`, `VideoPlayer`).
-    *   ✅ Step 3.5: Settings Modal Wallet UI.
+    *   ✅ Step 3.3: Tipping Function (Simplified - 100% primary recipient, no Zapsplits/Receipts).
+    *   ✅ Step 3.4: Tipping UI Integration (Focus+OK using default amount). ❌ Advanced Tip UI not implemented.
+    *   ✅ Step 3.5: Settings Modal Wallet UI (Includes Default Tip setting buttons). ✅ Layout updated as described.
     *   ✅ Step 3.6: `useAuth` Enhancements (`encryptDm`/`decryptDm`).
 *   **Phase 4 (Refinement & Integration):**
     *   ❌ Context API not implemented.
     *   ✅ Basic Error Handling & Loading States implemented.
     *   ✅ TV Navigation & Focus Polish implemented for new sections.
-*   ✅ **NDK Singleton Refactor:** NDK initialization moved to a singleton (`src/ndk.ts`), instantiated outside React, and connected once in `App.tsx` to ensure a stable instance throughout the app.
+*   ✅ **NDK Singleton Refactor:** Completed.
+*   ✅ **Logout Backup/Confirmation Flow:** Implemented.
+
+---
+
+## ⏳ Pending / Unimplemented Features (From Original Plan)
+
+*   **Zapsplits:** Parsing profile data for Zapsplit recipients is not implemented.
+*   **Zap Receipts (Kind 9735):** Generating and publishing standard Zap receipts is not implemented.
+*   **Transaction History:** No UI or storage for displaying past deposits or tips.
+*   **Wallet "More Options":** The button exists in the modal but has no functionality.
+*   **Manual DM Sync:** No button to force a historical check for missed deposit DMs.
+*   **Advanced Tip UI:** No UI to select different tip amounts or add comments during the tipping action.
+*   **Trending Hashtag Suggestions:** Only static default tags are shown as suggestions.
+*   **Context API:** State management relies on prop drilling instead of React Context.
+*   **Wallet Restore:** UI/Logic to import proofs from backup string is not implemented.
 
 ---
 

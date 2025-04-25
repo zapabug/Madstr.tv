@@ -1,11 +1,14 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth provides all necessary states and functions, and exports its return type
 import { useWallet, UseWalletReturn, DEFAULT_MINT_URLS } from '../hooks/useWallet'; // Import useWallet return type and DEFAULT_MINT_URLS
 import QRCode from 'react-qr-code'; // Import QRCode for backup
 import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
-import { FiRefreshCw, FiSettings, FiHeart } from 'react-icons/fi'; // Import FiRefreshCw for refresh icon, FiSettings, FiHeart
+import { FiRefreshCw, FiSettings, FiHeart, FiPlusCircle, FiXCircle } from 'react-icons/fi'; // Import FiRefreshCw for refresh icon, FiSettings, FiHeart, FiPlusCircle, FiXCircle
 import { TV_PUBKEY_NPUB } from '../constants'; // Import the app's npub
+// <<< Import constants for default tags >>>
+import { DEFAULT_FOLLOWED_TAGS } from '../hooks/useAuth';
+
 type NDKInstance = NDK; // Alias NDK class as NDKInstance type
 
 // RE-ADD SVG component definition
@@ -57,13 +60,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const [displayError, setDisplayError] = useState<string | null>(null);
     const [npubPressCount, setNpubPressCount] = useState(0); // Counter for nsec reveal
     const [hashtagInput, setHashtagInput] = useState<string>(''); // For adding hashtags
-    const [focusedTagIndex, setFocusedTagIndex] = useState<number | null>(null); // For tag list navigation/deletion
+    const [focusedTagIndex, setFocusedTagIndex] = useState<number | null>(null);
     const [mintUrlInput, setMintUrlInput] = useState<string>('');
     const [isSavingMintUrl, setIsSavingMintUrl] = useState<boolean>(false);
     const [isTippingDevs, setIsTippingDevs] = useState(false);
     const [tipDevStatus, setTipDevStatus] = useState<'success' | 'error' | null>(null);
     // <<< NEW: State for locally selected default tip amount >>>
     const [selectedDefaultTipAmount, setSelectedDefaultTipAmount] = useState<number>(auth.defaultTipAmount);
+    // <<< State for logout backup QR >>>
+    const [isShowingBackupQR, setIsShowingBackupQR] = useState<boolean>(false);
+    const [backupQRData, setBackupQRData] = useState<string | null>(null);
+    const [logoutCountdown, setLogoutCountdown] = useState<number | null>(null);
+    // <<< State for logout confirmation step >>>
+    const [showLogoutConfirmation, setShowLogoutConfirmation] = useState<boolean>(false);
 
     // <<< Add refs for the new toggle switches >>>
     const fetchImagesToggleRef = useRef<HTMLButtonElement>(null);
@@ -104,18 +113,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
 
     // Effect to start/stop deposit listener (uses wallet prop)
     useEffect(() => {
-        if (isOpen && auth.isLoggedIn) { 
+        // <<< Gate the entire effect based on isOpen >>>
+        if (!isOpen) {
+            // If the modal is not open, ensure the listener is stopped *once*
+            // but don't set up the effect/cleanup cycle repeatedly.
+            // Note: The stopDepositListener might still be called on initial mount
+            // when isOpen is false, which is acceptable.
+            return; // Exit the effect if modal is not open
+        }
+
+        // --- Effect logic when isOpen is true ---
+        let listenerActive = false;
+        if (auth.isLoggedIn) {
             console.log('SettingsModal: Attempting to start deposit listener.');
-            wallet.startDepositListener(auth); // <-- RE-ENABLED
+            wallet.startDepositListener(auth.isLoggedIn, auth.currentUserNpub, auth.decryptDm);
+            listenerActive = true;
         } else {
-             console.log('SettingsModal: Stopping deposit listener (modal closed or not logged in).');
+             console.log('SettingsModal: Not starting listener (not logged in).');
+             // Ensure it's stopped if user logs out while modal is open
              wallet.stopDepositListener();
         }
+
+        // --- Cleanup function ---
         return () => {
-            console.log('SettingsModal: Cleaning up deposit listener effect.');
-            wallet.stopDepositListener();
+            console.log('SettingsModal: Cleaning up deposit listener effect (modal closed or deps changed).');
+            // Only stop if we actually started it in this effect run
+            if (listenerActive) {
+                wallet.stopDepositListener();
+            }
         };
-    }, [isOpen, auth, wallet]); // Depends on modal open state, auth state, and wallet instance
+        // Keep dependencies, but the effect body now ignores changes if !isOpen
+    }, [isOpen, auth.isLoggedIn, auth.currentUserNpub, auth.decryptDm, wallet.startDepositListener, wallet.stopDepositListener]);
 
     // Focus trapping and initial focus
     useEffect(() => {
@@ -181,6 +209,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         setNpubPressCount(0);
         setNsecInput('');
         setHashtagInput('');
+        setFocusedTagIndex(null);
         setMintUrlInput('');
         setIsSavingMintUrl(false);
         // Don't reset selectedDefaultTipAmount here, keep persisted value
@@ -299,23 +328,104 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         }
     };
 
-    const handleLogout = async () => {
+    // <<< Actual logout logic, called after backup/countdown >>>
+    const finalizeLogout = useCallback(async () => {
+        console.log("Finalizing logout...");
+        // Clear any existing countdown interval
+        // (Interval clearing logic is in the useEffect below)
+        setIsShowingBackupQR(false); // Hide QR modal
+        setShowLogoutConfirmation(false); // Hide confirmation buttons
+        setBackupQRData(null);
+        setLogoutCountdown(null);
         setDisplayError(null);
         try {
-         await auth.logout();
+            await auth.logout();
             // Reset any local state tied to login
             setGeneratedNpub(null);
             setGeneratedNsec(null);
             setShowNsecQR(false);
             setShowNsecBackupQR(false);
             setNpubPressCount(0);
-             // Focus should shift back to logged-out state view
-             setTimeout(() => connectSignerButtonRef.current?.focus(), 50);
+            // Focus should shift back to logged-out state view
+            setTimeout(() => connectSignerButtonRef.current?.focus(), 50);
         } catch (error) {
             console.error("Logout error:", error);
             setDisplayError(`Logout failed: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            // Ensure modal closes if something goes very wrong during logout
+            // but maybe not, keep it open to show error?
+            // onClose(); // Maybe not needed if user is already interacting
         }
+    }, [auth]); // Dependency: auth hook for logout function
+
+    // <<< Modified logout handler to trigger backup QR first >>>
+    const handleLogout = async () => {
+        setDisplayError(null);
+        setBackupQRData(null); // Clear previous data
+        setLogoutCountdown(null);
+
+        console.log("Logout initiated, attempting to export proofs...");
+
+        try {
+            // Reset confirmation state at the start
+            setShowLogoutConfirmation(false);
+
+            const proofsString = await wallet.exportUnspentProofs();
+
+            if (proofsString && proofsString !== '[]') { // Check if proofs exist
+                console.log("Proofs exported, showing backup QR.");
+                setBackupQRData(proofsString);
+                setIsShowingBackupQR(true);
+                setLogoutCountdown(45); // Start 45 second countdown
+            } else {
+                console.log("No proofs to back up or export failed, proceeding directly to logout.");
+                finalizeLogout(); // No proofs, logout immediately
+            }
+        } catch (error) {
+            console.error("Error during proof export for logout backup:", error);
+            setDisplayError("Error preparing wallet backup. Proceeding to logout.");
+            // Proceed to logout even if backup fails, otherwise user is stuck
+            setTimeout(finalizeLogout, 1500); // Give user a moment to see the error
+        }
+        // --- Old immediate logout logic removed --- 
+        // try {
+        //  await auth.logout();
+        //     // Reset any local state tied to login
+        // ...
+        // } catch (error) { ... }
     };
+
+    // <<< Effect for countdown timer >>>
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout | null = null;
+
+        if (isShowingBackupQR && logoutCountdown !== null && logoutCountdown > 0) {
+            intervalId = setInterval(() => {
+                setLogoutCountdown((prevCountdown) => {
+                    if (prevCountdown === null) return null; // Should not happen
+                    const nextCountdown = prevCountdown - 1;
+                    if (nextCountdown <= 0) {
+                        if (intervalId) clearInterval(intervalId);
+                        // Timer ended, show confirmation buttons instead of logging out
+                        setShowLogoutConfirmation(true);
+                        return 0; 
+                    }
+                    return nextCountdown;
+                });
+            }, 1000);
+        } else if (logoutCountdown === 0 && intervalId) {
+             // Ensure cleanup if countdown somehow reaches 0 externally
+             clearInterval(intervalId);
+        }
+
+        // Cleanup function to clear interval when component unmounts
+        // or when the dependencies change (e.g., QR modal closes)
+        return () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [isShowingBackupQR, logoutCountdown, finalizeLogout]); // Dependencies
 
     const handleNpubKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
         if (event.key === 'Enter' || event.key === ' ') { // Treat Space as OK too for some remotes
@@ -350,70 +460,91 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
 
      // --- Hashtag Management ---
 
-     const handleAddTag = () => {
-        const tagToAdd = hashtagInput.trim().toLowerCase().replace(/^#+/, ''); // Remove leading # and spaces, lowercase
-        if (tagToAdd && auth.followedTags && !auth.followedTags.includes(tagToAdd) && auth.setFollowedTags) {
-            const newTags = [...auth.followedTags, tagToAdd];
+     // <<< Calculate suggested tags based on defaults and currently followed >>>
+     const suggestedTags = useMemo(() => {
+         if (!auth.followedTags) return DEFAULT_FOLLOWED_TAGS; // Should not happen if init is correct, but safe fallback
+         return DEFAULT_FOLLOWED_TAGS.filter(tag => !auth.followedTags.includes(tag));
+     }, [auth.followedTags]);
+
+     // Handler for adding a tag (from input OR suggestion click)
+     const handleAddTag = (tagToAdd: string) => {
+        const cleanTag = tagToAdd.trim().toLowerCase().replace(/^#+/, '');
+        if (cleanTag && auth.followedTags && !auth.followedTags.includes(cleanTag) && auth.setFollowedTags) {
+            const newTags = [...auth.followedTags, cleanTag];
             auth.setFollowedTags(newTags); // Update state via auth hook
-            setHashtagInput(''); // Clear input
-            setTimeout(() => hashtagInputRef.current?.focus(), 50); // Keep focus on input
-        } else if (!tagToAdd) {
-             setDisplayError("Please enter a tag to add.");
+            setHashtagInput(''); // Clear input if added from input
+            setFocusedTagIndex(null); // Clear focus
+            // Focus the input
+            setTimeout(() => hashtagInputRef.current?.focus(), 50); 
+        } else if (!cleanTag) {
+             setDisplayError("Please enter or select a tag to add.");
+        } else if (auth.followedTags && auth.followedTags.includes(cleanTag)) {
+             setDisplayError(`Tag "#${cleanTag}" is already followed.`);
         } else {
-             setDisplayError(`Tag "${tagToAdd}" is already followed.`);
+            setDisplayError("Could not add tag."); // Generic error
         }
      };
+
+     // Handler for the input button
+     const handleAddTagFromInput = () => {
+         handleAddTag(hashtagInput);
+     }
 
      const handleRemoveTag = (tagToRemove: string) => {
         if (auth.followedTags && auth.setFollowedTags) {
             const newTags = auth.followedTags.filter(tag => tag !== tagToRemove);
             auth.setFollowedTags(newTags);
             setFocusedTagIndex(null); // Clear focus index after removal
-            setTimeout(() => addTagButtonRef.current?.focus(), 50); // Focus add button after removing
+            // Focus add button 
+            setTimeout(() => addTagButtonRef.current?.focus(), 50); 
         }
      };
 
-     // Handle D-pad navigation and deletion in the tag list
-    const handleTagListKeyDown = (event: React.KeyboardEvent<HTMLLIElement>, index: number, tag: string) => {
-        if (!auth.followedTags) return;
+    // <<< Combined KeyDown Handler for whichever list is visible >>>
+    const handleTagListKeyDown = (event: React.KeyboardEvent<HTMLLIElement>, index: number, tag: string, isSuggestionList: boolean) => {
+        const currentList = isSuggestionList ? DEFAULT_FOLLOWED_TAGS : auth.followedTags;
+        if (!currentList) return;
 
         switch (event.key) {
             case 'ArrowUp':
                 event.preventDefault();
                 if (index > 0) {
                     setFocusedTagIndex(index - 1);
-                     (tagListRef.current?.children[index - 1] as HTMLLIElement)?.focus();
                 } else {
-                    // Move focus up to the Add Tag button or input?
-                     addTagButtonRef.current?.focus();
-                     setFocusedTagIndex(null);
+                    // Focus input field when going up from the first item
+                    hashtagInputRef.current?.focus();
+                    setFocusedTagIndex(null);
                 }
                 break;
             case 'ArrowDown':
                 event.preventDefault();
-                if (index < auth.followedTags.length - 1) {
+                if (index < currentList.length - 1) {
                     setFocusedTagIndex(index + 1);
-                     (tagListRef.current?.children[index + 1] as HTMLLIElement)?.focus();
                 } else {
-                    // Optionally loop back or focus another element below
-                    setFocusedTagIndex(index); // Keep focus on last item
+                    // If at bottom of list, potentially focus next section (e.g., toggles)
+                    // For now, just stay on the last item
+                    setFocusedTagIndex(index); 
                 }
                 break;
             case 'Enter': // OK button
             case ' ':
                 event.preventDefault();
-                handleRemoveTag(tag);
+                if (isSuggestionList) {
+                    handleAddTag(tag); // Add the suggested tag
+                } else {
+                    handleRemoveTag(tag); // Remove the followed tag
+                }
                 break;
-            // Potentially handle Left/Right to move focus out of the list
             case 'ArrowLeft':
+            case 'ArrowRight': // Treat left/right similarly - focus input
                 event.preventDefault();
-                addTagButtonRef.current?.focus(); // Example: move focus to Add button
+                hashtagInputRef.current?.focus(); 
                 setFocusedTagIndex(null);
                 break;
         }
     };
 
-     // Focus the correct tag when the focusedTagIndex changes
+     // <<< Effect to focus the correct tag in the active list >>>
      useEffect(() => {
          if (focusedTagIndex !== null && tagListRef.current?.children[focusedTagIndex]) {
              (tagListRef.current.children[focusedTagIndex] as HTMLLIElement).focus();
@@ -475,6 +606,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
 
     if (!isOpen) return null;
 
+    const hasFollowedTags = auth.followedTags && auth.followedTags.length > 0;
+
     return (
         <motion.div
             ref={modalRef}
@@ -494,7 +627,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         >
             {/* Header */}
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-purple-400">Mad⚡tr.tv Settings</h2>
+                    <h2 className="text-xl font-bold text-purple-400">Mad⚡tr.tv<span className="ml-6">SetUp</span></h2>
                 <button
                         ref={closeButtonRef}
                         onClick={handleClose}
@@ -516,24 +649,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                 {/* --- Authentication Section --- */}
                  <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
                     {auth.isLoggedIn ? (
-                        // --- Simplified Logged In View ---
-                        <div className="space-y-3 text-center"> {/* Centered content */}                            
-                            <button
-                                ref={logoutButtonRef}
-                                onClick={handleLogout}
-                                className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
-                            >
-                                Logout
-                            </button>
-                            {/* Logout Warning */}                            
-                            <p className="text-xs text-yellow-500/80 pt-2">
-                                Warning: Logging out without backing up your nsec will result in loss of access to your followed tags and possible loss of wallet balance.
+                        // --- Logged In: Only show balance here --- 
+                        <div className="flex justify-between items-center"> {/* Removed text-center and space-y */}                            
+                            <p className="text-xl font-semibold text-yellow-400">
+                                {wallet.balanceSats.toLocaleString()} sats
                             </p>
+                            <button
+                                ref={refreshDepositsButtonRef}
+                                onClick={() => {
+                                    console.log('Manual deposit refresh triggered.');
+                                    wallet.stopDepositListener();
+                                    setTimeout(() => wallet.startDepositListener(auth.isLoggedIn, auth.currentUserNpub, auth.decryptDm), 100);
+                                }}
+                                className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                                aria-label="Refresh Deposit Check"
+                                title="Check for new deposits"
+                            >
+                                <FiRefreshCw className="h-5 w-5" />
+                            </button>
                         </div>
                      ) : (
                          // --- Logged Out View ---                         
                          <div className="space-y-4">
-                            <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Connect or Login</h3>                             
+                            <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1 text-center">Connect or Login</h3>                             
                             {/* NIP-46 Connection */}
                             <div className='text-center'>
                                 <button
@@ -644,65 +782,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                  </div>
                             )}
                         </div> // This closes the Logged Out View div
-                     ) // This closes the ternary operator
-                    } 
+                     )}
                 </div> {/* This closes the Authentication Section div */}            
 
-                {/* --- Wallet Section --- */}
+                {/* <<< MOVED UP: Wallet Section (excluding balance) >>> */}
                 {auth.isLoggedIn && (
-                    <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
-                        <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Wallet</h3>
-                        <div className="space-y-3"> {/* Increased spacing slightly */} 
-                            {/* Balance Display */}
-                            <div className="flex justify-between items-center">                                
-                                <p className="text-xl font-semibold text-yellow-400">
-                                    {wallet.balanceSats.toLocaleString()} sats
-                                </p>
-                                {/* Refresh Button (conditionally rendered) */}
-                                {auth.isLoggedIn && (
-                                    <button
-                                        ref={refreshDepositsButtonRef}
-                                        onClick={() => {
-                                            console.log('Manual deposit refresh triggered.');
-                                            wallet.stopDepositListener();
-                                            setTimeout(() => wallet.startDepositListener(auth), 100); 
-                                        }}
-                                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-                                        aria-label="Refresh Deposit Check"
-                                        title="Check for new deposits"
-                                    >
-                                        <FiRefreshCw className="h-5 w-5" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Removed Listening text */}
+                    <div className="mb-6 mt-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600"> {/* Added mt-4 */}
+                        <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1 text-center">Wallet Settings</h3> {/* Changed title slightly */}
+                        <div className="space-y-3">
                             {wallet.walletError && <p className="text-red-400 bg-red-900/40 p-2 rounded text-sm mt-2">{wallet.walletError}</p>}
                             {wallet.isLoadingWallet && <p className="text-purple-400 text-sm mt-2">Loading wallet...</p>}
-
-                            {/* --- NEW: Default Tip Amount Selection --- */} 
-                            <div className="pt-3 mt-3 border-t border-gray-700/30">
-                                <label className="block text-sm font-medium text-gray-400 mb-2"> 
-                                    Default Tip Amount (sats):
-                                </label>
-                                <div className="flex items-center justify-around gap-2"> 
-                                    {PRESET_TIP_AMOUNTS.map((amount, index) => (
-                                        <button
-                                            key={amount}
-                                            ref={el => defaultTipButtonsRef.current[index] = el} // Assign ref
-                                            onClick={() => handleSelectDefaultTip(amount)}
-                                            className={`flex-1 px-3 py-1.5 rounded text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 transition-colors duration-150 ${ 
-                                                selectedDefaultTipAmount === amount
-                                                    ? 'bg-purple-600 text-white ring-2 ring-purple-400' 
-                                                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500 focus:ring-gray-500'
-                                            }`}
-                                        >
-                                            {amount.toLocaleString()}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            {/* --- END: Default Tip Amount Selection --- */} 
 
                             {/* Mint URL Input Section */}
                             <div className="pt-3 mt-3 border-t border-gray-700/30">
@@ -747,7 +836,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             <p className="text-xs text-gray-500 pt-3 border-t border-gray-700/50"> {/* Adjusted pt */}                                Deposit Instructions: Create a Cashu token and send it as a DM  to the address shown in the QR code.
                             </p>
                             <p className="text-xs font-bold text-red-500/80 mt-1">
-                                SECURITY WARNING: Storing Cashu tokens in a browser is risky. Do not store large amounts. Use at your own risk.
+                                SECURITY WARNING: Do not store large amounts. Use at your own risk.
                             </p>
 
                             {/* More Options Button */}
@@ -763,62 +852,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                         </div>
                     </div>
                 )}
+                {/* <<< END MOVED Wallet Section >>> */}
 
-                {/* --- Hashtag Following Section --- */}
-                <div className="mb-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
-                    <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Follow Hashtags</h3>
-                    {auth.isLoggedIn ? (
-                        <>
-                             <div className="flex items-center gap-2 mb-3">
-                                 <span className="text-gray-400">#</span>
-                                 <input
-                                     ref={hashtagInputRef}
-                                     type="text"
-                                     value={hashtagInput}
-                                     onChange={(e) => setHashtagInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))} // Allow letters, numbers, underscore
-                                     placeholder="music"
-                                     className="flex-grow px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                                     aria-label="Enter hashtag to follow (without #)"
-                                     onKeyDown={(e) => { if (e.key === 'Enter') handleAddTag(); }}
-                                 />
-                                 <button
-                                     ref={addTagButtonRef}
-                                     onClick={handleAddTag}
-                                     disabled={!hashtagInput.trim()}
-                                     className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 text-sm font-semibold"
-                                 >
-                                     Add
-                                 </button>
-                             </div>
-                            <p className="text-xs text-gray-500 mb-2">Followed Tags (Press OK on tag to remove):</p>
-                            {auth.followedTags && auth.followedTags.length > 0 ? (
-                                <ul ref={tagListRef} className="max-h-32 overflow-y-auto space-y-1 bg-gray-800/50 p-2 rounded border border-gray-700">
-                                    {auth.followedTags.map((tag, index) => (
-                                        <li
-                                            key={tag}
-                                            tabIndex={0} // Make focusable
-                                            className={`px-2 py-1 rounded text-sm cursor-pointer flex justify-between items-center ${focusedTagIndex === index ? 'bg-purple-700 text-white ring-2 ring-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} focus:outline-none focus:bg-purple-700 focus:text-white focus:ring-2 focus:ring-purple-400`}
-                                            onFocus={() => setFocusedTagIndex(index)}
-                                            // onBlur={() => setFocusedTagIndex(null)} // Maybe remove this to keep track of last focused
-                                             onKeyDown={(e) => handleTagListKeyDown(e, index, tag)}
-                                             aria-label={`Tag ${tag}. Press OK to remove.`}
-                                        >
-                                            <span>#{tag}</span>
-                                            <span className="text-xs text-gray-500 ml-2">(OK to Del)</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-gray-500 italic">No tags followed yet.</p>
-                            )}
-                        </>
-                    ) : (
-                        <p className="text-sm text-gray-500 italic">Login to manage followed hashtags.</p>
-                    )}
-                </div>
-
-                {/* <<< NEW: Fetch Images by Tag Toggle >>> */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-700 mt-4"> {/* Added top border/margin for separation */}
+                {/* <<< Fetch Images by Tag Toggle >>> */}
+                {auth.isLoggedIn && (<div className="flex items-center justify-between pt-2 border-t border-gray-700 mt-4"> {/* Added top border/margin for separation */}
                     <label htmlFor="fetchImagesToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4"> {/* Added padding right */}
                         Fetch images by followed hashtags
                     </label>
@@ -840,10 +877,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
                         />
                     </button>
-                </div>
+                </div>)}
 
-                {/* <<< NEW: Fetch Videos by Tag Toggle >>> */}
-                <div className="flex items-center justify-between pt-2"> {/* No top border needed if directly below */}
+                {/* <<< Fetch Videos by Tag Toggle >>> */}
+                {auth.isLoggedIn && (<div className="flex items-center justify-between pt-2"> {/* No top border needed if directly below */}
                     <label htmlFor="fetchVideosToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4">
                         Fetch videos by followed hashtags
                     </label>
@@ -865,20 +902,205 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
                         />
                     </button>
-                </div>
-                {/* <<< END NEW SECTION >>> */}
+                </div>)}
 
-                 {/* Footer - Maybe Save button if needed later */}
-                 {/* <div className="mt-auto pt-4 border-t border-gray-600">
-                     <button
-                         onClick={handleClose} // Or a save function later
-                         className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
-                     >
-                         Close Settings
-                     </button>
-                 </div> */}
+                {/* --- Hashtag Following Section --- */}
+                {auth.isLoggedIn && (<div className="mb-4 mt-4 pt-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600"> {/* Added top margin/padding */} 
+                    <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1 text-center">Follow Hashtags</h3>
+                    <>
+                         {/* --- Input Area (Always visible when logged in) --- */}
+                         <div className="flex items-center gap-2 mb-3">
+                             <span className="text-gray-400">#</span>
+                             <input
+                                 ref={hashtagInputRef}
+                                 type="text"
+                                 value={hashtagInput}
+                                 onChange={(e) => setHashtagInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))} 
+                                 placeholder="custom_tag"
+                                 className="flex-grow px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                                 aria-label="Enter custom hashtag to follow (without #)"
+                                 onKeyDown={(e) => { 
+                                     if (e.key === 'Enter') handleAddTagFromInput(); 
+                                     if (e.key === 'ArrowDown') { // Navigate down from input to the list
+                                         e.preventDefault();
+                                         const listElement = tagListRef.current?.children[0] as HTMLElement | undefined;
+                                         if (listElement) {
+                                             setFocusedTagIndex(0);
+                                             listElement.focus();
+                                         } 
+                                     }
+                                 }}
+                                 onFocus={() => setFocusedTagIndex(null)} // Clear list focus when input is focused
+                             />
+                             <button
+                                 ref={addTagButtonRef}
+                                 onClick={handleAddTagFromInput}
+                                 disabled={!hashtagInput.trim()}
+                                 className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 text-sm font-semibold"
+                             >
+                                 Add
+                             </button>
+                         </div>
+                        
+                         {/* --- Conditional List Display --- */} 
+                        {hasFollowedTags ? (
+                            // --- Display Followed Tags --- 
+                            <div className="mb-3">
+                                <p className="text-sm font-medium text-gray-400 mb-1">Followed (OK to remove):</p>
+                                <ul ref={tagListRef} className="max-h-32 overflow-y-auto space-y-1 bg-gray-800/50 p-2 rounded border border-gray-600">
+                                    {auth.followedTags.map((tag: string, index: number) => (
+                                        <li
+                                            key={tag}
+                                            tabIndex={0}
+                                            className={`px-2 py-1 rounded text-sm cursor-pointer flex justify-between items-center transition-colors ${focusedTagIndex === index ? 'bg-purple-700 text-white ring-2 ring-purple-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} focus:outline-none focus:bg-purple-700 focus:text-white focus:ring-2 focus:ring-purple-400`}
+                                            onFocus={() => setFocusedTagIndex(index)}
+                                            onKeyDown={(e) => handleTagListKeyDown(e, index, tag, false)} // Indicate this is NOT suggestions
+                                            aria-label={`Following tag #${tag}. Press OK to remove.`}
+                                        >
+                                            <span>#{tag}</span>
+                                            <FiXCircle className="w-4 h-4 text-red-400 opacity-70 ml-2" />
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                         ) : (
+                            // --- Display Suggestions (Only if followed list is empty) --- 
+                            <div>
+                                <p className="text-sm font-medium text-gray-400 mb-1">Suggestions (OK to add):</p>
+                                <ul ref={tagListRef} className="max-h-32 overflow-y-auto space-y-1 bg-gray-800/30 p-2 rounded border border-gray-700">
+                                    {suggestedTags.map((tag: string, index: number) => (
+                                        <li
+                                            key={tag}
+                                            tabIndex={0} 
+                                            className={`px-2 py-1 rounded text-sm cursor-pointer flex justify-between items-center transition-colors ${focusedTagIndex === index ? 'bg-green-700 text-white ring-2 ring-green-400' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'} focus:outline-none focus:bg-green-700 focus:text-white focus:ring-2 focus:ring-green-400`}
+                                            onFocus={() => setFocusedTagIndex(index)}
+                                            onKeyDown={(e) => handleTagListKeyDown(e, index, tag, true)} // Indicate this IS suggestions
+                                            aria-label={`Suggest tag #${tag}. Press OK to add.`}
+                                        >
+                                            <span>#{tag}</span>
+                                             <FiPlusCircle className="w-4 h-4 text-green-400 opacity-70 ml-2" />
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                         )}
+                    </>
+                </div>)}
+
+                {/* --- Default Tip Amount Section --- */}
+                {auth.isLoggedIn && (
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                        <h3 className="text-lg font-semibold mb-3 text-purple-300 text-center">Default Tip (Focus+OK)</h3>
+                        <div className="flex items-center space-x-2">
+                            {PRESET_TIP_AMOUNTS.map((amount, index) => (
+                                <button
+                                    key={amount}
+                                    ref={el => defaultTipButtonsRef.current[index] = el}
+                                    onClick={() => handleSelectDefaultTip(amount)}
+                                    className={`px-4 py-1.5 rounded text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 ${
+                                        selectedDefaultTipAmount === amount
+                                            ? 'bg-green-600 text-white ring-green-500'
+                                            : 'bg-gray-600 hover:bg-gray-500 text-gray-300 focus:ring-gray-500'
+                                    }`}
+                                    aria-pressed={selectedDefaultTipAmount === amount}
+                                    aria-label={`Set default tip to ${amount} sats`}
+                                >
+                                    {amount} sats
+                                </button>
+                            ))}
+                            {/* Optional: Add custom input later if needed */}
+                        </div>
+                    </div>
+                )}
+
+                {/* --- Tip Devs Section --- */}
+                {auth.isLoggedIn && TV_PUBKEY_NPUB && (
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                        <h3 className="text-lg font-semibold mb-3 text-purple-300 text-center">Tip Devs</h3>
+                        <button
+                            ref={tipDevsButtonRef}
+                            onClick={handleTipDevs}
+                            className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
+                        >
+                            Tip Devs
+                        </button>
+                    </div>
+                )}
+
+                {/* --- Logout Button (Remains at bottom) --- */}
+                {auth.isLoggedIn && (
+                    <div className="mt-6 pt-4 border-t border-gray-700 text-center"> {/* Added top margin/border */}
+                        <button
+                            ref={logoutButtonRef}
+                            onClick={handleLogout}
+                            className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
+                        >
+                            Logout
+                        </button>
+                        {/* Logout Warning */}                            
+                        <p className="text-xs text-yellow-500/80 pt-2">
+                            Warning: Logging out without backing up your nsec will result in loss of access to your followed tags and possible loss of wallet balance.
+                        </p>
+                    </div>
+                )}
 
             </motion.div>
+            {/* --- Backup QR Code Modal on Logout --- */}
+            <AnimatePresence>
+                {isShowingBackupQR && backupQRData && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-60 p-4 text-center"
+                        // No onClick handler to prevent closing
+                    >
+                        <h2 className="text-2xl font-bold text-yellow-400 mb-4">Wallet Backup Required</h2>
+                        {!showLogoutConfirmation ? (
+                            // --- Countdown Phase --- 
+                            <div className="animate-pulse-border-red border-4 border-dashed border-red-600/80 p-4 rounded-lg">
+                                <p className="text-gray-200 mb-1">Scan this QR code with a compatible app or copy the text below.</p>
+                                <p className="text-red-400 font-semibold mb-4">🛑🚨 SAVE THIS SECURELY! 🚨🛑 It is needed to restore funds.</p>
+                                <div className="bg-white p-4 rounded mb-4 inline-block">
+                                    <QRCode value={backupQRData} size={256} level="L" />
+                                </div>
+                                <p className="text-lg text-purple-400 font-mono mb-2">
+                                    Logging out in: {logoutCountdown}s
+                                </p>
+                                <p className="text-xs text-gray-500">Backup finished. Prepare to confirm logout.</p>
+                            </div>
+                        ) : (
+                            // --- Confirmation Phase --- 
+                            <div className="space-y-4">
+                                <p className="text-xl text-gray-200">Wallet backup displayed.</p>
+                                <p className="text-lg text-red-400">⚠️🔒💸❓ Are you sure you want to log out? ❓💸🔒⚠️</p>
+                                <p className="text-xs text-yellow-500/80">
+                                    Logging out clears your session and requires the nsec or remote signer to log back in. Ensure backup is saved.
+                                </p>
+                                <div className="flex justify-center gap-4 pt-4">
+                                    <button
+                                        onClick={finalizeLogout} // Confirm logout
+                                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                                    >
+                                        Log Out
+                                    </button>
+                                    <button
+                                        onClick={() => { // Cancel logout
+                                            setIsShowingBackupQR(false);
+                                            setShowLogoutConfirmation(false);
+                                            setBackupQRData(null);
+                                            setLogoutCountdown(null);
+                                        }}
+                                        className="px-6 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-semibold focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };

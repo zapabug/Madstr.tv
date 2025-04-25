@@ -10,14 +10,15 @@ import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
 import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKFilter, NDKSubscription, NDKUser } from '@nostr-dev-kit/ndk';
 // Corrected import path - removed .ts extension
 import { idb, StoredNsecData } from '../utils/idb';
+// Import the constants
+import { RELAYS, DEFAULT_TIP_AMOUNT_SATS } from '../constants'; // Import main RELAYS
 // Import the new helper
 // import { bytesToHex } from '../utils/misc';
 
 // Define default tags (can be customized)
-const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast'];
+export const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast', 'madeira'];
 const DEFAULT_FETCH_IMAGES_BY_TAG = true; // <<< New default
 const DEFAULT_FETCH_VIDEOS_BY_TAG = true; // <<< New default for videos
-const DEFAULT_TIP_AMOUNT_SATS = 210; // <<< New default tip amount
 
 // Define the shape of the hook's return value
 // Export the interface so it can be used externally
@@ -59,7 +60,8 @@ export interface UseAuthReturn {
 // const APP_IDENTITY_NPUB = "npub1..."; // Use NDK's signer pubkey if available, or generate one
 // const APP_IDENTITY_NSEC = "nsec1..."; // TODO: Ideally load from secure config, not hardcoded (Commented out as unused)
 
-const NIP46_RELAYS = ['wss://nsec.app', 'wss://relay.damus.io', 'wss://relay.primal.net'];
+// Remove the local NIP46_RELAYS constant, use RELAYS from constants.ts
+// const NIP46_RELAYS = ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://relay.primal.net'];
 const NIP46_CONNECT_TIMEOUT = 75000; // 75 seconds
 
 // Accept NDK | undefined (aligning with useMediaAuthors)
@@ -170,7 +172,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             const imagePref = await loadFetchImagesByTag();
             const videoPref = await loadFetchVideosByTag(); // <<< Load video pref
             const tipPref = await loadDefaultTipAmount(); // <<< Load tip pref
-            setFollowedTagsState(Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...tags])));
+            setFollowedTagsState(tags || []);
             setFetchImagesByTagEnabledState(imagePref);
             setFetchVideosByTagEnabledState(videoPref); // <<< Set video pref state
             setDefaultTipAmountState(tipPref); // <<< Set tip pref state
@@ -227,7 +229,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             const imagePref = await loadFetchImagesByTag();
             const videoPref = await loadFetchVideosByTag(); // <<< Load video pref
             const tipPref = await loadDefaultTipAmount(); // <<< Load tip pref
-            setFollowedTagsState(Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...tags])));
+            setFollowedTagsState(tags || []);
             setFetchImagesByTagEnabledState(imagePref);
             setFetchVideosByTagEnabledState(videoPref); // <<< Set video pref state
             setDefaultTipAmountState(tipPref); // <<< Set tip pref state
@@ -253,7 +255,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                 const imagePref = await loadFetchImagesByTag();
                 const videoPref = await loadFetchVideosByTag(); // <<< Load video pref
                 const tipPref = await loadDefaultTipAmount(); // <<< Load tip pref
-                setFollowedTagsState(Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...tags])));
+                setFollowedTagsState(tags || []);
                 setFetchImagesByTagEnabledState(imagePref);
                 setFetchVideosByTagEnabledState(videoPref); // <<< Set video pref state
                 setDefaultTipAmountState(tipPref); // <<< Set tip pref state
@@ -279,44 +281,75 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
 
     // --- Initiate NIP-46 Connection ---
     const initiateNip46Connection = useCallback(async (): Promise<void> => {
-        if (!ndkInstance) { setAuthError("NDK not ready."); return; }
+        // Ensure NDK is available for subscription
+        if (!ndkInstance) {
+            setAuthError("NDK not ready.");
+            setIsGeneratingUri(false);
+            return;
+        }
+
         console.log("Initiating NIP-46 connection...");
         setIsGeneratingUri(true); setAuthError(null); cleanupNip46Attempt(); // Clean previous attempts
 
         try {
+            // Generate a temporary key pair for this connection attempt
             nip46TempPrivKeyRef.current = generateSecretKey();
             const tempPubkeyHex = getPublicKey(nip46TempPrivKeyRef.current);
-            const connectUri = `nostrconnect://${tempPubkeyHex}?relay=${NIP46_RELAYS[0]}&metadata=${JSON.stringify({ name: "Madstr.tv TV App" })}`;
+
+            // Select *only one* reliable relay for the hint
+            const theRelayHint = 'wss://relay.nsec.app'; // Use the corrected nsec.app relay
+
+            // Ensure this relay is actually in the main list for consistency (optional check)
+            if (!RELAYS.includes(theRelayHint)) {
+                console.warn(`NIP-46 Hint Relay ${theRelayHint} not found in main RELAYS list.`);
+                // Decide whether to proceed or throw error - proceeding for now
+            }
+
+            // Manually construct the URI with a single relay hint
+            const relayParam = `relay=${encodeURIComponent(theRelayHint)}`;
+            const metadataParam = `metadata=${encodeURIComponent(JSON.stringify({ name: "Madstr.tv TV App" }))}`;
+            // Use nostrconnect:// scheme
+            const connectUri = `nostrconnect://${tempPubkeyHex}?${relayParam}&${metadataParam}`;
+
             setNip46ConnectUri(connectUri);
+            console.log("NIP-46 URI generated (manual, nostrconnect, single relay):", connectUri);
 
-            console.log("NIP-46 URI generated:", connectUri);
-
-            const filter: NDKFilter = { kinds: [24133], authors: [tempPubkeyHex], limit: 1 }; // Filter for responses TO our temp key
+            // Corrected Filter: Listen for NIP-46 responses (kind 24133)
+            // directed TO our temporary pubkey (#p tag)
+            const filter: NDKFilter = {
+                kinds: [24133],
+                "#p": [tempPubkeyHex], // Corrected: Must target our temp pubkey
+                since: Math.floor(Date.now() / 1000) - 60 // Look back briefly just in case
+            };
             nip46SubscriptionRef.current = ndkInstance.subscribe(filter, { closeOnEose: false }); // Keep listening
 
+            console.log("NIP-46 Subscription created for filter:", filter);
+
             nip46SubscriptionRef.current.on("event", async (event: NDKEvent) => {
-                if (!nip46TempPrivKeyRef.current) return; // Should not happen
+                console.log("NIP-46 Received potential response event:", event.id, "from", event.pubkey);
+                if (!nip46TempPrivKeyRef.current) {
+                     console.warn("NIP-46: Received event but temp key is missing.");
+                     return; // Should not happen
+                }
                 try {
+                    // Decrypt using the temporary private key and the sender's public key (Amber's pubkey)
                     const decryptedContent = await nip04.decrypt(nip46TempPrivKeyRef.current, event.pubkey, event.content);
                     const message = JSON.parse(decryptedContent);
                     console.log("NIP-46 Decrypted Response:", message);
 
-                    if (message.result === "auth_url") {
-                        // This is the response confirming the signer scanned the code
-                        console.log(`NIP-46: Signer ${event.pubkey} connected.`);
-                        // We can now save the REMOTE signer's pubkey
-                        await saveNip46SignerToDb(event.pubkey);
-                        cleanupNip46Attempt(); // Success, clean up temp state/sub
-                        setIsLoadingAuth(false); // Update loading state
-                    } else if (message.error) {
-                         console.error("NIP-46 Signer Error:", message.error);
-                         setAuthError(`NIP-46 Signer Error: ${message.error}`);
-                         cleanupNip46Attempt();
-                         setIsLoadingAuth(false);
-                    }
+                    // The key is that we received *any* valid decrypted message from the signer.
+                    // The NIP-46 spec is loose on the *exact* confirmation response.
+                    // Receiving a parsable encrypted message on this channel is sufficient confirmation.
+                    console.log(`NIP-46: Signer ${event.pubkey} connected (received valid encrypted message).`);
+
+                    // Save the REMOTE signer's pubkey (Amber's pubkey in this case)
+                    await saveNip46SignerToDb(event.pubkey);
+                    cleanupNip46Attempt(); // Success, clean up temp state/sub
+                    setIsLoadingAuth(false); // Update loading state
+
                 } catch (decryptError) {
-                    console.error("NIP-46 Decryption/Parse Error:", decryptError);
-                    // Don't necessarily stop the attempt here, might be unrelated message
+                    // Ignore messages that fail decryption/parsing - they might not be intended for us.
+                    console.warn("NIP-46 Decryption/Parse Error (might be expected noise):", decryptError);
                 }
             });
 
@@ -359,7 +392,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                     const imagePref = await loadFetchImagesByTag();
                     const videoPref = await loadFetchVideosByTag();
                     const tipPref = await loadDefaultTipAmount();
-                    setFollowedTagsState(Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...tags])));
+                    setFollowedTagsState(tags || []);
                     setFetchImagesByTagEnabledState(imagePref);
                     setFetchVideosByTagEnabledState(videoPref);
                     setDefaultTipAmountState(tipPref);
@@ -376,7 +409,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                     const imagePref = await loadFetchImagesByTag();
                     const videoPref = await loadFetchVideosByTag();
                     const tipPref = await loadDefaultTipAmount();
-                    setFollowedTagsState(Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...tags])));
+                    setFollowedTagsState(tags || []);
                     setFetchImagesByTagEnabledState(imagePref);
                     setFetchVideosByTagEnabledState(videoPref);
                     setDefaultTipAmountState(tipPref);
@@ -389,7 +422,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                 setCurrentUserNpub(null);
                 setCurrentUserNsec(null);
                 setNip46SignerPubkey(null);
-                setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
+                const loadedTags = await loadFollowedTags();
+                setFollowedTagsState(loadedTags || []);
                 setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
                 setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
                 setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Set default tip amount
@@ -401,7 +435,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                 setCurrentUserNpub(null);
                 setCurrentUserNsec(null);
                 setNip46SignerPubkey(null);
-                setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
+                const loadedTags = await loadFollowedTags();
+                setFollowedTagsState(loadedTags || []);
                 setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
                 setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
                 setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip amount on error
@@ -427,7 +462,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             setNip46SignerPubkey(null);
             cleanupNip46Attempt(); // Ensure any pending NIP-46 is stopped
             // Reset settings to defaults
-            setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
+            setFollowedTagsState([]);
             setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
             setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
             setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip amount on logout
@@ -435,6 +470,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             await idb.clearFetchImagesByTagEnabledFromDb();
             await idb.clearFetchVideosByTagEnabledFromDb();
             await idb.clearDefaultTipAmountFromDb(); // <<< Clear persisted tip amount
+            // <<< Clear the last checked DM timestamp >>>
+            await idb.clearLastCheckedDmTimestamp();
 
             console.log("Logout successful, credentials and settings cleared.");
         } catch (error: any) {
@@ -444,7 +481,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             setCurrentUserNpub(null);
             setCurrentUserNsec(null);
             setNip46SignerPubkey(null);
-            setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
+            const loadedTags = await loadFollowedTags();
+            setFollowedTagsState(loadedTags || []);
             setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
             setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
             setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip amount
@@ -488,7 +526,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
     }, [getNdkSigner, ndkInstance]);
 
-    // --- NIP-04 Encryption/Decryption ---
+    // --- NIP-46 Encryption/Decryption ---
     const encryptDm = useCallback(async (recipientPubkeyHex: string, plaintext: string): Promise<string> => {
         const signer = getNdkSigner();
         if (!signer || !signer.user) {
@@ -509,23 +547,43 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
     }, [getNdkSigner, ndkInstance]);
 
+    // NIP-46 Decryption (using current signer)
     const decryptDm = useCallback(async (senderPubkeyHex: string, ciphertext: string): Promise<string> => {
-         const signer = getNdkSigner();
-         if (!signer || !signer.user) {
-             throw new Error("Cannot decrypt DM: Signer not available.");
-         }
-         if (signer instanceof NDKPrivateKeySigner && signer.privateKey) {
-             return nip04.decrypt(signer.privateKey, senderPubkeyHex, ciphertext);
-         } else if (signer instanceof NDKNip46Signer) {
-             // NDKNip46Signer handles remote decryption
-             // It needs an NDKUser object for the sender
-             if (!ndkInstance) throw new Error("NDK instance required for NIP-46 decryption");
-             const senderUser = ndkInstance.getUser({ hexpubkey: senderPubkeyHex });
-             return await signer.decrypt(senderUser, ciphertext);
-         } else {
-             throw new Error("Cannot decrypt DM: Unsupported signer type or missing private key.");
-         }
-    }, [getNdkSigner, ndkInstance]);
+        const signer = getNdkSigner();
+        if (!signer) {
+            throw new Error("Signer not available for decryption.");
+        }
+
+        // Handle NIP-46 Signer specifically
+        if (signer instanceof NDKNip46Signer) {
+            console.log("%%% useAuth: Using NIP-46 signer for decryption...");
+            if (!ndkInstance) throw new Error("NDK instance required for NIP-46 decryption");
+            const senderUser = ndkInstance.getUser({ hexpubkey: senderPubkeyHex });
+            // NIP-46 signer requires the *other* user object
+            return signer.decrypt(senderUser, ciphertext);
+        } 
+        // Handle Local Nsec Signer using nostr-tools nip04
+        else if (signer instanceof NDKPrivateKeySigner && currentUserNsec) { 
+            console.log("%%% useAuth: Using local nsec signer for decryption...");
+            try {
+                const decodedNsec = nip19.decode(currentUserNsec);
+                if (decodedNsec.type === 'nsec') {
+                    // Use nostr-tools nip04 directly
+                    const plaintext = await nip04.decrypt(decodedNsec.data as Uint8Array, senderPubkeyHex, ciphertext);
+                    return plaintext;
+                } else {
+                    throw new Error("Stored key is not a valid nsec.");
+                }
+            } catch (error) {
+                console.error("NIP-04 Decryption failed:", error);
+                throw new Error(`Failed to decrypt message: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        } 
+        // Fallback / Error
+        else {
+            throw new Error("Cannot decrypt DM: Unsupported signer type or missing private key.");
+        }
+    }, [getNdkSigner, currentUserNsec, ndkInstance]);
 
     // <<< Memoize the returned followedTags array >>>
     const memoizedFollowedTags = useMemo(() => followedTags, [followedTags]);

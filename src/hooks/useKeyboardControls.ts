@@ -2,14 +2,9 @@ import { useEffect, useCallback } from 'react';
 
 // Original Props
 interface KeyboardControlsProps {
-  isFullScreen: boolean; // Still needed to gate controls
-  signalInteraction: () => void; // Called on any keypress
-  onSetViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
+  isFullScreen: boolean;
+  signalInteraction: () => void;
   onTogglePlayPause: () => void;
-  onNext: () => void;
-  onPrevious: () => void;
-  onFocusToggle: () => void; 
-  viewMode: 'imagePodcast' | 'videoPlayer';
   onToggleFullScreen: () => void;
 }
 
@@ -17,107 +12,106 @@ interface KeyboardControlsProps {
 export function useKeyboardControls({
   isFullScreen,
   signalInteraction,
-  onSetViewMode,
   onTogglePlayPause,
-  onNext,
-  onPrevious,
-  onFocusToggle,
-  viewMode,
   onToggleFullScreen,
 }: KeyboardControlsProps) {
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    signalInteraction(); // Signal activity on any key press
-    console.log(`useKeyboardControls: Key event - Key: ${event.key}, Code: ${event.code}, isFullScreen: ${isFullScreen}`);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      signalInteraction(); // Signal activity on any key press
+      console.log(
+        `useKeyboardControls: Key event - Key: ${event.key}, Code: ${event.code}, isFullScreen: ${isFullScreen}`
+      );
 
-    // Specific handling based on key and fullscreen state
-    switch (event.key) {
-      case 'ArrowUp':
-      case 'ArrowDown':
-      case 'ArrowLeft':
-      case 'ArrowRight':
-        if (isFullScreen) {
-          console.log(`useKeyboardControls: Arrow key (${event.key}) detected (Fullscreen) - Exiting fullscreen.`);
-          onToggleFullScreen(); // Exit fullscreen on any arrow press
-          event.preventDefault(); // Prevent default scrolling/actions
-        } else {
-          // Original non-fullscreen arrow key logic
-          console.log(`useKeyboardControls: Arrow key (${event.key}) detected (Not Fullscreen).`);
-          switch (event.key) {
-            case 'ArrowUp':
-              if (viewMode === 'imagePodcast') onSetViewMode('videoPlayer');
-              break;
-            case 'ArrowDown':
-              if (viewMode === 'videoPlayer') onSetViewMode('imagePodcast');
-              else onFocusToggle();
-              break;
-            case 'ArrowLeft':
-              onPrevious();
-              break;
-            case 'ArrowRight':
-              onNext();
-              break;
+      // Handle exit fullscreen first
+      if (isFullScreen) {
+        switch (event.key) {
+          case 'ArrowUp':
+          case 'ArrowDown':
+          case 'ArrowLeft':
+          case 'ArrowRight':
+          case 'Backspace':
+          case 'Escape':
+            console.log(
+              `useKeyboardControls: Key (${event.key}) detected (Fullscreen) - Exiting fullscreen.`
+            );
+            onToggleFullScreen();
+            event.preventDefault(); // Prevent default scrolling/actions when exiting
+            return; // Don't process further
+        }
+      }
+
+      // Non-fullscreen handling
+      switch (event.key) {
+        case 'ArrowUp':
+        case 'ArrowDown':
+        case 'ArrowLeft':
+        case 'ArrowRight':
+          // *** DO NOTHING - Allow default browser focus navigation ***
+          console.log(
+            `useKeyboardControls: Arrow key (${event.key}) detected (Not Fullscreen) - Allowing default focus navigation.`
+          );
+          // Note: event.preventDefault() is NOT called here
+          break;
+
+        case 'Enter':
+        case ' ': // OK / Select button
+          console.log(
+            `useKeyboardControls: ${
+              event.key === 'Enter' ? 'Enter' : 'Space'
+            } detected (Not Fullscreen).`
+          );
+          // Check if a specific element (button, input, etc.) has focus
+          if (
+            document.activeElement &&
+            document.activeElement !== document.body &&
+            document.activeElement !== document.documentElement &&
+            // Check if it's an interactive element that should respond to Enter/Space
+            (document.activeElement instanceof HTMLButtonElement ||
+              document.activeElement instanceof HTMLInputElement ||
+              document.activeElement instanceof HTMLSelectElement ||
+              document.activeElement instanceof HTMLTextAreaElement ||
+              document.activeElement.getAttribute('role') === 'button' ||
+              document.activeElement.getAttribute('role') === 'option' ||
+              document.activeElement.getAttribute('role') === 'menuitem' ||
+              document.activeElement.getAttribute('role') === 'slider' ||
+              document.activeElement.hasAttribute('onclick')) // Basic check for elements with click handlers
+          ) {
+            console.log(
+              'useKeyboardControls: Allowing default action for focused element:',
+              document.activeElement
+            );
+            // *** DO NOT preventDefault() ***
+            // Let the browser handle activating the focused element (click, select, etc.)
+          } else {
+            // If no specific interactive element is focused, treat Enter/Space as Play/Pause
+            console.log(
+              'useKeyboardControls: No specific element focused, toggling play/pause.'
+            );
+            onTogglePlayPause();
+            event.preventDefault(); // Prevent space scrolling page etc. in this fallback case
           }
-          event.preventDefault(); // Prevent default scrolling/actions
-        }
-        break;
+          break;
 
-      case 'Enter':
-      case ' ': // OK / Select button
-        if (isFullScreen) {
-          // Assuming the QR Code button is already focused via auto-focus logic elsewhere
-          console.log(`useKeyboardControls: ${event.key === 'Enter' ? 'Enter' : 'Space'} detected (Fullscreen) - Allowing default action for focused element (QR Button).`);
-          // *** DO NOT preventDefault() ***
-          // Let the browser handle activating the focused button.
-        } else {
-          // Original non-fullscreen behavior
-          console.log(`useKeyboardControls: ${event.key === 'Enter' ? 'Enter' : 'Space'} detected (Not Fullscreen).`);
-           if (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement) {
-               console.log("useKeyboardControls: Allowing default for focused element:", document.activeElement);
-               // Allow default browser action for other focused elements like buttons
-           } else {
-               console.log("useKeyboardControls: Toggling play/pause.");
-               onTogglePlayPause(); // Toggle play/pause if nothing specific is focused
-               event.preventDefault(); // Prevent space scrolling page etc.
-           }
-        }
-        break;
+        case 'Backspace':
+          console.log(
+            'useKeyboardControls: Backspace detected (Not Fullscreen) - Ignoring.'
+          );
+          // Allow default backspace behavior (e.g., in input fields) or do nothing
+          break;
 
-      case 'Backspace': // Assuming Back button also exits fullscreen
-        if (isFullScreen) {
-          console.log("useKeyboardControls: Backspace detected (Fullscreen) - Exiting fullscreen.");
-          onToggleFullScreen();
-          event.preventDefault();
-        } else {
-           console.log("useKeyboardControls: Backspace detected (Not Fullscreen) - Ignoring.");
-          // Potentially add non-fullscreen Backspace behavior if needed
-        }
-        break;
+        case 'Escape':
+           console.log("useKeyboardControls: Escape detected (Not Fullscreen) - Ignoring.");
+           // Allow default escape behavior if needed
+          break;
 
-      // Also exit on Escape
-       case 'Escape':
-         if (isFullScreen) {
-          console.log("useKeyboardControls: Escape detected (Fullscreen) - Exiting fullscreen.");
-          onToggleFullScreen();
-          event.preventDefault();
-         }
-         break;
-
-      default:
-         console.log(`useKeyboardControls: Unhandled key - ${event.key}`);
-         // Allow default behavior for unhandled keys
-         break;
-    }
-  }, [
-    isFullScreen,
-    signalInteraction,
-    onSetViewMode,
-    onTogglePlayPause,
-    onNext,
-    onPrevious,
-    onFocusToggle,
-    viewMode,
-    onToggleFullScreen, // Ensure dependency is included
-  ]);
+        default:
+          console.log(`useKeyboardControls: Unhandled key - ${event.key}`);
+          // Allow default behavior for unhandled keys
+          break;
+      }
+    },
+    [isFullScreen, signalInteraction, onTogglePlayPause, onToggleFullScreen]
+  );
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

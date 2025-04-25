@@ -1,5 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase, StoreNames } from 'idb';
 import { Proof } from '@cashu/cashu-ts'; // Import Proof type
+import { DEFAULT_TIP_AMOUNT_SATS } from '../constants';
 
 // --- Type Definitions ---
 // Define more specific types if possible
@@ -69,21 +70,40 @@ export interface StoredFetchVideosByTagEnabled {
 // <<< END NEW >>>
 
 // <<< NEW: Add interface for Default Tip Amount setting >>>
-export interface StoredDefaultTipAmount {
-    id: 'defaultTipAmount'; // Use literal type for the key
-    amount: number;
-}
-// <<< END NEW >>>
+const DEFAULT_TIP_AMOUNT_KEY = 'defaultTipAmount';
+// <<< Define key for timestamp >>>
+const LAST_CHECKED_DM_TS_KEY = 'lastCheckedDmTimestamp';
 
-// Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl | StoredFetchImagesByTagEnabled | StoredNip46SignerPubkey | StoredFetchVideosByTagEnabled | StoredDefaultTipAmount;
+// Specific type for default tip amount
+type StoredDefaultTipAmount = number | null;
+
+// <<< Specific type for last checked DM timestamp (OBJECT FORMAT) >>>
+type StoredLastCheckedDmTimestamp = { id: 'lastCheckedDmTimestamp'; value: number | null };
+
+// Combine object-based settings types
+type StoredObjectSettings = 
+    StoredNsecData | 
+    StoredFollowedTags | 
+    StoredMintUrl | 
+    StoredFetchImagesByTagEnabled | 
+    StoredNip46SignerPubkey | 
+    StoredFetchVideosByTagEnabled | 
+    StoredLastCheckedDmTimestamp; // <<< Add the object type here
+
+// Primitive settings (for direct access)
+type StoredPrimitiveSettings = StoredDefaultTipAmount; // Only tip amount is primitive now
+
+// Final combined type for the store value (can be object or primitive)
+type SettingsValue = StoredObjectSettings | StoredPrimitiveSettings;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled' | 'defaultTipAmount';
+    // Key is string literal matching one of the 'id' fields OR the primitive key
+    key: StoredObjectSettings['id'] | 'defaultTipAmount'; 
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'nip46SignerPubkey' | 'fetchVideosByTagEnabled' | 'defaultTipAmount' };
+    // Index only the 'id' field of the objects
+    indexes: { 'id': StoredObjectSettings['id'] }; 
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -169,19 +189,22 @@ const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
 export const idb = {
     getDbInstance: getDb,
 
-    // --- Settings Store Basic Helpers ---
-    getSetting: async (key: MadstrTvAppDB['settings']['key']): Promise<SettingsValue | undefined> => {
+    // --- Settings Store Basic Helpers (for object-based settings) ---
+    getSetting: async (key: StoredObjectSettings['id']): Promise<StoredObjectSettings | undefined> => {
         const db = await getDb();
-        return db.get('settings', key);
+        // Get the object using its 'id' as the key
+        return db.get('settings', key) as Promise<StoredObjectSettings | undefined>;
     },
 
-    putSetting: async (value: SettingsValue): Promise<MadstrTvAppDB['settings']['key']> => {
+    putSetting: async (value: StoredObjectSettings): Promise<StoredObjectSettings['id']> => {
         const db = await getDb();
-        return db.put('settings', value);
+        // Put the whole object, IDB uses the 'id' field as the key
+        return db.put('settings', value) as Promise<StoredObjectSettings['id']>;
     },
 
-    deleteSetting: async (key: MadstrTvAppDB['settings']['key']): Promise<void> => {
+    deleteSetting: async (key: StoredObjectSettings['id']): Promise<void> => {
         const db = await getDb();
+        // Delete the object using its 'id' as the key
         return db.delete('settings', key);
     },
 
@@ -291,23 +314,24 @@ export const idb = {
 
     // <<< NEW: Add specific helpers for Default Tip Amount setting >>>
     saveDefaultTipAmountToDb: async (amount: number): Promise<void> => {
-        if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
-             console.error("Invalid default tip amount provided for saving:", amount);
-             throw new Error("Invalid default tip amount.");
-        }
-        await idb.putSetting({ id: 'defaultTipAmount', amount });
+        const db = await getDb();
+        await db.put('settings', amount, DEFAULT_TIP_AMOUNT_KEY);
+        console.log(`IDB: Saved default tip amount: ${amount}`);
     },
 
     loadDefaultTipAmountFromDb: async (): Promise<number> => {
-        const setting = await idb.getSetting('defaultTipAmount');
-        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'defaultTipAmount' && 'amount' in setting && typeof setting.amount === 'number' && setting.amount > 0) {
-            return setting.amount;
+        const db = await getDb();
+        const amount = await db.get('settings', DEFAULT_TIP_AMOUNT_KEY);
+        if (typeof amount === 'number') {
+            return amount;
         }
-        return 210; // Return the default value (use constant if defined elsewhere)
+        return DEFAULT_TIP_AMOUNT_SATS;
     },
 
     clearDefaultTipAmountFromDb: async (): Promise<void> => {
-        await idb.deleteSetting('defaultTipAmount');
+        const db = await getDb();
+        await db.delete('settings', DEFAULT_TIP_AMOUNT_KEY);
+        console.log('IDB: Cleared default tip amount.');
     },
     // <<< END NEW >>>
 
@@ -405,6 +429,31 @@ export const idb = {
         await idb.deleteSetting('fetchImagesByTagEnabled');
     },
     // --- End added clear functions ---
+
+    // --- Last Checked DM Timestamp ---
+    saveLastCheckedDmTimestamp: async (timestamp: number | null): Promise<void> => {
+        // Use putSetting with the object format
+        await idb.putSetting({ id: 'lastCheckedDmTimestamp', value: timestamp });
+        console.log(`IDB: Saved last checked DM timestamp object: ${timestamp}`);
+    },
+
+    loadLastCheckedDmTimestamp: async (): Promise<number | null> => {
+        // Use getSetting to retrieve the object
+        const setting = await idb.getSetting('lastCheckedDmTimestamp');
+        // Check if it's the correct object and return its value
+        if (setting && setting.id === 'lastCheckedDmTimestamp') {
+            console.log(`IDB: Loaded last checked DM timestamp object, value: ${setting.value}`);
+            return setting.value; // value is number | null
+        }
+        console.log('IDB: No last checked DM timestamp object found.');
+        return null;
+    },
+
+    clearLastCheckedDmTimestamp: async (): Promise<void> => {
+        // Use deleteSetting with the object's id
+        await idb.deleteSetting('lastCheckedDmTimestamp');
+        console.log('IDB: Cleared last checked DM timestamp object.');
+    },
 };
 
 // --- Initialize ---

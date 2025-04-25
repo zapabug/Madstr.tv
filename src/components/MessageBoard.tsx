@@ -250,10 +250,8 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
     // ---------------------------------
 
     subscription.current = ndkInstance.subscribe(filter, {
-      closeOnEose: false, // Keep listening for new messages
-      groupable: true, // Allow NDK grouping for potentially better performance
-      // Add subId for debugging
-      subId: `msgboard-${eventId.substring(0, 5)}` 
+      closeOnEose: false,
+      subId: `msgboard-${eventId.substring(0, 5)}`
     });
 
     subscription.current.on('event', (event: NDKEvent) => {

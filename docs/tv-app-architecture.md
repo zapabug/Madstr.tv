@@ -17,6 +17,7 @@ This document describes the architecture of the React-based TV application desig
 *   Uses a **split-screen layout**, hiding the bottom panel in fullscreen mode.
 *   Enters **fullscreen mode** automatically after periods of inactivity.
 *   Supports user **authentication** via nsec (generation/login) or NIP-46 remote signer.
+    *   **Logout includes a mandatory wallet backup step:** If the user has a Cashu balance, logout displays a QR code of the wallet proofs for 45 seconds, followed by a confirmation step before proceeding.
 *   Allows users to **follow specific hashtags** (`#t` tags) to be used for filtering if enabled.
 *   Includes an internal **Cashu wallet** for receiving deposits via encrypted DMs and **sending tips** (currently simplified, non-Zap standard) to content creators via encrypted DMs. Tipping is triggered by focusing the author QR code and pressing OK/Select.
 
@@ -116,9 +117,18 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Purpose:** Renders the actual buttons, sliders, and time displays for media control.
 
 *   **`SettingsModal.tsx`:**
-    *   **Purpose:** Provides a UI for managing user identity (login/logout/generate/NIP-46), followed hashtags, **independent toggles for fetching images/videos by tag**, and the internal Cashu wallet (mint URL, balance, deposit QR).
+    *   **Purpose:** Provides a UI for managing user identity (login/logout/generate/NIP-46), followed hashtags, **independent toggles for fetching images/videos by tag**, setting the **default tip amount** via preset buttons, and the internal Cashu wallet (mint URL, balance, deposit QR). Includes a **Tip Devs** button.
     *   **Hook Usage:** `useAuth`, uses `wallet` prop.
-    *   **Functionality:** Renders different sections based on login state. Handles key generation/login/logout flows. Manages adding/removing hashtags. Allows toggling `fetchImagesByTagEnabled` and `fetchVideosByTagEnabled` via `useAuth` setters. Manages Cashu mint URL settings and displays balance/deposit info from `wallet` prop.
+    *   **Functionality:** Renders different sections based on login state.
+        *   **Logged Out:** Displays options for NIP-46 connection, generating a new identity (nsec), or logging in with an existing nsec.
+        *   **Logged In:** Displays wallet balance at the top, followed by Wallet Settings (Mint URL, Deposit QR, etc.), Fetch Toggles, Hashtag Following, Default Tip Amount, Tip Devs, and finally the Logout button at the bottom.
+        *   Handles key generation/login flows.
+        *   Manages adding/removing hashtags (showing suggestions when empty).
+        *   Allows toggling `fetchImagesByTagEnabled` and `fetchVideosByTagEnabled` via `useAuth` setters.
+        *   Manages Cashu mint URL settings and displays balance/deposit info from `wallet` prop.
+        *   Allows setting `defaultTipAmount` via `useAuth` setter using preset buttons.
+        *   Triggers tipping the app developer.
+        *   **Logout Flow:** Initiating logout first triggers `wallet.exportUnspentProofs`. If proofs exist, a modal overlay appears showing a QR code of the proofs with a 45-second countdown. After the countdown, confirmation buttons ("Log Out" / "Cancel") are shown. If no proofs existed, logout proceeds directly.
 
 *   **`RelayStatus.tsx`, `QRCode.tsx`:** Utility components. `RelayStatus` now includes the button to open the `SettingsModal`.
 
@@ -134,8 +144,9 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
         *   Signer: `getNdkSigner`, `signEvent`.
         *   Hashtag State: `followedTags` (array), `setFollowedTags` (function).
         *   **Tag Fetching Toggles:** `fetchImagesByTagEnabled` (boolean), `setFetchImagesByTagEnabled` (function), `fetchVideosByTagEnabled` (boolean), `setFetchVideosByTagEnabled` (function).
+        *   **Default Tip Amount:** `defaultTipAmount` (number), `setDefaultTipAmount` (function).
         *   NIP-04 Helpers: `encryptDm`, `decryptDm`.
-    *   **Function:** Manages authentication state via IDB. Persists `followedTags` and **tag fetching enable flags** to IDB (`settings` store). Provides NDK signer access and NIP-04 helpers.
+    *   **Function:** Manages authentication state via IDB. Persists `followedTags`, **tag fetching enable flags**, and **default tip amount** to IDB (`settings` store). Provides NDK signer access and NIP-04 helpers.
 
 *   **`useMediaAuthors`:**
     *   **Input:** `ndk` (NDK | undefined).
@@ -189,8 +200,8 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 
 *   **`useWallet`:** (No significant architecture changes noted, depends on NDK readiness)
     *   **Input:** `ndkInstance` (NDK | undefined), `isNdkReady` (boolean).
-    *   **Output:** `UseWalletReturn` ... (existing description) ...
-    *   **Function:** Manages internal Cashu wallet. Loads/stores proofs/mint URL. Calculates balance. Interacts with `cashuHelper`. Listens for DMs (Kind 4) using NDK subscription **only when NDK is ready**. Decrypts DMs using `useAuth` helper.
+    *   **Output:** `UseWalletReturn` interface now includes `exportUnspentProofs: () => Promise<string | null>;`.
+    *   **Function:** Manages internal Cashu wallet. Loads/stores proofs/mint URL. Calculates balance. Interacts with `cashuHelper`. Listens for DMs (Kind 4) using NDK subscription **only when NDK is ready**. Decrypts DMs using `useAuth` helper. Provides function to export current proofs as a JSON string for backup.
 
 *   **`useNDKInit` (New Hook):**
     *   **Input:** None.
