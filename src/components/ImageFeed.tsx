@@ -1,379 +1,254 @@
-import React, { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-// useNdk no longer needed here
-// import { useNdk } from 'nostr-hooks'; 
-// NDK types no longer needed here
-// import { NDKEvent, NDKFilter, NDKKind } from '@nostr-dev-kit/ndk';
-// nip19 potentially still needed if displaying npubs
-import { nip19 } from 'nostr-tools'; 
-import { NostrNote, NostrProfile } from '../types/nostr'; 
-import { useProfileData } from '../hooks/useProfileData';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import QRCode from 'react-qr-code';
-import { useWallet, SendTipParams, UseWalletReturn } from '../hooks/useWallet'; // Import wallet hook and types
-import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Import auth hook for context
-import { FiZap } from 'react-icons/fi'; // Import Zap icon
-// NDK type is needed for useMediaAuthors return type
-import NDK from '@nostr-dev-kit/ndk'; 
-import { useNDKInit } from '../hooks/useNDKInit'; // <<< Use NDKInit to get instance >>>
+import { nip19 } from 'nostr-tools';
+import { NostrNote } from '../types/nostr';
+// <<< Import context hooks >>>
+import { useAuthContext } from '../context/AuthContext';
+import { useWalletContext } from '../context/WalletContext';
+// <<< Keep NDK import if needed for event creation, otherwise remove >>>
+// import NDK from '@nostr-dev-kit/ndk';
+import { TV_PUBKEY_NPUB } from '../constants'; // Keep if used for comparison or other logic
 
-// Remove internal MediaNote interface if NostrNote is sufficient
-/*
-interface MediaNote {
-  id: string; // Event ID
-  eventId: string; // Use id
-  type: 'image' | 'video'; // Can be inferred from tags/content?
-  url: string; // Should be in content or tags
-  posterNpub: string; // Map to posterPubkey
-  createdAt: number; // Map to created_at
-}
-*/
-
-// Update props: remove authors, onNotesLoaded, add isLoading, authorNpub
-export interface MediaFeedProps {
-  // authors: string[]; // Removed
-  isLoading: boolean; // Added
+// Interface for props
+interface MediaFeedProps {
+  isLoading: boolean;
   handlePrevious: () => void;
   handleNext: () => void;
   currentImageIndex: number;
-  imageNotes: NostrNote[]; 
-  authorNpub: string | null; // Added
-  authorProfilePictureUrl: string | null; // <<< Added >>>
-  // <<< Add auth, wallet, and tip amount >>>
-  auth: UseAuthReturn;
-  wallet: UseWalletReturn;
-  defaultTipAmount: number;
-  // onNotesLoaded: (notes: NostrNote[]) => void; // Removed
+  imageNotes: NostrNote[];
+  authorNpub: string | null;
+  authorProfilePictureUrl: string | null;
+  authorDisplayName: string | null;
+  // Remove props provided by context
+  // defaultTipAmount: number;
+  // auth: any; // Replace with specific types if parts are needed
+  // wallet: any; // Replace with specific types if parts are needed
+  // Playback props (might be removable if only for status?)
   isPlaying: boolean;
   togglePlayPause: () => void;
   isFullScreen: boolean;
-  signalInteraction: (interaction: string) => void;
+  signalInteraction: () => void;
 }
 
+// Interface for the ref
 export interface ImageFeedRef {
   focusToggleButton: () => void;
 }
 
-// Loading messages array
-const loadingMessages = [
-  "Tuning into the cosmic streams...",
-  "Aligning the digital constellations...",
-  "Reticulating splines...",
-  "Charging the flux capacitor...",
-  "Brewing cyber-coffee...",
-  "Asking the magic smoke nicely...",
-  "Untangling the timelines...",
-  "Polishing the pixels...",
-];
+// Helper to truncate npub
+const truncateNpub = (npub: string | null): string => {
+    if (!npub) return 'N/A';
+    if (npub.length <= 15) return npub;
+    return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
+};
 
-const DEFAULT_TIP_AMOUNT = 121; // Sats
-
-// Define your custom SVG component or markup here
-const CustomLoggedInIcon = () => (
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-    {/* Lightning bolt path with specified colors */}
-    <path 
-      d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" 
-      fill="#8B5CF6" 
-      stroke="#F7931A" 
-      strokeWidth="1.5" // Adjust stroke width as needed
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
+// Component definition using forwardRef
 const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
-  { 
-    // authors, // Removed
-    isLoading, // Added
+  {
+    isLoading,
     handlePrevious,
     handleNext,
     currentImageIndex,
-    imageNotes, 
-    authorNpub, // Added
-    authorProfilePictureUrl, // <<< Destructure new prop >>>
-    // <<< Destructure new props >>>
-    auth,
-    wallet,
-    defaultTipAmount,
-    // onNotesLoaded, // Removed
+    imageNotes,
+    authorNpub,
+    authorProfilePictureUrl,
+    authorDisplayName,
     isPlaying,
     togglePlayPause,
     isFullScreen,
-    signalInteraction,
+    signalInteraction
   },
-  ref 
+  ref
 ) => {
-  // Remove NDK and internal fetching state
-  // const { ndk } = useNdk();
-  // const notesById = useRef<Map<string, NostrNote>>(new Map()); 
-  // const [isLoading, setIsLoading] = useState(true); // Use prop instead
-  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  // <<< Get auth and wallet state from context >>>
+  const auth = useAuthContext();
+  const wallet = useWalletContext();
+  const { defaultTipAmount } = auth; // Get default tip amount from auth context
+
+  const [showTipFeedback, setShowTipFeedback] = useState<'success' | 'error' | null>(null);
+  const [tipErrorMsg, setTipErrorMsg] = useState<string | null>(null);
+  const tipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Ref for the mode toggle button
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
-  const { profiles } = useProfileData(imageNotes); // Keep profile fetching based on notes prop
+  // Ref for the QR code button/div
+  const qrCodeRef = useRef<HTMLDivElement>(null); // Ref the div containing the QR
 
-  // --- Get NDK Instance (No longer needed directly if passed in auth/wallet) ---
-  const { ndkInstance, isConnecting: isNdkConnecting, connectionError: ndkConnectionError } = useNDKInit();
-  const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
-  
-  const [isTipping, setIsTipping] = useState(false);
-  const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
-  const authorContainerRef = useRef<HTMLDivElement>(null); // Ref for the author info container
-
-  // --- Loading Message Cycling (Keep) --- 
-   useEffect(() => {
-    const intervalId = setInterval(() => {
-      setLoadingMessageIndex(prevIndex => (prevIndex + 1) % loadingMessages.length);
-    }, 2500); 
-    return () => clearInterval(intervalId); 
-  }, []);
-
-  // --- Effect to Scroll to Current Image (Keep) ---
-  useEffect(() => {
-    if (imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
-       const targetElement = document.getElementById(`media-item-${imageNotes[currentImageIndex]?.id}`);
-       targetElement?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-    }
-  }, [currentImageIndex, imageNotes]);
-
-  // --- REMOVED Effect to Fetch Notes --- 
-  // useEffect(() => { ... fetching logic removed ... }, [ndk, authors, onNotesLoaded]);
-
-  // --- Expose focusToggleButton via useImperativeHandle (Keep) ---
-  React.useImperativeHandle(ref, () => ({
+  // Expose focusToggleButton via ref
+  useImperativeHandle(ref, () => ({
     focusToggleButton: () => {
-      console.log("ImageFeed: focusing toggle button via handle");
-      // Focus the author container instead if available and tipping enabled
-      if (authorContainerRef.current && canTip) {
-          authorContainerRef.current.focus();
-      } else {
-         toggleButtonRef.current?.focus();
-      }
+      toggleButtonRef.current?.focus();
     }
   }));
 
-  // Find the current image note
-  const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length
-    ? imageNotes[currentImageIndex]
-    : null;
-  const imageUrl = currentImageNote?.url;
-  // <<< Get profile data needed for display >>>
-  const profile = currentImageNote?.posterPubkey ? profiles[currentImageNote.posterPubkey] : undefined;
-  const displayName = profile?.name || profile?.displayName || currentImageNote?.posterPubkey?.substring(0, 10) || 'Anon';
-  const timestamp = currentImageNote?.created_at ? new Date(currentImageNote.created_at * 1000).toLocaleDateString() : 'Date unknown';
+  const currentNote = imageNotes[currentImageIndex];
+  const imageUrl = currentNote?.url;
+  const displayAuthorName = authorDisplayName || truncateNpub(authorNpub);
+  const timestamp = currentNote?.created_at ? new Date(currentNote.created_at * 1000).toLocaleString() : 'N/A';
 
-  const currentNoteId = currentImageNote?.id;
-  // Ensure ndkInstance is checked for canTip
-  const canTip = !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= defaultTipAmount && authorNpub && auth.isLoggedIn && isNdkReady;
-
-  // <<< Log received props and derived values >>>
-  console.log("ImageFeed Render:", {
-      isLoading,
-      currentImageIndex,
-      notesCount: imageNotes.length,
-      currentNoteId,
-      imageUrl,
-      authorNpub,
-      displayName,
-      defaultTipAmount, // Log the passed tip amount
-      isPlaying // Log playback state received
-  });
-
-  // --- Tipping Handler ---
-  const handleTip = useCallback(async () => {
-    // Check ndkInstance readiness here too
-    if (!canTip || !authorNpub || !ndkInstance || !auth || !isNdkReady) {
-        console.warn('Cannot tip: Conditions not met', { canTip, authorNpub, ndkInstance: !!ndkInstance, auth: !!auth, isNdkReady });
-        return;
+  // --- Tipping Logic --- 
+  const handleTipInteraction = useCallback(async () => {
+    if (!authorNpub || !currentNote?.id || !auth.isLoggedIn || !wallet.sendCashuTipWithSplits) {
+      console.log('ImageFeed: Cannot tip - missing author, note ID, auth, or wallet function.');
+      return;
     }
 
-    setIsTipping(true);
-    setTipStatus(null);
-    console.log(`Attempting to tip ${defaultTipAmount} sats to ${authorNpub}`); // Use defaultTipAmount
+    if (wallet.balanceSats < defaultTipAmount) {
+      console.log('ImageFeed: Insufficient balance for default tip.');
+      setTipErrorMsg(`Need ${defaultTipAmount} sats`);
+      setShowTipFeedback('error');
+      if (tipTimeoutRef.current) clearTimeout(tipTimeoutRef.current);
+      tipTimeoutRef.current = setTimeout(() => setShowTipFeedback(null), 2500);
+      return;
+    }
 
-    const params: SendTipParams = {
-        primaryRecipientNpub: authorNpub,
-        amountSats: defaultTipAmount, // Use defaultTipAmount
-        auth: auth, // Pass the auth object
-        eventIdToZap: currentNoteId, 
-        comment: `📺⚡️ Tip from Mad⚡tr.tv TV App!` 
-    };
+    setShowTipFeedback(null); // Clear previous feedback
+    setTipErrorMsg(null);
+    // Consider adding a brief "Sending..." state?
 
     try {
-        // sendCashuTipWithSplits now uses NDK instance internally from useWallet
-        const success = await wallet.sendCashuTipWithSplits(params);
+        // Assume sendCashuTipWithSplits needs auth object, uses ndk internally
+        const success = await wallet.sendCashuTipWithSplits({
+            primaryRecipientNpub: authorNpub,
+            amountSats: defaultTipAmount,
+            auth: auth,
+            eventIdToZap: currentNote.id,
+        });
+
         if (success) {
-            console.log('Tip successful!');
-            setTipStatus('success');
-            // Trigger visual feedback (e.g., flash checkmark)
-            // Balance updates automatically via wallet hook
+            console.log(`ImageFeed: Successfully sent ${defaultTipAmount} sats tip to ${authorNpub}.`);
+            setShowTipFeedback('success');
         } else {
-            console.error('Tip failed.', wallet.walletError);
-            setTipStatus('error');
-            // Trigger visual feedback (e.g., flash error)
+            console.error(`ImageFeed: Failed to send tip (returned false) to ${authorNpub}.`);
+            setTipErrorMsg(wallet.walletError || 'Tip Failed'); // Use error from wallet if available
+            setShowTipFeedback('error');
         }
     } catch (error) {
-        console.error('Exception during tip:', error);
-        setTipStatus('error');
+        console.error(`ImageFeed: Error sending tip to ${authorNpub}:`, error);
+        setTipErrorMsg(error instanceof Error ? error.message : String(error));
+        setShowTipFeedback('error');
     } finally {
-        setIsTipping(false);
-        // Clear status after a short delay
-        setTimeout(() => setTipStatus(null), 2000);
+      // Clear feedback after a delay
+      if (tipTimeoutRef.current) clearTimeout(tipTimeoutRef.current);
+      tipTimeoutRef.current = setTimeout(() => setShowTipFeedback(null), 2500);
     }
-  }, [canTip, authorNpub, auth, wallet, currentNoteId, ndkInstance, isNdkReady, defaultTipAmount]); // Added defaultTipAmount to deps
 
-  // --- Keyboard Handler for Tipping ---
-  const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') { // OK/Select button
-        event.preventDefault();
-        if (canTip) {
-            handleTip();
-        }
+  }, [authorNpub, currentNote, auth, wallet, defaultTipAmount]); // Added dependencies
+
+  // Handle keyboard interaction (Enter/Space) on the QR code
+  const handleQrKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      // signalInteraction(); // <<< REMOVE this line to prevent exiting fullscreen
+      handleTipInteraction();
     }
-    // Allow arrow keys for navigation if needed, but prevent default if handled
-    // if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
-    //   // Handle focus movement elsewhere if needed
-    // }
   };
 
-  // --- Render Logic (Use isLoading prop) ---
-  if (isLoading && !imageUrl) {
-    // Show loading spinner/message while fetching
-    return (
-         <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
-           {/* SVG Spinner */}
-           <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-purple-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-           </svg>
-           <p className="text-gray-400 text-lg animate-pulse">
-             {loadingMessages[loadingMessageIndex]}
-           </p>
-         </div>
-    );
-  }
-  
-  // Handle case where loading is false but notes are empty
-  if (!imageNotes || imageNotes.length === 0) {
-     return (
-      <div className="w-full h-full flex items-center justify-center text-gray-400">
-        No images found for selected authors.
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
-      {/* Image Container with Animation */}
-      <AnimatePresence initial={false} mode='wait'>
-          <motion.div
-            key={currentImageNote?.id} 
-            className="absolute inset-0 flex items-center justify-center"
-            initial={{ opacity: 0, scale: 0.9 }} // Start slightly scaled down and faded
-            animate={{ opacity: 1, scale: 1 }}     // Animate to full size and opacity
-            exit={{ opacity: 0, scale: 0.95 }}    // Exit by fading and slightly scaling down
-            transition={{ duration: 0.5, ease: "easeInOut" }} // Smooth transition
-          >
-            <img
-              id={`media-item-${currentImageNote?.id}`}
-              src={imageUrl}
-              alt={currentImageNote?.content || 'Nostr Image'}
-              className="max-w-full max-h-full object-contain"
-              onLoad={() => console.log("Image loaded:", imageUrl)} // Log image load
-              onError={() => console.error("Error loading image:", imageUrl)} // Log image errors
-            />
-          </motion.div>
-      </AnimatePresence>
-
-      {/* Image Meta Info Overlay (Hide on Fullscreen) */}
-      <AnimatePresence>
-        {!isFullScreen && (
-           <motion.div
-             key="meta-overlay"
-             initial={{ opacity: 0, y: 20 }}
-             animate={{ opacity: 1, y: 0 }}
-             exit={{ opacity: 0, y: 20 }}
-             transition={{ duration: 0.3, delay: 0.2 }}
-             className="absolute bottom-1 left-1 z-10 p-2 bg-black bg-opacity-70 rounded-lg text-left pointer-events-none text-xs"
-           >
-              {/* Author Info placeholder - can add author name/pic here later if desired */}
-              {/* <p className="font-semibold text-purple-400 break-all" title={currentImageNote?.posterPubkey}>{displayName}</p> */}
-              
-              {/* Timestamp Display - Corrected */}
-              <p className="text-gray-400 text-xs">{timestamp}</p>
-           </motion.div>
-         )
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tipTimeoutRef.current) {
+        clearTimeout(tipTimeoutRef.current);
       }
-      </AnimatePresence>
+    };
+  }, []);
 
-      {/* --- Grouped Author Info Container (with Tipping interaction) --- */}
-      {/* Show only when not fullscreen */}
-      <AnimatePresence>
-        {authorNpub && (
-          <motion.div
-            key="author-qr-container"
-            ref={authorContainerRef}
-            className={`absolute bottom-2 right-2 z-20 flex flex-col items-center space-y-0.5 transition-all duration-200 ease-in-out
-                        ${canTip ? 'cursor-pointer focus:outline-none focus:ring-4 focus:ring-purple-600 focus:ring-opacity-75 rounded-lg p-1 bg-black/30' : 'p-1 bg-black/40 rounded'}`}
-            tabIndex={canTip ? 0 : -1}
-            onKeyDown={handleAuthorKeyDown}
-            title={canTip ? `Press OK to tip ${DEFAULT_TIP_AMOUNT} sats` : 'Image Author'}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.3 }}
-          >
-            {/* Author QR Code + Overlays */}
-            <div className="relative bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
-                 <QRCode
-                    value={`nostr:${authorNpub}`} // <<< Use nostr: prefix >>>
-                    size={256}
-                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                    viewBox={`0 0 256 256`}
-                    level="H" // <<< Use Level H like VideoPlayer >>>
-                    bgColor="#FFFFFF"
-                    fgColor="#000000"
-                 />
-                 {/* --- Overlays Container --- */}
-                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                     {auth.isLoggedIn && (
-                         <div className="absolute w-1/3 h-1/3 opacity-80">
-                             <CustomLoggedInIcon />
-                         </div>
-                     )}
-                     {canTip && !isTipping && (
-                         <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-sm">
-                             <FiZap className="w-3/5 h-3/5 text-yellow-400 opacity-90 filter drop-shadow(0 1px 1px rgba(0,0,0,0.7))" />
-                         </div>
-                     )}
-                 </div>
-                 {/* --- Tipping Status Overlays --- */} 
-                 <div className="absolute inset-0 pointer-events-none">
-                     <AnimatePresence>
-                         {isTipping && (
-                             <motion.div key="tipping" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-sm">
-                                 <svg className="animate-spin h-6 w-6 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                             </motion.div>
-                         )}
-                         {tipStatus === 'success' && (
-                             <motion.div key="success" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-green-600/80 rounded-sm">
-                                 <svg className="h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                             </motion.div>
-                         )}
-                         {tipStatus === 'error' && (
-                             <motion.div key="error" initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 10, opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-red-600/80 rounded-sm">
-                                 <svg className="h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                             </motion.div>
-                         )}
-                     </AnimatePresence>
-                 </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+  // Determine if tip cue should be shown
+  const showTipCue = auth.isLoggedIn && wallet.balanceSats >= defaultTipAmount;
+
+  // Handle loading state
+  if (isLoading) {
+    return <div className="text-gray-400">Loading Image...</div>;
+  }
+
+  // Handle no image URL
+  if (!imageUrl) {
+    return <div className="text-red-500">Error: Image URL not found for note.</div>;
+  }
+
+  // --- Render Component ---
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-black">
+      {/* Image Display */}
+      <motion.img
+        key={imageUrl} // Animate when imageUrl changes
+        src={imageUrl}
+        alt={`Nostr post by ${displayAuthorName}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.6 }}
+        className="max-h-full max-w-full object-contain"
+        onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+          console.error(`Failed to load image: ${imageUrl}`);
+          (e.target as HTMLImageElement).src = '/placeholder-image.png'; // Use a local placeholder
+        }}
+      />
+
+      {/* Info Overlay (Bottom Right, hide on fullscreen) */}
+      {/* The outer motion.div is REMOVED for the QR code part */}
+      {/* 
+      {!isFullScreen && (
+        <motion.div
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 50 }}
+          transition={{ duration: 0.5 }}
+          // className="absolute bottom-4 right-4 z-10 bg-black/60 backdrop-blur-sm p-3 rounded-lg shadow-lg max-w-xs text-right" // Removed positioning from here
+          className="absolute bottom-4 right-4 z-10" // Keep absolute positioning container if needed, but content moves out
+        >
+           <div className="flex items-center justify-end mb-2">
+             
+             // QR Code USED TO BE HERE
+
+             // Author Info - REMOVED
+           </div>
+        </motion.div>
+      )}
+      */}
+
+      {/* QR Code (Focusable for Tipping - ALWAYS VISIBLE) */}
+      <div 
+          ref={qrCodeRef} 
+          tabIndex={auth.isLoggedIn ? 0 : -1} // Only focusable when logged in
+          // <<< ADDED Positioning >>>
+          className={`absolute bottom-4 right-4 z-10 p-1 bg-white rounded shadow cursor-pointer transition-transform duration-150 ease-in-out 
+                      ${auth.isLoggedIn ? 'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/50 focus:ring-yellow-400 hover:scale-105 active:scale-100' : 'opacity-50 cursor-not-allowed'}
+                    `}
+          onClick={auth.isLoggedIn ? handleTipInteraction : undefined} // Click handler
+          onKeyDown={auth.isLoggedIn ? handleQrKeyDown : undefined} // Keyboard handler
+          aria-label={auth.isLoggedIn ? `Tip ${defaultTipAmount} sats to ${displayAuthorName}` : "Login to tip"}
+          title={auth.isLoggedIn ? `Tip ${defaultTipAmount} sats to ${displayAuthorName}` : "Login to tip"}
+        >
+          {authorNpub ? (
+                <QRCode value={authorNpub} size={64} level="H" />
+            ) : (
+                <div className="w-16 h-16 bg-gray-700 flex items-center justify-center text-xs text-gray-400">N/A</div>
+            )}
+            {/* Tip Cue */}
+            {showTipCue && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-3xl" style={{ textShadow: '0 0 5px rgba(255,255,255,0.7)' }}>⚡️</span>
+              </div>
+            )}
+            {/* Tip Feedback Overlay */}
+            {showTipFeedback === 'success' && (
+              <div className="absolute inset-0 flex items-center justify-center bg-green-500/80 rounded">
+                  <span className="text-3xl text-white">✅</span>
+              </div>
+            )}
+            {showTipFeedback === 'error' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-600/90 rounded p-1">
+                  <span className="text-2xl text-white animate-pulse">❌</span>
+                  <span className="text-[10px] text-white font-semibold mt-0.5 leading-tight">{tipErrorMsg || 'Error'}</span>
+              </div>
+            )}
+        </div>
 
     </div>
   );
 });
 
-export default ImageFeed; 
+export default ImageFeed;

@@ -28,8 +28,8 @@ This document describes the architecture of the React-based TV application desig
 ## 2. Core Technologies
 
 *   **Frontend Framework:** React (`useState`, `useEffect`, `useRef`, `useCallback`, `useMemo`)
-*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`, `useWallet`, `useNDKInit`, `useUserProfile`) orchestrated by the root `App` component.
-*   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`
+*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`, `useWallet`, `useNDKInit`, `useUserProfile`) orchestrated by the root `App` component. **Note:** `useProfile` from `nostr-hooks` is still used specifically for the `MessageBoard` component's `currentUser` prop.
+*   **Nostr Integration:** `@nostr-dev-kit/ndk`, `nostr-tools`, `nostr-hooks` (for `useProfile`)
 *   **Cashu (Ecash) Integration:** `@cashu/cashu-ts`
 *   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`, `cashuProofs`)
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
@@ -48,44 +48,33 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 ---
 
 *   **`App.tsx` (Root Component):**
-    *   **Orchestrator:** Initializes NDK via `useNDKInit`. Initializes core hooks, manages media element refs (`audioRef`, `videoRef`, `preloadVideoRef`), defines the main JSX layout structure with Tailwind, fetches initial data (via `useMediaAuthors`, `useMediaNotes` conditionally based on `useAuth` flags), handles image shuffling and video deduplication/sorting, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks.
-    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`, `imageTagsFetchUntil`, `videoTagsFetchUntil`), combined image/video notes (`combinedImageNotes`, `combinedVideoNotes`), deduplicated/sorted unique video notes (`uniqueVideoNotes`), visible video count (`visibleVideoCount`), initial podcast time (`initialPodcastTime`), preload URL (`preloadVideoUrl`), settings modal visibility (`isSettingsOpen`).
+    *   **Orchestrator:** Initializes NDK connection state via `useNDKInit`. **Gets the singleton `ndkInstance` and the reliable `isReady` flag from `useNDKInit`.** Wraps `AppContent` with providers (`AuthProvider`, `WalletProvider`). **Passes `ndkInstance` and `isReady` as props to `AppContent`.** Manages overall loading/error states based on `useNDKInit`.
+    *   **State Held:** None directly related to core app logic (managed in `AppContent`).
+    *   **Refs Created:** None.
+    *   **Hook Usage:**
+        *   `useNDKInit`: Initializes connection, provides `ndkInstance` and `isReady` flag (true after first relay connects).
+    *   **Data Handling:** None directly (delegated to `AppContent`).
+    *   **Rendering Logic:**
+        *   Displays initial loading/error states based on `useNDKInit`.
+        *   Renders providers (`AuthProvider`, `WalletProvider`) and the main `AppContent` component, passing `ndkInstance` and `isReady` props.
+
+*   **`AppContent.tsx` (Main Logic Component):**
+    *   **Purpose:** Contains the core application logic, UI structure, and hook orchestration previously handled by `App.tsx`.
+    *   **Props:** Receives `ndkInstance` (NDK) and `isNdkReady` (boolean) from `App`.
+    *   **Orchestrator:** Uses the passed `ndkInstance` and `isNdkReady` props. Initializes core hooks (`useAuthContext`, `useWalletContext`, `useMediaAuthors`, `useMediaNotes`, `useMediaState`, etc.), manages media element refs, defines layout, handles data fetching/processing (combining notes, shuffling, deduplication), manages `SettingsModal`, and passes state/props down.
+    *   **State Held:** Fetch limits/timestamps, combined/unique/shuffled note arrays, visible video count, preload URL, settings modal visibility, **relay connection stats (`relayStats` derived from `ndkInstance.pool`)**.
     *   **Refs Created:** `audioRef`, `videoRef`, `preloadVideoRef`, `imageFeedRef`.
     *   **Hook Usage:**
-        *   `useNDKInit`: Gets the primary `ndkInstance` and connection status.
-        *   `useMediaAuthors`: Gets `mediaAuthors` using the `ndkInstance`.
-        *   `useAuth`: Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, tag fetching enable flags (`fetchImagesByTagEnabled`, `fetchVideosByTagEnabled`), signing capabilities, and NIP-04 helpers (`encryptDm`/`decryptDm`).
-        *   `useWallet`: Manages internal Cashu wallet state, depends on `ndkInstance`.
-        *   `useMediaNotes`: Called multiple times (for authors/tags, images/videos) to fetch notes, conditionally based on `useAuth` flags. Uses specific limits for authors vs tags (e.g., Images: 30/30, Videos: 15/15, Podcasts: 25).
-        *   `useMediaState`: Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives shuffled combined images and a *slice* of sequential unique videos (`visibleUniqueVideoNotes`). Uses modified `fetchOlderVideos`/`fetchOlderImages` callbacks.
-        *   `useMediaElementPlayback`: Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref, `currentItemUrl`, and props for controlling autoplay/continuous play (`autoplayEnabled`, `next`). Instantiated separately for audio and video.
-        *   `useFullscreen`: Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
-        *   `useKeyboardControls`: Sets up global keyboard listener, uses correct `togglePlayPause` callback.
-        *   `useImageCarousel`: Manages the image auto-advance timer.
-        *   `useCurrentAuthor`: Calculates the `npub` of the currently displayed author based on combined/unique notes.
-        *   `useUserProfile`: Fetches profile data for the `currentAuthorNpub`.
-    *   **Data Handling:**
-        *   Receives raw notes from multiple `useMediaNotes` calls (authors vs tags, images vs videos).
-        *   Uses `useEffect` to combine/deduplicate author and tag notes (if fetched) into `combinedImageNotes` / `combinedVideoNotes`.
-        *   Uses `useMemo` to shuffle `combinedImageNotes` into `shuffledImageNotes` state (used by `ImageFeed` and `useMediaState`).
-        *   Uses `useEffect` to deduplicate `combinedVideoNotes` by URL and sort by date into `uniqueVideoNotes` state (used for `VideoPlayer` via `useMediaState`).
-        *   Uses `useState` (`visibleVideoCount`) and `useMemo` (`visibleUniqueVideoNotes`) to limit the video playlist shown via `useMediaState`.
-        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks that conditionally fetch older author/tag notes based on `useAuth` flags and passes them to `useMediaState`. `fetchOlderVideos` handles expanding the visible video count from cache first.
-        *   Uses `useEffect` to calculate the next video URL (`preloadVideoUrl`) based on `viewMode`, `currentVideoIndex`, and `uniqueVideoNotes`.
-        *   Uses `useEffect` to set the `src` of the hidden `preloadVideoRef` and call `.load()` when `preloadVideoUrl` changes.
-        *   Gets `followedTags` and enable flags from `useAuth` and passes them conditionally to `useMediaNotes` calls.
+        *   Uses props: `ndkInstance`, `isNdkReady`.
+        *   Context Hooks: `useAuthContext`, `useWalletContext`.
+        *   Core Hooks: `useMediaAuthors`, `useMediaNotes`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`, `useCurrentAuthor`, `useUserProfile` (for author profile), `useProfile` (from `nostr-hooks`, for logged-in user profile for `MessageBoard`).
+        *   **Relay Stats:** Uses `useEffect` with the `ndkInstance` prop to listen for `relay:connect`/`relay:disconnect` events and poll `ndkInstance.pool.stats()` to update `relayStats` state.
+    *   **Data Handling:** (As previously described, now using passed `ndkInstance`).
     *   **Rendering Logic:**
-        *   Renders invisible `<audio>` element (`audioRef`) and hidden `<video>` element (`preloadVideoRef`).
-        *   Renders layout structure (Top Area, Bottom Panel).
-        *   Conditionally renders `ImageFeed` or `VideoPlayer` based on `viewMode`.
-        *   Passes `currentItemUrl` from `useMediaState` directly to playback hooks and `VideoPlayer`.
-        *   Passes necessary context (`ndkInstance`, `isNdkReady`, `auth`, `wallet`) to `VideoPlayer`.
-        *   Conditionally renders the Bottom Panel based on `isFullScreen`.
-        *   Renders `MessageBoard` and `MediaPanel` within the Bottom Panel.
-        *   Renders `SettingsModal` and `RelayStatus`.
-        *   Renders the current author's profile picture in the top-left corner.
-        *   Passes necessary props down to child components.
-        *   Handles overall loading state display based on NDK, authors, and relevant notes hooks.
+        *   (As previously described)
+        *   Passes `relayStats.connected` to `RelayStatus` component.
+        *   **Passes `ndkInstance` prop to `MessageBoard`.**
+        *   **Passes profile data from `useProfile` (nostr-hooks) to `MessageBoard`'s `currentUser` prop.**
 
 *   **`ImageFeed.tsx`:**
     *   **Purpose:** Displays the main image feed with author QR code and tipping interaction.
@@ -111,7 +100,8 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 *   **`MessageBoard.tsx`:**
     *   **Purpose:** Displays Nostr chat messages for a specific thread.
     *   **Rendered In:** Bottom-Left Panel (B1) - *Rendered only when not fullscreen*.
-    *   **Key Props:** `ndk`, `threadEventId`, `onNewMessage` (callback to signal fullscreen hook), `isReady`.
+    *   **Key Props:** `currentUser` (**receives profile object from `useProfile` (nostr-hooks)**), `threadEventId`, `onNewMessage` (callback to signal fullscreen hook).
+    *   **Note:** Uses `useNdk()` internally to access the NDK instance if needed.
 
 *   **`PlaybackControls.tsx` (Child of `MediaPanel.tsx`):**
     *   **Purpose:** Renders the actual buttons, sliders, and time displays for media control.
@@ -149,14 +139,14 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Function:** Manages authentication state via IDB. Persists `followedTags`, **tag fetching enable flags**, and **default tip amount** to IDB (`settings` store). Provides NDK signer access and NIP-04 helpers.
 
 *   **`useMediaAuthors`:**
-    *   **Input:** `ndk` (NDK | undefined).
-    *   **Output:** `mediaAuthors` (array of pubkeys), `isLoadingAuthors`. (Note: No longer provides the primary NDK instance, which now comes from `useNDKInit`).
-    *   **Function:** Fetches the user's Kind 3 contact list using `ndk.subscribe`. Includes timeout fallback. Returns the list of authors.
+    *   **Input:** `ndk` (NDK | undefined), `isReady` (boolean).
+    *   **Output:** `mediaAuthors` (array of pubkeys), `isLoadingAuthors`.
+    *   **Function:** Fetches the user's Kind 3 contact list using `ndk.subscribe` **only when `ndk` is provided and `isReady` is true**. Includes timeout fallback. Corrected dependency array to `[ndk, pubkey, isReady]`.
 
 *   **`useMediaNotes`:**
-    *   **Input:** `authors` (optional), `mediaType` ('image', 'podcast', 'video'), `ndk` (NDK | null), `limit` (optional, defaults vary), `until` (optional), `followedTags` (optional string array).
+    *   **Input:** `authors` (optional), `mediaType` ('image', 'podcast', 'video'), `ndk` (NDK | undefined), `limit` (optional, defaults vary), `until` (optional), `followedTags` (optional string array).
     *   **Output:** `notes` (array of `NostrNote`), `isLoading`.
-    *   **Function:** Fetches Nostr notes based on filters. Builds filters using `authors` OR `followedTags` (passed conditionally by `App`). Uses `limit`/`until`. Caches/retrieves from `mediaNoteCache`. Returns raw, sorted notes for the specific source (authors or tags).
+    *   **Function:** Fetches Nostr notes based on filters **only when `ndk` is provided and authors/tags criteria met**. Builds filters using `authors` OR `followedTags`. Uses `limit`/`until`. Caches/retrieves from `mediaNoteCache`. Stabilized `processEvent` callback using corrected dependencies `[mediaType, getUrlRegexForMediaType]`.
 
 *   **`useMediaState`:**
     *   **Input:** `initialImageNotes` (shuffled combined), `initialPodcastNotes`, `initialVideoNotes` (deduplicated, *sliced* unique), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength` (length of *sliced* videos).
@@ -193,10 +183,10 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   ~~**Output:** `profiles` (Record<string, ProfileData>), `fetchProfile` (function).~~
     *   ~~**Function:** Extracts unique pubkeys. Fetches profiles using caching and NDK lookups.~~
 
-*   **`useUserProfile` (New usage in App.tsx):**
+*   **`useUserProfile` (Used for Author Profile):**
     *   **Input:** `hexPubkey` (string | null), `ndk` (NDK | undefined).
-    *   **Output:** `profile` (NDKUserProfile | null), `isLoading` (boolean).
-    *   **Function:** Fetches a single user's profile (Kind 0) using NDK's built-in caching and fetching mechanisms. Used in `App.tsx` to get the `currentAuthorProfile`.
+    *   **Output:** `profile` (**ProfileData** | null), `isLoading` (boolean).
+    *   **Function:** Fetches a single user's profile (Kind 0) using NDK lookups and caching (`profileCache`). Used in `AppContent` to get the `currentAuthorProfileData`.
 
 *   **`useWallet`:** (No significant architecture changes noted, depends on NDK readiness)
     *   **Input:** `ndkInstance` (NDK | undefined), `isNdkReady` (boolean).
@@ -205,5 +195,5 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 
 *   **`useNDKInit` (New Hook):**
     *   **Input:** None.
-    *   **Output:** `ndkInstance` (NDK | undefined), `isConnecting` (boolean), `connectionError` (Error | null).
-    *   **Function:** Responsible for creating the singleton NDK instance (`src/ndk.ts`), setting explicit relays, attempting connection, and managing connection state/errors. Provides the **primary NDK instance** used throughout the app.
+    *   **Output:** `ndkInstance` (NDK), `isReady` (boolean), `connectionError` (Error | null).
+    *   **Function:** Responsible for creating the singleton NDK instance (`src/ndk.ts`), setting explicit relays, **initiating** the connection (`ndk.connect()`), and managing connection state/errors. **Crucially, sets `isReady` to `true` only *after* the first `relay:connect` event is received from the `ndk.pool`, ensuring a more reliable readiness signal.** Provides the **primary NDK instance** and `isReady` flag used by `App`.

@@ -210,3 +210,30 @@ This document summarizes the current state of the application after integrating 
     *   Modified the `handleEnded` listener (in Effect 3) for videos: when a video ends, it sets `isEndedRef.current = true` *before* calling the `onEnded` prop (which triggers `handleNext` in `useMediaState` and eventually changes `currentItemUrl`).
     *   Modified Effect 1 (Load Source URL) in `useMediaElementPlayback`: if the `currentItemUrl` changes *and* `isEndedRef.current` is true, it adds a one-time `canplay` listener to the element. When this listener fires (meaning the *next* video is ready), it calls `play()` and resets `isEndedRef`.
 *   **Result:** The infinite loop is resolved. Video playlists start limited and expand from the cache before fetching older ones. The next video is proactively preloaded using a hidden element. Videos now play back-to-back automatically. 
+
+### 15. NDK Readiness Timing and Hook Stability Fixes (Addressing Recurring Issues)
+
+*   **Problem:** Despite previous fixes, issues resurfaced where:
+    *   `RelayStatus` component showed 0 connections initially, even when logs indicated connections were being established.
+    *   Media fetching hooks (`useMediaAuthors`, `useMediaNotes`) sometimes failed to run or ran with stale `isReady` state, preventing media from loading.
+    *   Logs showed contradictory states (e.g., `isReady` being true inside a code block that should only run if `isReady` is false).
+    *   The `useMediaNotes` hook dependency loop (`processEvent` changing reference) reappeared.
+*   **Cause:**
+    *   **Readiness Timing (`useNDKInit`):** The `isReady` flag from `useNDKInit` was being set to `true` when the `ndk.connect()` promise resolved, which doesn't guarantee actual relay connection. Components received `isReady = true` before NDK was truly ready to fetch data.
+    *   **State Propagation (`App.tsx`):** `AppContent` was using `useNdk()` from `nostr-hooks` separately, potentially getting a different instance or readiness state than the one managed by `useNDKInit` in the parent `App` component.
+    *   **Stale State Closure (`useMediaAuthors`):** The `useEffect` hook in `useMediaAuthors` was capturing a stale value of the `isReady` prop in its closure, leading to incorrect logic execution even after the prop updated. Its dependency array also included internal state (`isLoadingAuthors`), potentially causing unnecessary re-runs.
+    *   **Dependency Loop (`useMediaNotes`):** The `useCallback` hook for `processEvent` was still missing a dependency (`getUrlRegexForMediaType`), causing its reference to change and trigger the main effect repeatedly.
+*   **Solution:**
+    1.  **`useNDKInit.ts` Modification:** Changed the hook to set `isReady = true` only *after* the first `relay:connect` event is received from the `ndk.pool`. This ensures `isReady` accurately reflects the ability to interact with relays.
+    2.  **`App.tsx` Refactor:**
+        *   The main `App` component now calls `useNDKInit` to get both the `ndkInstance` and the reliable `isReady` flag.
+        *   It passes both `ndkInstance` and `isReady` down as props to the `AppContent` component.
+    3.  **`AppContent` Refactor:**
+        *   Removed the internal call to `useNdk()` (from `nostr-hooks`).
+        *   Now receives `ndkInstance` and `isReady` as props.
+        *   Uses the passed `ndkInstance` prop for all child hooks (`useMediaAuthors`, `useMediaNotes`, etc.) and the relay stats effect.
+        *   Reverted the `currentUser` prop for `MessageBoard` back to using `useProfile` from `nostr-hooks` to resolve persistent type conflicts, accepting this specific deviation.
+        *   Corrected the order of hook calls to ensure state dependencies (`viewMode`, notes, indices) were defined before being used in `useCurrentAuthor`.
+    4.  **`useMediaAuthors.ts` Fix:** Corrected the main `useEffect` dependency array to `[ndk, pubkey, isReady]`, removing internal state (`isLoadingAuthors`, `mediaAuthors`) to prevent loops and ensure it reacts correctly to changes in external props/state. Simplified the initial readiness check logic.
+    5.  **`useMediaNotes.ts` Fix:** Added the missing `getUrlRegexForMediaType` function to the dependency array of the `processEvent` `useCallback` hook to stabilize its reference and prevent the dependency loop.
+*   **Result:** These combined changes stabilized the NDK initialization and readiness reporting, corrected the flow of the NDK instance and readiness state via props, fixed stale state issues in hooks, and resolved the dependency loop in `useMediaNotes`. The application now reliably connects, updates status, and fetches media content. 

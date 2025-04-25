@@ -1,69 +1,104 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ndk from '../ndk'; // Import the singleton instance
 import NDK from '@nostr-dev-kit/ndk';
 
 interface UseNDKInitReturn {
-  isConnecting: boolean;
+  isReady: boolean;
   connectionError: Error | null;
   ndkInstance: NDK; // Return the instance for convenience
 }
 
 /**
  * Hook to initialize the singleton NDK instance connection.
- * Manages connection state (loading, error).
+ * Manages connection state (ready, error).
  * Ensures connection is attempted only once on mount.
+ * Provides an 'isReady' flag that becomes true AFTER the first relay connects.
  */
 export const useNDKInit = (): UseNDKInitReturn => {
-  const [isConnecting, setIsConnecting] = useState<boolean>(true);
+  const [isAttemptingConnection, setIsAttemptingConnection] = useState<boolean>(true);
+  const [isReady, setIsReady] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<Error | null>(null);
+  const connectPromiseResolved = useRef<boolean>(false); // Track if connect() resolved
+  const firstConnectHandlerAttached = useRef<boolean>(false); // Prevent multiple listeners
 
   useEffect(() => {
     let isMounted = true; // Prevent state updates on unmounted component
+    let firstConnectListener: (() => void) | null = null; // Store listener for removal
 
     const connectNDK = async () => {
       console.log('useNDKInit: Attempting NDK connection...');
-      setIsConnecting(true);
+      setIsAttemptingConnection(true);
+      setIsReady(false);
       setConnectionError(null);
+      connectPromiseResolved.current = false;
+
       try {
-        // ndk.connect() doesn't explicitly return connection status in v2,
-        // but might throw errors or take time. We assume connection starts here.
-        // We rely on other parts of the app using the instance,
-        // and potentially NDK events, to know when it's fully ready/connected to relays.
-        await ndk.connect(); // Connect the singleton instance
-        if (isMounted) {
-          console.log('useNDKInit: NDK connect() called successfully.');
-          // We mark connecting as false once the connect call finishes,
-          // although actual relay connections might still be in progress.
-          setIsConnecting(false);
+        // Don't await here, let it run in the background
+        ndk.connect().then(() => {
+            if (isMounted) {
+                console.log('useNDKInit: NDK connect() promise resolved.');
+                connectPromiseResolved.current = true;
+                // If isReady is already true (listener fired first), we don't need to do anything
+                // If not ready, we still wait for the listener.
+            }
+        }).catch((error) => {
+            console.error('useNDKInit: Error connecting NDK:', error);
+            if (isMounted) {
+                setConnectionError(error instanceof Error ? error : new Error('Failed to connect NDK'));
+                setIsReady(false);
+                setIsAttemptingConnection(false);
+                // Clean up listener if connection promise failed
+                if (firstConnectListener) {
+                    ndk.pool.off("relay:connect", firstConnectListener);
+                }
+            }
+        });
+
+        // Define the listener function only once
+        if (!firstConnectHandlerAttached.current) {
+            firstConnectListener = () => {
+                console.log("useNDKInit: First relay:connect event detected.");
+                if (isMounted && !isReady) { // Set ready only once
+                    setIsReady(true);
+                    setIsAttemptingConnection(false);
+                    // Optionally remove the listener now that we're ready
+                    // ndk.pool.off("relay:connect", firstConnectListener!);
+                }
+            };
+
+            // Attach the listener
+            ndk.pool.on("relay:connect", firstConnectListener);
+            firstConnectHandlerAttached.current = true;
+            console.log('useNDKInit: Attached relay:connect listener.');
         }
+
       } catch (error) {
-        console.error('useNDKInit: Error connecting NDK:', error);
+        // Catch synchronous errors from ndk.connect() if any (unlikely)
+        console.error('useNDKInit: Synchronous error during NDK connect setup:', error);
         if (isMounted) {
-          setConnectionError(error instanceof Error ? error : new Error('Failed to connect NDK'));
-          setIsConnecting(false);
+          setConnectionError(error instanceof Error ? error : new Error('Failed NDK setup'));
+          setIsReady(false);
+          setIsAttemptingConnection(false);
         }
       }
     };
 
-    // Check if ndk.pool is available which indicates prior connection attempt
-    // This check might be fragile depending on NDK internal state management.
-    // A more robust check might involve NDK connection status events if available.
-    if (!ndk.pool || Object.keys(ndk.pool.relays).length === 0) {
-       connectNDK();
-    } else {
-       console.log('useNDKInit: NDK connection likely already initiated, skipping connect().');
-       setIsConnecting(false); // Assume already connected or connecting
+    if (!isReady && isAttemptingConnection) { // Only attempt if not already ready/attempting
+        connectNDK();
     }
-
 
     return () => {
       isMounted = false;
-      // We generally don't disconnect the singleton NDK instance here
-      // as it's intended to persist for the app's lifetime.
-      // Disconnection logic might belong elsewhere if needed.
-      // console.log('useNDKInit: Cleanup.');
+      // Remove listener on unmount if it was attached
+      if (firstConnectListener && firstConnectHandlerAttached.current) {
+          console.log('useNDKInit: Cleaning up relay:connect listener.');
+          ndk.pool.off("relay:connect", firstConnectListener);
+          firstConnectHandlerAttached.current = false; // Reset for potential future remounts
+      }
+      // Singleton NDK is not disconnected here.
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
+    // Re-run if connection attempt failed and we want to retry? For now, run once.
+  }, []); // Runs once on mount
 
-  return { isConnecting, connectionError, ndkInstance: ndk };
+  return { isReady, connectionError, ndkInstance: ndk };
 }; 

@@ -10,7 +10,7 @@ export type MediaType = 'podcast' | 'video' | 'image';
 interface UseMediaNotesProps {
     authors?: string[]; // <<< Make authors optional
     mediaType: MediaType;
-    ndk: NDK | null;
+    ndk: NDK | undefined; // <<< Updated to accept undefined
     limit?: number; // <<< Renamed from initialLimit, now dynamic
     until?: number; // <<< Added until timestamp (seconds)
     followedTags?: string[]; // <<< Add optional followedTags
@@ -62,7 +62,7 @@ export function useMediaNotes({
     const currentSubscription = useRef<NDKSubscription | null>(null);
     const isFetching = useRef<boolean>(false); // Prevent concurrent fetches
     // Add refs to track previous dependency values
-    const prevNdkRef = useRef<NDK | null>(ndk);
+    const prevNdkRef = useRef<NDK | undefined>(ndk);
     const prevAuthorsRef = useRef<string[] | undefined>(authors);
     const prevMediaTypeRef = useRef<MediaType>(mediaType);
     const prevLimitRef = useRef<number>(limit);
@@ -209,7 +209,7 @@ export function useMediaNotes({
         };
         return note;
 
-    }, [mediaType]); // No dependencies, it's a pure function based on args
+    }, [mediaType, getUrlRegexForMediaType]);
 
     useEffect(() => {
         // <<< START ADDED LOGGING >>>

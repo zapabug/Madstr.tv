@@ -1,16 +1,15 @@
+import 'websocket-polyfill';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Proof } from '@cashu/cashu-ts';
 import { idb } from '../utils/idb'; // Use the consolidated idb export
 import { cashuHelper } from '../utils/cashu';
 import { UseAuthReturn } from './useAuth';
-import NDK, { NDKEvent, NDKFilter, NDKSubscription, NDKUser, NostrEvent, NDKKind } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'; // <<< RE-ADDED NDK type imports
+import { useNdk } from 'nostr-hooks'; // <<< Corrected import path and hook name
 import { nip19 } from 'nostr-tools';
-
-// <<< Define props for the hook >>>
-interface UseWalletProps {
-    ndkInstance: NDK | undefined;
-    isNdkReady: boolean; // Flag indicating NDK connection status
-}
+// import { useAuth } from './useAuth'; // <<< REMOVED unused useAuth import
+// import { CashuMint, CashuWallet, /* PayLnInvoiceResponse, */ SendResponse, TokenV2 as TokenV3 } from '@cashu/cashu-ts'; // <<< REMOVED unused import
+// import { RELAYS } from '../constants'; // <<< REMOVED unused RELAYS import
 
 // Define the shape of the wallet state and functions
 export interface UseWalletReturn {
@@ -22,12 +21,13 @@ export interface UseWalletReturn {
     configuredMintUrl: string | null;
     // loadWalletState is now internal, triggered by NDK readiness
     startDepositListener: (isLoggedIn: boolean, currentUserNpub: string | null, decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>) => void; // NDK passed via props
-    stopDepositListener: () => void;
+    stopDepositListener: () => Promise<void>; // <<< Mark as async
     sendCashuTipWithSplits: (params: SendTipParams) => Promise<boolean>; // Returns true on success
     setConfiguredMintUrl: (url: string | null) => Promise<void>;
     exportUnspentProofs: () => Promise<string | null>;
 }
 
+// <<< Restore definition >>>
 export interface SendTipParams {
     primaryRecipientNpub: string;
     amountSats: number;
@@ -51,8 +51,12 @@ const DEFAULT_MINT_URLS: string[] = [
 // Export the list for use elsewhere
 export { DEFAULT_MINT_URLS };
 
-// <<< Update hook signature to accept props >>>
-export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalletReturn => {
+// <<< Update hook signature to remove props >>>
+// export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalletReturn => {
+export const useWallet = (): UseWalletReturn => {
+    const { ndk } = useNdk(); // <<< Get NDK instance via hook
+    // const { currentUserNpub, getNdkSigner } = useAuth(); // <<< REMOVED - Not used directly in this hook
+
     const [proofs, setProofs] = useState<(Proof & { mintUrl: string })[]>([]);
     const [balanceSats, setBalanceSats] = useState<number>(0);
     const [configuredMintUrl, _setConfiguredMintUrl] = useState<string | null>(null);
@@ -102,17 +106,11 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
 
     // <<< Effect to load wallet state when NDK becomes ready >>>
     useEffect(() => {
-        if (isNdkReady) {
+        if (ndk) {
             console.log("useWallet: NDK is ready, triggering loadWalletState.");
             loadWalletState();
-        } else {
-            console.log("useWallet: NDK not ready, skipping initial wallet load.");
-            // Optionally clear state if NDK becomes not ready?
-            // setProofs([]);
-            // setBalanceSats(0);
-            // setIsLoadingWallet(true); 
         }
-    }, [isNdkReady, loadWalletState]);
+    }, [ndk, loadWalletState]);
 
     const setConfiguredMintUrl = useCallback(async (url: string | null) => {
         setWalletError(null);
@@ -163,8 +161,8 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
 
     // <<< Update startDepositListener signature and logic >>>
     const startDepositListener = useCallback((isLoggedIn: boolean, currentUserNpub: string | null, decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>) => {
-        // <<< Check isNdkReady and ndkInstance from props >>>
-        if (!isNdkReady || !ndkInstance) {
+        // <<< Check ndk directly >>>
+        if (!ndk) {
             console.warn('useWallet: Cannot start deposit listener: NDK not ready.');
             // Don't set wallet error here, App level should indicate NDK issues
             return;
@@ -280,29 +278,33 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             }
         };
 
-        // <<< Use ndkInstance from props >>>
-        depositSubRef.current = ndkInstance.subscribe(filter, { closeOnEose: false });
-        console.log('useWallet: Deposit listener subscription created.');
+        // <<< Use ndk derived from hook >>>
+        depositSubRef.current = ndk.subscribe(filter, { closeOnEose: true }); // Close on EOSE for initial catch-up
 
-        // Add EOSE handling if needed
+        // <<< Add null check >>>
+        if (!depositSubRef.current) {
+            console.error("useWallet: Failed to create subscription.");
+            setWalletError("Failed to start deposit listener.");
+            setIsListeningForDeposits(false);
+            return;
+        }
+
+        depositSubRef.current.on('event', handleIncomingDm);
+
         depositSubRef.current.on('eose', () => {
-            console.log('useWallet: Deposit listener received EOSE.');
-            // Optionally save timestamp here as well?
-            // const nowTimestamp = Math.floor(Date.now() / 1000);
-            // idb.saveLastCheckedDmTimestamp(nowTimestamp);
-            // lastCheckedTimestampRef.current = nowTimestamp;
+            // ... existing code ...
         });
 
-    // <<< Fix dependencies: Only include variables from the hook's scope >>>
-    }, [isNdkReady, ndkInstance, loadWalletState]);
+    // <<< Dependencies now include ndk derived from hook >>>
+    }, [ndk, loadWalletState]); // Include ndk
 
     // --- Tipping / Sending --- 
 
-    // <<< Update sendCashuTipWithSplits to use ndkInstance from props >>>
+    // <<< Update sendCashuTipWithSplits to use ndk derived from hook >>>
     const sendCashuTipWithSplits = useCallback(async (params: SendTipParams): Promise<boolean> => {
         const { primaryRecipientNpub, amountSats, auth, comment, eventIdToZap } = params;
 
-        if (!isNdkReady || !ndkInstance) {
+        if (!ndk) {
             console.error('sendCashuTipWithSplits: NDK not ready.');
             setWalletError('Cannot send tip: Connection issue.');
             return false;
@@ -347,7 +349,7 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             if (!encryptedDmContent) { throw new Error('Failed to encrypt DM content'); }
 
             // 2. Create the NDKEvent structure
-            const dmNdkEvent = new NDKEvent(ndkInstance); // Use NDK instance from props
+            const dmNdkEvent = new NDKEvent(ndk); // Use NDK instance from hook
             dmNdkEvent.kind = 4;
             dmNdkEvent.created_at = Math.floor(Date.now() / 1000);
             dmNdkEvent.tags = [['p', recipientHex]];
@@ -360,7 +362,7 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             
             // 4. Publish the signed event
             console.log('useWallet: Publishing encrypted & signed DM event...');
-            await ndkInstance.publish(dmNdkEvent);
+            await ndk.publish(dmNdkEvent);
             console.log('useWallet: DM published successfully.');
             
             // TODO: Optional Zap Receipt (if eventIdToZap is provided)
@@ -402,8 +404,8 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
         }
         return success;
 
-    // <<< Fix dependencies: remove auth as it's passed in params >>>
-    }, [proofs, configuredMintUrl, isNdkReady, ndkInstance, loadWalletState]);
+    // <<< Dependencies now include ndk derived from hook >>>
+    }, [proofs, configuredMintUrl, ndk, loadWalletState]); // Include ndk
 
     // <<< NEW: Function to export unspent proofs >>>
     const exportUnspentProofs = useCallback(async (): Promise<string | null> => {

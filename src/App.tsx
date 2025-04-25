@@ -2,9 +2,10 @@ import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import QRCode from 'react-qr-code';
 import { nip19 } from 'nostr-tools';
 import ndkInstance from './ndk'; // <-- Import the singleton NDK instance
+import { useNDKInit } from './hooks/useNDKInit'; // <-- Import useNDKInit
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import MediaPanel from './components/MediaPanel';
-import RelayStatus from './components/RelayStatus';
+import RelayStatus, { RelayStatusHandle } from './components/RelayStatus'; // <<< Import Handle
 import VideoPlayer from './components/VideoPlayer';
 import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
@@ -15,17 +16,18 @@ import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
 import { useCurrentAuthor } from './hooks/useCurrentAuthor';
-import { useNDKInit } from './hooks/useNDKInit'; // <-- Import the new hook
-import { useUserProfile } from './hooks/useUserProfile'; // <<< Import useUserProfile >>>
+import { useUserProfile } from './hooks/useUserProfile';
 import { NostrNote } from './types/nostr';
 import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
-import { useAuth } from './hooks/useAuth';
-import { useWallet } from './hooks/useWallet'; // <<< Import useWallet >>>
-import MessageBoard from './components/MessageBoard'; // <-- Import MessageBoard
+import { AuthProvider, useAuthContext } from './context/AuthContext';
+import { WalletProvider, useWalletContext } from './context/WalletContext';
+import MessageBoard from './components/MessageBoard';
+import { useProfile } from 'nostr-hooks';
+import NDK, { NDKUser } from '@nostr-dev-kit/ndk';
 
-// Restore original timeout constants 
+// Restore original timeout constants
 const INTERACTION_TIMEOUT = 30000; // Or original value
 const MESSAGE_TIMEOUT = 120000;    // Or original value
 const CHECK_INTERVAL = 5000;
@@ -38,17 +40,20 @@ const VIDEO_PLAYLIST_LOAD_BATCH_SIZE = 15;
 const IMAGE_TAG_FETCH_LIMIT = 30; // <<< Add constant for tag image limit
 const VIDEO_TAG_FETCH_LIMIT = 15; // <<< New constant for video tag limit
 
-function App() {
-  // --- NDK Initialization (Using Hook) ---
-  const { isConnecting: isNdkConnecting, connectionError: ndkConnectionError, ndkInstance } = useNDKInit();
-  const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
+// Component that actually contains the app logic, nested inside providers
+function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInstance: NDK }) {
+  const ndk = ndkInstance;
 
-  // Use the authors hook, passing the singleton ndk instance
-  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance });
+  const auth = useAuthContext();
+  const wallet = useWalletContext();
 
-  // --- Auth Hook ---
-  const auth = useAuth(ndkInstance);
-  const { followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled } = auth;
+  // <<< Ref for RelayStatus component >>>
+  const relayStatusRef = useRef<RelayStatusHandle>(null);
+
+  // Hooks that depend on NDK instance (will get it via useNDK() internally)
+  // Pass necessary auth/wallet props if the hooks need them explicitly
+  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk, isReady: isNdkReady });
+  const { followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled } = auth; // Use auth from context
 
   // --- MEMOIZE authors and tags before passing to useMediaNotes ---
   const memoizedMediaAuthors = useMemo(() => mediaAuthors, [mediaAuthors]);
@@ -59,12 +64,9 @@ function App() {
   const emptyAuthors = useMemo(() => [], []);
   const emptyTags = useMemo(() => [], []);
 
-  // --- Wallet Hook --- <<< Initialize useWallet here >>>
-  const wallet = useWallet({ ndkInstance, isNdkReady });
-
   // State for fetch parameters - Set initial image limits to 30
-  const [imageFetchLimit] = useState<number>(30); // <<< Change from 50 to 30
-  const [videoFetchLimit] = useState<number>(15); // <<< Change initial video limit to 15
+  const [imageFetchLimit] = useState<number>(30);
+  const [videoFetchLimit] = useState<number>(15);
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
   const [imageTagsFetchUntil, setImageTagsFetchUntil] = useState<number | undefined>(undefined); // New state for tag pagination
@@ -74,7 +76,7 @@ function App() {
   const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({
     authors: memoizedMediaAuthors,
     mediaType: 'podcast',
-    ndk: ndkInstance,
+    ndk, // <-- Pass ndk prop
     limit: 25 // Keep separate limit for podcasts
   });
 
@@ -85,7 +87,7 @@ function App() {
   const { notes: authorVideoNotes, isLoading: isLoadingAuthorVideoNotes } = useMediaNotes({
     authors: memoizedMediaAuthors,
     mediaType: 'video',
-    ndk: ndkInstance,
+    ndk, // <-- Pass ndk prop
     limit: videoFetchLimit,
     until: videoFetchUntil,
   });
@@ -94,7 +96,7 @@ function App() {
   const { notes: tagVideoNotes, isLoading: isLoadingTagVideoNotes } = useMediaNotes({
     followedTags: fetchVideosByTagEnabled ? memoizedFollowedTags : emptyTags,
     mediaType: 'video',
-    ndk: ndkInstance,
+    ndk, // <-- Pass ndk prop
     limit: VIDEO_TAG_FETCH_LIMIT,
     until: videoTagsFetchUntil,
     authors: emptyAuthors,
@@ -104,7 +106,7 @@ function App() {
   const { notes: authorImageNotes, isLoading: isLoadingAuthorImages } = useMediaNotes({
     authors: memoizedMediaAuthors,
     mediaType: 'image',
-    ndk: ndkInstance,
+    ndk, // <-- Pass ndk prop
     limit: imageFetchLimit,
     until: imageFetchUntil,
     // No followedTags here
@@ -114,7 +116,7 @@ function App() {
   const { notes: tagImageNotes, isLoading: isLoadingTagImages } = useMediaNotes({
     followedTags: fetchImagesByTagEnabled ? memoizedFollowedTags : emptyTags,
     mediaType: 'image',
-    ndk: ndkInstance,
+    ndk, // <-- Pass ndk prop
     limit: IMAGE_TAG_FETCH_LIMIT,
     until: imageTagsFetchUntil,
     authors: emptyAuthors,
@@ -154,9 +156,9 @@ function App() {
     } else {
       // console.log("App: Combined video notes are the same, skipping update."); // Keep commented
     }
-  }, [authorVideoNotes, tagVideoNotes]); // Keep deps as inputs only
+  }, [authorVideoNotes, tagVideoNotes, combinedVideoNotes]); // Add combinedVideoNotes to deps
 
-  // --- Effect to COMBINE and DEDUPLICATE IMAGE notes ---
+  // --- Effect to COMBINE, DEDUPLICATE, and FILTER IMAGE notes ---
   useEffect(() => {
     // console.log("App: Combining and deduplicating image notes..."); // Keep commented
     // Start with existing notes
@@ -174,19 +176,34 @@ function App() {
       combinedMap.set(note.id, note); // Use set to add/update
     });
 
-    const newCombinedNotes = Array.from(combinedMap.values())
+    // Filter out notes missing a URL *after* combining/deduplicating
+    const filteredNotes = Array.from(combinedMap.values())
+      .filter(note => { // <<< ADD FILTER STEP
+        if (!note.url) {
+          console.warn(`App: Filtering out image note ${note.id} due to missing URL.`);
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => b.created_at - a.created_at); // Sort newest first
 
     // Update state only if content changed
     const currentIds = combinedImageNotes.map(n => n.id).join(',');
-    const newIds = newCombinedNotes.map(n => n.id).join(',');
+    const newIds = filteredNotes.map(n => n.id).join(','); // Use filteredNotes
     if (currentIds !== newIds) {
-      console.log(`App: Combined image notes updated. Total: ${newCombinedNotes.length}`);
-      setCombinedImageNotes(newCombinedNotes);
+      console.log(`App: Combined & Filtered image notes updated. Total: ${filteredNotes.length}`);
+      setCombinedImageNotes(filteredNotes); // Set the filtered notes
     } else {
       // console.log("App: Combined image notes are the same, skipping update."); // Keep commented
     }
-  }, [authorImageNotes, tagImageNotes]); // Keep deps as inputs only
+  }, [authorImageNotes, tagImageNotes, combinedImageNotes]); // Add combinedImageNotes to deps
+
+  // --- Memoize the shuffled VALID image notes ---
+  const shuffledImageNotes = useMemo(() => {
+    console.log(`App.tsx: Memoizing shuffled COMBINED ImageNotes (Count: ${combinedImageNotes.length})...`);
+    // Shuffle the already filtered combined notes
+    return shuffleArray([...combinedImageNotes]);
+  }, [combinedImageNotes]); // Depend on the combined state (which is now pre-filtered)
 
   // State for shuffled notes for display (use combined notes)
   const [uniqueVideoNotes, setUniqueVideoNotes] = useState<NostrNote[]>([]); // Keep for URL deduplication
@@ -200,6 +217,52 @@ function App() {
   // State for preload URL
   const preloadVideoRef = useRef<HTMLVideoElement>(null); // <<< Ref for hidden preload element
   const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
+
+  // --- NDK Stats for RelayStatus ---
+  const [relayStats, setRelayStats] = useState(() => ndk?.pool?.stats() || { connected: 0, disconnected: 0, connecting: 0, total: 0 });
+  useEffect(() => {
+    if (!isNdkReady || !ndk) { // Combine checks
+      console.log("AppContent: NDK not ready or missing, delaying relay stats handling.");
+      setRelayStats({ connected: 0, disconnected: 0, connecting: 0, total: 0 }); // Reset stats
+      return;
+    }
+
+    console.log("AppContent: NDK ready, setting up relay stats handling.");
+
+    const updateStats = () => {
+        const currentStats = ndk.pool.stats() || { connected: 0, disconnected: 0, connecting: 0, total: 0 };
+        // console.log("AppContent: Updating relay stats:", currentStats); // Optional: uncomment for detailed logging
+        setRelayStats(currentStats);
+    };
+
+    // Initial update
+    updateStats();
+
+    // Set up polling interval
+    const interval = setInterval(updateStats, 5000); // Poll less frequently (e.g., 5s)
+
+    // Set up event listeners for immediate updates
+    const handleConnect = () => {
+        console.log("AppContent: ndk.pool relay:connect event detected.");
+        // Update stats slightly delayed to allow pool stats to potentially update
+        setTimeout(updateStats, 100); 
+    };
+    const handleDisconnect = () => {
+        console.log("AppContent: ndk.pool relay:disconnect event detected.");
+        setTimeout(updateStats, 100); 
+    };
+
+    ndk.pool.on("relay:connect", handleConnect);
+    ndk.pool.on("relay:disconnect", handleDisconnect);
+
+    // Cleanup function
+    return () => {
+      console.log("AppContent: Clearing relay stats interval and listeners.");
+      clearInterval(interval);
+      ndk.pool.off("relay:connect", handleConnect);
+      ndk.pool.off("relay:disconnect", handleDisconnect);
+    };
+  }, [isNdkReady, ndk]);
 
   // Fetcher functions - Reverted -> Updated for combined logic
   const fetchOlderImages = useCallback(() => {
@@ -243,18 +306,19 @@ function App() {
     // <<< Dependencies updated >>>
   }, [ uniqueVideoNotes, visibleVideoCount, authorVideoNotes, tagVideoNotes, fetchVideosByTagEnabled ]);
 
-  // <<< Memoize the shuffled COMBINED image notes >>>
-  const shuffledImageNotes = useMemo(() => {
-    console.log('App.tsx: Memoizing shuffled COMBINED ImageNotes...');
-    // Ensure we shuffle a copy of the combined notes
-    return shuffleArray([...combinedImageNotes]);
-  }, [combinedImageNotes]); // Depend on the combined state
-
   // <<< Create memoized slice of unique video notes >>>
-  const visibleUniqueVideoNotes = useMemo(() => {
-    console.log(`App: Slicing uniqueVideoNotes (${uniqueVideoNotes.length}) to ${visibleVideoCount}`);
-    return uniqueVideoNotes.slice(0, visibleVideoCount);
-  }, [uniqueVideoNotes, visibleVideoCount]);
+  const visibleVideoNotes = useMemo(() => {
+    // Deduplicate based on URL first, then slice
+    const urlMap = new Map<string, NostrNote>();
+    combinedVideoNotes.forEach(note => {
+      if (note.url && !urlMap.has(note.url)) {
+        urlMap.set(note.url, note);
+      }
+    });
+    const uniqueByUrlNotes = Array.from(urlMap.values()).sort((a, b) => b.created_at - a.created_at);
+    setUniqueVideoNotes(uniqueByUrlNotes); // Update the state used for fetching older
+    return uniqueByUrlNotes.slice(0, visibleVideoCount);
+  }, [combinedVideoNotes, visibleVideoCount]);
 
   // Media state hook (pass memoized shuffled combined notes)
   const {
@@ -274,11 +338,11 @@ function App() {
   } = useMediaState({
       initialImageNotes: shuffledImageNotes,
       initialPodcastNotes: memoizedPodcastNotes,
-      initialVideoNotes: visibleUniqueVideoNotes, // <<< Pass sliced array
+      initialVideoNotes: visibleVideoNotes, // <<< Pass sliced array
       fetchOlderImages: fetchOlderImages,
       fetchOlderVideos: fetchOlderVideos, // Pass the modified callback
       shuffledImageNotesLength: shuffledImageNotes.length,
-      shuffledVideoNotesLength: visibleUniqueVideoNotes.length, // <<< Pass length of sliced array
+      shuffledVideoNotesLength: visibleVideoNotes.length, // <<< Pass length of sliced array
   });
 
   // Effect for deduplicating video notes BY URL (using combinedVideoNotes)
@@ -314,7 +378,7 @@ function App() {
       console.log('%%% App.tsx: Video Dedupe Effect - Skipping uniqueVideoNotes update.');
     }
     // Depend only on the input combinedVideoNotes state
-  }, [combinedVideoNotes]); // Remove uniqueVideoNotes from deps
+  }, [combinedVideoNotes, uniqueVideoNotes]); // Add uniqueVideoNotes back to deps ? No, should derive from combinedVideoNotes
 
   // --- Inactivity Timer Setup ---
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -412,16 +476,16 @@ function App() {
     }
   }, []);
 
+  // <<< Function to focus the settings button in RelayStatus >>>
+  const handleFocusSettingsRequest = useCallback(() => {
+    relayStatusRef.current?.focusSettingsButton();
+  }, []); // <<< MOVED DEFINITION UP
+
   // Keyboard Controls Hook - Pass toggleFullScreen
   useKeyboardControls({
     isFullScreen,
     signalInteraction,
-    onSetViewMode: setViewMode,
     onTogglePlayPause: activePlayback.togglePlayPause,
-    onNext: handleNext,
-    onPrevious: handlePrevious,
-    onFocusToggle: focusImageFeedToggle,
-    viewMode,
     onToggleFullScreen: signalInteraction,
   });
 
@@ -438,8 +502,8 @@ function App() {
       viewMode,
       imageIndex: currentImageIndex,
       videoIndex: currentVideoIndex,
-      imageNotes: combinedImageNotes, // Use combined images
-      videoNotes: uniqueVideoNotes,   // Use unique URL videos
+      imageNotes: combinedImageNotes,
+      videoNotes: uniqueVideoNotes,
   });
 
   // --- NEW: Fetch Current Author Profile ---
@@ -509,29 +573,14 @@ function App() {
   }, [signalInteraction]);
 
   // Global Loading/Error States
-  const isLoading = isNdkConnecting ||
-                    isLoadingAuthors ||
-                    isLoadingPodcastNotes ||
-                    isLoadingAuthorVideoNotes || (fetchVideosByTagEnabled && isLoadingTagVideoNotes) ||
-                    isLoadingAuthorImages || (fetchImagesByTagEnabled && isLoadingTagImages);
+  // Note: We might not need this comprehensive isLoading flag if NDK connection
+  // is handled by the parent App component wrapper.
+  // const isLoading = isNdkConnecting ||
+  //                   isLoadingAuthors ||
+  //                   isLoadingPodcastNotes ||
+  //                   isLoadingAuthorVideoNotes || (fetchVideosByTagEnabled && isLoadingTagVideoNotes) ||
+  //                   isLoadingAuthorImages || (fetchImagesByTagEnabled && isLoadingTagImages);
 
-  if (isNdkConnecting) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
-        Connecting to Nostr Relays...
-      </div>
-    );
-  }
-
-  if (ndkConnectionError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-black text-red-500">
-        <p>Error connecting to Nostr Relays:</p>
-        <p>{ndkConnectionError.message}</p>
-        <p className="mt-4 text-gray-400 text-sm">Please check console or try refreshing.</p>
-      </div>
-    );
-  }
 
   // <<< Add diagnostic logging before render >>>
   console.log(`App Render Diagnostics (Image Mode: ${viewMode === 'imagePodcast'}):`, {
@@ -556,266 +605,295 @@ function App() {
     currentItemUrl,
   });
 
+  // <<< RESTORED LOGGED-IN USER PROFILE LOGIC HERE >>>
+  // --- Logged-in User Profile (For MessageBoard) ---
+  const { profile: messageBoardCurrentUser } = useProfile({ pubkey: auth.currentUserNpub ?? undefined });
+  // ---------------------------------------------------
+
   // --- JSX Structure ---
   return (
     <>
-    {/* Outermost div */}
-    <div className="relative flex flex-col min-h-screen h-screen text-white border-2 border-purple-900 bg-gradient-radial from-gray-900 via-black to-black">
+      {/* Outermost div */}
+      <div className="relative flex flex-col min-h-screen h-screen text-white border-2 border-purple-900 bg-gradient-radial from-gray-900 via-black to-black">
+        {/* Invisible Audio Element */}
+        {/* <<< Hidden video element for preloading >>> */}
+        <video ref={preloadVideoRef} className="hidden" muted playsInline preload="metadata"></video>
+        <audio ref={audioRef} className="hidden" />
+        {/* Video is rendered visibly inside VideoPlayer */}
 
-      {/* Invisible Audio Element */}
-      {/* <<< Hidden video element for preloading >>> */}
-      <video ref={preloadVideoRef} className="hidden" muted playsInline preload="metadata"></video>
-      <audio
-        ref={audioRef}
-        className="hidden"
-      />
-      {/* Video is rendered visibly inside VideoPlayer */}
+        {/* Absolute Positioned Titles */}
+        <h2 className="absolute top-2 right-4 z-20 text-base font-bold text-purple-600 pointer-events-none">
+          Mad⚡tr.tv
+        </h2>
 
-      {/* Absolute Positioned Titles */}
-      <h2 className="absolute top-2 right-4 z-20 text-base font-bold text-purple-600 pointer-events-none">
-        Mad⚡tr.tv
-      </h2>
+        {/* Inner wrapper */}
+        <div className="relative flex flex-col flex-grow min-h-0 overflow-hidden">
+          {/* MediaFeed Area (Top Section) */}
+          <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
+            {/* <<< NEW: Author Profile Picture (Always Visible) >>> */}
+            {authorProfilePictureUrl && (
+              <img
+                src={authorProfilePictureUrl}
+                alt="Author profile"
+                className="absolute top-2 left-2 z-30 w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-purple-600 shadow-lg pointer-events-none"
+              />
+            )}
+            {/* <<< End New Element >>> */}
+            <AnimatePresence mode="wait">
+              {isLoadingAuthors || isLoadingAuthorImages || isLoadingTagImages || isLoadingAuthorVideoNotes || isLoadingTagVideoNotes ? ( // Check all relevant loading states
+                <motion.div
+                  key="loading-notes" // Changed key to reflect general media loading
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="text-gray-400"
+                >
+                  {isLoadingAuthors ? "Loading author list..." : "Loading media..."}
+                </motion.div>
+              ) : viewMode === 'imagePodcast' ? (
+                <motion.div
+                  key="imageFeed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-full h-full flex items-center justify-center"
+                >
+                  <ImageFeed
+                    ref={imageFeedRef}
+                    isLoading={isLoadingAuthorImages || isLoadingTagImages} // Check both image loading states
+                    handlePrevious={handlePrevious}
+                    handleNext={handleNext}
+                    currentImageIndex={currentImageIndex}
+                    imageNotes={shuffledImageNotes} // <<< Use SHUFFLED notes >>>
+                    authorNpub={currentAuthorNpub}
+                    authorProfilePictureUrl={authorProfilePictureUrl}
+                    authorDisplayName={currentAuthorProfile?.name || currentAuthorProfile?.displayName || null}
+                    isPlaying={false} // Audio playback is separate
+                    togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
+                    isFullScreen={isFullScreen}
+                    signalInteraction={signalInteraction}
+                  />
+                </motion.div>
+              ) : viewMode === 'videoPlayer' ? (
+                <motion.div
+                  key="videoPlayer"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-full h-full flex items-center justify-center"
+                >
+                  <VideoPlayer
+                    videoRef={videoRef}
+                    src={currentItemUrl} // Derived from uniqueVideoNotes via useMediaState
+                    isPlaying={videoPlayback.isPlaying}
+                    togglePlayPause={videoPlayback.togglePlayPause}
+                    pause={videoPlayback.pause}
+                    play={videoPlayback.play}
+                    toggleMute={videoPlayback.toggleMute}
+                    authorNpub={currentAuthorNpub}
+                    // defaultTipAmount={auth.defaultTipAmount} // Pass default tip amount << REMOVED
+                    // authorProfilePictureUrl={authorProfilePictureUrl} // <<< Pass picture URL - Commented out until VideoPlayer supports it >>>
+                    autoplayFailed={videoPlayback.autoplayFailed}
+                    isMuted={videoPlayback.isMuted}
+                    currentNoteId={stateVideoNotes[currentVideoIndex]?.id} // stateVideoNotes is uniqueVideoNotes
+                    // Pass necessary context as props
+                    // ndkInstance={ndkInstance} // <<< REMOVE prop
+                    // isNdkReady={isNdkReady} // <<< REMOVE prop
+                    // auth={auth} // << REMOVED
+                    // wallet={wallet} // << REMOVED
+                  />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
-      {/* Inner wrapper */}
-      <div className="relative flex flex-col flex-grow min-h-0 overflow-hidden">
-
-        {/* MediaFeed Area (Top Section) */}
-         <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
-              {/* <<< NEW: Author Profile Picture (Always Visible) >>> */}
-              {authorProfilePictureUrl && (
-                <img
-                  src={authorProfilePictureUrl}
-                  alt="Author profile"
-                  className="absolute top-2 left-2 z-30 w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-purple-600 shadow-lg pointer-events-none"
-                />
-              )}
-              {/* <<< End New Element >>> */}
-              <AnimatePresence mode='wait'>
-                 {isLoadingAuthors || isLoadingAuthorImages || isLoadingTagImages || isLoadingAuthorVideoNotes || isLoadingTagVideoNotes ? ( // Check all relevant loading states
-                     <motion.div
-                         key="loading-notes" // Changed key to reflect general media loading
-                         initial={{ opacity: 0 }}
-                         animate={{ opacity: 1 }}
-                         exit={{ opacity: 0 }}
-                         transition={{ duration: 0.3 }}
-                         className="text-gray-400"
-                      >
-                         {isLoadingAuthors ? "Loading author list..." : "Loading media..."}
-                     </motion.div>
-                 ) : viewMode === 'imagePodcast' ? (
-                     <motion.div
-                         key="imageFeed"
-                         initial={{ opacity: 0 }}
-                         animate={{ opacity: 1 }}
-                         exit={{ opacity: 0 }}
-                         transition={{ duration: 0.5 }}
-                         className="w-full h-full flex items-center justify-center"
-                     >
-                         <ImageFeed
-                             ref={imageFeedRef}
-                             isLoading={isLoadingAuthorImages || isLoadingTagImages} // Check both image loading states
-                             handlePrevious={handlePrevious}
-                             handleNext={handleNext}
-                             currentImageIndex={currentImageIndex}
-                             imageNotes={shuffledImageNotes} // <<< Use SHUFFLED notes >>>
-                             authorNpub={currentAuthorNpub}
-                             authorProfilePictureUrl={authorProfilePictureUrl}
-                             defaultTipAmount={auth.defaultTipAmount} // Pass default tip amount
-                             auth={auth} // Pass full auth object for checks
-                             wallet={wallet} // Pass wallet object for checks
-                             isPlaying={false} // Audio playback is separate
-                             togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
-                             isFullScreen={isFullScreen}
-                             signalInteraction={signalInteraction}
-                         />
-                     </motion.div>
-                 ) : viewMode === 'videoPlayer' ? (
-                     <motion.div
-                         key="videoPlayer"
-                         initial={{ opacity: 0 }}
-                         animate={{ opacity: 1 }}
-                         exit={{ opacity: 0 }}
-                         transition={{ duration: 0.5 }}
-                         className="w-full h-full flex items-center justify-center"
-                     >
-                         <VideoPlayer
-                             videoRef={videoRef}
-                             src={currentItemUrl} // Derived from uniqueVideoNotes via useMediaState
-                             isPlaying={videoPlayback.isPlaying}
-                             togglePlayPause={videoPlayback.togglePlayPause}
-                             pause={videoPlayback.pause}
-                             play={videoPlayback.play}
-                             toggleMute={videoPlayback.toggleMute}
-                             authorNpub={currentAuthorNpub}
-                             defaultTipAmount={auth.defaultTipAmount} // Pass default tip amount
-                             // authorProfilePictureUrl={authorProfilePictureUrl} // <<< Pass picture URL - Commented out until VideoPlayer supports it >>>
-                             autoplayFailed={videoPlayback.autoplayFailed}
-                             isMuted={videoPlayback.isMuted}
-                             currentNoteId={stateVideoNotes[currentVideoIndex]?.id} // stateVideoNotes is uniqueVideoNotes
-                             // Pass necessary context as props
-                             ndkInstance={ndkInstance}
-                             isNdkReady={isNdkReady}
-                             auth={auth}
-                             wallet={wallet}
-                         />
-                     </motion.div>
-                 ) : null }
-              </AnimatePresence>
-
-              {/* Duplicated Mode Toggle Button (Hide on Fullscreen) */}
-              <AnimatePresence>
-                {!isFullScreen && (
-                  <motion.button
-                      key="top-toggle-button"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      onClick={() => setViewMode(viewMode === 'imagePodcast' ? 'videoPlayer' : 'imagePodcast')}
-                      tabIndex={0}
-                      className="absolute bottom-2 right-24 z-20 p-1.5 rounded
+            {/* Duplicated Mode Toggle Button (Hide on Fullscreen) */}
+            <AnimatePresence>
+              {!isFullScreen && (
+                <motion.button
+                  key="top-toggle-button"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  onClick={() => setViewMode(viewMode === 'imagePodcast' ? 'videoPlayer' : 'imagePodcast')}
+                  tabIndex={0}
+                  className="absolute bottom-2 right-24 z-20 p-1.5 rounded
                                  bg-transparent text-purple-600
                                  hover:text-purple-100 hover:bg-black/70
                                  focus:outline-none focus:bg-transparent focus:text-purple-300
                                  focus:ring-2 focus:ring-gray-400 focus:ring-offset-1 focus:ring-offset-black
                                  transition-all duration-150 text-xs font-semibold uppercase"
-                      aria-label={`Show ${viewMode === 'imagePodcast' ? 'Videos' : 'Images'}`}
-                      title={`Show ${viewMode === 'imagePodcast' ? 'Videos' : 'Images'}`}
-                  >
-                      {viewMode === 'imagePodcast' ? 'Videos' : 'Images'}
-                  </motion.button>
-                )}
-              </AnimatePresence>
-              {/* Author QR Code is rendered inside ImageFeed/VideoPlayer */}
+                  aria-label={`Show ${viewMode === 'imagePodcast' ? 'Videos' : 'Images'}`}
+                  title={`Show ${viewMode === 'imagePodcast' ? 'Videos' : 'Images'}`}
+                >
+                  {viewMode === 'imagePodcast' ? 'Videos' : 'Images'}
+                </motion.button>
+              )}
+            </AnimatePresence>
+            {/* Author QR Code is rendered inside ImageFeed/VideoPlayer */}
+          </div>
 
-         </div>
-
-        {/* Prev/Next Buttons (Hide on Fullscreen) */}
-        <AnimatePresence>
-          {!isFullScreen && (
-            (viewMode === 'imagePodcast' && combinedImageNotes.length > 1) || // <<< Check combined length >>>
-            (viewMode === 'videoPlayer' && uniqueVideoNotes.length > 1) // uniqueVideoNotes length is correct here
-          ) && (
-             <motion.div
-                 key="pagination-buttons"
-                 initial={{ opacity: 0 }}
-                 animate={{ opacity: 1 }}
-                 exit={{ opacity: 0 }}
-                 transition={{ duration: 0.3 }}
-             >
+          {/* Prev/Next Buttons (Hide on Fullscreen) */}
+          <AnimatePresence>
+            {!isFullScreen && (
+              (viewMode === 'imagePodcast' && combinedImageNotes.length > 1) || // <<< Check combined length >>>
+              (viewMode === 'videoPlayer' && uniqueVideoNotes.length > 1) // uniqueVideoNotes length is correct here
+            ) && (
+              <motion.div
+                key="pagination-buttons"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
                 <>
                   {/* Prev Button */}
                   <button
-                      onClick={handlePrevious}
-                      className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 p-1.5 rounded
+                    onClick={handlePrevious}
+                    className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 p-1.5 rounded
                                  bg-transparent text-purple-600
                                  hover:text-purple-100 hover:bg-black/70
                                  focus:outline-none focus:bg-transparent focus:text-purple-300
                                  focus:ring-2 focus:ring-gray-400 focus:ring-offset-1 focus:ring-offset-black
                                  transition-all duration-150 text-xs font-semibold uppercase"
-                      aria-label="Previous Item"
+                    aria-label="Previous Item"
                   >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 5 L 13 12 L 15 19" />
-                      </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 5 L 13 12 L 15 19" />
+                    </svg>
                   </button>
                   {/* Next Button */}
                   <button
-                      onClick={handleNext}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 p-1.5 rounded
+                    onClick={handleNext}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 p-1.5 rounded
                                  bg-transparent text-purple-600
                                  hover:text-purple-100 hover:bg-black/70
                                  focus:outline-none focus:bg-transparent focus:text-purple-300
                                  focus:ring-2 focus:ring-gray-400 focus:ring-offset-1 focus:ring-offset-black
                                  transition-all duration-150 text-xs font-semibold uppercase"
-                      aria-label="Next Item"
+                    aria-label="Next Item"
                   >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5 L 11 12 L 9 19" />
-                      </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5 L 11 12 L 9 19" />
+                    </svg>
                   </button>
                 </>
-             </motion.div>
-           )
-        }
-        </AnimatePresence>
-
-        {/* Animated Bottom Split Screen Container */}
-        <AnimatePresence>
-            {!isFullScreen && (
-                 <motion.div
-                    key="bottomPanel"
-                    className="relative w-full h-1/4 flex-shrink-0 flex flex-row overflow-hidden mt-2"
-                    initial={{ y: '100%', opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: '100%', opacity: 0 }}
-                    transition={{ duration: 0.5, ease: "easeInOut" }}
-                 >
-                    {/* Left Side: Message Board */}
-                    <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden">
-                        <MessageBoard
-                            ndk={ndkInstance}
-                            threadEventId={MAIN_THREAD_NEVENT_URI}
-                            onNewMessage={signalMessage}
-                            isReady={isNdkReady}
-                        />
-                    </div>
-                    {/* Right Side: Media Panel - Adjust width */}
-                    <div className="w-1/3 h-full pl-1 flex flex-col">
-                        <MediaPanel
-                            viewMode={viewMode}
-                            audioRef={audioRef}
-                            videoRef={videoRef}
-                            podcastNotes={statePodcastNotes} // from useMediaState (original podcast fetch)
-                            videoNotes={stateVideoNotes} // from useMediaState (uniqueVideoNotes derived from combined)
-                            isLoadingPodcastNotes={isLoadingPodcastNotes}
-                            isLoadingVideoNotes={isLoadingAuthorVideoNotes || (fetchVideosByTagEnabled && isLoadingTagVideoNotes)}
-                            currentPodcastIndex={currentPodcastIndex}
-                            currentVideoIndex={currentVideoIndex} // Index within uniqueVideoNotes
-                            setCurrentPodcastIndex={setCurrentPodcastIndex}
-                            onVideoSelect={handleVideoSelect} // Selects from uniqueVideoNotes
-                            setViewMode={setViewMode}
-                            // Playback State & Handlers
-                            isPlaying={activePlayback.isPlaying}
-                            currentTime={activePlayback.currentTime}
-                            duration={activePlayback.duration}
-                            playbackRate={activePlayback.playbackRate}
-                            setPlaybackRate={activePlayback.setPlaybackRate}
-                            togglePlayPause={activePlayback.togglePlayPause}
-                            handleSeek={activePlayback.handleSeek}
-                            currentItemUrl={currentItemUrl}
-                            authors={mediaAuthors} // Keep original authors list for potential display/filtering in panel
-                            signalInteraction={signalInteraction}
-                            ndkInstance={ndkInstance}
-                        />
-                    </div>
-                 </motion.div>
+              </motion.div>
             )}
-        </AnimatePresence>
+          </AnimatePresence>
 
-      </div> {/* End Inner Wrapper */}
-    </div> {/* End Outermost Div */}
+          {/* Animated Bottom Split Screen Container */}
+          <AnimatePresence>
+            {!isFullScreen && (
+              <motion.div
+                key="bottomPanel"
+                className="relative w-full h-1/4 flex-shrink-0 flex flex-row overflow-hidden mt-2"
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 0 }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              >
+                {/* Left Side: Message Board */}
+                <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden">
+                  <div className="w-full h-full max-w-4xl max-h-[80vh] p-4 rounded-lg overflow-hidden" onClick={(e) => e.stopPropagation()}> {/* Prevent closing on inner click */}
+                    <MessageBoard
+                      currentUser={messageBoardCurrentUser}
+                      threadEventId={MAIN_THREAD_NEVENT_URI}
+                      onNewMessage={signalMessage}
+                      onRequestFocusSettings={handleFocusSettingsRequest} // <<< Pass focus callback
+                    />
+                  </div>
+                </div>
+                {/* Right Side: Media Panel - Adjust width */}
+                <div className="w-1/3 h-full pl-1 flex flex-col">
+                  <MediaPanel
+                    // Refactor props based on context/hooks
+                    audioRef={audioRef}
+                    videoRef={videoRef}
+                    viewMode={viewMode}
+                    setViewMode={setViewMode}
+                    podcastNotes={memoizedPodcastNotes} // Pass memoized notes
+                    videoNotes={visibleVideoNotes} // Pass CORRECT visible subset
+                    isLoadingPodcastNotes={isLoadingPodcastNotes}
+                    isLoadingVideoNotes={isLoadingAuthorVideoNotes || isLoadingTagVideoNotes}
+                    isPlaying={activePlayback.isPlaying}
+                    currentTime={activePlayback.currentTime}
+                    duration={activePlayback.duration}
+                    playbackRate={activePlayback.playbackRate}
+                    setPlaybackRate={activePlayback.setPlaybackRate}
+                    togglePlayPause={activePlayback.togglePlayPause}
+                    handleSeek={activePlayback.handleSeek}
+                    currentItemUrl={currentItemUrl}
+                    currentPodcastIndex={currentPodcastIndex}
+                    setCurrentPodcastIndex={setCurrentPodcastIndex}
+                    currentVideoIndex={currentVideoIndex}
+                    onVideoSelect={handleVideoSelect}
+                    authors={memoizedMediaAuthors} // Pass authors for profiles
+                    signalInteraction={signalInteraction}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div> {/* End Inner Wrapper */}
+      </div> {/* End Outermost Div */}
 
-    {/* Relay Status (Bottom Left) */}
-    <div className="absolute bottom-0 left-0 p-2 z-20">
-      <RelayStatus
-        isReceivingData={!!ndkInstance?.pool?.connectedRelays?.().length} // <-- Call function and check length
-        relayCount={RELAYS.length}
-        onSettingsClick={toggleSettingsModal} // Pass the toggle function
-      />
-    </div>
+      {/* Relay Status (Bottom Left) */}
+      <div className="absolute bottom-0 left-0 p-2 z-20">
+        <RelayStatus
+          ref={relayStatusRef} // <<< Pass the ref
+          connectedCount={relayStats.connected}
+          totalCount={RELAYS.length} // Use constant for total
+          onOpenSettings={toggleSettingsModal} // Pass the correct callback
+        />
+      </div>
 
-    {/* Settings Modal */}
-    <SettingsModal
+      {/* Settings Modal */}
+      <SettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
-        ndkInstance={ndkInstance} // <-- Pass singleton
-        wallet={wallet} // <<< Pass wallet instance >>>
-    />
-
+      />
     </>
   );
 }
+
+// Main App component: Initializes NDK and sets up providers
+const App: React.FC = () => {
+  // <<< Get ndkInstance and isReady from useNDKInit >>>
+  const { ndkInstance, isReady, connectionError } = useNDKInit();
+
+  // Handle connection states
+  // <<< Restore Loading State Check >>>
+  if (!isReady && !connectionError) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black text-purple-400">
+        Initializing Connection...
+      </div>
+    );
+  }
+
+  if (connectionError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-black text-red-500">
+        <p>Error connecting to Nostr network:</p>
+        <p className="mt-2 text-sm text-gray-400">{connectionError.message}</p>
+      </div>
+    );
+  }
+
+  // NDK connection is ready
+  return (
+    <AuthProvider>
+      <WalletProvider>
+        {/* <<< Pass ndkInstance and isReady down >>> */}
+        <AppContent ndkInstance={ndkInstance} isNdkReady={isReady} />
+      </WalletProvider>
+    </AuthProvider>
+  );
+};
 
 export default App;
 

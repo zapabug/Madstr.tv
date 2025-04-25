@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { nip19 } from 'nostr-tools';
 import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { RELAYS } from '../constants'; // Adjust path as needed
@@ -21,136 +21,106 @@ function getHexPubkey(npub: string): string | null {
 
 // Define props for the hook
 interface UseMediaAuthorsProps {
-    ndk: NDK | undefined;
+    ndk?: NDK;
+    isReady: boolean;
 }
 
-export function useMediaAuthors({ ndk }: UseMediaAuthorsProps) {
+interface MediaAuthorsState {
+    mediaAuthors: string[];
+    isLoadingAuthors: boolean;
+}
+
+const AUTHOR_FETCH_TIMEOUT = 15000; // 15 seconds timeout
+
+export const useMediaAuthors = ({ ndk, isReady }: UseMediaAuthorsProps): MediaAuthorsState => {
     const [mediaAuthors, setMediaAuthors] = useState<string[]>([]);
     const [isLoadingAuthors, setIsLoadingAuthors] = useState<boolean>(true);
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const pubkey = useMemo(() => {
+        try {
+            return nip19.decode(TV_PUBKEY_NPUB).data as string;
+        } catch (e) {
+            console.error("Error decoding TV_PUBKEY_NPUB:", e);
+            return null;
+        }
+    }, []);
 
     useEffect(() => {
         console.log("useMediaAuthors: Effect running/re-running.");
+        let sub: NDKSubscription | null = null;
+        let timeoutId: NodeJS.Timeout | null = null;
 
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-        }
-
-        if (!ndk) {
-            console.log("useMediaAuthors: NDK instance not ready yet.");
+        if (!ndk || !isReady || !pubkey) {
+            console.log(`useMediaAuthors: Skipping fetch - ndk: ${!!ndk}, isReady: ${isReady}, pubkey: ${!!pubkey}`);
             if (isLoadingAuthors) setIsLoadingAuthors(false);
-            setMediaAuthors([]);
+            if (!pubkey && mediaAuthors.length === 0) setMediaAuthors([TV_PUBKEY_NPUB]);
             return;
         }
 
-        let sub: NDKSubscription | null = null;
-        let foundKind3Event = false;
-        setIsLoadingAuthors(true);
+        if (!isLoadingAuthors) setIsLoadingAuthors(true);
 
-        const fetchKind3List = async () => {
-            console.log("useMediaAuthors: NDK instance available, starting fetchKind3List.");
-            try {
-                const tvPubkeyHex = getHexPubkey(TV_PUBKEY_NPUB);
-                if (!tvPubkeyHex) {
-                    console.error("useMediaAuthors: Invalid TV_PUBKEY_NPUB, cannot fetch authors.");
-                    setIsLoadingAuthors(false);
-                    return;
-                }
+        const authorsFilter: NDKFilter = {
+            kinds: [3],
+            authors: [pubkey],
+            limit: 1,
+        };
 
-                console.log(`useMediaAuthors: Subscribing to Kind 3 for ${tvPubkeyHex}...`);
-                
-                const filter: NDKFilter = { kinds: [3], authors: [tvPubkeyHex], limit: 1 };
-                sub = ndk.subscribe(filter, { closeOnEose: false });
-                console.log("useMediaAuthors: NDK subscription initiated (closeOnEose: false). Sub ID:", sub.subId);
+        console.log("useMediaAuthors: Subscribing to authors list...", authorsFilter);
 
-                sub.on('event', (kind3Event: NDKEvent) => {
-                    console.log("useMediaAuthors: >>> Kind 3 EVENT received!", kind3Event.id);
-                    if (foundKind3Event) {
-                        console.log("useMediaAuthors: Kind 3 event ignored (already processed).");
-                        return;
-                    }
-                    const currentAuthorsString = mediaAuthors.slice().sort().join(','); // Get current state
-                    const followed = kind3Event.tags
-                        .filter(tag => tag[0] === 'p' && tag[1])
-                        .map(tag => tag[1]);
-                    const newAuthors = Array.from(new Set([tvPubkeyHex, ...followed]));
-                    const newAuthorsString = newAuthors.slice().sort().join(','); // Get new list
-                    
-                    if (currentAuthorsString !== newAuthorsString) {
-                        console.log(`useMediaAuthors: Kind 3 changed! Setting mediaAuthors state with ${newAuthors.length} authors.`, newAuthors);
-                        foundKind3Event = true; // Mark found only if changed?
-                        if (timeoutRef.current) {
-                            clearTimeout(timeoutRef.current);
-                            timeoutRef.current = null;
-                        }
-                        setMediaAuthors(newAuthors);
-                        setIsLoadingAuthors(false); 
-                    } else {
-                        console.log("useMediaAuthors: Received Kind 3 event, but authors list is identical. Skipping state update.");
-                        // Still clear timeout and set loading false if it was the *first* event received
-                        if (!foundKind3Event) {
-                            foundKind3Event = true;
-                            if (timeoutRef.current) {
-                                clearTimeout(timeoutRef.current);
-                                timeoutRef.current = null;
-                            }
-                            if (isLoadingAuthors) setIsLoadingAuthors(false);
-                        }
-                    }
-                });
+        sub = ndk.subscribe(authorsFilter, { closeOnEose: true });
 
-                sub.on('eose', () => {
-                    console.log("useMediaAuthors: >>> Kind 3 EOSE received (subscription remains open)!");
-                });
-
-                 sub.on('closed', (reason) => {
-                    console.log("useMediaAuthors: >>> Kind 3 subscription CLOSED. Reason:", reason);
-                    if (isLoadingAuthors && !foundKind3Event) { 
-                         console.warn("useMediaAuthors: Closed before event/timeout, setting loading false & default authors.");
-                         const tvHex = getHexPubkey(TV_PUBKEY_NPUB);
-                         setMediaAuthors(tvHex ? [tvHex] : []);
-                         setIsLoadingAuthors(false);
-                          if (timeoutRef.current) {
-                            clearTimeout(timeoutRef.current);
-                            timeoutRef.current = null;
-                         }
-                    }
-                });
-
-                console.log("useMediaAuthors: Setting timeout (15s) for Kind 3 fetch.");
-                timeoutRef.current = setTimeout(() => {
-                     console.log("useMediaAuthors: Timeout reached!");
-                     timeoutRef.current = null;
-                     if (!foundKind3Event) {
-                         console.warn("useMediaAuthors: Timeout reached and no Kind 3 event found. Setting default authors.");
-                         const tvHex = getHexPubkey(TV_PUBKEY_NPUB);
-                         setMediaAuthors(tvHex ? [tvHex] : []);
-                         setIsLoadingAuthors(false);
-                         console.log("useMediaAuthors: Stopping subscription due to timeout.");
-                         sub?.stop();
-                     }
-                 }, 15000);
-
-            } catch (err) {
-                console.error("useMediaAuthors: Error during Kind 3 Subscription call:", err);
+        timeoutId = setTimeout(() => {
+            console.warn("useMediaAuthors: Timeout fetching authors list after 15s");
+            sub?.stop();
+            if (isLoadingAuthors) {
+                setMediaAuthors(pubkey ? [pubkey] : [TV_PUBKEY_NPUB]);
                 setIsLoadingAuthors(false);
             }
-        };
+        }, AUTHOR_FETCH_TIMEOUT);
 
-        fetchKind3List();
+        sub.on('event', (event: NDKEvent) => {
+            console.log("useMediaAuthors: Received kind 3 event:", event.id);
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = null;
+
+            try {
+                const followedPubkeys = event.tags
+                    .filter(tag => tag[0] === 'p' && tag[1])
+                    .map(tag => tag[1]);
+
+                const allAuthors = Array.from(new Set([pubkey, ...followedPubkeys]));
+
+                console.log(`useMediaAuthors: Found ${followedPubkeys.length} followed pubkeys. Total authors: ${allAuthors.length}`);
+                setMediaAuthors(allAuthors);
+                setIsLoadingAuthors(false);
+            } catch (e) {
+                console.error("useMediaAuthors: Error processing kind 3 event:", e);
+                setMediaAuthors(pubkey ? [pubkey] : [TV_PUBKEY_NPUB]);
+                setIsLoadingAuthors(false);
+            }
+        });
+
+        sub.on('eose', () => {
+            console.log("useMediaAuthors: Subscription EOSE received.");
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = null;
+            if (isLoadingAuthors) {
+                console.log("useMediaAuthors: No kind 3 event found before EOSE. Setting default author.");
+                setMediaAuthors(pubkey ? [pubkey] : [TV_PUBKEY_NPUB]);
+                setIsLoadingAuthors(false);
+            }
+        });
 
         return () => {
-          console.log("useMediaAuthors: Cleaning up Kind 3 subscription (effect re-run or unmount). Sub ID:", sub?.subId);
-          if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-          }
-          sub?.stop();
+            console.log("useMediaAuthors: Cleaning up subscription and timeout.");
+            if (sub) {
+                sub.stop();
+            }
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
         };
+    }, [ndk, pubkey, isReady]);
 
-    }, [ndk]);
-
-    console.log("useMediaAuthors: Returning state", { isLoadingAuthors, mediaAuthors });
     return { mediaAuthors, isLoadingAuthors };
-} 
+}; 

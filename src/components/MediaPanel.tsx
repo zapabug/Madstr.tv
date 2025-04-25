@@ -5,10 +5,11 @@ import { useInactivityTimer } from '../hooks/useInactivityTimer';
 // Removed: import { usePodcastNotes } from '../hooks/usePodcastNotes'; // Data will come via props
 import { useProfileData } from '../hooks/useProfileData'; // Keep for profiles
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback'; // Keep for playback
+import type NDK from '@nostr-dev-kit/ndk'; 
+import { useNdk } from 'nostr-hooks'; // <<< ADD NDK context import
 
 // Define types for props - This will expand significantly
 import { NostrNote } from '../types/nostr'; // Fixed import path
-import type NDK from '@nostr-dev-kit/ndk'; // Import NDK type
 
 // --- Helper to format time (seconds) into MM:SS ---
 const formatTime = (seconds: number): string => {
@@ -77,8 +78,8 @@ export interface MediaPanelProps {
   // <<< Add signalInteraction prop >>>
   signalInteraction: () => void;
 
-  // <<< Add ndkInstance prop >>>
-  ndkInstance: NDK | undefined;
+  // <<< REMOVE ndkInstance prop >>>
+  // ndkInstance: NDK | undefined;
 }
 
 // --- The Unified MediaPanel Component (Reverted) ---
@@ -107,8 +108,12 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     onVideoSelect,
     authors, // <<< Use added prop
     signalInteraction,
-    ndkInstance, // <<< Destructure ndkInstance
+    // <<< REMOVE ndkInstance from destructuring >>>
+    // ndkInstance, 
 }) => {
+  // <<< Replace useNDKContext with useNdk >>>
+  // const { ndkInstance, isNdkReady } = useNDKContext(); // <<< OLD
+  const { ndk } = useNdk(); // <<< NEW - Get NDK instance directly
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   
@@ -118,6 +123,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   const currentItemIndex = viewMode === 'imagePodcast' ? currentPodcastIndex : currentVideoIndex;
 
   // Combine notes for profile fetching (using derived 'notes')
+  // Ensure useProfileData doesn't require ndkInstance directly
   const { profiles } = useProfileData(notes);
 
   // --- Refs --- 

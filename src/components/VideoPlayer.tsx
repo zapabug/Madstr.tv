@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import QRCode from 'react-qr-code';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useWallet, SendTipParams, UseWalletReturn } from '../hooks/useWallet';
-import { useAuth, UseAuthReturn } from '../hooks/useAuth';
+import { useAuthContext } from '../context/AuthContext';
+import { useWalletContext } from '../context/WalletContext';
+import { SendTipParams } from '../hooks/useWallet';
+import { useNdk } from 'nostr-hooks';
 import { FiZap } from 'react-icons/fi';
 import NDK from '@nostr-dev-kit/ndk';
 
@@ -21,7 +23,7 @@ const CustomLoggedInIcon = () => (
 );
 
 export interface VideoPlayerProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   src: string | null;
   isPlaying: boolean;
   togglePlayPause: () => void;
@@ -32,11 +34,6 @@ export interface VideoPlayerProps {
   autoplayFailed: boolean;
   isMuted: boolean;
   currentNoteId?: string;
-  ndkInstance: NDK | null;
-  isNdkReady: boolean;
-  auth: UseAuthReturn;
-  wallet: UseWalletReturn;
-  defaultTipAmount: number;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
@@ -51,12 +48,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   autoplayFailed,
   isMuted,
   currentNoteId,
-  ndkInstance,
-  isNdkReady,
-  auth,
-  wallet,
-  defaultTipAmount
 }) => {
+  const auth = useAuthContext();
+  const wallet = useWalletContext();
+  const { ndk } = useNdk();
+  const isNdkReady = !!ndk;
+  const { defaultTipAmount } = auth;
+
   const [isTipping, setIsTipping] = useState(false);
   const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
   const authorContainerRef = useRef<HTMLDivElement>(null);
@@ -92,12 +90,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                  wallet.balanceSats >= defaultTipAmount &&
                  authorNpub && 
                  auth.isLoggedIn &&
-                 !!ndkInstance;
+                 !!ndk;
 
   // --- Tipping Handler (Similar to ImageFeed) ---
   const handleTip = useCallback(async () => {
-    if (!canTip || !authorNpub || !ndkInstance || !auth || !wallet ) {
-        console.warn('VideoPlayer: Cannot tip:', { canTip, authorNpub, ndkInstanceExists: !!ndkInstance, authExists: !!auth, walletExists: !!wallet });
+    if (!canTip || !authorNpub || !ndk || !auth.isLoggedIn || !wallet.sendCashuTipWithSplits ) {
+        console.warn('VideoPlayer: Cannot tip:', { canTip, authorNpub, ndkInstanceExists: !!ndk, authExists: !!auth.isLoggedIn, walletExists: !!wallet.sendCashuTipWithSplits });
         return;
     }
     setIsTipping(true);
@@ -120,7 +118,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setIsTipping(false);
         setTimeout(() => setTipStatus(null), 2000);
     }
-  }, [canTip, authorNpub, ndkInstance, auth, wallet, currentNoteId, defaultTipAmount]);
+  }, [canTip, authorNpub, ndk, auth, wallet, currentNoteId, defaultTipAmount]);
 
   // --- Keyboard Handler for Tipping ---
   const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {

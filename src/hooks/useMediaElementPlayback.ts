@@ -29,7 +29,7 @@ const getPlaybackTime = (url: string): number | null => {
 
 // --- Hook Definition ---
 interface UseMediaElementPlaybackProps {
-  mediaElementRef: React.RefObject<HTMLMediaElement>;
+  mediaElementRef: React.RefObject<HTMLMediaElement | null>;
   currentItemUrl: string | null;
   isActiveMode: boolean;
   elementType: 'audio' | 'video';

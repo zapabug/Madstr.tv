@@ -4,6 +4,7 @@ import NDK, { NDKEvent, NDKFilter, NDKKind, NDKSubscription, NDKUserProfile } fr
 import { nip19 } from 'nostr-tools'; // Import nip19 for decoding
 // Import useAuth
 import { useAuth } from '../hooks/useAuth';
+import { useNdk } from 'nostr-hooks'; // Corrected import path and hook name
 // Import ABOUT.md content
 import aboutContent from '/ABOUT.md?raw';
 // Import shared profile cache utilities
@@ -18,21 +19,29 @@ import {
 
 // Define the props for the component
 interface MessageBoardProps {
-  ndk: NDK | null;
+  // ndk: NDK | null; // REMOVED - will use useNDK()
   threadEventId: string;
   onNewMessage?: () => void;
-  isReady: boolean;
+  // isReady: boolean; // REMOVED - will derive internally
+  currentUser: NDKUserProfile | null | undefined; // ADDED - Need user for sending messages (updated type)
+  onRequestFocusSettings?: () => void; // <<< ADDED: Callback to focus settings
 }
 
-const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMessage, isReady }) => {
+const MessageBoard: React.FC<MessageBoardProps> = ({ threadEventId, onNewMessage, currentUser, onRequestFocusSettings }) => {
+  // <<< Get NDK instance via hook >>>
+  const { ndk } = useNdk(); // <-- Corrected hook name (lowercase d)
+  // <<< Determine readiness locally >>>
+  const isReady = !!ndk; // Simple check is often sufficient after initial app load
+
   const [messages, setMessages] = useState<NDKEvent[]>([]);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for profiles (uses imported type)
   const subscription = useRef<NDKSubscription | null>(null);
   const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
   const [isProfileCacheLoaded, setIsProfileCacheLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null); // <<< ADDED: Ref for container
   // Get auth state
-  const auth = useAuth(ndk ?? undefined); // Pass ndk instance or undefined
+  // const auth = useAuth(ndk ?? undefined); // REMOVED - useAuth should use useNDK() itself, and we get currentUser via props
 
   // Load profiles from shared cache on component mount
   useEffect(() => {
@@ -185,7 +194,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
       console.log('MessageBoard: Subscribing to message authors profile updates.');
       authorsProfileSub = ndk.subscribe(profileFilter, { closeOnEose: false });
       
-      authorsProfileSub.on('event', (profileEvent: NDKEvent) => {
+      authorsProfileSub?.on('event', (profileEvent: NDKEvent) => {
         const eventPubkey = profileEvent?.pubkey;
         if (!eventPubkey || typeof eventPubkey !== 'string') return;
 
@@ -218,12 +227,14 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
             }
         }
       });
-      authorsProfileSub.on('eose', () => { /* console.log('EOSE...') */ });
-      authorsProfileSub.start();
+      authorsProfileSub?.on('eose', () => { /* console.log('EOSE...') */ });
+      authorsProfileSub?.start();
     }
     return () => {
-        authorsProfileSub?.stop();
-      };
+      if (authorsProfileSub) {
+          authorsProfileSub.stop();
+      }
+    };
   }, [messages, ndk, fetchProfile, isProfileCacheLoaded]); // Added isProfileCacheLoaded dependency
 
   const subscribeToReplies = (ndkInstance: NDK, eventId: string) => {
@@ -272,6 +283,20 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
     });
   };
 
+  // <<< ADDED: Keyboard handler for focus navigation >>>
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      // If ArrowLeft is pressed, attempt to move focus to the settings button
+      if (onRequestFocusSettings) {
+        console.log("MessageBoard: ArrowLeft detected, requesting settings focus.");
+        onRequestFocusSettings();
+        event.preventDefault(); // Prevent default browser navigation
+        event.stopPropagation(); // Stop event from bubbling up
+      }
+    }
+    // Add other navigation logic here if needed (e.g., ArrowRight to MediaPanel)
+  };
+
   // Simplified status rendering
   const renderStatus = () => {
       if (!ndk) return 'Waiting for NDK...';
@@ -281,7 +306,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
   }
 
   // --- Conditional rendering based on login state ---
-  if (!auth.isLoggedIn) {
+  if (!currentUser) {
     return (
       <div className="flex flex-col h-full overflow-y-auto p-4 bg-gray-800 text-gray-300 rounded-lg shadow-inner">
         <h2 className="text-xl font-semibold text-purple-400 mb-4">Welcome to Mad⚡tr.tv!</h2>
@@ -294,48 +319,74 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
 
   // --- Render the Message List if logged in ---
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-gray-800 rounded-lg shadow-inner">
-      {/* Status Bar (Optional) */}
-      {/* {renderStatus()} */}
+    <div 
+      ref={containerRef} // Attach ref
+      className="message-board-container flex flex-col h-full bg-gray-900/80 backdrop-blur-sm rounded-lg overflow-hidden p-2 focus:outline-none focus:ring-1 focus:ring-yellow-400" // Added focus styles
+      tabIndex={0} // Make the container focusable
+      onKeyDown={handleKeyDown} // Attach keydown listener
+      aria-label="Message Board - Press Left Arrow to access Settings" // Accessibility hint
+    >
+      {/* Header/Title (Optional) */}
+      {/* <h2 className="text-sm font-semibold text-purple-300 mb-1">Chat</h2> */}
 
       {/* Message List */}
-      <div className="flex-grow overflow-y-auto px-4 pb-4 pt-2 space-y-3">
-        {messages.length === 0 && (
-          <div className="text-center text-gray-500 pt-4">No messages yet...</div>
-        )}
-        {messages
-          .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)) // Sort newest first
-          .map((msg) => {
-            const profile = profiles[msg.pubkey];
-            const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...';
-            const profilePicture = profile?.picture;
+      <div className="flex-grow overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+        {isReady && targetEventId ? (
+          messages.length > 0 ? (
+            messages.map((msg) => {
+              const profile = profiles[msg.pubkey];
+              const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...';
+              const profilePicture = profile?.picture;
 
-            return (
-              <div key={msg.id} className="flex items-start space-x-2 p-2 bg-gray-750 rounded-md shadow">
-                {/* Profile Picture */}
-                {profilePicture ? (
-                  <img
-                    src={profilePicture}
-                    alt={`${displayName}'s avatar`}
-                    className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-600 object-cover flex-shrink-0"
-                    onError={(e) => (e.currentTarget.style.display = 'none')} // Hide if image fails
-                  />
-                ) : (
-                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-purple-700 flex items-center justify-center text-white text-xs lg:text-sm font-bold flex-shrink-0">
-                    {displayName.charAt(0).toUpperCase()}
+              return (
+                <div key={msg.id} className="flex items-start space-x-2 p-2 bg-gray-750 rounded-md shadow">
+                  {/* Profile Picture */}
+                  {profilePicture ? (
+                    <img
+                      src={profilePicture}
+                      alt={`${displayName}'s avatar`}
+                      className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-600 object-cover flex-shrink-0"
+                      onError={(e) => (e.currentTarget.style.display = 'none')} // Hide if image fails
+                    />
+                  ) : (
+                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-purple-700 flex items-center justify-center text-white text-xs lg:text-sm font-bold flex-shrink-0">
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  {/* Message Content */}
+                  <div className="flex-grow text-sm lg:text-base">
+                    <span className="font-medium text-purple-600 text-sm lg:text-base mr-1.5" title={profile?.name ? msg.pubkey : undefined}>
+                      {displayName}
+                    </span>
+                    <span className="text-gray-300">{msg.content}</span>
                   </div>
-                )}
-                {/* Message Content */}
-                <div className="flex-grow text-sm lg:text-base">
-                  <span className="font-medium text-purple-600 text-sm lg:text-base mr-1.5" title={profile?.name ? msg.pubkey : undefined}>
-                    {displayName}
-                  </span>
-                  <span className="text-gray-300">{msg.content}</span>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div className="flex justify-center items-center h-full">
+              <p className="text-gray-500 text-sm">No messages yet. Be the first!</p>
+            </div>
+          )
+        ) : (
+          <div className="flex justify-center items-center h-full">
+            <p className="text-gray-500">Loading messages...</p>
+          </div>
+        )}
       </div>
+
+      {/* Message Input Area (Simplified - Placeholder for future) */}
+      {/* 
+      <div className="mt-1 pt-1 border-t border-gray-700">
+        <input
+          type="text"
+          placeholder={currentUser ? "Type your message..." : "Log in to chat"}
+          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          disabled={!currentUser} // Disable if not logged in
+          // Add onKeyDown handler for sending messages
+        />
+      </div>
+      */}
     </div>
   );
 };

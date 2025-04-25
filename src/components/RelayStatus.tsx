@@ -1,58 +1,57 @@
-import React from 'react';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
+import { FiSettings } from 'react-icons/fi';
 
-interface RelayStatusProps {
-  isReceivingData: boolean; // Simplified prop
-  relayCount: number; // <<< Re-add relayCount prop
-  onSettingsClick: () => void; // Add the callback prop
+// Define the interface for the imperative methods
+export interface RelayStatusHandle {
+  focusSettingsButton: () => void;
 }
 
-const RelayStatus: React.FC<RelayStatusProps> = ({ isReceivingData, relayCount, onSettingsClick }) => {
+interface RelayStatusProps {
+  connectedCount: number;
+  totalCount: number; // Keep prop for title, but don't display fraction
+  onOpenSettings: () => void; // Callback to open the actual modal
+}
 
-  // <<< REMOVE unused getTextColor function >>>
-  /*
-  const getTextColor = (): string => {
-      if (!isReceivingData) {
-          return 'text-yellow-500'; // Connecting or not receiving
-      }
-      if (relayCount < 3) {
-          return 'text-orange-400'; // Receiving, but few relays
-      }
-      return 'text-green-400 font-semibold'; // Receiving data, 3+ relays: Green, slightly bolder
-  };
-  */
+// Keep forwardRef to allow focusing the button from parent
+const RelayStatus = forwardRef<RelayStatusHandle, RelayStatusProps>(
+  ({ connectedCount, totalCount, onOpenSettings }, ref) => {
+    const settingsButtonRef = useRef<HTMLButtonElement>(null); // Ref for the button
 
-  // Determine status text and color based on the prop (keep for potential future use or title)
-  // const statusText = isReceivingData ? 'Connected' : 'Connecting...';
-  // const statusColor = isReceivingData ? 'bg-green-500' : 'bg-yellow-500';
+    // Expose the focus method via useImperativeHandle
+    useImperativeHandle(ref, () => ({
+      focusSettingsButton: () => {
+        settingsButtonRef.current?.focus();
+      },
+    }));
 
-  return (
-    // Use relative positioning on the container to position the button absolutely
-    <div className="group relative w-fit h-fit"> {/* Fit content size */} 
-      {/* Relay Count Span (The base layer) */}
-      <span 
-        className={`text-xs font-medium text-gray-400`} 
-        title={isReceivingData ? `Connected (${relayCount} relays)` : 'Connecting...'}
-      >
-         {relayCount} 
-      </span>
+    return (
+      // Use group class for focus-within styling
+      <div className="group absolute bottom-2 left-2 flex items-center space-x-1 p-1 rounded-md bg-black/40 backdrop-blur-sm z-10">
+        {/* Relay Count Display (Only connected count) */}
+        <span 
+          className={`text-xs font-semibold ${connectedCount > 0 ? 'text-green-400' : 'text-yellow-500'}`}
+          title={`${connectedCount}/${totalCount} relays connected`}
+        >
+          {connectedCount} {/* Display only connected count */}
+        </span>
 
-      {/* Settings Button (Absolute position, covers the number, centered icon) */}
-      <button 
-        aria-label="Settings"
-        tabIndex={0} 
-        className="absolute inset-0 flex items-center justify-center p-0.5 rounded text-purple-500 
-                   opacity-0 focus:opacity-100 group-focus-within:opacity-100 
-                   transition-opacity duration-150 
-                   focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
-        onClick={onSettingsClick}
-      >
-          {/* Simple Gear SVG (centered by button's flex properties) */}
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-               <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-          </svg>
-      </button>
-    </div>
-  );
-};
+        {/* Hidden Settings Button - appears on focus */}
+        <button
+          ref={settingsButtonRef} // Attach the ref here
+          onClick={onOpenSettings}
+          // Use opacity-0, group-focus-within:opacity-100, and focus:opacity-100
+          className="p-0.5 rounded text-gray-400 opacity-0 group-focus-within:opacity-100 focus:opacity-100 hover:text-white focus:text-white focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black focus:outline-none transition-all duration-150"
+          aria-label="Open Settings"
+          tabIndex={0} // Ensure it's focusable
+        >
+          <FiSettings size={16} />
+        </button>
+      </div>
+    );
+  }
+);
+
+// Add display name for DevTools
+RelayStatus.displayName = 'RelayStatus';
 
 export default RelayStatus; 
