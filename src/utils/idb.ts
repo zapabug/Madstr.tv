@@ -69,6 +69,13 @@ export interface StoredFetchVideosByTagEnabled {
 }
 // <<< END NEW >>>
 
+// <<< NEW: Add interface for Podcast Fetch Toggle setting >>>
+export interface StoredFetchPodcastsByTagEnabled {
+    id: 'fetchPodcastsByTagEnabled'; // Use literal type for the key
+    enabled: boolean;
+}
+// <<< END NEW >>>
+
 // <<< NEW: Add interface for Default Tip Amount setting >>>
 const DEFAULT_TIP_AMOUNT_KEY = 'defaultTipAmount';
 // <<< Define key for timestamp >>>
@@ -88,6 +95,7 @@ type StoredObjectSettings =
     StoredFetchImagesByTagEnabled | 
     StoredNip46SignerPubkey | 
     StoredFetchVideosByTagEnabled | 
+    StoredFetchPodcastsByTagEnabled |
     StoredLastCheckedDmTimestamp; // <<< Add the object type here
 
 // Primitive settings (for direct access)
@@ -301,14 +309,27 @@ export const idb = {
 
     loadFetchVideosByTagEnabledFromDb: async (): Promise<boolean> => {
         const setting = await idb.getSetting('fetchVideosByTagEnabled');
-        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'fetchVideosByTagEnabled' && 'enabled' in setting) {
-            return setting.enabled;
-        }
-        return true; // Or use DEFAULT_FETCH_VIDEOS_BY_TAG
+        // Default to true if not set
+        return setting && 'enabled' in setting ? setting.enabled : true; 
     },
-    // <<< NEW: Add corresponding clear function >>>
+
     clearFetchVideosByTagEnabledFromDb: async (): Promise<void> => {
         await idb.deleteSetting('fetchVideosByTagEnabled');
+    },
+
+    // <<< NEW: Add helpers for Podcast Fetch Toggle >>>
+    loadFetchPodcastsByTagEnabledFromDb: async (): Promise<boolean> => {
+        const setting = await idb.getSetting('fetchPodcastsByTagEnabled');
+        // Default to false if not set (matching useAuth default)
+        return setting && 'enabled' in setting ? setting.enabled : false; 
+    },
+
+    saveFetchPodcastsByTagEnabledToDb: async (enabled: boolean): Promise<void> => {
+        await idb.putSetting({ id: 'fetchPodcastsByTagEnabled', enabled });
+    },
+
+    clearFetchPodcastsByTagEnabledFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('fetchPodcastsByTagEnabled');
     },
     // <<< END NEW >>>
 
@@ -316,22 +337,18 @@ export const idb = {
     saveDefaultTipAmountToDb: async (amount: number): Promise<void> => {
         const db = await getDb();
         await db.put('settings', amount, DEFAULT_TIP_AMOUNT_KEY);
-        console.log(`IDB: Saved default tip amount: ${amount}`);
     },
 
     loadDefaultTipAmountFromDb: async (): Promise<number> => {
         const db = await getDb();
-        const amount = await db.get('settings', DEFAULT_TIP_AMOUNT_KEY);
-        if (typeof amount === 'number') {
-            return amount;
-        }
-        return DEFAULT_TIP_AMOUNT_SATS;
+        const value = await db.get('settings', DEFAULT_TIP_AMOUNT_KEY);
+        // Ensure it's a number, default if not
+        return typeof value === 'number' && value > 0 ? value : DEFAULT_TIP_AMOUNT_SATS;
     },
 
     clearDefaultTipAmountFromDb: async (): Promise<void> => {
         const db = await getDb();
         await db.delete('settings', DEFAULT_TIP_AMOUNT_KEY);
-        console.log('IDB: Cleared default tip amount.');
     },
     // <<< END NEW >>>
 
@@ -431,28 +448,17 @@ export const idb = {
     // --- End added clear functions ---
 
     // --- Last Checked DM Timestamp ---
-    saveLastCheckedDmTimestamp: async (timestamp: number | null): Promise<void> => {
-        // Use putSetting with the object format
-        await idb.putSetting({ id: 'lastCheckedDmTimestamp', value: timestamp });
-        console.log(`IDB: Saved last checked DM timestamp object: ${timestamp}`);
+    saveLastCheckedDmTimestamp: async (timestamp: number): Promise<void> => {
+        await idb.putSetting({ id: LAST_CHECKED_DM_TS_KEY, value: timestamp });
     },
 
     loadLastCheckedDmTimestamp: async (): Promise<number | null> => {
-        // Use getSetting to retrieve the object
-        const setting = await idb.getSetting('lastCheckedDmTimestamp');
-        // Check if it's the correct object and return its value
-        if (setting && setting.id === 'lastCheckedDmTimestamp') {
-            console.log(`IDB: Loaded last checked DM timestamp object, value: ${setting.value}`);
-            return setting.value; // value is number | null
-        }
-        console.log('IDB: No last checked DM timestamp object found.');
-        return null;
+        const setting = await idb.getSetting(LAST_CHECKED_DM_TS_KEY);
+        return setting && 'value' in setting ? setting.value : null;
     },
 
     clearLastCheckedDmTimestamp: async (): Promise<void> => {
-        // Use deleteSetting with the object's id
-        await idb.deleteSetting('lastCheckedDmTimestamp');
-        console.log('IDB: Cleared last checked DM timestamp object.');
+        await idb.deleteSetting(LAST_CHECKED_DM_TS_KEY);
     },
 };
 

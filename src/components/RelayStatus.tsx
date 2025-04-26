@@ -24,23 +24,30 @@ const RelayStatus = forwardRef<RelayStatusHandle, RelayStatusProps>(
       },
     }));
 
+    // Determine text color based on connection status (optional enhancement)
+    const textColor = connectedCount > 0 ? 'text-green-400' : 'text-yellow-500';
+
     return (
-      // Use group class for focus-within styling
-      <div className="group absolute bottom-2 left-2 flex items-center space-x-1 p-1 rounded-md bg-black/40 backdrop-blur-sm z-10">
-        {/* Relay Count Display (Only connected count) */}
+      // Use group class and relative positioning on the container
+      <div className="group relative w-fit h-fit p-1 rounded-md bg-black/40 backdrop-blur-sm z-10">
+        {/* Relay Count Display (Base Layer) */}
         <span 
-          className={`text-xs font-semibold ${connectedCount > 0 ? 'text-green-400' : 'text-yellow-500'}`}
+          className={`text-xs font-semibold ${textColor}`}
           title={`${connectedCount}/${totalCount} relays connected`}
         >
           {connectedCount} {/* Display only connected count */}
         </span>
 
-        {/* Hidden Settings Button - appears on focus */}
+        {/* Hidden Settings Button - appears on focus, positioned over the number */}
         <button
           ref={settingsButtonRef} // Attach the ref here
           onClick={onOpenSettings}
-          // Use opacity-0, group-focus-within:opacity-100, and focus:opacity-100
-          className="p-0.5 rounded text-gray-400 opacity-0 group-focus-within:opacity-100 focus:opacity-100 hover:text-white focus:text-white focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black focus:outline-none transition-all duration-150"
+          // Absolute position, cover parent, center icon, hide by default
+          className={`absolute inset-0 flex items-center justify-center p-0.5 rounded text-purple-400 
+                     opacity-0 group-focus-within:opacity-100 focus:opacity-100 
+                     hover:text-white focus:text-white 
+                     focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black 
+                     focus:outline-none transition-opacity duration-150`}
           aria-label="Open Settings"
           tabIndex={0} // Ensure it's focusable
         >

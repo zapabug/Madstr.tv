@@ -13,11 +13,11 @@ export function useKeyboardControls({
   isFullScreen,
   signalInteraction,
   onTogglePlayPause,
-  onToggleFullScreen,
+  // onToggleFullScreen, // Prop not used directly
 }: KeyboardControlsProps) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      signalInteraction(); // Signal activity on any key press
+      // signalInteraction(); // <<< REMOVE Unconditional Call Here
       console.log(
         `useKeyboardControls: Key event - Key: ${event.key}, Code: ${event.code}, isFullScreen: ${isFullScreen}`
       );
@@ -34,13 +34,19 @@ export function useKeyboardControls({
             console.log(
               `useKeyboardControls: Key (${event.key}) detected (Fullscreen) - Exiting fullscreen.`
             );
-            onToggleFullScreen();
-            event.preventDefault(); // Prevent default scrolling/actions when exiting
-            return; // Don't process further
+            signalInteraction(); // Call signalInteraction ONLY when exiting fullscreen via these keys
+            event.preventDefault();
+            return;
+        }
+      } else {
+        // If NOT fullscreen, still signal interaction for activity tracking (except maybe for arrows?)
+        // Let's only signal on non-arrow keys when not fullscreen to avoid messing with focus timer
+        if (!event.key.startsWith('Arrow')) {
+            signalInteraction(); 
         }
       }
 
-      // Non-fullscreen handling
+      // Non-fullscreen handling (continues if not fullscreen or handled above)
       switch (event.key) {
         case 'ArrowUp':
         case 'ArrowDown':
@@ -110,7 +116,7 @@ export function useKeyboardControls({
           break;
       }
     },
-    [isFullScreen, signalInteraction, onTogglePlayPause, onToggleFullScreen]
+    [isFullScreen, signalInteraction, onTogglePlayPause]
   );
 
   useEffect(() => {

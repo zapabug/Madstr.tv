@@ -357,6 +357,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     </button>
                 </div>)}
 
+                {/* <<< NEW: Podcast Fetch Toggle >>> */}
+                {auth.isLoggedIn && (<div className="flex items-center justify-between">
+                    <label htmlFor="fetch-podcasts-toggle" className="text-sm font-medium text-gray-300 mr-2">Fetch Podcasts by Tag</label>
+                    <button
+                        id="fetch-podcasts-toggle"
+                        onClick={() => auth.setFetchPodcastsByTagEnabled(!auth.fetchPodcastsByTagEnabled)}
+                        className={`relative inline-flex items-center h-6 rounded-full w-11 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-400 transition-colors duration-200 ease-in-out ${auth.fetchPodcastsByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'}`}
+                        aria-pressed={auth.fetchPodcastsByTagEnabled}
+                    >
+                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${auth.fetchPodcastsByTagEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>)}
+
                 {/* --- Hashtag Following Section --- */}
                 {auth.isLoggedIn && (
                     <HashtagSettings setDisplayError={setDisplayError} />

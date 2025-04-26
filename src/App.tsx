@@ -53,7 +53,14 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
   // Hooks that depend on NDK instance (will get it via useNDK() internally)
   // Pass necessary auth/wallet props if the hooks need them explicitly
   const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk, isReady: isNdkReady });
-  const { followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled } = auth; // Use auth from context
+  const { followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchPodcastsByTagEnabled } = auth; // Use auth from context
+
+  // <<< ADD Log for Authors >>>
+  useEffect(() => {
+    if (!isLoadingAuthors) {
+      console.log('[AppContent] Media Authors:', mediaAuthors);
+    }
+  }, [mediaAuthors, isLoadingAuthors]);
 
   // --- MEMOIZE authors and tags before passing to useMediaNotes ---
   const memoizedMediaAuthors = useMemo(() => mediaAuthors, [mediaAuthors]);
@@ -72,16 +79,23 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
   const [imageTagsFetchUntil, setImageTagsFetchUntil] = useState<number | undefined>(undefined); // New state for tag pagination
   const [videoTagsFetchUntil, setVideoTagsFetchUntil] = useState<number | undefined>(undefined); // New state for tag pagination
 
-  // --- Fetch PODCAST notes (assuming authors only for podcasts) ---
-  const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({
+  // --- Fetch PODCAST notes from AUTHORS ---
+  const { notes: authorPodcastNotes, isLoading: isLoadingAuthorPodcastNotes } = useMediaNotes({
     authors: memoizedMediaAuthors,
     mediaType: 'podcast',
-    ndk, // <-- Pass ndk prop
+    ndk,
     limit: 25 // Keep separate limit for podcasts
+    // No tags filter here
   });
 
-  // <<< Memoize podcast notes before passing to useMediaState >>>
-  const memoizedPodcastNotes = useMemo(() => podcastNotes, [podcastNotes]);
+  // --- Fetch PODCAST notes from TAGS (Conditional) ---
+  const { notes: tagPodcastNotes, isLoading: isLoadingTagPodcastNotes } = useMediaNotes({
+    followedTags: fetchPodcastsByTagEnabled ? memoizedFollowedTags : emptyTags,
+    mediaType: 'podcast',
+    ndk,
+    limit: 25, // Use same limit for tags for now
+    authors: emptyAuthors, // Explicitly don't filter by author here
+  });
 
   // --- Fetch VIDEO notes from AUTHORS ---
   const { notes: authorVideoNotes, isLoading: isLoadingAuthorVideoNotes } = useMediaNotes({
@@ -125,6 +139,7 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
   // --- State for COMBINED and DEDUPLICATED notes ---
   const [combinedVideoNotes, setCombinedVideoNotes] = useState<NostrNote[]>([]);
   const [combinedImageNotes, setCombinedImageNotes] = useState<NostrNote[]>([]);
+  const [combinedPodcastNotes, setCombinedPodcastNotes] = useState<NostrNote[]>([]); // <<< ADD Podcast combined state
 
   // --- Effect to COMBINE and DEDUPLICATE VIDEO notes ---
   useEffect(() => {
@@ -197,6 +212,25 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
       // console.log("App: Combined image notes are the same, skipping update."); // Keep commented
     }
   }, [authorImageNotes, tagImageNotes, combinedImageNotes]); // Add combinedImageNotes to deps
+
+  // --- NEW Effect to COMBINE and DEDUPLICATE PODCAST notes ---
+  useEffect(() => {
+    const combinedMap = new Map<string, NostrNote>(
+      combinedPodcastNotes.map(note => [note.id, note])
+    );
+    authorPodcastNotes.forEach(note => { combinedMap.set(note.id, note); });
+    tagPodcastNotes.forEach(note => { combinedMap.set(note.id, note); });
+
+    const newCombinedNotes = Array.from(combinedMap.values())
+      .sort((a, b) => b.created_at - a.created_at); // Sort newest first
+
+    const currentIds = combinedPodcastNotes.map(n => n.id).join(',');
+    const newIds = newCombinedNotes.map(n => n.id).join(',');
+    if (currentIds !== newIds) {
+      console.log(`App: Combined podcast notes updated. Total: ${newCombinedNotes.length}`);
+      setCombinedPodcastNotes(newCombinedNotes);
+    } 
+  }, [authorPodcastNotes, tagPodcastNotes, combinedPodcastNotes]);
 
   // --- Memoize the shuffled VALID image notes ---
   const shuffledImageNotes = useMemo(() => {
@@ -337,8 +371,8 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
     currentItemUrl,
   } = useMediaState({
       initialImageNotes: shuffledImageNotes,
-      initialPodcastNotes: memoizedPodcastNotes,
-      initialVideoNotes: visibleVideoNotes, // <<< Pass sliced array
+      initialPodcastNotes: combinedPodcastNotes, // <<< Use combined/deduped podcasts
+      initialVideoNotes: visibleVideoNotes, 
       fetchOlderImages: fetchOlderImages,
       fetchOlderVideos: fetchOlderVideos, // Pass the modified callback
       shuffledImageNotesLength: shuffledImageNotes.length,
@@ -815,9 +849,9 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
                     videoRef={videoRef}
                     viewMode={viewMode}
                     setViewMode={setViewMode}
-                    podcastNotes={memoizedPodcastNotes} // Pass memoized notes
+                    podcastNotes={combinedPodcastNotes} // <<< Pass combined/deduped podcasts
                     videoNotes={visibleVideoNotes} // Pass CORRECT visible subset
-                    isLoadingPodcastNotes={isLoadingPodcastNotes}
+                    isLoadingPodcastNotes={isLoadingAuthorPodcastNotes || isLoadingTagPodcastNotes} // <<< Combine loading states
                     isLoadingVideoNotes={isLoadingAuthorVideoNotes || isLoadingTagVideoNotes}
                     isPlaying={activePlayback.isPlaying}
                     currentTime={activePlayback.currentTime}

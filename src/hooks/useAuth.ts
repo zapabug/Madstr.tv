@@ -20,6 +20,7 @@ import { RELAYS, DEFAULT_TIP_AMOUNT_SATS } from '../constants'; // Import main R
 export const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast', 'madeira'];
 const DEFAULT_FETCH_IMAGES_BY_TAG = true; // <<< New default
 const DEFAULT_FETCH_VIDEOS_BY_TAG = true; // <<< New default for videos
+const DEFAULT_FETCH_PODCASTS_BY_TAG = false; // Default to false for podcasts?
 
 // Define the shape of the hook's return value
 // Export the interface so it can be used externally
@@ -48,6 +49,9 @@ export interface UseAuthReturn {
     // <<< Add video toggle state and setter >>>
     fetchVideosByTagEnabled: boolean;
     setFetchVideosByTagEnabled: (enabled: boolean) => void;
+    // <<< Add podcast toggle state and setter >>>
+    fetchPodcastsByTagEnabled: boolean;
+    setFetchPodcastsByTagEnabled: (enabled: boolean) => void;
     // <<< Add default tip amount state and setter >>>
     defaultTipAmount: number;
     setDefaultTipAmount: (amount: number) => void;
@@ -84,6 +88,8 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
     const [fetchImagesByTagEnabled, setFetchImagesByTagEnabledState] = useState<boolean>(DEFAULT_FETCH_IMAGES_BY_TAG);
     // <<< Add state for video toggle >>>
     const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(DEFAULT_FETCH_VIDEOS_BY_TAG);
+    // <<< Add podcast toggle state >>>
+    const [fetchPodcastsByTagEnabled, setFetchPodcastsByTagEnabledState] = useState<boolean>(DEFAULT_FETCH_PODCASTS_BY_TAG);
     // <<< Add state for default tip amount >>>
     const [defaultTipAmount, setDefaultTipAmountState] = useState<number>(DEFAULT_TIP_AMOUNT_SATS);
 
@@ -121,6 +127,16 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         setFetchVideosByTagEnabledState(enabled);
         saveFetchVideosByTag(enabled);
     }, [saveFetchVideosByTag]);
+
+    // <<< Add load/save/setter for podcast toggle >>>
+    const loadFetchPodcastsByTag = useCallback(async () => idb.loadFetchPodcastsByTagEnabledFromDb(), []);
+    const saveFetchPodcastsByTag = useCallback(async (enabled: boolean) => {
+        await idb.saveFetchPodcastsByTagEnabledToDb(enabled);
+    }, []);
+    const setFetchPodcastsByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchPodcastsByTagEnabledState(enabled);
+        saveFetchPodcastsByTag(enabled);
+    }, [saveFetchPodcastsByTag]);
 
     // <<< Add load/save/setter for default tip amount >>>
     const loadDefaultTipAmount = useCallback(async () => idb.loadDefaultTipAmountFromDb(), []);
@@ -174,19 +190,21 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             // Load/set ALL settings
             const tags = await loadFollowedTags();
             const imagePref = await loadFetchImagesByTag();
-            const videoPref = await loadFetchVideosByTag(); // <<< Load video pref
-            const tipPref = await loadDefaultTipAmount(); // <<< Load tip pref
+            const videoPref = await loadFetchVideosByTag();
+            const podcastPref = await loadFetchPodcastsByTag(); // <<< Load podcast pref
+            const tipPref = await loadDefaultTipAmount();
             setFollowedTagsState(tags || []);
             setFetchImagesByTagEnabledState(imagePref);
-            setFetchVideosByTagEnabledState(videoPref); // <<< Set video pref state
-            setDefaultTipAmountState(tipPref); // <<< Set tip pref state
+            setFetchVideosByTagEnabledState(videoPref);
+            setFetchPodcastsByTagEnabledState(podcastPref); // <<< Set podcast pref state
+            setDefaultTipAmountState(tipPref);
             console.log("Nsec saved and ALL settings loaded.");
         } catch (error) {
             console.error("Failed to save nsec:", error);
             setAuthError("Failed to save login credentials.");
             throw error; // Re-throw
         }
-    }, [loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadDefaultTipAmount]); // Dependencies
+    }, [loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]); // Dependencies
 
     const loginWithNsec = useCallback(async (nsecInput: string): Promise<boolean> => {
         setIsLoadingAuth(true); setAuthError(null);
@@ -200,6 +218,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
             setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
             setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG); // <<< Reset video pref on fail
+            setFetchPodcastsByTagEnabledState(DEFAULT_FETCH_PODCASTS_BY_TAG); // <<< Reset podcast pref on fail
             setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip pref on fail
             setIsLoadingAuth(false); return false;
         }
@@ -240,12 +259,14 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             // Load/set ALL settings
             const tags = await loadFollowedTags();
             const imagePref = await loadFetchImagesByTag();
-            const videoPref = await loadFetchVideosByTag(); // <<< Load video pref
-            const tipPref = await loadDefaultTipAmount(); // <<< Load tip pref
+            const videoPref = await loadFetchVideosByTag();
+            const podcastPref = await loadFetchPodcastsByTag(); // <<< Load podcast pref
+            const tipPref = await loadDefaultTipAmount();
             setFollowedTagsState(tags || []);
             setFetchImagesByTagEnabledState(imagePref);
-            setFetchVideosByTagEnabledState(videoPref); // <<< Set video pref state
-            setDefaultTipAmountState(tipPref); // <<< Set tip pref state
+            setFetchVideosByTagEnabledState(videoPref);
+            setFetchPodcastsByTagEnabledState(podcastPref); // <<< Set podcast pref state
+            setDefaultTipAmountState(tipPref);
             console.log("NIP-46 signer saved and ALL settings loaded.");
 
             // Create the signer and set it on the NDK instance if available
@@ -263,7 +284,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             setAuthError("Failed to save NIP-46 connection.");
             throw error; // Re-throw
         }
-    }, [ndk, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadDefaultTipAmount]);
+    }, [ndk, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]);
 
     const loadNip46SignerFromDb = useCallback(async () => {
         const loadedPubkey = await idb.loadNip46SignerPubkeyFromDb();
@@ -277,12 +298,14 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                 // Load ALL settings
                 const tags = await loadFollowedTags();
                 const imagePref = await loadFetchImagesByTag();
-                const videoPref = await loadFetchVideosByTag(); // <<< Load video pref
-                const tipPref = await loadDefaultTipAmount(); // <<< Load tip pref
+                const videoPref = await loadFetchVideosByTag();
+                const podcastPref = await loadFetchPodcastsByTag(); // <<< Load podcast pref
+                const tipPref = await loadDefaultTipAmount();
                 setFollowedTagsState(tags || []);
                 setFetchImagesByTagEnabledState(imagePref);
-                setFetchVideosByTagEnabledState(videoPref); // <<< Set video pref state
-                setDefaultTipAmountState(tipPref); // <<< Set tip pref state
+                setFetchVideosByTagEnabledState(videoPref);
+                setFetchPodcastsByTagEnabledState(podcastPref); // <<< Set podcast pref state
+                setDefaultTipAmountState(tipPref);
                 console.log("Loaded NIP-46 signer and ALL settings:", npub);
 
                 // Create the signer and set it on the NDK instance if available
@@ -303,7 +326,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             }
         }
         return null;
-    }, [ndk, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadDefaultTipAmount, clearNip46FromDb]); // Dependencies
+    }, [ndk, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount, clearNip46FromDb]); // Dependencies
 
     // --- Generate New Keys ---
     const generateNewKeys = useCallback(async (): Promise<{ npub: string; nsec: string } | null> => {
@@ -432,10 +455,12 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                     const tags = await loadFollowedTags();
                     const imagePref = await loadFetchImagesByTag();
                     const videoPref = await loadFetchVideosByTag();
+                    const podcastPref = await loadFetchPodcastsByTag(); // <<< Load podcast pref
                     const tipPref = await loadDefaultTipAmount();
                     setFollowedTagsState(tags || []);
                     setFetchImagesByTagEnabledState(imagePref);
                     setFetchVideosByTagEnabledState(videoPref);
+                    setFetchPodcastsByTagEnabledState(podcastPref); // <<< Set podcast pref state
                     setDefaultTipAmountState(tipPref);
                     setIsLoadingAuth(false);
                     return;
@@ -449,10 +474,12 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                     const tags = await loadFollowedTags();
                     const imagePref = await loadFetchImagesByTag();
                     const videoPref = await loadFetchVideosByTag();
+                    const podcastPref = await loadFetchPodcastsByTag(); // <<< Load podcast pref
                     const tipPref = await loadDefaultTipAmount();
                     setFollowedTagsState(tags || []);
                     setFetchImagesByTagEnabledState(imagePref);
                     setFetchVideosByTagEnabledState(videoPref);
+                    setFetchPodcastsByTagEnabledState(podcastPref); // <<< Set podcast pref state
                     setDefaultTipAmountState(tipPref);
                     setIsLoadingAuth(false);
                     return;
@@ -467,6 +494,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                 setFollowedTagsState(loadedTags || []);
                 setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
                 setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
+                setFetchPodcastsByTagEnabledState(DEFAULT_FETCH_PODCASTS_BY_TAG);
                 setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Set default tip amount
 
             } catch (error: any) {
@@ -480,6 +508,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                 setFollowedTagsState(loadedTags || []);
                 setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
                 setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
+                setFetchPodcastsByTagEnabledState(DEFAULT_FETCH_PODCASTS_BY_TAG);
                 setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip amount on error
             }
             setIsLoadingAuth(false);
@@ -494,7 +523,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         // Cleanup function (optional, depending on needs)
         // return () => { console.log("Auth hook unmounting or NDK instance changed"); };
 
-    }, [ndk, loadNsecFromDb, loadNip46SignerFromDb, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadDefaultTipAmount]); // <<< Added ndk dependency
+    }, [ndk, loadNsecFromDb, loadNip46SignerFromDb, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]); // <<< Added ndk dependency
 
     // --- Logout ---
     const logout = useCallback(async () => {
@@ -513,10 +542,12 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             setFollowedTagsState([]);
             setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
             setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
+            setFetchPodcastsByTagEnabledState(DEFAULT_FETCH_PODCASTS_BY_TAG);
             setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip amount on logout
             await idb.clearFollowedTagsFromDb(); // Explicitly clear persisted settings
             await idb.clearFetchImagesByTagEnabledFromDb();
             await idb.clearFetchVideosByTagEnabledFromDb();
+            await idb.clearFetchPodcastsByTagEnabledFromDb();
             await idb.clearDefaultTipAmountFromDb(); // <<< Clear persisted tip amount
             // <<< Clear the last checked DM timestamp >>>
             await idb.clearLastCheckedDmTimestamp();
@@ -533,6 +564,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             setFollowedTagsState(loadedTags || []);
             setFetchImagesByTagEnabledState(DEFAULT_FETCH_IMAGES_BY_TAG);
             setFetchVideosByTagEnabledState(DEFAULT_FETCH_VIDEOS_BY_TAG);
+            setFetchPodcastsByTagEnabledState(DEFAULT_FETCH_PODCASTS_BY_TAG);
             setDefaultTipAmountState(DEFAULT_TIP_AMOUNT_SATS); // <<< Reset tip amount
         } finally {
             setIsLoadingAuth(false);
@@ -649,6 +681,8 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         setFetchImagesByTagEnabled,
         fetchVideosByTagEnabled,
         setFetchVideosByTagEnabled,
+        fetchPodcastsByTagEnabled,
+        setFetchPodcastsByTagEnabled,
         defaultTipAmount,
         setDefaultTipAmount,
         encryptDm,

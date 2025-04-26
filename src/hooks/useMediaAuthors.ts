@@ -53,7 +53,10 @@ export const useMediaAuthors = ({ ndk, isReady }: UseMediaAuthorsProps): MediaAu
         if (!ndk || !isReady || !pubkey) {
             console.log(`useMediaAuthors: Skipping fetch - ndk: ${!!ndk}, isReady: ${isReady}, pubkey: ${!!pubkey}`);
             if (isLoadingAuthors) setIsLoadingAuthors(false);
-            if (!pubkey && mediaAuthors.length === 0) setMediaAuthors([TV_PUBKEY_NPUB]);
+            if (!isLoadingAuthors && mediaAuthors.length === 0) {
+                console.log("useMediaAuthors: Setting default author because fetch was skipped and state is empty.");
+                setMediaAuthors(pubkey ? [pubkey] : [TV_PUBKEY_NPUB]);
+            }
             return;
         }
 
@@ -88,9 +91,10 @@ export const useMediaAuthors = ({ ndk, isReady }: UseMediaAuthorsProps): MediaAu
                     .filter(tag => tag[0] === 'p' && tag[1])
                     .map(tag => tag[1]);
 
-                const allAuthors = Array.from(new Set([pubkey, ...followedPubkeys]));
+                const allAuthors = Array.from(new Set(pubkey ? [pubkey, ...followedPubkeys] : followedPubkeys));
 
                 console.log(`useMediaAuthors: Found ${followedPubkeys.length} followed pubkeys. Total authors: ${allAuthors.length}`);
+                console.log("[useMediaAuthors] Setting authors:", allAuthors);
                 setMediaAuthors(allAuthors);
                 setIsLoadingAuthors(false);
             } catch (e) {
