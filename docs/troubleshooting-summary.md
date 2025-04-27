@@ -216,24 +216,34 @@ This document summarizes the current state of the application after integrating 
 *   **Problem:** Despite previous fixes, issues resurfaced where:
     *   `RelayStatus` component showed 0 connections initially, even when logs indicated connections were being established.
     *   Media fetching hooks (`useMediaAuthors`, `useMediaNotes`) sometimes failed to run or ran with stale `isReady` state, preventing media from loading.
+    *   **Authentication hooks (`useAuth`, `useWallet`) reported "NDK not ready" errors, preventing login/NIP-46 and wallet operations.**
     *   Logs showed contradictory states (e.g., `isReady` being true inside a code block that should only run if `isReady` is false).
     *   The `useMediaNotes` hook dependency loop (`processEvent` changing reference) reappeared.
 *   **Cause:**
     *   **Readiness Timing (`useNDKInit`):** The `isReady` flag from `useNDKInit` was being set to `true` when the `ndk.connect()` promise resolved, which doesn't guarantee actual relay connection. Components received `isReady = true` before NDK was truly ready to fetch data.
     *   **State Propagation (`App.tsx`):** `AppContent` was using `useNdk()` from `nostr-hooks` separately, potentially getting a different instance or readiness state than the one managed by `useNDKInit` in the parent `App` component.
+    *   **Internal `useNdk()` Calls:** `useAuth` and `useWallet` were calling `useNdk()` internally, creating separate, potentially unsynchronized NDK instances/readiness states compared to the main application flow.
     *   **Stale State Closure (`useMediaAuthors`):** The `useEffect` hook in `useMediaAuthors` was capturing a stale value of the `isReady` prop in its closure, leading to incorrect logic execution even after the prop updated. Its dependency array also included internal state (`isLoadingAuthors`), potentially causing unnecessary re-runs.
     *   **Dependency Loop (`useMediaNotes`):** The `useCallback` hook for `processEvent` was still missing a dependency (`getUrlRegexForMediaType`), causing its reference to change and trigger the main effect repeatedly.
 *   **Solution:**
     1.  **`useNDKInit.ts` Modification:** Changed the hook to set `isReady = true` only *after* the first `relay:connect` event is received from the `ndk.pool`. This ensures `isReady` accurately reflects the ability to interact with relays.
     2.  **`App.tsx` Refactor:**
         *   The main `App` component now calls `useNDKInit` to get both the `ndkInstance` and the reliable `isReady` flag.
-        *   It passes both `ndkInstance` and `isReady` down as props to the `AppContent` component.
-    3.  **`AppContent` Refactor:**
+        *   It passes both `ndkInstance` and `isReady` down as props to the `AppContent` component **and to the `AuthProvider` and `WalletProvider` components.**
+    3.  **Provider Refactor (`AuthContext.tsx`, `WalletContext.tsx`):**
+        *   `AuthProvider` and `WalletProvider` were modified to accept `ndkInstance` and `isReady` as props.
+        *   They pass these props down to the `useAuth` and `useWallet` hooks respectively.
+    4.  **Hook Refactor (`useAuth.ts`, `useWallet.ts`):**
+        *   **Removed internal `useNdk()` calls.**
+        *   **Modified hooks to accept `ndkInstance` and `isNdkReady` as parameters.**
+        *   Updated all internal logic to use the passed props instead of the internal `ndk` variable.
+        *   **Added explicit setting of `ndkInstance.signer` in `useAuth` for nsec logins** during initialization.
+    5.  **`AppContent` Refactor:**
         *   Removed the internal call to `useNdk()` (from `nostr-hooks`).
-        *   Now receives `ndkInstance` and `isReady` as props.
-        *   Uses the passed `ndkInstance` prop for all child hooks (`useMediaAuthors`, `useMediaNotes`, etc.) and the relay stats effect.
+        *   Now receives `ndkInstance` and `isReady` as props from `App`.
+        *   Uses the passed `ndkInstance` prop for child hooks (`useMediaAuthors`, `useMediaNotes`, `useUserProfile`) and the relay stats effect.
         *   Reverted the `currentUser` prop for `MessageBoard` back to using `useProfile` from `nostr-hooks` to resolve persistent type conflicts, accepting this specific deviation.
         *   Corrected the order of hook calls to ensure state dependencies (`viewMode`, notes, indices) were defined before being used in `useCurrentAuthor`.
-    4.  **`useMediaAuthors.ts` Fix:** Corrected the main `useEffect` dependency array to `[ndk, pubkey, isReady]`, removing internal state (`isLoadingAuthors`, `mediaAuthors`) to prevent loops and ensure it reacts correctly to changes in external props/state. Simplified the initial readiness check logic.
-    5.  **`useMediaNotes.ts` Fix:** Added the missing `getUrlRegexForMediaType` function to the dependency array of the `processEvent` `useCallback` hook to stabilize its reference and prevent the dependency loop.
-*   **Result:** These combined changes stabilized the NDK initialization and readiness reporting, corrected the flow of the NDK instance and readiness state via props, fixed stale state issues in hooks, and resolved the dependency loop in `useMediaNotes`. The application now reliably connects, updates status, and fetches media content. 
+    6.  **`useMediaAuthors.ts` Fix:** Corrected the main `useEffect` dependency array to `[ndk, pubkey, isReady]`, removing internal state (`isLoadingAuthors`, `mediaAuthors`) to prevent loops and ensure it reacts correctly to changes in external props/state. Simplified the initial readiness check logic.
+    7.  **`useMediaNotes.ts` Fix:** Added the missing `getUrlRegexForMediaType` function to the dependency array of the `processEvent` `useCallback` hook to stabilize its reference and prevent the dependency loop.
+*   **Result:** These combined changes stabilized the NDK initialization and readiness reporting, corrected the flow of the NDK instance and readiness state via props into providers and hooks, fixed stale state issues in hooks, and resolved the dependency loop in `useMediaNotes`. The application now reliably connects, updates status, handles authentication, and fetches media content. 

@@ -920,9 +920,8 @@ const App: React.FC = () => {
 
   // NDK connection is ready
   return (
-    <AuthProvider>
-      <WalletProvider>
-        {/* <<< Pass ndkInstance and isReady down >>> */}
+    <AuthProvider ndkInstance={ndkInstance} isNdkReady={isReady}>
+      <WalletProvider ndkInstance={ndkInstance} isNdkReady={isReady}>
         <AppContent ndkInstance={ndkInstance} isNdkReady={isReady} />
       </WalletProvider>
     </AuthProvider>

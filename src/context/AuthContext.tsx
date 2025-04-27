@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Ensure correct path
+import type NDK from '@nostr-dev-kit/ndk';
 
 // Define the context type
 // Use Partial<UseAuthReturn> initially if auth might be undefined during loading?
@@ -8,13 +9,12 @@ const AuthContext = createContext<UseAuthReturn | undefined>(undefined);
 
 interface AuthProviderProps {
     children: ReactNode;
-    // ndkInstance: NDK | undefined; // REMOVED - useAuth now uses useNDK()
+    ndkInstance: NDK | undefined;
+    isNdkReady: boolean;
 }
 
-// export const AuthProvider: React.FC<AuthProviderProps> = ({ children, ndkInstance }) => {
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-    // const auth = useAuth(ndkInstance); // Initialize the hook here (REMOVED ndkInstance)
-    const auth = useAuth(); // Initialize the hook here
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children, ndkInstance, isNdkReady }) => {
+    const auth = useAuth(ndkInstance, isNdkReady); // Initialize the hook here, passing NDK info
 
     return (
         <AuthContext.Provider value={auth}>

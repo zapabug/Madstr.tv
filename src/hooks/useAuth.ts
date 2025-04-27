@@ -7,9 +7,11 @@ import * as nip04 from 'nostr-tools/nip04';
 import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
 // Removed incorrect import: import { generatePrivateKey } from 'nostr-tools';
 // Removed unused NDKFilter, NDKSubscriptionOptions from import
-import { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
-import { useNdk } from 'nostr-hooks'; // <<< Corrected import path and hook name
-// Corrected import path - removed .ts extension
+// <<< Remove NDK import if no longer directly needed after param change >>>
+// import { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKFilter, NDKSubscription, NDK } from '@nostr-dev-kit/ndk';
+// <<< Fix NDK type import: Use default import for the type >>>
+import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
+// Removed incorrect import path - removed .ts extension
 import { idb } from '../utils/idb';
 // Import the constants
 import { RELAYS, DEFAULT_TIP_AMOUNT_SATS } from '../constants'; // Import main RELAYS
@@ -69,10 +71,10 @@ export interface UseAuthReturn {
 // const NIP46_RELAYS = ['wss://relay.nsec.app', 'wss://relay.damus.io', 'wss://relay.primal.net'];
 const NIP46_CONNECT_TIMEOUT = 75000; // 75 seconds
 
-// Accept NDK | undefined (aligning with useMediaAuthors)
-// export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
-export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance parameter
-    const { ndk } = useNdk(); // <<< Corrected hook name (lowercase d)
+// <<< Accept NDK instance and readiness flag as parameters >>>
+export const useAuth = (ndkInstance: NDK | undefined, isNdkReady: boolean): UseAuthReturn => {
+    // <<< Remove internal useNdk call >>>
+    // const { ndk } = useNdk(); // <<< Corrected hook name (lowercase d)
 
     const [currentUserNpub, setCurrentUserNpub] = useState<string | null>(null);
     const [currentUserNsec, setCurrentUserNsec] = useState<string | null>(null);
@@ -233,15 +235,15 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         if (nip46TimeoutRef.current) { clearTimeout(nip46TimeoutRef.current); nip46TimeoutRef.current = null; }
         setNip46ConnectUri(null); setIsGeneratingUri(false); nip46TempPrivKeyRef.current = null;
         // Also clear the temporary signer from NDK if it was set
-        if (ndk && ndk.signer && nip46TempPrivKeyRef.current) { // Simplified check
+        if (ndkInstance && ndkInstance.signer && nip46TempPrivKeyRef.current) { // Simplified check
             const tempPubkeyHex = getPublicKey(nip46TempPrivKeyRef.current);
             // Compare hex public keys directly
-            if (ndk.signer.pubkey === tempPubkeyHex) {
+            if (ndkInstance.signer.pubkey === tempPubkeyHex) {
                 console.log("useAuth: Clearing temporary NIP-46 signer from NDK.");
-                ndk.signer = undefined;
+                ndkInstance.signer = undefined;
             }
         }
-    }, [ndk]); // <<< Add ndk to dependencies
+    }, [ndkInstance]); // <<< Update dependency
 
     const clearNip46FromDb = useCallback(async () => {
         cleanupNip46Attempt();
@@ -270,13 +272,13 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             console.log("NIP-46 signer saved and ALL settings loaded.");
 
             // Create the signer and set it on the NDK instance if available
-            if (ndk) { // <<< Check if ndk exists
-                const nip46Signer = new NDKNip46Signer(ndk, remotePubkeyHex, undefined);
+            if (ndkInstance) {
+                const nip46Signer = new NDKNip46Signer(ndkInstance, remotePubkeyHex, undefined);
                 nip46Signer.on('authUrl', (url) => {
                     console.warn('NIP-46 Auth URL generated unexpectedly during load:', url);
                     // Perhaps show this URL to the user to re-authorize?
                 });
-                ndk.signer = nip46Signer;
+                ndkInstance.signer = nip46Signer;
                 console.log("NIP-46 signer re-established on NDK instance.");
             }
         } catch (error) {
@@ -284,7 +286,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             setAuthError("Failed to save NIP-46 connection.");
             throw error; // Re-throw
         }
-    }, [ndk, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]);
+    }, [ndkInstance, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]);
 
     const loadNip46SignerFromDb = useCallback(async () => {
         const loadedPubkey = await idb.loadNip46SignerPubkeyFromDb();
@@ -309,13 +311,13 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                 console.log("Loaded NIP-46 signer and ALL settings:", npub);
 
                 // Create the signer and set it on the NDK instance if available
-                if (ndk) { // <<< Check if ndk exists
-                    const nip46Signer = new NDKNip46Signer(ndk, loadedPubkey, undefined);
+                if (ndkInstance) {
+                    const nip46Signer = new NDKNip46Signer(ndkInstance, loadedPubkey, undefined);
                     nip46Signer.on('authUrl', (url) => {
                         console.warn('NIP-46 Auth URL generated unexpectedly during load:', url);
                         // Perhaps show this URL to the user to re-authorize?
                     });
-                    ndk.signer = nip46Signer;
+                    ndkInstance.signer = nip46Signer;
                     console.log("NIP-46 signer re-established on NDK instance.");
                 }
 
@@ -326,7 +328,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             }
         }
         return null;
-    }, [ndk, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount, clearNip46FromDb]); // Dependencies
+    }, [ndkInstance, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount, clearNip46FromDb]); // Dependencies
 
     // --- Generate New Keys ---
     const generateNewKeys = useCallback(async (): Promise<{ npub: string; nsec: string } | null> => {
@@ -340,8 +342,8 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
 
     // --- Initiate NIP-46 Connection ---
     const initiateNip46Connection = useCallback(async (): Promise<void> => {
-        // Ensure NDK is available for subscription
-        if (!ndk) {
+        // <<< Check ndkInstance and isNdkReady >>>
+        if (!ndkInstance || !isNdkReady) {
             setAuthError("NDK not ready.");
             setIsGeneratingUri(false);
             return;
@@ -380,7 +382,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                 "#p": [tempPubkeyHex], // Corrected: Must target our temp pubkey
                 since: Math.floor(Date.now() / 1000) - 60 // Look back briefly just in case
             };
-            nip46SubscriptionRef.current = ndk.subscribe(filter, { closeOnEose: false }); // Keep listening
+            nip46SubscriptionRef.current = ndkInstance.subscribe(filter, { closeOnEose: false }); // Keep listening
 
             console.log("NIP-46 Subscription created for filter:", filter);
 
@@ -426,7 +428,7 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             cleanupNip46Attempt(); // Clean up on error
             setIsLoadingAuth(false);
         }
-    }, [ndk, cleanupNip46Attempt, saveNip46SignerToDb]);
+    }, [ndkInstance, isNdkReady, cleanupNip46Attempt, saveNip46SignerToDb]);
 
     // --- Cancel NIP-46 Connection ---
     const cancelNip46Connection = useCallback(() => {
@@ -437,14 +439,15 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
 
     // --- Initialization Effect ---
     useEffect(() => {
-        // Check NDK readiness before initializing auth
-        if (!ndk) { // <<< Check ndk availability
-            console.log("useAuth: Waiting for NDK instance...");
+        // <<< Check ndkInstance and isNdkReady >>>
+        if (!ndkInstance || !isNdkReady) {
+            console.log("useAuth: Waiting for NDK instance or readiness...");
             setIsLoadingAuth(true); // Keep loading true until NDK is ready
             return;
         }
 
-        console.log("useAuth: NDK instance available, initializing authentication...");
+        // <<< Use ndkInstance parameter >>>
+        console.log("useAuth: NDK instance available and ready, initializing authentication...");
         const initializeAuth = async () => {
             try {
                 // Try loading nsec first
@@ -462,6 +465,18 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
                     setFetchVideosByTagEnabledState(videoPref);
                     setFetchPodcastsByTagEnabledState(podcastPref); // <<< Set podcast pref state
                     setDefaultTipAmountState(tipPref);
+
+                    // <<< Explicitly set nsec signer >>>
+                    if (ndkInstance) {
+                        try {
+                            const decoded = nip19.decode(nsec);
+                            if (decoded.type === 'nsec') {
+                                ndkInstance.signer = new NDKPrivateKeySigner(decoded.data as Uint8Array);
+                                console.log("Nsec signer explicitly set on NDK instance during init.");
+                            }
+                        } catch (e) { console.error("Failed to set nsec signer on NDK during init", e); }
+                    }
+
                     setIsLoadingAuth(false);
                     return;
                 }
@@ -521,9 +536,9 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         });
 
         // Cleanup function (optional, depending on needs)
-        // return () => { console.log("Auth hook unmounting or NDK instance changed"); };
+        // return () => { console.log("Auth hook unmounting or NDK instance changed\"); };
 
-    }, [ndk, loadNsecFromDb, loadNip46SignerFromDb, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]); // <<< Added ndk dependency
+    }, [ndkInstance, isNdkReady, loadNsecFromDb, loadNip46SignerFromDb, loadFollowedTags, loadFetchImagesByTag, loadFetchVideosByTag, loadFetchPodcastsByTag, loadDefaultTipAmount]); // <<< Added dependencies
 
     // --- Logout ---
     const logout = useCallback(async () => {
@@ -574,8 +589,10 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
     // --- Signer Logic ---
     const getNdkSigner = useCallback((): NDKPrivateKeySigner | NDKNip46Signer | undefined => {
         // Return NDK's current signer directly
-        return ndk?.signer as NDKPrivateKeySigner | NDKNip46Signer | undefined;
-    }, [ndk]); // <<< Added ndk dependency
+        // <<< Use ndkInstance parameter >>>
+        return ndkInstance?.signer as NDKPrivateKeySigner | NDKNip46Signer | undefined;
+        // <<< Use ndkInstance parameter >>>
+    }, [ndkInstance]); // <<< Update dependency
 
     // --- Unified Signing Method ---
     const signEvent = useCallback(async (event: NostrEvent): Promise<NostrEvent | null> => {
@@ -586,7 +603,8 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             return null;
         }
         try {
-            const ndkEvent = new NDKEvent(ndk, event);
+            // <<< Use ndkInstance parameter >>>
+            const ndkEvent = new NDKEvent(ndkInstance, event); // <<< Use ndkInstance if available
             await ndkEvent.sign(signer);
             return ndkEvent.rawEvent();
         } catch (error) {
@@ -594,7 +612,8 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
             setAuthError(`Failed to sign event: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
-    }, [getNdkSigner, ndk]);
+        // <<< Use ndkInstance parameter >>>
+    }, [getNdkSigner, ndkInstance]); // <<< Update dependency
 
     // --- NIP-46 Encryption/Decryption ---
     const encryptDm = useCallback(async (recipientPubkeyHex: string, plaintext: string): Promise<string> => {
@@ -609,13 +628,16 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         } else if (signer instanceof NDKNip46Signer) {
             // NDKNip46Signer itself should handle the remote encryption via bunker
             // It needs an NDKUser object for the recipient
-            if (!ndk) throw new Error("NDK instance required for NIP-46 encryption");
-            const recipientUser = ndk.getUser({ hexpubkey: recipientPubkeyHex });
+            // <<< Use ndkInstance parameter >>>
+            if (!ndkInstance) throw new Error("NDK instance required for NIP-46 encryption");
+            // <<< Use ndkInstance parameter >>>
+            const recipientUser = ndkInstance.getUser({ hexpubkey: recipientPubkeyHex });
             return await signer.encrypt(recipientUser, plaintext);
         } else {
             throw new Error("Cannot encrypt DM: Unsupported signer type or missing private key.");
         }
-    }, [getNdkSigner, ndk]);
+        // <<< Use ndkInstance parameter >>>
+    }, [getNdkSigner, ndkInstance]);
 
     // NIP-46 Decryption (using current signer)
     const decryptDm = useCallback(async (senderPubkeyHex: string, ciphertext: string): Promise<string> => {
@@ -627,8 +649,10 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         // Handle NIP-46 Signer specifically
         if (signer instanceof NDKNip46Signer) {
             console.log("%%% useAuth: Using NIP-46 signer for decryption...");
-            if (!ndk) throw new Error("NDK instance required for NIP-46 decryption");
-            const senderUser = ndk.getUser({ hexpubkey: senderPubkeyHex });
+            // <<< Use ndkInstance parameter >>>
+            if (!ndkInstance) throw new Error("NDK instance required for NIP-46 decryption");
+            // <<< Use ndkInstance parameter >>>
+            const senderUser = ndkInstance.getUser({ hexpubkey: senderPubkeyHex });
             // NIP-46 signer requires the *other* user object
             return signer.decrypt(senderUser, ciphertext);
         } 
@@ -653,7 +677,8 @@ export const useAuth = (): UseAuthReturn => { // <<< Remove ndkInstance paramete
         else {
             throw new Error("Cannot decrypt DM: Unsupported signer type or missing private key.");
         }
-    }, [getNdkSigner, currentUserNsec, ndk]);
+        // <<< Use ndkInstance parameter >>>
+    }, [getNdkSigner, currentUserNsec, ndkInstance]); // <<< Update dependency
 
     // <<< Memoize the returned followedTags array >>>
     const memoizedFollowedTags = useMemo(() => followedTags, [followedTags]);

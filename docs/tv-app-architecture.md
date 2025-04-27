@@ -48,7 +48,7 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 ---
 
 *   **`App.tsx` (Root Component):**
-    *   **Orchestrator:** Initializes NDK connection state via `useNDKInit`. **Gets the singleton `ndkInstance` and the reliable `isReady` flag from `useNDKInit`.** Wraps `AppContent` with providers (`AuthProvider`, `WalletProvider`). **Passes `ndkInstance` and `isReady` as props to `AppContent`.** Manages overall loading/error states based on `useNDKInit`.
+    *   **Orchestrator:** Initializes NDK connection state via `useNDKInit`. **Gets the singleton `ndkInstance` and the reliable `isReady` flag from `useNDKInit`.** Wraps `AppContent` with providers (`AuthProvider`, `WalletProvider`), **passing `ndkInstance` and `isReady` as props to both providers.** Manages overall loading/error states based on `useNDKInit`.
     *   **State Held:** None directly related to core app logic (managed in `AppContent`).
     *   **Refs Created:** None.
     *   **Hook Usage:**
@@ -56,7 +56,7 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
     *   **Data Handling:** None directly (delegated to `AppContent`).
     *   **Rendering Logic:**
         *   Displays initial loading/error states based on `useNDKInit`.
-        *   Renders providers (`AuthProvider`, `WalletProvider`) and the main `AppContent` component, passing `ndkInstance` and `isReady` props.
+        *   Renders providers (`AuthProvider`, `WalletProvider`), passing `ndkInstance` and `isReady` props, and then the main `AppContent` component, also passing `ndkInstance` and `isReady` props.
 
 *   **`AppContent.tsx` (Main Logic Component):**
     *   **Purpose:** Contains the core application logic, UI structure, and hook orchestration previously handled by `App.tsx`.
@@ -125,7 +125,7 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 ## 4. Custom Hooks Deep Dive
 
 *   **`useAuth`:**
-    *   **Input:** `ndkInstance` (NDK | undefined)
+    *   **Input:** `ndkInstance` (NDK | undefined), `isNdkReady` (boolean). **Receives NDK state via props.**
     *   **Output:** `UseAuthReturn` (exported interface) containing:
         *   User Identity: `currentUserNpub`, `currentUserNsec`, `isLoggedIn`.
         *   Loading/Error: `isLoadingAuth`, `authError`.
@@ -136,17 +136,17 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
         *   **Tag Fetching Toggles:** `fetchImagesByTagEnabled` (boolean), `setFetchImagesByTagEnabled` (function), `fetchVideosByTagEnabled` (boolean), `setFetchVideosByTagEnabled` (function).
         *   **Default Tip Amount:** `defaultTipAmount` (number), `setDefaultTipAmount` (function).
         *   NIP-04 Helpers: `encryptDm`, `decryptDm`.
-    *   **Function:** Manages authentication state via IDB. Persists `followedTags`, **tag fetching enable flags**, and **default tip amount** to IDB (`settings` store). Provides NDK signer access and NIP-04 helpers.
+    *   **Function:** Manages authentication state via IDB. Persists `followedTags`, **tag fetching enable flags**, and **default tip amount** to IDB (`settings` store). **Uses the passed `ndkInstance` and `isNdkReady` props** for NIP-46 connections, subscriptions, and setting the NDK signer. **Explicitly sets `ndkInstance.signer` for nsec logins** during initialization.
 
 *   **`useMediaAuthors`:**
-    *   **Input:** `ndk` (NDK | undefined), `isReady` (boolean).
+    *   **Input:** `ndk` (NDK | undefined), `isReady` (boolean). **Receives NDK state via props.**
     *   **Output:** `mediaAuthors` (array of pubkeys), `isLoadingAuthors`.
     *   **Function:** Fetches the user's Kind 3 contact list using `ndk.subscribe` **only when `ndk` is provided and `isReady` is true**. Includes timeout fallback. Corrected dependency array to `[ndk, pubkey, isReady]`.
 
 *   **`useMediaNotes`:**
-    *   **Input:** `authors` (optional), `mediaType` ('image', 'podcast', 'video'), `ndk` (NDK | undefined), `limit` (optional, defaults vary), `until` (optional), `followedTags` (optional string array).
+    *   **Input:** `authors` (optional), `mediaType` ('image', 'podcast', 'video'), `ndk` (NDK | undefined), `limit` (optional, defaults vary), `until` (optional), `followedTags` (optional string array). **Receives NDK instance via props.**
     *   **Output:** `notes` (array of `NostrNote`), `isLoading`.
-    *   **Function:** Fetches Nostr notes based on filters **only when `ndk` is provided and authors/tags criteria met**. Builds filters using `authors` OR `followedTags`. Uses `limit`/`until`. Caches/retrieves from `mediaNoteCache`. Stabilized `processEvent` callback using corrected dependencies `[mediaType, getUrlRegexForMediaType]`.
+    *   **Function:** Fetches Nostr notes based on filters **only when `ndk` is provided**. Builds filters using `authors` OR `followedTags`. Uses `limit`/`until`. Caches/retrieves from `mediaNoteCache`. Stabilized `processEvent` callback using corrected dependencies `[mediaType, getUrlRegexForMediaType]`.
 
 *   **`useMediaState`:**
     *   **Input:** `initialImageNotes` (shuffled combined), `initialPodcastNotes`, `initialVideoNotes` (deduplicated, *sliced* unique), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength` (length of *sliced* videos).
@@ -186,12 +186,12 @@ The main layout is defined in `App.tsx` and consists of two primary sections wit
 *   **`useUserProfile` (Used for Author Profile):**
     *   **Input:** `hexPubkey` (string | null), `ndk` (NDK | undefined).
     *   **Output:** `profile` (**ProfileData** | null), `isLoading` (boolean).
-    *   **Function:** Fetches a single user's profile (Kind 0) using NDK lookups and caching (`profileCache`). Used in `AppContent` to get the `currentAuthorProfileData`.
+    *   **Function:** Fetches a single user's profile (Kind 0) using NDK lookups and caching (`profileCache`). Uses the passed `ndk` instance.
 
-*   **`useWallet`:** (No significant architecture changes noted, depends on NDK readiness)
-    *   **Input:** `ndkInstance` (NDK | undefined), `isNdkReady` (boolean).
+*   **`useWallet`:**
+    *   **Input:** `ndkInstance` (NDK | undefined), `isNdkReady` (boolean). **Receives NDK state via props.**
     *   **Output:** `UseWalletReturn` interface now includes `exportUnspentProofs: () => Promise<string | null>;`.
-    *   **Function:** Manages internal Cashu wallet. Loads/stores proofs/mint URL. Calculates balance. Interacts with `cashuHelper`. Listens for DMs (Kind 4) using NDK subscription **only when NDK is ready**. Decrypts DMs using `useAuth` helper. Provides function to export current proofs as a JSON string for backup.
+    *   **Function:** Manages internal Cashu wallet. Loads/stores proofs/mint URL. Calculates balance. Interacts with `cashuHelper`. Listens for DMs (Kind 4) using NDK subscription **only when `ndkInstance` is provided and `isNdkReady` is true**. Decrypts DMs using `useAuth` helper. Provides function to export current proofs as a JSON string for backup. **Uses the passed `ndkInstance` for subscriptions and publishing.**
 
 *   **`useNDKInit` (New Hook):**
     *   **Input:** None.

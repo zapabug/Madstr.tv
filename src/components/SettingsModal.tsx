@@ -8,6 +8,7 @@ import { TV_PUBKEY_NPUB } from '../constants';
 import HashtagSettings from './settings/HashtagSettings';
 import AuthSettings from './settings/AuthSettings';
 import WalletSettings from './settings/WalletSettings';
+import SettingsModalLayout from './settings/SettingsModalLayout';
 
 // Interface for props expected by SettingsModal
 interface SettingsModalProps {
@@ -232,6 +233,120 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
     if (!isOpen) return null;
 
+    // --- Prepare sections for the layout component --- 
+
+    // Auth Section: Render AuthSettings if logged out, Balance/Refresh if logged in
+    const authSectionContent = auth.isLoggedIn ? (
+        // --- Logged In: Show balance and refresh button --- 
+        <div className="flex justify-between items-center">                           
+            <p ref={loggedInNpubRef} tabIndex={-1} className="text-xl font-semibold text-yellow-400 focus:outline-none focus:ring-1 focus:ring-purple-500 rounded px-1">
+                {wallet.balanceSats.toLocaleString()} sats
+            </p>
+            <button
+                ref={refreshDepositsButtonRef}
+                onClick={() => {
+                    console.log('Manual deposit refresh triggered.');
+                    wallet.stopDepositListener();
+                    setTimeout(() => wallet.startDepositListener(auth.isLoggedIn, auth.currentUserNpub, auth.decryptDm), 100);
+                }}
+                className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                aria-label="Refresh Deposit Check"
+                title="Check for new deposits"
+            >
+                <FiRefreshCw className="h-5 w-5" />
+            </button>
+        </div>
+     ) : (
+         // --- Logged Out: Show AuthSettings component ---                         
+         <AuthSettings
+            setDisplayError={setDisplayError}
+            setDefaultMintUrl={wallet.setConfiguredMintUrl} // Pass the wallet function
+        />
+     );
+    const authSection = (
+        <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+            {authSectionContent}
+        </div>
+    );
+
+    // Wallet Section: Render WalletSettings component only if logged in
+    const walletSection = auth.isLoggedIn ? (
+        <WalletSettings setDisplayError={setDisplayError} />
+    ) : null;
+
+    // Media Toggles Section: Render toggles only if logged in
+    const mediaTogglesSection = auth.isLoggedIn ? (
+        <>
+             {/* Image Fetch Toggle */}
+             <div className="flex items-center justify-between pt-2 border-t border-gray-700 mt-4">
+                 <label htmlFor="fetchImagesToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4">
+                     Fetch images by followed hashtags
+                 </label>
+                 <button
+                     ref={fetchImagesToggleRef}
+                     id="fetchImagesToggle"
+                     role="switch"
+                     aria-checked={auth.fetchImagesByTagEnabled}
+                     onClick={handleToggleFetchImagesByTag}
+                     className={`${
+                         auth.fetchImagesByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'
+                     } relative inline-flex flex-shrink-0 items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500`}
+                 >
+                     <span className="sr-only">Use setting</span>
+                     <span
+                         aria-hidden="true"
+                         className={`${
+                             auth.fetchImagesByTagEnabled ? 'translate-x-6' : 'translate-x-1'
+                         } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
+                     />
+                 </button>
+             </div>
+             {/* Video Fetch Toggle */}
+             <div className="flex items-center justify-between pt-2">
+                 <label htmlFor="fetchVideosToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4">
+                     Fetch videos by followed hashtags
+                 </label>
+                 <button
+                     ref={fetchVideosToggleRef}
+                     id="fetchVideosToggle"
+                     role="switch"
+                     aria-checked={auth.fetchVideosByTagEnabled}
+                     onClick={handleToggleFetchVideosByTag}
+                     className={`${ 
+                         auth.fetchVideosByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'
+                     } relative inline-flex flex-shrink-0 items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500`}
+                 >
+                     <span className="sr-only">Use setting</span>
+                     <span
+                         aria-hidden="true"
+                         className={`${ 
+                             auth.fetchVideosByTagEnabled ? 'translate-x-6' : 'translate-x-1'
+                         } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
+                     />
+                 </button>
+             </div>
+             {/* Podcast Fetch Toggle */}
+             <div className="flex items-center justify-between">
+                 <label htmlFor="fetch-podcasts-toggle" className="text-sm font-medium text-gray-300 mr-2">Fetch Podcasts by Tag</label>
+                 <button
+                     id="fetch-podcasts-toggle"
+                     onClick={() => auth.setFetchPodcastsByTagEnabled(!auth.fetchPodcastsByTagEnabled)}
+                     className={`relative inline-flex items-center h-6 rounded-full w-11 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-400 transition-colors duration-200 ease-in-out ${auth.fetchPodcastsByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'}`}
+                     aria-pressed={auth.fetchPodcastsByTagEnabled}
+                 >
+                     <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${auth.fetchPodcastsByTagEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                 </button>
+             </div>
+        </>
+    ) : null;
+
+    // Hashtag Section: Render HashtagSettings component only if logged in
+    const hashtagSection = auth.isLoggedIn ? (
+        <HashtagSettings setDisplayError={setDisplayError} />
+    ) : null;
+
+    // --- End section preparation ---
+
     return (
         <motion.div
             ref={modalRef}
@@ -270,111 +385,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 {auth.authError && <p className="text-center text-red-500 bg-red-900/30 border border-red-600 rounded p-2 mb-4">Auth Error: {auth.authError}</p>}
 
 
-                {/* --- Authentication Section --- */}
-                 <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
-                    {auth.isLoggedIn ? (
-                        // --- Logged In: Only show balance here --- 
-                        <div className="flex justify-between items-center"> {/* Removed text-center and space-y */}                            
-                            <p ref={loggedInNpubRef} tabIndex={-1} className="text-xl font-semibold text-yellow-400 focus:outline-none focus:ring-1 focus:ring-purple-500 rounded px-1">
-                                {wallet.balanceSats.toLocaleString()} sats
-                            </p>
-                            <button
-                                ref={refreshDepositsButtonRef}
-                                onClick={() => {
-                                    console.log('Manual deposit refresh triggered.');
-                                    wallet.stopDepositListener();
-                                    setTimeout(() => wallet.startDepositListener(auth.isLoggedIn, auth.currentUserNpub, auth.decryptDm), 100);
-                                }}
-                                className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-                                aria-label="Refresh Deposit Check"
-                                title="Check for new deposits"
-                            >
-                                <FiRefreshCw className="h-5 w-5" />
-                            </button>
-                        </div>
-                     ) : (
-                         // --- Logged Out View ---                         
-                         <AuthSettings
-                            setDisplayError={setDisplayError}
-                            setDefaultMintUrl={wallet.setConfiguredMintUrl} // Pass the wallet function
-                        />
-                     )}
-                </div> {/* This closes the Authentication Section div */}            
-
-                {/* <<< MOVED UP: Wallet Section (excluding balance) >>> */}
-                {auth.isLoggedIn && (
-                    <WalletSettings setDisplayError={setDisplayError} />
-                )}
-                {/* <<< END MOVED Wallet Section >>> */}
-
-                {/* <<< Fetch Images by Tag Toggle >>> */}
-                {auth.isLoggedIn && (<div className="flex items-center justify-between pt-2 border-t border-gray-700 mt-4"> {/* Added top border/margin for separation */}
-                    <label htmlFor="fetchImagesToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4"> {/* Added padding right */}
-                        Fetch images by followed hashtags
-                    </label>
-                    <button
-                        ref={fetchImagesToggleRef}
-                        id="fetchImagesToggle"
-                        role="switch"
-                        aria-checked={auth.fetchImagesByTagEnabled}
-                        onClick={handleToggleFetchImagesByTag}
-                        className={`${
-                            auth.fetchImagesByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'
-                        } relative inline-flex flex-shrink-0 items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500`}
-                    >
-                        <span className="sr-only">Use setting</span> {/* For accessibility */}
-                        <span
-                            aria-hidden="true"
-                            className={`${
-                                auth.fetchImagesByTagEnabled ? 'translate-x-6' : 'translate-x-1'
-                            } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
-                        />
-                    </button>
-                </div>)}
-
-                {/* <<< Fetch Videos by Tag Toggle >>> */}
-                {auth.isLoggedIn && (<div className="flex items-center justify-between pt-2"> {/* No top border needed if directly below */}
-                    <label htmlFor="fetchVideosToggle" className="text-sm font-medium text-gray-300 cursor-pointer pr-4">
-                        Fetch videos by followed hashtags
-                    </label>
-                    <button
-                        ref={fetchVideosToggleRef}
-                        id="fetchVideosToggle"
-                        role="switch"
-                        aria-checked={auth.fetchVideosByTagEnabled}
-                        onClick={handleToggleFetchVideosByTag}
-                        className={`${ // <<< Re-added template literal for styles >>>
-                            auth.fetchVideosByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'
-                        } relative inline-flex flex-shrink-0 items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500`}
-                    >
-                        <span className="sr-only">Use setting</span>
-                        <span
-                            aria-hidden="true"
-                            className={`${ // <<< Re-added template literal for styles >>>
-                                auth.fetchVideosByTagEnabled ? 'translate-x-6' : 'translate-x-1'
-                            } pointer-events-none inline-block w-4 h-4 transform bg-white rounded-full shadow ring-0 transition duration-200 ease-in-out`}
-                        />
-                    </button>
-                </div>)}
-
-                {/* <<< NEW: Podcast Fetch Toggle >>> */}
-                {auth.isLoggedIn && (<div className="flex items-center justify-between">
-                    <label htmlFor="fetch-podcasts-toggle" className="text-sm font-medium text-gray-300 mr-2">Fetch Podcasts by Tag</label>
-                    <button
-                        id="fetch-podcasts-toggle"
-                        onClick={() => auth.setFetchPodcastsByTagEnabled(!auth.fetchPodcastsByTagEnabled)}
-                        className={`relative inline-flex items-center h-6 rounded-full w-11 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-400 transition-colors duration-200 ease-in-out ${auth.fetchPodcastsByTagEnabled ? 'bg-purple-600' : 'bg-gray-600'}`}
-                        aria-pressed={auth.fetchPodcastsByTagEnabled}
-                    >
-                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${auth.fetchPodcastsByTagEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                </div>)}
-
-                {/* --- Hashtag Following Section --- */}
-                {auth.isLoggedIn && (
-                    <HashtagSettings setDisplayError={setDisplayError} />
-                )}
-
+                {/* === Main Content Area: Use Layout Component === */}
+                <SettingsModalLayout 
+                    authSection={authSection} 
+                    walletSection={walletSection} 
+                    mediaTogglesSection={mediaTogglesSection} 
+                    hashtagSection={hashtagSection} 
+                />
+                
                 {/* --- Logout Button (Remains at bottom) --- */}
                 {auth.isLoggedIn && (
                     <div className="mt-6 pt-4 border-t border-gray-700 text-center"> {/* Added top margin/border */}
