@@ -50,4 +50,18 @@
 *   **Findings:** Core data fetching refactored to Applesauce. Persistent module resolution errors for `applesauce-core`/`applesauce-react` noted, blocking testing. Filter combination strategy (authors OR tags) in `App.tsx` needs verification. Error handling and relay status display need review.
 *   **Decision Made:** Completed primary data fetching refactor for `App` and `MessageBoard`.
 *   **Steps Explained:** Replaced NDK/custom hooks with `useQuery` for subscriptions and profile lookups.
-*   **Next Action:** Decide next step: address module resolution errors, verify filter strategy/relay status, refactor `MediaPanel.tsx`, or refactor `useWallet.ts`. 
+*   **Next Action:** Decide next step: address module resolution errors, verify filter strategy/relay status, refactor `MediaPanel.tsx`, or refactor `useWallet.ts`.
+
+## Interaction 5: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Identified that module resolution errors were due to using local file links for Applesauce packages instead of installing from a registry, and that the required `dist` build output folders were missing from the local clone.
+*   **VibeStorm Action:** 
+    *   Explained why local linking requires local builds and doesn\'t provide automatic updates from the registry/GitHub.
+    *   Recommended switching to installing published packages from npm.
+    *   Removed local `link:` dependencies for `applesauce-core`, `applesauce-react`, and `applesauce-signers` from `tvapp/package.json`.
+    *   Ran `rm -rf node_modules`, `rm pnpm-lock.yaml` (file not found), and `pnpm install` to clean and reinstall base dependencies.
+    *   Ran `pnpm install applesauce-core applesauce-react applesauce-signers` to install packages from the npm registry.
+*   **Findings:** Switched dependency management for Applesauce from local links to registry installation.
+*   **Decision Made:** Proceed with registry-installed packages.
+*   **Steps Explained:** Cleaned project dependencies and installed published Applesauce versions.
+*   **Next Action:** Test if the application runs without module resolution errors (`pnpm run dev`). If successful, proceed with testing/further refactoring (e.g., `MediaPanel.tsx`, `useWallet.ts`). 
