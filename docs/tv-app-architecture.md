@@ -141,18 +141,9 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **(Removed `useNDKInit`, `useNDK`)**
 
 *   **`useAuth` (`src/hooks/useAuth.ts`):**
-    *   **Input:** Uses `useStore` internally to access `QueryStore` and `SignerStore`.
-    *   **Output:** `UseAuthReturn` (exported interface) containing:
-        *   `currentUserNpub`: Current user npub (derived reactively from `SignerStore`).
-        *   `currentUserNsecForBackup`: State holding nsec for backup/display purposes only.
-        *   `isLoggedIn`: Boolean derived from **`SignerStore`'s active signer**.
-        *   `isLoadingAuth`, `authError`: Loading and error states.
-        *   NIP-46 state: `nip46ConnectUri`, `isGeneratingUri`.
-        *   NIP-46 functions: `initiateNip46Connection`, `cancelNip46Connection`. **Uses Applesauce `NostrConnectSigner`.**
-        *   Nsec functions: `generateNewKeys`, `loginWithNsec`, `logout`. **Uses Applesauce `SimpleSigner`.**
-        *   Hashtag state: `followedTags` (array of strings), `setFollowedTags` (function).
-        *   NIP-04 Helpers: `encryptDm`, `decryptDm` (functions, **uses the active signer instance from `SignerStore`**).
-    *   **Function:** Manages user authentication state via Applesauce stores. **Loads credentials from IndexedDB (`loadNsecFromDb`, `loadNip46DataFromDb`)** during initialization. **`loginWithNsec` creates a `SimpleSigner`**, activates it in `SignerStore`, and saves the nsec (`saveNsecToDb`). **`initiateNip46Connection` creates a `NostrConnectSigner`**, generates the connection URI, listens for connection, activates the signer in `SignerStore`, and **persists the session data (`localSecret`, `remotePubkey`, `connectedUserPubkey`) using `saveNip46DataToDb`**. `logout` deactivates the signer in `SignerStore` and clears credentials (`clearNsecFromDb`, `clearNip46DataFromDb`). Persists `followedTags` to IndexedDB (Placeholder). Provides NIP-04 DM encryption/decryption helpers using the active signer's methods.
+    *   **Input:** Needs access to Applesauce stores/providers (correct mechanism TBD, likely internal `useStore` for `QueryStore`).
+    *   **Output:** `UseAuthReturn` (exported interface) containing user state (npub, isLoggedIn, potentially nsec for backup), login/logout functions, NIP-46 connection methods, NIP-04 encrypt/decrypt methods, followed tags management, **and the `activeSigner` instance (`Nip07Interface | undefined`)**. **(NOTE: Current implementation is INCONSISTENT with Applesauce APIs and needs significant refactoring)**.
+    *   **Function:** Intended to handle user authentication via nsec (`SimpleSigner`) or NIP-46 (`NostrConnectSigner`). **Currently attempts (incorrectly) to use a central `SignerStore` accessed via `useStore`. Needs refactoring to manage `activeSigner` via local state (`useState`).** Must correctly use `SimpleSigner` (with `Uint8Array`) and `NostrConnectSigner` (correct constructor options and methods like `getNostrConnectURI`, `connect`, `close`). Needs to load/persist credentials via `idb`. Will provide NIP-04 methods delegating to the `activeSigner`. Also manages followed hashtags.
 
 *   **`useMediaState` (`src/hooks/useMediaState.ts`):** (Largely unchanged, inputs may simplify slightly if `useSubscribe` returns notes directly).
     *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
@@ -191,9 +182,9 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
         *   `loadWalletState`: Function to load proofs/balance/mint from IDB (`src/utils/idb.ts`).
         *   `startDepositListener`: Function to semantically signal intent (listener managed by internal `useEffect`/`eventStore.filters`).
         *   `stopDepositListener`: Function to semantically signal intent (listener managed by internal `useEffect`/`eventStore.filters`).
-        *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs **(signs event via `auth.activeSigner`, adds to `eventStore`)**.
+        *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs (signs event via `auth.activeSigner`, adds to `eventStore`).
         *   `setConfiguredMintUrl`: Function to set and save the mint URL.
-    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`src/utils/cashu.ts`) (`redeemToken`, `createTokenForAmount`) for Cashu operations. **Uses `useEventStore().filters()` with an RxJS subscription** to listen for incoming Kind 4 DMs tagged with the user's pubkey. Attempts to decrypt DMs using `auth.decryptDm` and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function which generates tokens, constructs a Kind 4 event, **signs it using the `activeSigner` (assumed available via `auth`)**, and **adds the signed event to the `EventStore` (assuming this triggers relay publishing)**.
+    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`src/utils/cashu.ts`) (`redeemToken`, `createTokenForAmount`) for Cashu operations. Uses `useEventStore().filters()` with an RxJS subscription to listen for incoming Kind 4 DMs tagged with the user's pubkey. Attempts to decrypt DMs using `auth.decryptDm` and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function which generates tokens, constructs a Kind 4 event, signs it using the `activeSigner` (**assumed available via `auth` - requires `useAuth` refactor**), and adds the signed event to the `EventStore` (assuming this triggers relay publishing).
 
 *   **REMOVED Custom Hooks:**
     *   `useMediaAuthors`: Replaced by direct **Applesauce queries** for Kind 3 in `App.tsx` and signer management via `SignerStore`.

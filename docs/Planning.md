@@ -99,3 +99,40 @@
 *   **Decision Made:** Completed `useWallet.ts` refactor with current best assumptions.
 *   **Steps Explained:** Replaced NDK logic with Applesauce patterns, managing subscriptions manually and updating publishing approach.
 *   **Next Action:** Verify `auth.activeSigner` exposure in `useAuth.ts`, test the app, or refactor `MediaPanel.tsx`. 
+
+## Interaction 8: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Run `pnpm run dev`, identify remaining NDK imports in `MediaPanel.tsx` and `ImageFeed.tsx`.
+*   **VibeStorm Action:**
+    *   Refactored `src/components/MediaPanel.tsx`:
+        *   Removed NDK `useProfile` import.
+        *   Imported `Hooks` from `applesauce-react`, `ProfileQuery` and `ProfileContent` from `applesauce-core`.
+        *   Used `Hooks.useStoreQuery(ProfileQuery, ...)` to fetch profile data for the selected item.
+    *   Refactored `src/components/ImageFeed.tsx`:
+        *   Removed NDK `useProfile` and `useNDK` imports.
+        *   Imported Applesauce hooks and types (`Hooks`, `ProfileQuery`, `ProfileContent`, `EventStore`).
+        *   Used `Hooks.useStoreQuery(ProfileQuery, ...)` for profile fetching.
+        *   Removed NDK instance usage.
+        *   Modified `handleTip` to construct a placeholder Zap event (Kind 9735), sign using `auth.activeSigner` (assumed), and add via `eventStore.add()`.
+        *   Defined a local `EventSigner` interface.
+    *   Renamed `NostrProfile` interface to `ProfileContent` in `src/types/nostr.ts`.
+*   **Findings:** `MediaPanel.tsx` and `ImageFeed.tsx` refactored successfully, removing component-level NDK dependencies. Runtime errors revealed that `SignerStore` is not exported from `applesauce-core` or `applesauce-react`.
+*   **Decision Made:** Correct the instantiation logic in `main.tsx` based on `QueryStoreProvider`'s actual API.
+*   **Steps Explained:** Replaced NDK hooks with Applesauce equivalents in components. Investigated and identified incorrect store setup in `main.tsx`.
+*   **Next Action:** Fix `main.tsx` imports and provider props.
+
+## Interaction 9: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Runtime error `doesn't provide an export named: 'SignerStore'`. User attempts `pnpm run dev --force`.
+*   **VibeStorm Action:**
+    *   Corrected `src/main.tsx`:
+        *   Removed `SignerStore` import.
+        *   Removed `signerStore` instantiation.
+        *   Removed `signerStore` prop from `QueryStoreProvider`.
+    *   Identified the root cause of the runtime error: `src/hooks/useAuth.ts` still incorrectly imports `SignerStore` from `applesauce-core`.
+    *   Corrected the import in `src/hooks/useAuth.ts`, removing `SignerStore`.
+    *   Identified numerous other linter errors in `useAuth.ts` indicating significant inconsistencies with Applesauce APIs (`useStore`, `NostrEvent`, `Signer` type, `SimpleSigner` constructor, `NostrConnectSigner` API).
+*   **Findings:** `main.tsx` is now likely correct. `useAuth.ts` is fundamentally flawed in its interaction with Applesauce stores and signers. It incorrectly uses `useStore(SignerStore)`, needs to manage `activeSigner` via local state, uses incorrect signer APIs, and needs to return the `activeSigner`.
+*   **Decision Made:** Pause further component refactoring/testing. Prioritize fixing `useAuth.ts`.
+*   **Steps Explained:** Corrected `main.tsx`, identified the true source of the runtime error in `useAuth.ts`, discovered major API inconsistencies in `useAuth.ts` requiring a rewrite.
+*   **Next Action:** Refactor `useAuth.ts` based on correct Applesauce API usage (local state for signer, correct signer methods, expose active signer). 

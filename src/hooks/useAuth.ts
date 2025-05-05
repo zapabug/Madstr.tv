@@ -9,7 +9,9 @@ import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
 
 // Applesauce imports
 import { useStore } from 'applesauce-react';
-import { QueryStore, SignerStore, NostrEvent } from 'applesauce-core'; // Assuming NostrEvent export exists
+// Import QueryStore and NostrEvent type from core
+import { QueryStore, NostrEvent } from 'applesauce-core';
+// SignerStore will be inferred from useStore or imported correctly later if needed
 import { SimpleSigner, NostrConnectSigner, Signer } from 'applesauce-signers'; // Assuming Signer interface export
 
 // Local Utils/Constants imports
@@ -55,6 +57,7 @@ let activeNip46Signer: NostrConnectSigner | null = null;
 export const useAuth = (): UseAuthReturn => {
     // --- Get Stores from Context ---
     const queryStore = useStore(QueryStore);
+    // Get SignerStore via useStore - TS should infer the type if SignerStore class is available at runtime
     const signerStore = useStore(SignerStore);
 
     // --- State ---
