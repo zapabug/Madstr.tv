@@ -3,9 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth provides all necessary states and functions, and exports its return type
 import { useWallet, UseWalletReturn } from '../hooks/useWallet'; // Import useWallet
 import QRCode from 'react-qr-code'; // Import QRCode for backup
-import NDK from '@nostr-dev-kit/ndk'; // Import NDK class directly
-import { useNDK } from '@nostr-dev-kit/ndk-hooks'; // Correct the import path for useNDK
-type NDKInstance = NDK; // Alias NDK class as NDKInstance type
 
 // Helper to truncate npub/nsec
 const truncateKey = (key: string | null, length = 16): string => {
@@ -18,8 +15,7 @@ const truncateKey = (key: string | null, length = 16): string => {
 export interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    // REMOVED: ndkInstance prop is no longer needed, use useNDK hook
-    // ndkInstance: NDK | null; 
+    // REMOVED: ndkInstance prop is no longer needed
 }
 
 // Function to truncate npub for display
@@ -30,9 +26,7 @@ const truncateNpub = (npub: string | null): string => {
 };
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-    // Get NDK instance via hook
-    const { ndk } = useNDK();
-    // Use auth hook (gets NDK internally)
+    // Use auth hook (gets necessary stores internally via useStore)
     const auth = useAuth();
     const wallet: UseWalletReturn = useWallet(); // Use the wallet hook
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
@@ -75,13 +69,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         setIsSavingMintUrl(false);
     }, [isOpen, auth.isLoggedIn, wallet.configuredMintUrl]);
 
-    // Effect to start/stop deposit listener based on login state and NDK instance
+    // Effect to start/stop deposit listener based on login state
     useEffect(() => {
-        if (isOpen && auth.isLoggedIn && ndk) {
+        if (isOpen && auth.isLoggedIn) { // Check only for login state now
             console.log('SettingsModal: Attempting to start deposit listener.');
-            wallet.startDepositListener(auth, ndk);
+            wallet.startDepositListener(auth, null); // Pass null temporarily
         } else {
-             console.log('SettingsModal: Stopping deposit listener (modal closed, not logged in, or no NDK).');
+             console.log('SettingsModal: Stopping deposit listener (modal closed or not logged in).');
             wallet.stopDepositListener();
         }
         // Ensure listener stops when modal closes or user logs out
@@ -89,8 +83,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             console.log('SettingsModal: Cleaning up deposit listener effect.');
             wallet.stopDepositListener();
         };
-        // Dependencies: isOpen, auth object (for isLoggedIn and methods), ndk, wallet hook instance
-    }, [isOpen, auth, ndk, wallet]);
+        // Dependencies: isOpen, auth object, wallet hook instance (ndk removed)
+    }, [isOpen, auth, wallet]);
 
     // Focus trapping and initial focus
     useEffect(() => {

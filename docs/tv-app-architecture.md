@@ -125,9 +125,9 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
 *   **`SettingsModal.tsx` (`src/components/SettingsModal.tsx`):**
     *   **Purpose:** Provides a UI for managing user identity (nsec generation/login, NIP-46 connection), application settings (followed hashtags), and the internal Cashu wallet.
     *   **Rendered By:** `App.tsx` (`src/App.tsx`) (conditionally).
-    *   **Key Props:** `isOpen`, `onClose`. (No longer needs `ndkInstance` prop, uses **Applesauce hooks**).
-    *   **Hook Usage (Internal):** `useAuth`, `useWallet`, **Applesauce hooks (`useStore`)**.
-    *   **Functionality:** Handles user login/logout via nsec or NIP-46, displays QR codes for connection/backup (with warnings), allows adding/removing followed hashtags. Includes a "Wallet" section displaying balance, deposit instructions (DM to TV npub), allows configuring the Cashu mint URL, shows wallet status/errors, and includes security warnings about browser-based proof storage. Manages focus internally for TV navigation. Starts/stops the wallet's deposit listener when opened/closed while logged in. **Will need updates to use Applesauce signers/stores via `useAuth` and `useWallet`.**
+    *   **Key Props:** `isOpen`, `onClose`.
+    *   **Hook Usage (Internal):** `useAuth`, `useWallet`.
+    *   **Functionality:** Handles user login/logout via nsec or NIP-46, displays QR codes for connection/backup (with warnings), allows adding/removing followed hashtags. Includes a "Wallet" section displaying balance, deposit instructions (DM to TV npub), allows configuring the Cashu mint URL, shows wallet status/errors, and includes security warnings about browser-based proof storage. Manages focus internally for TV navigation. Starts/stops the wallet's deposit listener **(via internal `useWallet` logic based on `useQuery`/`eventStore` now)** when opened/closed while logged in. Uses Applesauce signers/stores via `useAuth` and `useWallet`.
 
 *   **`RelayStatus.tsx` (`src/components/RelayStatus.tsx`), `QRCode.tsx` (`src/components/QRCode.tsx`):** Utility components. `RelayStatus` now includes the button to open the `SettingsModal`.
 
@@ -179,28 +179,24 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **Output:** None (sets up side effect).
     *   **Function:** Sets up an interval timer using `setInterval`. Calls `onTick` every `intervalDuration` milliseconds, but only if `isActive` is true. Clears the interval on cleanup or when `isActive` becomes false.
 
-*   **`useWallet` (`src/hooks/useWallet.ts`):** (Dependencies on `useAuth` updated)
-    *   **Input:** Uses `useAuth`, **`useStore`** internally.
+*   **`useWallet` (`src/hooks/useWallet.ts`):** (Refactored for Applesauce)
+    *   **Input:** Uses `useAuth()`, `Hooks.useQueryStore()`, `Hooks.useEventStore()` internally.
     *   **Output:** `UseWalletReturn` (exported interface) containing:
         *   `proofs`: Array of stored Cashu proofs (`Proof & { mintUrl: string }[]`).
         *   `balanceSats`: Current total wallet balance (number).
-        *   `isListeningForDeposits`: Boolean flag for DM listener status.
+        *   `isListeningForDeposits`: Boolean flag derived from subscription status.
         *   `walletError`: String or null for wallet errors.
         *   `isLoadingWallet`: Boolean flag for initial loading/processing state.
         *   `configuredMintUrl`: Currently configured Cashu mint URL (string | null).
         *   `loadWalletState`: Function to load proofs/balance/mint from IDB (`src/utils/idb.ts`).
-        *   `startDepositListener`: Function to start the Nostr DM listener **(will use `useQuery`)**.
-        *   `stopDepositListener`: Function to stop the DM listener.
-        *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs **(will use signer from `useAuth`)**.
+        *   `startDepositListener`: Function to semantically signal intent (listener managed by internal `useEffect`/`eventStore.filters`).
+        *   `stopDepositListener`: Function to semantically signal intent (listener managed by internal `useEffect`/`eventStore.filters`).
+        *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs **(signs event via `auth.activeSigner`, adds to `eventStore`)**.
         *   `setConfiguredMintUrl`: Function to set and save the mint URL.
-    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`src/utils/cashu.ts`) (`redeemToken`, `createTokenForAmount`) for Cashu operations. Listens for incoming Nostr DMs (Kind 4) tagged with the user's pubkey using **Applesauce's `useQuery` (To Be Implemented)**. Attempts to decrypt DMs using **`auth.decryptDm` (now uses active Applesauce signer)** and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function to generate tokens (using `configuredMintUrl`) and send them via encrypted DMs (using **`auth.encryptDm` and the active Applesauce signer to sign/publish via `QueryStore`**).
+    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`src/utils/cashu.ts`) (`redeemToken`, `createTokenForAmount`) for Cashu operations. **Uses `useEventStore().filters()` with an RxJS subscription** to listen for incoming Kind 4 DMs tagged with the user's pubkey. Attempts to decrypt DMs using `auth.decryptDm` and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function which generates tokens, constructs a Kind 4 event, **signs it using the `activeSigner` (assumed available via `auth`)**, and **adds the signed event to the `EventStore` (assuming this triggers relay publishing)**.
 
 *   **REMOVED Custom Hooks:**
     *   `useMediaAuthors`: Replaced by direct **Applesauce queries** for Kind 3 in `App.tsx` and signer management via `SignerStore`.
-    *   `useMediaNotes`: Replaced by **`useQuery`** calls in `App.tsx`.
-    *   **`useMediaContent`**: Replaced by direct state management and **`useQuery`** calls in `App.tsx`.
-    *   `useCurrentAuthor`: Functionality replaced by deriving pubkey from current note in `App.tsx` and using **Applesauce profile fetching (`useQuery`)** in rendering components (`ImageFeed`, `VideoPlayer`).
-    *   `useProfileData`: Replaced by direct usage of **Applesauce profile fetching (`useQuery`)** in components (`MediaPanel`, `ImageFeed`, `MessageItem`).
 
 ## 5. Large Files (>500 Lines) - Potential Refactor Targets
 

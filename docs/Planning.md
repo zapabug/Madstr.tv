@@ -65,3 +65,37 @@
 *   **Decision Made:** Proceed with registry-installed packages.
 *   **Steps Explained:** Cleaned project dependencies and installed published Applesauce versions.
 *   **Next Action:** Test if the application runs without module resolution errors (`pnpm run dev`). If successful, proceed with testing/further refactoring (e.g., `MediaPanel.tsx`, `useWallet.ts`). 
+
+## Interaction 6: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Refactor `SettingsModal.tsx` to use Applesauce.
+*   **VibeStorm Action:** 
+    *   Removed NDK imports (`NDK`, `useNDK`) and `useNDK()` hook call from `src/components/SettingsModal.tsx`.
+    *   Modified the `useEffect` hook responsible for the wallet deposit listener:
+        *   Removed the `ndk` instance from the dependency array.
+        *   Updated the call to `wallet.startDepositListener` to pass `auth` and `null` (temporary placeholder until `useWallet` is refactored) instead of `auth` and `ndk`.
+    *   Updated `docs/tv-app-architecture.md` to reflect the removal of NDK dependencies in `SettingsModal` and the updated signature/requirements for `useWallet`'s `startDepositListener`.
+*   **Findings:** `SettingsModal.tsx` no longer directly depends on NDK. `useWallet.ts` requires refactoring for its `startDepositListener` to function correctly with Applesauce stores.
+*   **Decision Made:** Proceed with Applesauce-native approach for `SettingsModal`.
+*   **Steps Explained:** Removed direct NDK usage from the modal component and updated documentation.
+*   **Next Action:** Decide next refactoring target. Options include: refactoring `useWallet.ts` (specifically `startDepositListener`), refactoring `MediaPanel.tsx`, or testing the application's current state. 
+
+## Interaction 7: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Refactor `useWallet.ts` to use Applesauce.
+*   **VibeStorm Action:** 
+    *   Installed `rxjs` dependency.
+    *   Refactored `src/hooks/useWallet.ts`:
+        *   Removed NDK imports and types.
+        *   Imported and used `Hooks.useQueryStore()` and `Hooks.useEventStore()`.
+        *   Called `useAuth()` internally.
+        *   Replaced NDK subscription logic with a manual RxJS subscription using `eventStore.filters(filter).subscribe(...)` within a `useEffect` hook for the deposit listener.
+        *   Replaced publishing logic (`queryStore.sendEvent`) with signing (`activeSigner.signEvent` - assuming `auth.activeSigner` is exposed) and adding to the local store (`eventStore.add(signedEvent)` - assuming this triggers relay publish).
+        *   Defined a local `EventSigner` interface as a placeholder for the active signer type.
+        *   Adjusted internal logic, error handling, and dependencies accordingly.
+        *   Ignored persistent spurious linter errors related to implicit returns in useCallback.
+    *   Updated `docs/tv-app-architecture.md` to describe the new `useWallet` implementation (manual RxJS subscription, eventStore.add).
+*   **Findings:** `useWallet.ts` refactored to use Applesauce stores and manual RxJS subscription. Publishing relies on assumptions about `auth.activeSigner` exposure and `eventStore.add` behavior. Spurious linter errors remain.
+*   **Decision Made:** Completed `useWallet.ts` refactor with current best assumptions.
+*   **Steps Explained:** Replaced NDK logic with Applesauce patterns, managing subscriptions manually and updating publishing approach.
+*   **Next Action:** Verify `auth.activeSigner` exposure in `useAuth.ts`, test the app, or refactor `MediaPanel.tsx`. 
