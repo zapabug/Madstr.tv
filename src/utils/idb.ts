@@ -30,11 +30,13 @@ interface AppDbSchema extends DBSchema {
 // Export StoredProof type
 export type StoredProof = Proof & { mintUrl: string };
 
+// Updated structure for Applesauce NostrConnectSigner persistence
 export interface StoredNip46Data {
   id: string; // Fixed key like 'currentNip46Session'
-  remoteNpub: string;
-  token: string;
-  relay?: string; // Optional relay hint
+  localSecret: string; // Hex-encoded secret key of the local NIP-46 client
+  remotePubkey: string; // Hex-encoded public key of the remote signer service
+  connectedUserPubkey: string; // Hex-encoded public key of the actual user logged in
+  relays?: string[]; // Optional relays used for connection
 }
 
 // --- Database Initialization and Upgrade Logic ---
@@ -302,32 +304,33 @@ const deleteProofsBySecret = async (secretsToDelete: string[]): Promise<void> =>
 
 const deleteProofs = (mintUrl: string) => deleteDbEntry('cashuProofs', mintUrl);
 
-// Nsec Storage
-const NSEC_KEY = 'currentUserNsec';
-const loadNsecFromDb = async (): Promise<string | null> => {
-    const result = await get('nsec', NSEC_KEY);
-    return typeof result === 'string' ? result : null;
+// Nsec storage
+const NSEC_KEY = 'currentUserNsec'; // Fixed key
+export const loadNsecFromDb = async (): Promise<string | null> => {
+    const nsec = await get('nsec', NSEC_KEY);
+    return typeof nsec === 'string' ? nsec : null;
 };
-const saveNsecToDb = (nsec: string) => put('nsec', nsec, NSEC_KEY);
-const clearNsecFromDb = () => deleteDbEntry('nsec', NSEC_KEY);
+export const saveNsecToDb = (nsec: string) => put('nsec', nsec, NSEC_KEY);
+export const clearNsecFromDb = () => deleteDbEntry('nsec', NSEC_KEY);
 
-// NIP-46 Session Storage
-const NIP46_KEY = 'currentNip46Session';
-const loadNip46DataFromDb = async (): Promise<StoredNip46Data | null> => {
-    const result = await get('nip46Session', NIP46_KEY);
-    // Basic type check
-    if (result && typeof result.remoteNpub === 'string' && typeof result.token === 'string') {
-        return result as StoredNip46Data;
+// NIP-46 storage
+const NIP46_KEY = 'currentNip46Session'; // Fixed key
+export const loadNip46DataFromDb = async (): Promise<StoredNip46Data | null> => {
+    const data = await get('nip46Session', NIP46_KEY);
+    // Basic validation - could add more checks
+    if (data && typeof data === 'object' && data.id === NIP46_KEY && data.localSecret && data.remotePubkey && data.connectedUserPubkey) {
+        return data as StoredNip46Data;
     }
     return null;
 };
-const saveNip46DataToDb = (data: Omit<StoredNip46Data, 'id'>) => {
-    const storedData: StoredNip46Data = { ...data, id: NIP46_KEY };
-    return put('nip46Session', storedData);
+// Note: The 'value' type here is StoredNip46Data, defined in the schema section
+export const saveNip46DataToDb = (data: Omit<StoredNip46Data, 'id'>) => {
+    const dataToStore: StoredNip46Data = { ...data, id: NIP46_KEY };
+    return put('nip46Session', dataToStore);
 };
-const clearNip46DataFromDb = () => deleteDbEntry('nip46Session', NIP46_KEY);
+export const clearNip46DataFromDb = () => deleteDbEntry('nip46Session', NIP46_KEY);
 
-// Followed Tags Storage
+// Followed Tags storage
 const FOLLOWED_TAGS_KEY = 'userFollowedTags';
 const loadFollowedTagsFromDb = async (): Promise<string[] | null> => {
     const result = await get('followedTags', FOLLOWED_TAGS_KEY);
