@@ -7,7 +7,9 @@ import './index.css';
 // import { NDKProvider } from '@nostr-dev-kit/ndk-react';
 
 // Import Applesauce using package names
-import { EventStore, QueryStore, SignerStore } from 'applesauce-core';
+// Core stores
+import { EventStore, QueryStore } from 'applesauce-core';
+// React provider
 import { QueryStoreProvider } from 'applesauce-react';
 
 // Remove NDK setup logic
@@ -45,14 +47,13 @@ import { QueryStoreProvider } from 'applesauce-react';
 // Initialize Applesauce Core Stores
 const eventStore = new EventStore();
 const queryStore = new QueryStore(eventStore);
-const signerStore = new SignerStore();
 
 // Render the app with Applesauce Provider
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {/* Remove NDKProvider */}
     {/* <NDKProvider ndk={ndk}> */}
-    <QueryStoreProvider queryStore={queryStore} signerStore={signerStore}>
+    <QueryStoreProvider queryStore={queryStore}>
       <App />
     </QueryStoreProvider>
     {/* </NDKProvider> */}

@@ -1,7 +1,7 @@
 // src/types/nostr.ts
 
 // Represents basic Nostr profile data extracted from Kind 0
-export interface NostrProfile {
+export interface ProfileContent {
     npub: string;
     pubkey: string;
     name?: string;

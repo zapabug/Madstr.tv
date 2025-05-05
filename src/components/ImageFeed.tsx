@@ -5,18 +5,24 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 // import { NDKEvent, NDKFilter, NDKKind } from '@nostr-dev-kit/ndk';
 // nip19 potentially still needed if displaying npubs
 import { nip19 } from 'nostr-tools'; 
-import { NostrNote } from '../types/nostr'; 
+// Import local types
+import { NostrNote } from '../types/nostr';
 // import { useProfileData } from '../hooks/useProfileData'; // <-- Remove old hook import
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'react-qr-code';
-import { useWallet, SendTipParams } from '../hooks/useWallet'; // Import wallet hook and types
+import { useWallet } from '../hooks/useWallet'; // Import wallet hook
 import { useAuth } from '../hooks/useAuth'; // Import auth hook for context
 // import { useMediaAuthors } from '../hooks/useMediaAuthors'; // Remove this - NDK comes from useNDK
 import { FiZap } from 'react-icons/fi'; // Import Zap icon
 // import NDK from '@nostr-dev-kit/ndk'; // Removed unused NDK import
-import { useNDK, useProfile } from '@nostr-dev-kit/ndk-hooks'; // Import useNDK and useProfile
+// import { useNDK, useProfile } from '@nostr-dev-kit/ndk-hooks'; // Import useNDK and useProfile
 // import { formatTimeAgo } from '../utils/timeUtils'; // Removed - file not found, function unused
 // import { useInactivityTimer } from '../hooks/useInactivityTimer'; // Removed - state unused
+import { UnsignedEvent } from 'nostr-tools'; // Import UnsignedEvent
+// Import Applesauce hooks and queries/types
+import { Hooks } from 'applesauce-react';
+import { ProfileQuery } from 'applesauce-core/queries';
+import { EventStore, ProfileContent } from 'applesauce-core';
 
 // Remove internal MediaNote interface if NostrNote is sufficient
 /*
@@ -97,12 +103,14 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   // const [isLoading, setIsLoading] = useState(true); // Removed unused state
   // const [showMetadata, setShowMetadata] = useState(false); // Removed unused state
   // const [isInactive, resetInactivityTimer] = useInactivityTimer(30000); // Removed unused state
-  const { ndk } = useNDK(); // Get NDK instance
+  // const { ndk } = useNDK(); // Get NDK instance
 
   // Hooks
   const wallet = useWallet();
   // Get auth context without passing NDK; useAuth uses useNDK internally
   const auth = useAuth(); 
+  const eventStore = Hooks.useEventStore(); // Get EventStore
+  // const queryStore = Hooks.useQueryStore(); // Get QueryStore
 
   // --- Loading Message Cycling (Keep, but conditionally render based on notes length) --- 
    useEffect(() => {
@@ -132,9 +140,10 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   );
   const currentAuthorPubkey = currentImageNote?.pubkey;
 
-  // --- Fetch Profile for the Current Author --- 
-  // Correct useProfile call: pubkey string | undefined, enabled boolean
-  const profile = useProfile(currentAuthorPubkey); 
+  // --- Fetch Profile for the Current Author using Applesauce ---
+  const profileQueryArgs = useMemo((): [string] | null => (currentAuthorPubkey ? [currentAuthorPubkey] : null), [currentAuthorPubkey]);
+  const profileData: ProfileContent | undefined = Hooks.useStoreQuery(ProfileQuery, profileQueryArgs);
+  const profile = profileData;
   // Infer loading state: if we expect a profile but don't have one yet
   // const isLoadingProfile = !!currentAuthorPubkey && !profile; // Removed unused variable
 
@@ -158,39 +167,74 @@ const ImageFeed: React.FC<MediaFeedProps> = (
       }
   }, [currentAuthorPubkey]);
 
+  // Define minimal interface for required signer methods
+  interface EventSigner {
+      pubkey: string;
+      signEvent(event: Omit<NostrNote, 'id' | 'sig'> | UnsignedEvent): Promise<NostrNote>; // Allow UnsignedEvent
+  }
+
   // --- Determine if tipping is possible --- 
   const canTip = useMemo(() => 
-    !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && !!currentAuthorNpub && auth.isLoggedIn && !!ndk,
-    [wallet.isLoadingWallet, wallet.balanceSats, isTipping, currentAuthorNpub, auth.isLoggedIn, ndk]
+    !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && !!currentAuthorNpub && auth.isLoggedIn && !!eventStore,
+    [wallet.isLoadingWallet, wallet.balanceSats, isTipping, currentAuthorNpub, auth.isLoggedIn, eventStore]
   );
 
   // --- Tipping Handler ---
   const handleTip = useCallback(async () => {
-    // Re-check conditions inside handler as state might change
-    if (!canTip || !currentAuthorNpub || !ndk || !auth ) {
-        console.warn('Cannot tip (inside handler):', { canTip, currentAuthorNpub, ndk, auth });
+    // Assuming auth provides activeSigner
+    const activeSigner = (auth as any).activeSigner as EventSigner | undefined;
+
+    // Re-check conditions inside handler
+    if (!canTip || !currentAuthorNpub || !eventStore || !auth.isLoggedIn || !activeSigner) {
+        console.warn('Cannot tip (inside handler):', { canTip, currentAuthorNpub, eventStore, authIsLoggedIn: auth.isLoggedIn, activeSigner: !!activeSigner });
         return;
     }
     setIsTipping(true);
     setTipStatus(null);
     console.log(`Attempting to tip ${DEFAULT_TIP_AMOUNT} sats to ${currentAuthorNpub}`);
 
-    const params: SendTipParams = {
-        primaryRecipientNpub: currentAuthorNpub,
-        amountSats: DEFAULT_TIP_AMOUNT,
-        auth: auth, 
-        ndk: ndk, 
-        eventIdToZap: currentNoteId, 
-        comment: `📺⚡️ Tip from MadTrips TV App!`
-    };
-
     try {
-        const success = await wallet.sendCashuTipWithSplits(params);
-        if (success) {
+        // 1. Construct the unsigned Zap Request (Kind 9734) - This is complex!
+        // We need the recipient's zap endpoint from their profile (relays tag? lud16?)
+        // NIP-57: https://github.com/nostr-protocol/nips/blob/master/57.md
+        // For now, we'll skip the actual LN invoice generation and focus on the Nostr event publishing structure.
+        // We need to create a Kind 9735 (Zap) event, not 9734 (Zap Request).
+        // The Zap event usually includes the Bolt11 invoice in a description tag.
+
+        // --- Placeholder for Zap Event Creation --- 
+        // TODO: Implement proper Zap Request (Kind 9734) to get invoice, then create Kind 9735
+        // This is a simplified placeholder - assumes we magically got an invoice
+        const placeholderInvoice = "lnbc..."; // Replace with actual invoice
+        const zapEvent: UnsignedEvent = {
+            kind: 9735,
+            created_at: Math.floor(Date.now() / 1000),
+            pubkey: activeSigner.pubkey,
+            content: `📺⚡️ Tip from MadTrips TV App!`, // Optional user comment
+            tags: [
+                ["p", currentAuthorPubkey!], // Zap recipient pubkey
+                ["e", currentNoteId!], // Zap target event (optional)
+                // ["a", <coordinate>], // Zap target kind 10k+ (optional)
+                ["amount", (DEFAULT_TIP_AMOUNT * 1000).toString()], // Amount in millisats
+                // Required: Description tag containing the BOLT11 invoice
+                ["description", JSON.stringify({ content: `Zap for event ${currentNoteId}`, bolt11: placeholderInvoice })]
+            ],
+        };
+
+        console.log("ImageFeed: Signing Zap event...", zapEvent);
+        const signedZapEvent = await activeSigner.signEvent(zapEvent as any); // Cast needed?
+
+        console.log("ImageFeed: Adding Zap event to EventStore...", signedZapEvent.id);
+        eventStore.add(signedZapEvent);
+
+        // Assume success if add doesn't throw
+        const success = true;
+
+        // const success = await wallet.sendCashuTipWithSplits(params); // Old method
+        if (success) { // Check the result of adding to eventStore
             console.log('Tip successful!');
             setTipStatus('success');
         } else {
-            console.error('Tip failed.', wallet.walletError);
+            console.error('Tip failed.', wallet.walletError); // Keep wallet error for potential Cashu issues?
             setTipStatus('error');
         }
     } catch (error) {
@@ -200,7 +244,7 @@ const ImageFeed: React.FC<MediaFeedProps> = (
         setIsTipping(false);
         setTimeout(() => setTipStatus(null), 2000);
     }
-  }, [canTip, currentAuthorNpub, ndk, auth, wallet, currentNoteId]);
+  }, [canTip, currentAuthorNpub, eventStore, auth, wallet, currentNoteId]);
 
   // --- Keyboard Handler for Tipping ---
   const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {

@@ -1,12 +1,13 @@
 // src/components/MediaPanel.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 // Removed: import { usePodcastNotes } from '../hooks/usePodcastNotes'; // Data will come via props
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback'; // Keep for playback
-// Import useProfile from ndk-hooks
-import { useProfile } from '@nostr-dev-kit/ndk-hooks';
-import { NostrNote } from '../types/nostr'; // Fixed import path
+// Import Applesauce hooks and queries
+import { Hooks } from 'applesauce-react';
+import { ProfileQuery } from 'applesauce-core/queries'; // Adjust path if necessary
+import { NostrNote, ProfileContent } from '../types/nostr'; // Import ProfileContent type
 
 // --- Helper to format time (seconds) into MM:SS ---
 const formatTime = (seconds: number): string => {
@@ -108,9 +109,14 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   const mainContainerRef = useRef<HTMLDivElement>(null); 
   const toggleButtonRef = useRef<HTMLButtonElement>(null); // Mode Toggle Button
 
-  // --- Get Author Profile --- 
+  // --- Get Author Profile using Applesauce ---
   const currentItemPubkey = notes[currentItemIndex]?.pubkey;
-  const profile = useProfile(currentItemPubkey); // Use hook to get profile for the current item's author
+  const profileQueryArgs = useMemo((): [string] | null => (currentItemPubkey ? [currentItemPubkey] : null), [currentItemPubkey]);
+  // Fetch the raw Kind 0 event data
+  const profileData: ProfileContent | undefined = Hooks.useStoreQuery(ProfileQuery, profileQueryArgs);
+
+  // Use the fetched profile data directly
+  const profile = profileData;
 
   // Use inactivity timer (No change)
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
@@ -345,12 +351,16 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                     itemBg = 'bg-purple-700 bg-opacity-70'; // Always use purple when selected
                 }
                 
-                // Profile Data lookup
-                const itemPubkey = note.posterPubkey;
-                // Call useProfile hook within the map function
-                const profile = useProfile(itemPubkey, !!itemPubkey);
-                const itemDisplayName = profile?.name || profile?.displayName || itemPubkey?.substring(0, 10) || 'Anon';
-                const itemPictureUrl = profile?.picture;
+                // Display logic uses the profile fetched for the *selected* item
+                // We might want to fetch profiles for *all* visible items later, but keep it simple for now.
+                let itemDisplayName = note.pubkey?.substring(0, 10) || 'Anon';
+                let itemPictureUrl: string | undefined = undefined;
+
+                // If this list item IS the currently selected item, use its fetched profile
+                if (index === currentItemIndex && profile) {
+                    itemDisplayName = profile.name || profile.displayName || note.pubkey?.substring(0, 10) || 'Anon';
+                    itemPictureUrl = profile.picture;
+                }
 
                 return (
                     <div
