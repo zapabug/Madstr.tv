@@ -21,4 +21,33 @@
 *   **Decision Made:** Install Applesauce packages directly into `tvapp` instead of relying on relative paths to source code.
 *   **Steps Explained:** Confirmed the initialization sequence and the provider usage.
 *   **Next Action (User):** Install the required Applesauce packages using `bun add applesauce-core applesauce-react applesauce-signers` (or the equivalent command using paths to local packages if installing from source, e.g., `bun add /home/jq/gitshit/applesauce/packages/core ...`).
-*   **Next Action (VibeStorm):** After user confirms installation, update imports in `src/main.tsx` and `src/hooks/useAuth.ts` to use package names, then proceed with refactoring `main.tsx` logic. 
+*   **Next Action (VibeStorm):** After user confirms installation, update imports in `src/main.tsx` and `src/hooks/useAuth.ts` to use package names, then proceed with refactoring `main.tsx` logic.
+
+## Interaction 3: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** (Implicit continuation from previous session) Proceeded with refactoring after package installation.
+*   **VibeStorm Action:** Refactored `src/hooks/useAuth.ts` to use Applesauce's `QueryStore` and `SignerStore` for authentication logic (nsec, NIP-46), state management, and NIP-04 helpers. Updated `docs/tv-app-architecture.md` accordingly. Fixed associated linter errors.
+*   **Decision Made:** `useAuth` refactor complete. Architecture documentation updated.
+*   **Steps Explained:** Aligned `useAuth` with Applesauce patterns, removing NDK dependencies and leveraging the central stores.
+*   **Next Action:** Proceed with Step 3: Refactor Subscription Hooks (replace custom hooks like `useMediaNotes` with Applesauce\'s `useQuery`).
+
+## Interaction 4: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Proceeded with Step 3 (Refactor Subscription Hooks).
+*   **VibeStorm Action:** 
+    *   Refactored data fetching in `src/App.tsx`:
+        *   Removed NDK hooks (`useNDK`, `useNDKInit`) and custom `useMediaContent` hook.
+        *   Implemented Applesauce `useQuery` for fetching Kind 3 (follows) based on login state.
+        *   Implemented `useQuery` for fetching media notes (Kinds 1063, 34235, 31337) using filters derived from follows and tags.
+        *   Added state management for fetch parameters (`limit`, `until`) and note merging/shuffling.
+    *   Refactored `src/components/MessageBoard.tsx`:
+        *   Removed NDK hooks (`useNDK`, `useSubscribe`).
+        *   Implemented Applesauce `useQuery` for fetching Kind 1 replies based on `neventToFollow` prop.
+    *   Refactored `MessageItem` sub-component (within `MessageBoard.tsx`):
+        *   Removed NDK `useProfile` hook.
+        *   Implemented Applesauce `useQuery` for fetching Kind 0 profiles based on message author pubkey.
+    *   Updated `docs/tv-app-architecture.md` to reflect all changes.
+*   **Findings:** Core data fetching refactored to Applesauce. Persistent module resolution errors for `applesauce-core`/`applesauce-react` noted, blocking testing. Filter combination strategy (authors OR tags) in `App.tsx` needs verification. Error handling and relay status display need review.
+*   **Decision Made:** Completed primary data fetching refactor for `App` and `MessageBoard`.
+*   **Steps Explained:** Replaced NDK/custom hooks with `useQuery` for subscriptions and profile lookups.
+*   **Next Action:** Decide next step: address module resolution errors, verify filter strategy/relay status, refactor `MediaPanel.tsx`, or refactor `useWallet.ts`. 

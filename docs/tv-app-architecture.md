@@ -44,30 +44,37 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
 ---
 
 *   **`App.tsx` (`src/App.tsx`) (Root Component):**
-    *   **Orchestrator:** **Initialization is handled in `src/main.tsx` which sets up Applesauce's `EventStore` and `QueryStore` and wraps `App` in `QueryStoreProvider`.** `App` manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, uses **Applesauce hooks (like `useQuery`)** to fetch initial media data (images, videos, podcasts), shuffles image/video notes, manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks. **Applesauce stores are accessed using hooks like `useStore` or specific query hooks.**
-    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`), settings modal visibility (`isSettingsOpen`).
+    *   **Orchestrator:** Initialization is handled in `src/main.tsx` which sets up Applesauce\'s `EventStore` and `QueryStore` and wraps `App` in `QueryStoreProvider`. `App` manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, **uses Applesauce\'s `useQuery` hook to:**
+        *   Fetch the current user\'s (or default TV user\'s) Kind 3 follow list.
+        *   Fetch media notes (images - Kind 1063, videos - Kind 34235, podcasts - Kind 31337) based on filters constructed from the Kind 3 list and `followedTags` (from `useAuth`).
+    *   It manages state for fetch parameters (`limit`, `until`) and the raw/shuffled notes. It defines callbacks (`fetchOlderImages`/`fetchOlderVideos`) to update `until` timestamps for pagination. It uses `useEffect` to merge incoming notes from `useQuery` and to shuffle image/video notes. Manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks. Applesauce stores are accessed using hooks like `useStore` or specific query hooks.
+    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), **raw notes (`rawImageNotes`, `rawVideoNotes`, `rawPodcastNotes`)**, shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`), settings modal visibility (`isSettingsOpen`).
     *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
     *   **Hook Usage:**
-        *   **(Removed `useNDKInit`)**
-        *   **`useStore` (from `applesauce-react`): Accesses Applesauce stores (e.g., `QueryStore`, `SignerStore`).**
-        *   **`useQuery` (from `applesauce-react`): Subscribes to Nostr events based on filters.** Replaces `useSubscribe` from NDK Hooks.
-        *   `useAuth` (`src/hooks/useAuth.ts`): Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, signing capabilities, and NIP-04 helpers (`encryptDm`/`decryptDm`). **Will need refactoring to use Applesauce stores/signers.**
+        *   **(Removed `useNDKInit`, `useNDK`)**
+        *   `useStore` (from `applesauce-react`): Accesses Applesauce stores (e.g., `QueryStore`, `SignerStore`).
+        *   `useQuery` (from `applesauce-react`): **Used multiple times:**
+            *   To fetch the Kind 3 follow list.
+            *   To fetch image notes (Kind 1063).
+            *   To fetch video notes (Kind 34235).
+            *   To fetch podcast notes (Kind 31337).
+        *   `useAuth` (`src/hooks/useAuth.ts`): Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, signing capabilities, and NIP-04 helpers (`encryptDm`/`decryptDm`). **(Refactored to use Applesauce stores/signers)**.
         *   `useWallet` (`src/hooks/useWallet.ts`): Manages internal Cashu wallet state (`proofs`, `balanceSats`), handles DM deposits, and initiates tips (`sendCashuTipWithSplits`). **Will need refactoring to use Applesauce stores/signers via `useAuth`.**
-        *   **(Refactored `useSubscribe`): Uses `useQuery` to fetch `imageNotes`, `podcastNotes`, `videoNotes` based on filters constructed using:**
-            *   Authors followed by `TV_PUBKEY_NPUB` (default) **or** the logged-in user (`currentUserNpub`) - *Note: User follow fetching is planned, currently only fetches TV follows.*
-            *   `followedTags` from `useAuth` as an additional source.
-        *   `useMediaState` (`src/hooks/useMediaState.ts`): Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives initial notes, fetcher callbacks, and note lengths. Passes `currentNoteId` up for potential tipping context.
+        *   `useMediaState` (`src/hooks/useMediaState.ts`): Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives **shuffled/raw notes**, fetcher callbacks, and note lengths. Passes `currentNoteId` up for potential tipping context.
         *   `useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`): Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl`.
         *   `useFullscreen` (`src/hooks/useFullscreen.ts`): Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
         *   `useKeyboardControls` (`src/hooks/useKeyboardControls.ts`): Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`). Settings modal trigger is now in `RelayStatus`.
         *   `useImageCarousel` (`src/hooks/useImageCarousel.ts`): Manages the image auto-advance timer, receives `isActive` flag and `handleNext` callback.
         *   (Removed `useMediaAuthors`, `useMediaNotes`, `useCurrentAuthor` as separate custom hooks - functionality integrated or replaced by **`useQuery`**/**profile fetching via Applesauce**).**
     *   **Data Handling:**
-        *   Receives notes directly from **`useQuery`** calls.
-        *   Uses `useEffect` to shuffle `imageNotes` and `videoNotes` into `shuffledImageNotes`/`shuffledVideoNotes` state. Shuffling happens here before passing to `useMediaState` and components.
-        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks (updates `Until` state, potentially triggering **`useQuery`** refetch) and passes them to `useMediaState`.
-        *   Gets `followedTags` from `useAuth` and uses them to build filters for **`useQuery`**.
-        *   Fetches Kind 3 list for `TV_PUBKEY_NPUB`. **(Planned: Fetch logged-in user's Kind 3 and use it preferentially).**
+        *   **Fetches Kind 3 list using `useQuery` based on `isLoggedIn` state.**
+        *   **Constructs filters for media kinds (1063, 34235, 31337) using `followedPubkeys` (from Kind 3) and `followedTags` (from `useAuth`).**
+        *   Receives notes directly from **multiple `useQuery`** calls (for Kind 3, images, videos, podcasts).
+        *   **Uses `useEffect` to merge new image/video notes into `raw...Notes` state for pagination.**
+        *   Uses `useEffect` to shuffle `rawImageNotes` and `rawVideoNotes` into `shuffledImageNotes`/`shuffledVideoNotes` state. Shuffling happens here before passing to `useMediaState` and components.
+        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks (updates `Until` state and `Limit` state, triggering **`useQuery`** refetch via filter changes) and passes them to `useMediaState`.
+        *   ~~Gets `followedTags` from `useAuth` and uses them to build filters for **`useQuery`**.~~
+        *   ~~Fetches Kind 3 list for `TV_PUBKEY_NPUB`. **(Planned: Fetch logged-in user\'s Kind 3 and use it preferentially).**~~
     *   **Rendering Logic:**
         *   Renders invisible `<audio>` element (`audioRef`).
         *   Renders layout structure (Top Area, Bottom Panel).
@@ -104,13 +111,16 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **Purpose:** Displays Nostr chat messages (Kind 1 replies) for a specific thread.
     *   **Rendered In:** Bottom-Left Panel (B1) - *Rendered only when not fullscreen*.
     *   **Key Props:** `neventToFollow`, `onNewMessage` (callback to signal fullscreen hook). (Removed `ndk`, `authors` props).
-    *   **Hook Usage (Internal):** **Uses Applesauce hooks (`useStore`, `useQuery`)** (to fetch Kind 1 replies based on `#e` tag from `neventToFollow`), **and profile fetching (e.g., `useProfile`)** (within the `MessageItem` sub-component to get author info for each message).
-    *   **Functionality:** Decodes `neventToFollow`. **Uses `useQuery`** to get messages. Renders messages using `MessageItem` (`src/components/MessageItem.tsx`) which handles displaying author profile data via **Applesauce profile fetching**.
+    *   **Hook Usage (Internal):** **Uses Applesauce\'s `useQuery` hook twice:**
+        *   Once in the main component to fetch Kind 1 replies based on an `#e` tag filter constructed from the decoded `neventToFollow` prop.
+        *   Once within the `MessageItem` sub-component to fetch the Kind 0 profile for each message author.
+    *   **Functionality:** Decodes `neventToFollow`. **Uses `useQuery`** to get messages. Renders messages using `MessageItem` (`src/components/MessageItem.tsx`) which handles displaying author profile data fetched via **its own internal `useQuery` call**.
 
 *   **`PlaybackControls.tsx` (`src/components/PlaybackControls.tsx`) (Assumed Child of `MediaPanel.tsx`):**
     *   **Purpose:** Renders the actual buttons, sliders, and time displays for media control.
     *   **Rendered In:** `MediaPanel.tsx`.
     *   **Key Props:** Likely receives playback state (`isPlaying`, `currentTime`, `duration`, `playbackRate`, `isMuted`) and handlers (`togglePlayPause`, `handleSeek`, `setPlaybackRate`, `toggleMute`) from `MediaPanel`.
+    *   **`useQuery`:** Subscribes to Nostr events based on filters, similar to NDK\'s `useSubscribe`. **Used in `App.tsx` (for Kind 3, images, videos, podcasts) and `MessageBoard.tsx` (for Kind 1 replies and Kind 0 profiles within `MessageItem`).** Handles caching and updates via the underlying stores.
 
 *   **`SettingsModal.tsx` (`src/components/SettingsModal.tsx`):**
     *   **Purpose:** Provides a UI for managing user identity (nsec generation/login, NIP-46 connection), application settings (followed hashtags), and the internal Cashu wallet.
@@ -131,7 +141,7 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **(Removed `useNDKInit`, `useNDK`)**
 
 *   **`useAuth` (`src/hooks/useAuth.ts`):**
-    *   **Input:** **Uses `useStore` internally to access `QueryStore` and `SignerStore`.**
+    *   **Input:** Uses `useStore` internally to access `QueryStore` and `SignerStore`.
     *   **Output:** `UseAuthReturn` (exported interface) containing:
         *   `currentUserNpub`: Current user npub (derived reactively from `SignerStore`).
         *   `currentUserNsecForBackup`: State holding nsec for backup/display purposes only.
@@ -188,8 +198,9 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
 *   **REMOVED Custom Hooks:**
     *   `useMediaAuthors`: Replaced by direct **Applesauce queries** for Kind 3 in `App.tsx` and signer management via `SignerStore`.
     *   `useMediaNotes`: Replaced by **`useQuery`** calls in `App.tsx`.
-    *   `useCurrentAuthor`: Functionality replaced by deriving pubkey from current note in `App.tsx` and using **Applesauce profile fetching** in rendering components (`ImageFeed`, `VideoPlayer`).
-    *   `useProfileData`: Replaced by direct usage of **Applesauce profile fetching hooks/patterns** in components (`MediaPanel`, `ImageFeed`, `MessageBoard`).
+    *   **`useMediaContent`**: Replaced by direct state management and **`useQuery`** calls in `App.tsx`.
+    *   `useCurrentAuthor`: Functionality replaced by deriving pubkey from current note in `App.tsx` and using **Applesauce profile fetching (`useQuery`)** in rendering components (`ImageFeed`, `VideoPlayer`).
+    *   `useProfileData`: Replaced by direct usage of **Applesauce profile fetching (`useQuery`)** in components (`MediaPanel`, `ImageFeed`, `MessageItem`).
 
 ## 5. Large Files (>500 Lines) - Potential Refactor Targets
 
