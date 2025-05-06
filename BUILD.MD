@@ -186,3 +186,31 @@
         *   Review how `RelayStatus` is rendered in `App.tsx`.
         *   Investigate how `relayCount` prop is derived (should now be based on `SimplePool` status).
     3.  **Analyze Video Content (Post-Verification):** Once the source of `followedAuthorPubkeys` is verified, re-assess why videos from those authors aren't appearing.
+
+## 2025-05-08: Fixing Tag Loading, Verifying Video Sources, Restoring UI
+
+*   **Context & Goal Refresher:** The app aims to display media from authors followed by `TV_PUBKEY_NPUB` (see `docs/tv-app-architecture.md`) AND from user-defined hashtags. This was largely functional with NDK. The current focus is on achieving parity and NIP-46 functionality with Applesauce. See `TVplanningcontext.md` for a summary of previous NDK state vs. current goals.
+*   **Current Status - Data Flow:**
+    *   `App.tsx` correctly fetches `TV_PUBKEY_NPUB`'s Kind 3 follow list and passes the 19 derived `followedAuthorPubkeys` to `useMediaContent`.
+    *   `useAuth.ts` currently provides an empty `followedTags` array because IDB loading logic is commented out. This prevents tag-based content fetching.
+*   **Current Status - UI:**
+    *   `RelayStatus.tsx` is now temporarily visible after simplification; original styling needs to be restored with confirmed visibility.
+    *   Settings Modal is reportedly missing functionality and shows empty tags (due to `useAuth.ts`).
+*   **Current Status - Content:**
+    *   Some audio/images are appearing via Kind 1 parsing from the 19 `followedAuthorPubkeys`.
+    *   No videos are appearing. This is likely due to the 19 authors not posting detectable videos OR `followedTags` being empty.
+*   **To-Do List:**
+    1.  **Implement Tag Loading/Saving (IDB & `useAuth.ts`):
+        *   Create `loadFollowedTagsFromDb` and `saveFollowedTagsToDb` in `src/utils/idb.ts`.
+        *   Uncomment and integrate these functions into `src/hooks/useAuth.ts` to enable persistent hashtag following.
+        *   Verify `followedTags` are passed to `useMediaContent` and that tag-based filters are attempted.
+    2.  **Investigate Video Content Sources:**
+        *   Manually inspect several of the 19 `followedAuthorPubkeys` (from `TV_PUBKEY_NPUB`'s list) on a Nostr client to see *if* and *how* they post videos (Kind 1 URLs, Kind 34235 events, etc.).
+        *   Analyze `useMediaContent.ts` logs to see if it attempts to fetch/process events from these authors that *should* be videos.
+        *   Refine `VIDEO_URL_REGEX` or Kind 34235 handling in `useMediaContent` if specific video formats from these authors are identified but missed.
+    3.  **Restore `RelayStatus.tsx` Appearance:**
+        *   Re-apply original styling (overlay button, etc.).
+        *   Ensure default visibility (e.g., text color contrast, non-zero opacity for the gear icon by default).
+    4.  **Address Settings Modal Functionality:** Systematically review and fix/re-implement missing features in `SettingsModal.tsx`, focusing on its interactions with `useAuth.ts` (tag management, NIP-46 initiation) and `useWallet.ts`.
+    5.  **Verify Placeholder Chat Functionality.**
+    6.  **(Longer Term) Robust Relay Status:** Improve `isReceivingData` and `connectedRelaysCount` in `App.tsx` for `RelayStatus.tsx` for more accurate feedback.

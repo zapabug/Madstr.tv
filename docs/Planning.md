@@ -1719,3 +1719,17 @@
         *   Investigate `App.tsx` and `MessageBoard.tsx` to reinstate the default chat functionality for non-logged-in users (i.e., how `neventToFollow` is set for the `MessageBoard` when no user is logged in).
     4.  **(Low Priority) Test Image Feed Navigation (if applicable):**
         *   Although `onNext` and `onPrevious` were removed as direct props from `ImageFeed`, ensure that the image navigation logic controlled by `useMediaState` (and potentially triggered by `useKeyboardControls` or other UI elements) still functions correctly for the image feed.
+
+## Interaction 80: 2025-05-08 (Clarify TV Npub Logic, Tag Loading, RelayStatus)
+
+*   **Context Clarification:** User confirmed the core desired functionality: displaying media from authors *followed by* `TV_PUBKEY_NPUB` (as defined in `docs/tv-app-architecture.md` and `TVplanningcontext.md`) **AND** from user-followed hashtags. This setup was mostly working with NDK.
+*   **`App.tsx` Data Flow (Author Follows):** Log analysis confirmed `App.tsx` correctly identifies `TV_PUBKEY_NPUB`, fetches its Kind 3 contact list (resulting in 19 pubkeys), and passes these as `followedAuthorPubkeys` to `useMediaContent`.
+*   **`useAuth.ts` Tag Loading Issue:** Discovered that `followedTags` is consistently empty because the logic to load tags from IDB within `useAuth.ts` is commented out. This is the primary reason tag-based content fetching is not working.
+*   **`RelayStatus.tsx` Visibility:** The component was invisible. Props (`relayCount`) from `App.tsx` are correct. Temporarily simplifying its styles made it visible, indicating the original styling/layout (overlapping button, colors) was the cause of invisibility.
+*   **Video Content:** Still not appearing. With author pubkeys confirmed, this points to either (a) the 19 followed authors not posting videos in a detectable format/on current relays, or (b) `useMediaContent` issues in fetching/processing video-specific kinds or parsing video URLs from Kind 1s from these authors, or (c) the empty `followedTags` not providing video sources.
+*   **Revised To-Do / Next Steps:**
+    1.  **Fix Tag Loading (Priority 1):** Implement IDB functions (`loadFollowedTagsFromDb`, `saveFollowedTagsToDb` in `src/utils/idb.ts`) and uncomment/integrate loading/saving logic in `src/hooks/useAuth.ts`.
+    2.  **Investigate Video Sources (Priority 2):** Manually check if the 19 followed authors (from TV Npub's list) actually post videos and how. Then, analyze `useMediaContent` logs to see if these are fetched/processed.
+    3.  **Restore `RelayStatus.tsx` Appearance:** Re-apply original styles carefully ensuring visibility.
+    4.  **Fix Settings Modal Functionality:** Address missing features by reviewing `useAuth`, `useNip46AuthManagement`, and `useWallet`.
+    5.  **Address Placeholder Chat.**
