@@ -1,13 +1,38 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 // import { Buffer } from 'buffer'; // REMOVE Buffer import
-import { nip19, generateSecretKey, NostrEvent } from 'nostr-tools';
+import { nip19, generateSecretKey, NostrEvent, Filter } from 'nostr-tools'; // Remove SubCloser import
 import { SimpleSigner, NostrConnectSigner, NostrConnectSignerOptions, NostrConnectAppMetadata } from 'applesauce-signers';
 import { EventStore } from 'applesauce-core'; // Import concrete EventStore class
 import { Hooks } from 'applesauce-react'; // Assuming Hooks.useQueryStore exists
 import { RELAYS } from '../constants';
 import { StoredNip46Data, saveNip46DataToDb, loadNip46DataFromDb, clearNip46DataFromDb } from '../utils/idb'; // Adjust path if needed
 import { bytesToHex, hexToBytes } from '../utils/hex'; // IMPORT new hex helpers
-import { useRelayPool } from '../main'; // Corrected import path
+import { useRelayPool } from '../contexts/RelayPoolContext';
+
+// Define the RxJS-like types locally as expected by NostrConnectSigner
+interface MinimalUnsubscribable {
+  unsubscribe(): void;
+}
+
+interface MinimalObserver<T> {
+  next?: (value: T) => void;
+  error?: (err: any) => void;
+  complete?: () => void;
+}
+
+interface MinimalSubscribable<T> {
+  subscribe: (observer: MinimalObserver<T>) => MinimalUnsubscribable;
+}
+
+// Minimal interface for the object returned by SimplePool.subscribeMany
+interface MinimalPoolSubscription {
+  close: () => void;
+  // sub: (filters: Filter[], opts?: any) => MinimalPoolSubscription; // Not strictly needed for this adapter
+}
+
+// This is the type NostrConnectSigner actually expects for its subscriptionMethod
+export type NostrConnectSubscriptionMethod =
+    (relays: string[], filters: Filter[]) => MinimalSubscribable<NostrEvent>;
 
 // Define the return type for the hook
 export interface UseNip46AuthManagementReturn {
@@ -39,6 +64,73 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
             pool.publish(relays, event);
         },
         [pool]
+    );
+
+    // Define wrapper for subscription method
+    const nostrSubscriptionMethod: NostrConnectSubscriptionMethod = useCallback(
+        (
+            relays: string[], // These are the specific NIP-46 relays
+            filters: Filter[]
+        ): MinimalSubscribable<NostrEvent> => {
+            let subCloser: MinimalPoolSubscription | null = null; // Use minimal interface
+            let active = true;
+
+            return {
+                subscribe: (observer: MinimalObserver<NostrEvent>): MinimalUnsubscribable => {
+                    if (!active) { // Prevent re-subscription if already unsubscribed
+                        console.warn("NostrConnectSigner: Attempted to subscribe to an already unsubscribed subscription.");
+                        return { unsubscribe: () => {} };
+                    }
+                    if (!pool) {
+                        console.error("nostrSubscriptionMethod: Relay pool not available for NIP-46 subscription.");
+                        if (observer.error) {
+                            observer.error(new Error("Relay pool not available for NIP-46 subscription."));
+                        }
+                        return { unsubscribe: () => {} };
+                    }
+
+                    console.log(`nostrSubscriptionMethod: Subscribing to NIP-46 relays:`, relays, 'with filters:', filters);
+
+                    subCloser = pool.subscribeMany(
+                        relays, // Use the EXPLICIT relays for NIP-46 communication
+                        filters,
+                        {
+                            onevent: (event: NostrEvent) => {
+                                if (active && observer.next) {
+                                    // console.log('nostrSubscriptionMethod: received event for NIP-46', event);
+                                    observer.next(event);
+                                }
+                            },
+                            oneose: () => {
+                                // console.log('nostrSubscriptionMethod: EOSE received for NIP-46 subscription');
+                                if (active && observer.complete) {
+                                    // observer.complete(); // NIP-46 typically long-lived, completion might not be standard.
+                                }
+                            },
+                            onclose: (reason) => {
+                                console.log('nostrSubscriptionMethod: SimplePool subscription closed for NIP-46, reason:', reason);
+                                if (active && observer.error) {
+                                     observer.error(new Error(`SimplePool NIP-46 subscription closed: ${reason}`));
+                                }
+                                active = false; 
+                            }
+                        }
+                    );
+
+                    return {
+                        unsubscribe: () => {
+                            if (active && subCloser) {
+                                console.log('nostrSubscriptionMethod: Unsubscribing NIP-46 subscription from relays:', relays);
+                                subCloser.close(); 
+                                subCloser = null;
+                                active = false;
+                            }
+                        },
+                    };
+                },
+            };
+        },
+        [pool] // Depends on pool
     );
 
     const cleanupNip46Attempt = useCallback(async (errorMessage?: string) => {
@@ -85,7 +177,7 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
             const signerOpts: NostrConnectSignerOptions = {
                 relays: RELAYS,
                 signer: localSigner,
-                subscriptionMethod: pool.sub.bind(pool), // Use pool.sub again
+                subscriptionMethod: nostrSubscriptionMethod, // Use wrapper
                 publishMethod: nostrPublishMethod,      // Use wrapper
             };
             const nip46Signer = new NostrConnectSigner(signerOpts);
@@ -140,7 +232,7 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
                 setIsGeneratingUri(false);
             }
         }
-    }, [pool, cleanupNip46Attempt, nostrPublishMethod]);
+    }, [pool, cleanupNip46Attempt, nostrPublishMethod, nostrSubscriptionMethod]);
 
     const cancelNip46Connection = useCallback(() => {
         console.info("Cancelling NIP-46 connection attempt...");
@@ -167,7 +259,7 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
                     remote: persistedNip46.remotePubkey,
                     pubkey: persistedNip46.connectedUserPubkey,
                     relays: persistedNip46.relays || RELAYS,
-                    subscriptionMethod: pool.sub.bind(pool), // Use pool.sub again
+                    subscriptionMethod: nostrSubscriptionMethod, // Use wrapper
                     publishMethod: nostrPublishMethod,      // Use wrapper
                 };
                 const signer = new NostrConnectSigner(signerOpts);
@@ -199,7 +291,7 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
             console.info("No complete NIP-46 data found in storage for restore.");
             return null;
         }
-    }, [pool, nostrPublishMethod]);
+    }, [pool, nostrPublishMethod, nostrSubscriptionMethod]);
 
     const clearPersistedNip46Session = useCallback(async () => {
         console.info("Clearing persisted NIP-46 session data...");

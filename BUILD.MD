@@ -237,61 +237,66 @@
     3.  **Refine `VIDEO_URL_REGEX`:** Based on findings from the manual check, adjust `VIDEO_URL_REGEX` in `useMediaContent.ts` if current video URL patterns are not being caught.
     4.  **(Lower Priority for now) Re-evaluate Re-rendering & Carousel/Pagination:** Address potential re-rendering issues affecting UI elements like the image carousel and pagination once the core content fetching for videos is improved.
 
----
-Previous summary from 2025-05-09 (before detailed `useMediaContent` logs):
+## 2025-05-06: Functional Specification and Architecture Alignment
 
-**User Provided Summary of Current State & Understanding (2025-05-09):**
+*   **New Functional Specification:** Created `madstrtvSPEC.md` to serve as the canonical document detailing all intended features, user experiences, and operational logic for the Madstr TV application. This document is based on the comprehensive pre-Applesauce design documentation.
+*   **Architecture Document Update:** `docs/tv-app-architecture.md` has been significantly updated to align with `madstrtvSPEC.md`. The architecture document now describes how the application, built with the Applesauce toolkit, will achieve the functional requirements outlined in the new specification.
+*   **Current Focus:** Continue implementing and refining features (especially video content handling, including larger initial fetches and advanced playlist management) as per `madstrtvSPEC.md`, ensuring the Applesauce-based implementation in `useMediaContent`, `useMediaState`, and other hooks meets these detailed requirements.
 
-*   **Goal:** The TV app should display media (images, podcasts, videos) sourced from two main channels:
-    1.  **Authors followed by a default "curator" Npub** (`TV_PUBKEY_NPUB` from `constants.ts`).
-    2.  **User-defined (or default) followed hashtags.**
-    This mirrors functionality that was largely working with NDK before the refactor to Applesauce (which was primarily for robust NIP-46 remote signer support).
+## 2025-05-10: Runtime Error Investigation & Linter Error Resolution
 
-*   **Author Follows Data Flow (Working):**
-    *   `App.tsx` correctly identifies the `TV_PUBKEY_NPUB`.
-    *   It successfully fetches this curator's Kind 3 contact list using Applesauce's `Queries.ContactsQuery`.
-    *   It correctly processes this list into an array of 19 `followedAuthorPubkeys`.
-    *   These `followedAuthorPubkeys` are correctly passed as a prop to the `useMediaContent` hook.
+*   **Runtime Error (`useRelayPool` Import):**
+    *   Investigated `Uncaught SyntaxError: The requested module 'http://localhost:3000/src/main.tsx' doesn't provide an export named: 'useRelayPool'`.
+    *   Confirmed `src/App.tsx` imports `useRelayPool` correctly from `src/contexts/RelayPoolContext.tsx`.
+    *   Confirmed `src/main.tsx` does not incorrectly export or import `useRelayPool`.
+    *   A global search found no incorrect import paths for `useRelayPool`.
+    *   **Conclusion:** Error likely due to stale browser cache or dev server build. Recommended cache clearing and server restart.
 
-*   **Hashtag Follows Data Flow (Fixed & Verified Passing to useMediaContent):**
-    *   The `useAuth.ts` hook is responsible for managing `followedTags`.
-    *   IDB loading/saving logic for `followedTags` in `useAuth.ts` was implemented and verified.
-    *   `App.tsx` correctly receives `followedTags` from `useAuth`.
-    *   `useMediaContent` is confirmed to receive both populated `followedAuthorPubkeys` and `followedTags`.
+*   **Linter Error Resolution (Prop Mismatches in `App.tsx`):
+    *   Completed updates to `src/hooks/useAuth.ts` to include and persist `fetchImagesByTagEnabled` and `fetchVideosByTagEnabled`.
+    *   Completed updates to `src/utils/idb.ts` to support new settings persistence (`loadSettingsFromDb`, `saveSettingsToDb`).
+    *   Verified `UseMediaContentProps` and `UseMediaStateProps` are correctly exported from their respective hooks.
+    *   Reviewed `src/App.tsx` and confirmed it now correctly passes the required props to `useMediaContent` and `useMediaState`.
+    *   **Conclusion:** The previously identified linter errors related to these prop mismatches in `App.tsx` should be resolved.
 
-*   **Media Content Status (Focus on Videos):**
-    *   Some audio (podcasts) and images are appearing, sourced from the 19 `followedAuthorPubkeys` via Kind 1 content parsing, and potentially from `followedTags`.
-    *   **No videos are appearing.** This is the primary content issue.
+## Session Ending 2024-07-27 (Approx.)
 
-*   **UI Status:**
-    *   `RelayStatus.tsx` was invisible but is now temporarily visible after a style simplification. Its props (`relayCount`) are correctly calculated in `App.tsx`. The original styling needs to be restored with ensured visibility.
-    *   The Settings Modal is reportedly missing significant functionality and shows empty `followedTags` (this part needs re-verification now that IDB for tags is active).
+### Key Changes & Fixes:
 
-**Previous To-Do List (Prioritized as of 2025-05-09):**
+**1. `src/hooks/useNip46AuthManagement.ts`:**
+    *   **`useRelayPool` Import Correction**: Fixed runtime error by changing the import path for `useRelayPool` from `../main` to `../contexts/RelayPoolContext`.
+    *   **`NostrConnectSigner` Integration Rework (`subscriptionMethod`)**:
+        *   Addressed a critical type mismatch for `NostrConnectSignerOptions['subscriptionMethod']`.
+        *   Implemented a robust adapter to bridge `SimplePool.subscribeMany` (from `nostr-tools`) with the RxJS-like `Subscribable<NostrEvent>` interface that `NostrConnectSigner` internally expects.
+        *   This involved defining local minimal interfaces: `MinimalUnsubscribable`, `MinimalObserver`, `MinimalSubscribable`, and `MinimalPoolSubscription` (for the return type of `pool.subscribeMany` as `SubCloser` is not an exported type from `nostr-tools`).
+        *   Ensured the adapter correctly uses the NIP-46 specific `relays` argument when calling `pool.subscribeMany`.
+        *   Imported `Filter` from `nostr-tools`.
 
-1.  **Fix Hashtag Loading & Saving (Largely Done, Verification Ongoing):**
-    *   **Task:** Implement `loadFollowedTagsFromDb()` and `saveFollowedTagsToDb()` functions in `src/utils/idb.ts`. (Done)
-    *   **Task:** Uncomment and fully integrate this loading/saving logic into `src/hooks/useAuth.ts`. (Done)
-    *   **Goal:** Ensure `followedTags` are correctly loaded from storage and passed to `useMediaContent`, enabling tag-based content filtering. (Verified that `useMediaContent` receives the tags; actual filtering effectiveness for videos is pending).
+**2. `src/components/ImageFeed.tsx`:**
+    *   **Runtime Error Fix**: Resolved an `Uncaught TypeError: imageNotes is undefined`.
+    *   Modified the conditional rendering logic to check `if (!imageNotes || imageNotes.length === 0)` before accessing `imageNotes.length`, preventing the error when `imageNotes` is initially undefined. Further refinements made to `currentImageNote` derivation.
 
-2.  **Investigate Video Content Sources & `useMediaContent` (Active):**
-    *   **Task:** Manually inspect several of the 19 `followedAuthorPubkeys` (from `TV_PUBKEY_NPUB`'s list) and active tags on a Nostr client to determine *if* and *how* they post videos (e.g., Kind 1 URLs, Kind 34235 events, link formats).
-    *   **Task:** Analyze console logs from *within* `useMediaContent.ts` (detailed logging added) to verify:
-        *   Correct filter construction for specific kinds (1063, 34235) and general Kind 1s.
-        *   Results from `TimelineQuery` for these filters (are Kind 34235 events fetched? Are relevant Kind 1s fetched?).
-        *   How `processApplesauceEvent` handles any potential video events or Kind 1 notes from these authors/tags.
-    *   **Goal:** Identify why videos are not appearing – either due to lack of suitable content from followed sources or issues in fetching/processing within `useMediaContent`. Refine `VIDEO_URL_REGEX` or Kind 34235 handling if necessary.
+### Application State entering this session:
+*   The application now loads past the critical runtime errors that were preventing startup.
+*   The NIP-46 authentication flow should be more stable due to the corrected `subscriptionMethod` implementation.
+*   The `ImageFeed` component should no longer crash due to undefined `imageNotes`.
 
-3.  **Restore `RelayStatus.tsx` Appearance:**
-    *   **Task:** Re-apply the original intended styling and structure.
-    *   **Goal:** Ensure the component is visually correct and functional while remaining visible.
+## 2025-05-12: Debugging Re-render Loops & Carousel Issues
 
-4.  **Address Settings Modal Functionality:**
-    *   **Task:** Systematically review `SettingsModal.tsx` and its interactions with `useAuth.ts` (tag management, NIP-46 initiation) and `useWallet.ts`.
-    *   **Goal:** Fix and re-implement missing functionalities.
-
-5.  **Verify Placeholder Chat Functionality:**
-    *   **Task:** Investigate and restore the default chat thread.
-
-6.  **(Lower Priority / Refinement) Robust Relay Status:**
-    *   **Task:** Improve accuracy of relay status indicators.
+*   **Initial State:** App loaded but encountered `Uncaught TypeError: imageNotes is undefined` in `ImageFeed.tsx` again.
+*   **Fix 1 (`ImageFeed.tsx`):** Refined `currentImageNote` derivation in `ImageFeed.tsx` to more robustly handle potentially undefined `imageNotes` during initial render cycles. Also added a check to the scroll `useEffect` for `imageNotes`.
+*   **New Issue:** `Uncaught ReferenceError: hookInstanceId is not defined` in `useMediaContent.ts` after adding extensive logging.
+*   **Fix 2 (`useMediaContent.ts`):** Modified `hookInstanceId` definition in `useMediaContent.ts` to use `useRef` for more robust instantiation, resolving the ReferenceError.
+*   **Persistent Issue:** "Maximum update depth exceeded" error emerged, with stack traces pointing to `ImageFeed.tsx` and `App.tsx`.
+    *   **Symptom:** Image carousel "flipping through images like crazy."
+*   **Diagnostics & Fixes for Loop:**
+    *   Temporarily neutralized tipping logic in `ImageFeed.tsx` to isolate `useAuth` and `useWallet` as loop contributors. Loop persisted, pointing higher up.
+    *   Modified `isLoadingContent` `useEffect` in `App.tsx` to be less sensitive to `contactsData` reference changes. Loop persisted.
+    *   Corrected linter error in `App.tsx` where `imageNotes` was destructured instead of `imageNotesForDisplay` from `useMediaState`. Updated usages.
+    *   **Key Insight:** The crazy carousel and "Maximum update depth" error strongly point to instability in props passed to `useImageCarousel` (likely `onTick` which is `handleNext` from `useMediaState`), or `useMediaState` itself being caught in a loop due to unstable inputs from `useMediaContent`.
+    *   **Fix 3 (`useMediaState.ts`):** Added `JSON.stringify` checks before calling `setImageNotesForDisplay` (in `generateNewImageDisplayBatch`) and `setVideoNotesForDisplay` (in its init effect) to ensure these display batch state setters are only called if the actual content changes. This aims to stabilize the references of `imageNotesForDisplay` and `videoNotesForDisplay`.
+*   **Current Status:**
+    *   Images are displaying.
+    *   "Maximum update depth exceeded" error persists.
+    *   Image carousel is still "flipping like crazy." This indicates the `handleNext` function (passed as `onTick` to `useImageCarousel`) is still being called too rapidly, likely due to its own reference instability originating from its dependencies (`imageNotesForDisplay`, etc.) in `useMediaState`.
+*   **Next Steps:** Focus on `useImageCarousel` and the stability of its `onTick` prop (`handleNext` from `useMediaState`). Investigate dependencies of `handleNext` in `useMediaState.ts`.

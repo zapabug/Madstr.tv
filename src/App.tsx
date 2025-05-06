@@ -15,15 +15,15 @@ import {
 
 // Local Hooks
 import { useAuth } from './hooks/useAuth';
-import { useMediaState } from './hooks/useMediaState';
+import { useMediaState, UseMediaStateProps } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
-import { useMediaContent } from './hooks/useMediaContent'; // <<< ADD useMediaContent import
+import { useMediaContent, UseMediaContentProps } from './hooks/useMediaContent';
 
 // ADD RelayPool import
-import { useRelayPool } from './main'; // Assuming useRelayPool is exported from main.tsx
+import { useRelayPool } from './contexts/RelayPoolContext'; // ADD this import
 
 // Local Components
 import ImageFeed from './components/ImageFeed';
@@ -68,7 +68,7 @@ function App() {
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [isLoadingContent, setIsLoadingContent] = useState(true); 
   const auth = useAuth(); 
-  const { followedTags, currentUserNpub, isLoggedIn } = auth;
+  const { followedTags, currentUserNpub, isLoggedIn, fetchImagesByTagEnabled, fetchVideosByTagEnabled } = auth;
   const pool = useRelayPool(); 
   const eventStore = Hooks.useEventStore(); 
 
@@ -112,14 +112,14 @@ function App() {
 
   // --- Manage isLoadingContent State ---
   useEffect(() => {
-    const newIsLoading = contactsData === undefined;
-    if (newIsLoading !== isLoadingContent) {
-        console.log(`[App.tsx EFFECT] isLoadingContent changing from ${isLoadingContent} to ${newIsLoading}`); 
-        setIsLoadingContent(newIsLoading);
+    // Only transition from true to false once when contactsData becomes available
+    if (isLoadingContent && contactsData !== undefined) {
+        console.log(`[App.tsx DIAGNOSTIC EFFECT] contactsData is now defined. Setting isLoadingContent to false.`);
+        setIsLoadingContent(false);
     }
-    // We only need this effect to SET the loading state based on contactsData resolving.
-    // The direct logs above will show the contactsData content itself.
-  }, [contactsData, isLoadingContent]);
+    // If we need to handle user logout making contactsData undefined again, 
+    // this logic would need to be more complex, but for loop diagnosis, this is simpler.
+  }, [contactsData, isLoadingContent]); // Keep dependencies to re-evaluate if they change
 
   const followedPubkeysString = useMemo(() => {
     if (!Array.isArray(contactsData)) {
@@ -162,7 +162,12 @@ function App() {
       isLoadingImages,      
       isLoadingVideos, 
       isLoadingPodcasts 
-  } = useMediaContent({ followedAuthorPubkeys: followedPubkeys, followedTags });
+  } = useMediaContent({
+    followedAuthorPubkeys: followedPubkeys || [],
+    followedTags: followedTags || [],
+    fetchImagesByTagEnabled: fetchImagesByTagEnabled,
+    fetchVideosByTagEnabled: fetchVideosByTagEnabled,
+  });
 
   // --- State for Podcast Initial Time (if needed) --- 
   const [initialPodcastTime] = useState<number>(0);
@@ -175,7 +180,7 @@ function App() {
   // --- UI State & Playback Hooks --- 
   const { 
       viewMode,
-      imageNotes, // from useMediaState, if needed directly by App
+      imageNotesForDisplay, // Corrected from imageNotes
       // podcastNotes, // from useMediaState, if needed directly by App (already have from useMediaContent)
       // videoNotes, // from useMediaState, if needed directly by App (already have from useMediaContent)
       currentImageIndex,
@@ -190,24 +195,22 @@ function App() {
       setViewMode,
       setCurrentPodcastIndex,
   } = useMediaState({
-    initialImageNotes: shuffledImageNotes,
-    initialPodcastNotes: podcastNotes, // Pass processed podcasts from useMediaContent
-    initialVideoNotes: shuffledVideoNotes,
+    fullImageCache: shuffledImageNotes,
+    fullPodcastCache: podcastNotes,
+    fullVideoCache: shuffledVideoNotes,
     fetchOlderImages,
     fetchOlderVideos,
-    shuffledImageNotesLength: shuffledImageNotes.length,
-    shuffledVideoNotesLength: shuffledVideoNotes.length,
   });
 
   // --- Derive currentNoteId --- 
   const currentNoteId = useMemo(() => {
-    if (viewMode === 'imagePodcast' && shuffledImageNotes[currentImageIndex]) {
-        return shuffledImageNotes[currentImageIndex].id;
+    if (viewMode === 'imagePodcast' && imageNotesForDisplay[currentImageIndex]) { // Corrected from shuffledImageNotes to imageNotesForDisplay
+        return imageNotesForDisplay[currentImageIndex].id;
     } else if (viewMode === 'videoPlayer' && shuffledVideoNotes[currentVideoIndex]) {
         return shuffledVideoNotes[currentVideoIndex].id;
     }
     return null; 
-  }, [viewMode, currentImageIndex, currentVideoIndex, shuffledImageNotes, shuffledVideoNotes]);
+  }, [viewMode, currentImageIndex, currentVideoIndex, imageNotesForDisplay, shuffledVideoNotes]); // Corrected dependency
 
   const activeMediaRef = viewMode === 'videoPlayer' ? videoRef : audioRef;
 
@@ -314,21 +317,21 @@ function App() {
       {/* Main Content Area */}
       <div className="flex-grow flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
-          {viewMode === 'imagePodcast' ? (
-            <motion.div
-              key="imageFeed"
-              initial={{ opacity: 0 }}
+          {viewMode === 'imagePodcast' && (
+            <motion.div 
+              key="image-feed"
+              initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.5 }}
               className="w-full h-full"
             >
               <ImageFeed 
-                imageNotes={shuffledImageNotes} 
-                currentImageIndex={currentImageIndex} 
+                imageNotes={imageNotesForDisplay} // Corrected from shuffledImageNotes
+                currentImageIndex={currentImageIndex}
               />
             </motion.div>
-          ) : (
+          )}
+          {viewMode === 'videoPlayer' && currentItemUrl && (
             <motion.div
               key="videoPlayer"
               initial={{ opacity: 0 }}

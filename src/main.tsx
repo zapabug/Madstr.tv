@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
@@ -15,6 +15,9 @@ import { QueryStoreProvider } from 'applesauce-react';
 import { RELAYS, TV_PUBKEY_NPUB } from './constants';
 // Add SimplePool and nip19 import
 import { SimplePool, nip19, Filter, type NostrEvent } from 'nostr-tools'; // Ensure NostrEvent and Filter are typed
+
+// Import the RelayPoolContext Provider
+import { RelayPoolContext } from './contexts/RelayPoolContext';
 
 // Remove NDK setup logic
 // const explicitRelayUrls = [
@@ -52,18 +55,6 @@ import { SimplePool, nip19, Filter, type NostrEvent } from 'nostr-tools'; // Ens
 console.log("main.tsx: Creating SimplePool instance...");
 const pool = new SimplePool();
 console.log("main.tsx: SimplePool instance created.");
-
-// Create React Context for the pool
-const RelayPoolContext = createContext<SimplePool | null>(null);
-
-// Custom hook to use the RelayPool context
-export const useRelayPool = () => {
-  const context = useContext(RelayPoolContext);
-  if (!context) {
-    throw new Error('useRelayPool must be used within a RelayPoolProvider');
-  }
-  return context;
-};
 
 // --- Applesauce Core Stores Setup ---
 const eventStore = new EventStore();
@@ -135,7 +126,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {/* Remove NDKProvider */}
     {/* <NDKProvider ndk={ndk}> */}
-    {/* Provide the SimplePool instance via context */}
     <RelayPoolContext.Provider value={pool}>
       <QueryStoreProvider queryStore={queryStore}>
         <App />

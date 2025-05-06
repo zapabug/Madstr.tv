@@ -48,6 +48,7 @@ const NSEC_KEY = 'currentUserNsec';
 const NIP46_KEY = 'currentNip46Session';
 const FOLLOWED_TAGS_KEY = 'userFollowedTags'; // Added key for followed tags
 const MINT_URL_KEY = 'configuredMintUrl';
+const APP_SETTINGS_KEY = 'appWideSettings'; // Key for the single settings object
 
 let dbPromise: Promise<IDBPDatabase<AppDbSchema>> | null = null;
 
@@ -194,6 +195,21 @@ const deleteDbEntry = async <StoreName extends keyof AppDbSchema>(
 // Settings
 const getSetting = (key: string) => get('settings', key);
 const putSetting = (key: string, value: any) => put('settings', value, key);
+
+// New functions to load/save the entire settings object
+export const loadSettingsFromDb = async (): Promise<any | null> => {
+    console.log(`Attempting to load settings object with key: ${APP_SETTINGS_KEY}`);
+    const settings = await get('settings', APP_SETTINGS_KEY);
+    console.log('Loaded settings object from DB:', settings);
+    return settings;
+};
+
+export const saveSettingsToDb = async (settings: any): Promise<IDBValidKey> => {
+    console.log(`Attempting to save settings object with key: ${APP_SETTINGS_KEY}`, settings);
+    const result = await put('settings', settings, APP_SETTINGS_KEY);
+    console.log('Saved settings object to DB, result:', result);
+    return result;
+};
 
 // Cashu Proofs
 const getProofs = (mintUrl: string): Promise<Proof[] | undefined> => get('cashuProofs', mintUrl);
@@ -383,6 +399,9 @@ export const idb = {
     loadFollowedTagsFromDb,
     saveFollowedTagsToDb,
     clearFollowedTagsFromDb,
+    // New settings functions
+    loadSettingsFromDb,
+    saveSettingsToDb,
 };
 
 // --- Initialize ---

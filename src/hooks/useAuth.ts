@@ -17,11 +17,21 @@ import {
     clearNsecFromDb,
     loadFollowedTagsFromDb, // Added import
     saveFollowedTagsToDb,   // Added import
+    loadSettingsFromDb, 
+    saveSettingsToDb,
 } from '../utils/idb';
 
 // Assuming RELAYS are defined elsewhere if needed directly (e.g., maybe not needed here anymore)
 // import { RELAYS } from '../constants/relays';
 
+// Interface for settings stored in IDB
+interface AppSettings {
+    followedTags?: string[];
+    fetchImagesByTagEnabled?: boolean;
+    fetchVideosByTagEnabled?: boolean;
+    defaultTipAmount?: number;
+    // Add other settings here as needed
+}
 
 // Updated Return Type
 export interface UseAuthReturn {
@@ -40,6 +50,10 @@ export interface UseAuthReturn {
     logout: () => Promise<void>;
     followedTags: string[];
     setFollowedTags: (tags: string[]) => void;
+    fetchImagesByTagEnabled: boolean;
+    setFetchImagesByTagEnabled: (enabled: boolean) => void;
+    fetchVideosByTagEnabled: boolean;
+    setFetchVideosByTagEnabled: (enabled: boolean) => void;
     encryptDm: (recipientNpub: string, plaintext: string) => Promise<string>; // Changed param name for clarity
     decryptDm: (senderNpub: string, ciphertext: string) => Promise<string>; // Changed param name for clarity
 }
@@ -73,6 +87,10 @@ export const useAuth = (): UseAuthReturn => {
 
     // Followed tags state
     const [followedTags, setFollowedTagsState] = useState<string[]>([]);
+
+    // State for settings
+    const [fetchImagesByTagEnabled, setFetchImagesByTagEnabledState] = useState<boolean>(true); // Default to true
+    const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(true); // Default to true
 
     // --- Update derived currentUserNpub when activeSigner changes ---
     useEffect(() => {
@@ -116,19 +134,68 @@ export const useAuth = (): UseAuthReturn => {
         loadTags();
     }, []); // Intentionally empty dependency array to run once on mount
 
+    // Load all settings from IDB on mount
+    useEffect(() => {
+        const loadAllSettings = async () => {
+            try {
+                console.info('Auth Hook: Attempting to load settings from IDB...');
+                const settings = await loadSettingsFromDb();
+                if (settings) {
+                    setFollowedTagsState(settings.followedTags || []);
+                    setFetchImagesByTagEnabledState(settings.fetchImagesByTagEnabled === undefined ? true : settings.fetchImagesByTagEnabled);
+                    setFetchVideosByTagEnabledState(settings.fetchVideosByTagEnabled === undefined ? true : settings.fetchVideosByTagEnabled);
+                    console.info('Auth Hook: Successfully loaded settings:', settings);
+                } else {
+                    console.info('Auth Hook: No settings found in IDB, using defaults.');
+                    // Defaults are already set by useState initial values
+                }
+            } catch (error) {
+                console.error('Auth Hook: Failed to load settings from IDB:', error);
+                setNsecAuthError("Failed to load settings.");
+            }
+        };
+        loadAllSettings();
+    }, []);
+
+    // Helper to save all settings
+    const saveCurrentSettings = useCallback(async (updatedSettings: Partial<AppSettings>) => {
+        try {
+            // Construct the full settings object to save
+            const currentSettingsToSave: AppSettings = {
+                followedTags,
+                fetchImagesByTagEnabled,
+                fetchVideosByTagEnabled,
+                ...updatedSettings, // Apply specific updates
+            };
+            await saveSettingsToDb(currentSettingsToSave);
+            console.info('Auth Hook: Successfully persisted settings to IDB:', currentSettingsToSave);
+        } catch (error) {
+            console.error('Auth Hook: Failed to save settings:', error);
+            setNsecAuthError("Failed to save settings.");
+        }
+    }, [followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled]);
+
     const setFollowedTags = useCallback(async (tags: string[]) => {
         try {
             console.log('Auth Hook: setFollowedTags called with:', tags); // Added log
             setFollowedTagsState(tags);
-            await saveFollowedTagsToDb(tags);
+            await saveCurrentSettings({ followedTags: tags });
             console.info('Auth Hook: Successfully persisted followed tags to IDB:', tags);
         } catch (error) {
             console.error('Auth Hook: Failed to save followed tags:', error);
             setNsecAuthError("Failed to save followed tags.");
         }
-    }, [setNsecAuthError]);
+    }, [saveCurrentSettings]);
 
-    // Removed NIP-46 cleanup logic - handled by useNip46AuthManagement
+    const setFetchImagesByTagEnabled = useCallback(async (enabled: boolean) => {
+        setFetchImagesByTagEnabledState(enabled);
+        await saveCurrentSettings({ fetchImagesByTagEnabled: enabled });
+    }, [saveCurrentSettings]);
+
+    const setFetchVideosByTagEnabled = useCallback(async (enabled: boolean) => {
+        setFetchVideosByTagEnabledState(enabled);
+        await saveCurrentSettings({ fetchVideosByTagEnabled: enabled });
+    }, [saveCurrentSettings]);
 
     // --- NIP-46 Connection Initiation (Wrapper) ---
     const initiateNip46Connection = useCallback(async () => {
@@ -434,6 +501,10 @@ export const useAuth = (): UseAuthReturn => {
         logout,
         followedTags,
         setFollowedTags,
+        fetchImagesByTagEnabled,
+        setFetchImagesByTagEnabled,
+        fetchVideosByTagEnabled,
+        setFetchVideosByTagEnabled,
         encryptDm,
         decryptDm,
     };

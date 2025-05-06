@@ -120,7 +120,7 @@ const ImageFeed: React.FC<MediaFeedProps> = (
 
   // --- Effect to Scroll to Current Image (Keep) ---
   useEffect(() => {
-    if (imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
+    if (imageNotes && imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
        const targetElement = document.getElementById(`media-item-${imageNotes[currentImageIndex]?.id}`);
        targetElement?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
     }
@@ -130,12 +130,14 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   // useEffect(() => { ... fetching logic removed ... }, [ndk, authors, onNotesLoaded]);
 
   // --- Derive current note and author pubkey --- 
-  const currentImageNote = useMemo(() => 
-      (imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length)
-          ? imageNotes[currentImageIndex]
-          : null,
-      [imageNotes, currentImageIndex]
-  );
+  const currentImageNote = useMemo(() => {
+      // Ensure imageNotes is valid and currentImageIndex is within bounds
+      if (imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length) {
+          return imageNotes[currentImageIndex];
+      }
+      return null;
+  }, [imageNotes, currentImageIndex]);
+
   const currentAuthorPubkey = currentImageNote?.pubkey;
 
   // --- Fetch Profile for the Current Author using Applesauce ---
@@ -172,77 +174,39 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   }
 
   // --- Determine if tipping is possible --- 
-  const canTip = useMemo(() => 
-    !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && !!currentAuthorNpub && auth.isLoggedIn && !!eventStore,
-    [wallet.isLoadingWallet, wallet.balanceSats, isTipping, currentAuthorNpub, auth.isLoggedIn, eventStore]
-  );
+  // const canTip = useMemo(() => 
+  //   !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && !!currentAuthorNpub && auth.isLoggedIn && !!eventStore,
+  //   [wallet.isLoadingWallet, wallet.balanceSats, isTipping, currentAuthorNpub, auth.isLoggedIn, eventStore]
+  // );
+  const canTip = false; // DIAGNOSTIC: Force to false
 
   // --- Tipping Handler ---
-  const handleTip = useCallback(async () => {
-    // Assuming auth provides activeSigner
-    const activeSigner = (auth as any).activeSigner as EventSigner | undefined;
+  // const handleTip = useCallback(async () => {
+  //   // Assuming auth provides activeSigner
+  //   const activeSigner = (auth as any).activeSigner as EventSigner | undefined;
 
-    // Re-check conditions inside handler
-    if (!canTip || !currentAuthorNpub || !eventStore || !auth.isLoggedIn || !activeSigner) {
-        console.warn('Cannot tip (inside handler):', { canTip, currentAuthorNpub, eventStore, authIsLoggedIn: auth.isLoggedIn, activeSigner: !!activeSigner });
-        return;
-    }
-    setIsTipping(true);
-    setTipStatus(null);
-    console.log(`Attempting to tip ${DEFAULT_TIP_AMOUNT} sats to ${currentAuthorNpub}`);
+  //   // Re-check conditions inside handler
+  //   if (!canTip || !currentAuthorNpub || !eventStore || !auth.isLoggedIn || !activeSigner) {
+  //       console.warn('Cannot tip (inside handler):', { canTip, currentAuthorNpub, eventStore, authIsLoggedIn: auth.isLoggedIn, activeSigner: !!activeSigner });
+  //       return;
+  //   }
+  //   setIsTipping(true);
+  //   setTipStatus(null);
+  //   console.log(`Attempting to tip ${DEFAULT_TIP_AMOUNT} sats to ${currentAuthorNpub}`);
 
-    try {
-        // 1. Construct the unsigned Zap Request (Kind 9734) - This is complex!
-        // We need the recipient's zap endpoint from their profile (relays tag? lud16?)
-        // NIP-57: https://github.com/nostr-protocol/nips/blob/master/57.md
-        // For now, we'll skip the actual LN invoice generation and focus on the Nostr event publishing structure.
-        // We need to create a Kind 9735 (Zap) event, not 9734 (Zap Request).
-        // The Zap event usually includes the Bolt11 invoice in a description tag.
-
-        // --- Placeholder for Zap Event Creation --- 
-        // TODO: Implement proper Zap Request (Kind 9734) to get invoice, then create Kind 9735
-        // This is a simplified placeholder - assumes we magically got an invoice
-        const placeholderInvoice = "lnbc..."; // Replace with actual invoice
-        const zapEvent: UnsignedEvent = {
-            kind: 9735,
-            created_at: Math.floor(Date.now() / 1000),
-            pubkey: activeSigner.pubkey,
-            content: `📺⚡️ Tip from MadTrips TV App!`, // Optional user comment
-            tags: [
-                ["p", currentAuthorPubkey!], // Zap recipient pubkey
-                ["e", currentNoteId!], // Zap target event (optional)
-                // ["a", <coordinate>], // Zap target kind 10k+ (optional)
-                ["amount", (DEFAULT_TIP_AMOUNT * 1000).toString()], // Amount in millisats
-                // Required: Description tag containing the BOLT11 invoice
-                ["description", JSON.stringify({ content: `Zap for event ${currentNoteId}`, bolt11: placeholderInvoice })]
-            ],
-        };
-
-        console.log("ImageFeed: Signing Zap event...", zapEvent);
-        const signedZapEvent = await activeSigner.signEvent(zapEvent as any); // Cast needed?
-
-        console.log("ImageFeed: Adding Zap event to EventStore...", signedZapEvent.id);
-        eventStore.add(signedZapEvent);
-
-        // Assume success if add doesn't throw
-        const success = true;
-
-        // const success = await wallet.sendCashuTipWithSplits(params); // Old method
-        if (success) { // Check the result of adding to eventStore
-            console.log('Tip successful!');
-            setTipStatus('success');
-        } else {
-            console.error('Tip failed.', wallet.walletError); // Keep wallet error for potential Cashu issues?
-            setTipStatus('error');
-        }
-    } catch (error) {
-        console.error('Exception during tip:', error);
-        setTipStatus('error');
-    } finally {
-        setIsTipping(false);
-        setTimeout(() => setTipStatus(null), 2000);
-    }
-  }, [canTip, currentAuthorNpub, eventStore, auth, wallet, currentNoteId]);
+  //   try {
+  //       // ... (original tipping logic) ...
+  //   } catch (error) {
+  //       console.error('Exception during tip:', error);
+  //       setTipStatus('error');
+  //   } finally {
+  //       setIsTipping(false);
+  //       setTimeout(() => setTipStatus(null), 2000);
+  //   }
+  // }, [canTip, currentAuthorNpub, eventStore, auth, wallet, currentNoteId]);
+  const handleTip = useCallback(() => {
+    console.log("DIAGNOSTIC: Tipping disabled.");
+  }, []); // DIAGNOSTIC: No-op with empty dependencies
 
   // --- Keyboard Handler for Tipping ---
   const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -259,7 +223,7 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   };
 
   // <<< Conditionally render loading state based on imageNotes length >>>
-  if (imageNotes.length === 0) {
+  if (!imageNotes || imageNotes.length === 0) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
         <div className="mb-4 w-16 h-16 animate-spin border-4 border-purple-600 border-t-transparent rounded-full"></div>
