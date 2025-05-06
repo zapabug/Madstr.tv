@@ -1,10 +1,13 @@
 export const RELAYS = [
-  'wss://relay.damus.io',
-  // 'wss://relay.primal.net', // Temporarily commented out due to connection issues
-  'wss://nos.lol',
-  'wss://nostr.wine',
-  'wss://purplepag.es',
+  `wss://relay.nsec.app`,
+  `wss://nostr.mom`,
+  `wss://purplerelay.com`,
   'wss://relay.nostr.band',
+  'wss://purplepag.es',
+  'wss://nostr.wine',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://relay.damus.io'
 ];
 
 // !!! IMPORTANT !!!

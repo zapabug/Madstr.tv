@@ -154,24 +154,37 @@ export function useMediaState({
     // Update currentItemUrl whenever the relevant source changes
     useEffect(() => {
         let newUrl: string | null = null;
-        console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, pIdx=${currentPodcastIndex}, vIdx=${currentVideoIndex}, iIdx=${currentImageIndex}`);
+        // Enhanced logging for podcast selection
+        console.log(
+            `[DEBUG useMediaState URL Effect Trigger] Mode: ${viewMode}, ` +
+            `Podcast Idx: ${currentPodcastIndex}, Podcast Notes Count: ${podcastNotes.length}, ` +
+            `Video Idx: ${currentVideoIndex}, Image Idx: ${currentImageIndex}`
+        );
 
         if (viewMode === 'imagePodcast') {
-            if (imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
+            // Prioritize podcast URL if a valid podcast is selected and has a URL
+            if (podcastNotes.length > 0 && currentPodcastIndex < podcastNotes.length && podcastNotes[currentPodcastIndex]?.url) {
+                newUrl = podcastNotes[currentPodcastIndex].url;
+                console.log(`[DEBUG useMediaState] Prioritizing podcast URL: ${newUrl} from note:`, podcastNotes[currentPodcastIndex]);
+            } else if (imageNotes.length > 0 && currentImageIndex < imageNotes.length) {
+                // Fallback to image URL if no podcast is actively selected or playable
                 newUrl = imageNotes[currentImageIndex]?.url || null;
+                console.log(`[DEBUG useMediaState] Setting image URL: ${newUrl} (Podcast not prioritized or no URL)`);
             }
         } else { // viewMode === 'videoPlayer'
             if (videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
                 newUrl = videoNotes[currentVideoIndex]?.url || null;
+                console.log(`[DEBUG useMediaState] Setting video URL: ${newUrl}`);
             }
         }
         
         if (newUrl !== currentItemUrl) {
-            console.log(`useMediaState URL Effect: Setting currentItemUrl from ${currentItemUrl} to: ${newUrl}`);
+            console.log(`[DEBUG useMediaState URL Effect] Setting currentItemUrl FROM: ${currentItemUrl} TO: ${newUrl}`);
             setCurrentItemUrl(newUrl);
         } else {
-            if (currentItemUrl !== null || newUrl !== null) {
-                console.log(`useMediaState URL Effect: currentItemUrl (${currentItemUrl}) already matches newUrl (${newUrl}). No change.`);
+            // Only log if there's actually something to compare, to reduce noise when both are null initially
+            if (currentItemUrl !== null || newUrl !== null) { 
+                console.log(`[DEBUG useMediaState URL Effect] currentItemUrl (${currentItemUrl}) already matches newUrl (${newUrl}). No change.`);
             }
         }
 
@@ -179,11 +192,16 @@ export function useMediaState({
 
     // Set Podcast Index (does NOT change viewMode)
     const setCurrentPodcastIndex = useCallback((index: number) => {
-        console.log("useMediaState: setCurrentPodcastIndex called with", index);
+        console.log(`[DEBUG useMediaState] setCurrentPodcastIndex called with index: ${index}`);
         if (index >= 0 && index < podcastNotes.length) {
+            const selectedNote = podcastNotes[index];
+            console.log(`[DEBUG useMediaState] Selected podcast note at index ${index}:`, selectedNote);
+            if (!selectedNote?.url) {
+                console.warn(`[DEBUG useMediaState] WARNING: Selected podcast note at index ${index} has no URL. Note:`, selectedNote);
+            }
             setCurrentPodcastIndexInternal(index);
         } else {
-            console.warn(`useMediaState: Attempted to set invalid podcast index ${index}`);
+            console.warn(`[DEBUG useMediaState] Attempted to set invalid podcast index ${index}. podcastNotes length: ${podcastNotes.length}`);
         }
     }, [podcastNotes]);
 

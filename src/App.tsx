@@ -68,6 +68,7 @@ function App() {
 
   // --- Add state for loading message index ---
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+  const [isLoadingContent, setIsLoadingContent] = useState(true); // Start as true
 
   // --- Call Hooks --- 
   const auth = useAuth(); 
@@ -91,20 +92,36 @@ function App() {
   }, [isLoggedIn, currentUserNpub]);
 
   const contactsData = Hooks.useStoreQuery(Queries.ContactsQuery, pubkeyToFetchFollowsFor ? [pubkeyToFetchFollowsFor] : null);
+  
   useEffect(() => {
-      console.log("[App.tsx] contactsData updated:", contactsData);
+    console.log("[App.tsx] contactsData updated (raw from useStoreQuery):", contactsData);
+    const newIsLoading = contactsData === undefined;
+    if (newIsLoading !== isLoadingContent) {
+        console.log(`[App.tsx] isLoadingContent changing from ${isLoadingContent} to ${newIsLoading}`);
+        setIsLoadingContent(newIsLoading);
+    }
+  }, [contactsData, isLoadingContent]); // Added isLoadingContent to dependency array for correct comparison
+
+  // Stabilize followedPubkeys to prevent unnecessary re-renders down the chain
+  const followedPubkeysString = useMemo(() => {
+    if (!Array.isArray(contactsData)) return '[]';
+    // Sort to ensure order doesn't cause changes if the set is the same
+    // and filter out any undefined/null pubkeys before sorting & stringifying.
+    const pubkeys = contactsData
+        .map((pointer: any) => pointer?.pubkey)
+        .filter((pubkey): pubkey is string => typeof pubkey === 'string'); // Ensure only strings
+    pubkeys.sort();
+    return JSON.stringify(pubkeys);
   }, [contactsData]);
 
   const followedPubkeys = useMemo(() => {
-    if (!Array.isArray(contactsData)) return [];
-    return contactsData
-        .map((pointer: any) => pointer?.pubkey) // Added basic type hint
-        .filter(Boolean);
-   }, [contactsData]);
+      console.log("[App.tsx] Recomputing followedPubkeys from string. contactsData ref may have changed, but stringified content is:", followedPubkeysString);
+      return JSON.parse(followedPubkeysString);
+  }, [followedPubkeysString]);
 
   // --- Effect to subscribe to logged-in user's Kind 3 (Contact List) ---
   useEffect(() => {
-    // According to nostr-tools, pool.subscribeMany returns SubCloser[], which is effectively an array of subscriptions.
+    // According to nostr-tools, pool.subscribeMany returns SubCloser[], which is is an array of subscriptions.
     // Each element in the array should have an `unsub` method.
     let userContactsSubscriptions: Array<{ unsub: () => void }> | null = null;
 
@@ -298,10 +315,10 @@ function App() {
 
   // --- Update Overall Loading State --- 
   // Base loading on contacts query resolving, as media loading is handled by useMediaContent
-  const isFollowsLoading = contactsData === undefined;
-  const isLoadingContent = isFollowsLoading;
+  // const isFollowsLoading = contactsData === undefined; // Replaced by isLoadingContent state
+  // const isLoadingContent = isFollowsLoading; // Replaced by isLoadingContent state
   // DEBUG: Keep log for now
-  console.log('[App.tsx DEBUG] Final isLoadingContent (based on follows only):', isLoadingContent);
+  console.log('[App.tsx DEBUG] Final isLoadingContent (from state):', isLoadingContent);
 
   // --- Effect to cycle loading message --- 
   useEffect(() => {

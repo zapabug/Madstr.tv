@@ -136,10 +136,25 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **Output:** NIP-46 state and connection functions.
     *   **Function:** Encapsulates NIP-46 logic using `NostrConnectSigner` (Applesauce signer).
 
-*   **`useMediaContent` (`src/hooks/useMediaContent.ts`):** (Refactored)
+*   **`useMediaContent` (`src/hooks/useMediaContent.ts`):** (Significantly Refactored)
     *   **Input:** `followedAuthorPubkeys: string[]`, `followedTags: string[]`.
     *   **Output:** `shuffledImageNotes`, `shuffledVideoNotes`, `podcastNotes`, `isLoadingImages`, `isLoadingVideos`, `isLoadingPodcasts`, `fetchOlderImages`, `fetchOlderVideos`.
-    *   **Function:** **Primary hook for fetching media content.** Uses `Hooks.useStoreQuery(Queries.TimelineQuery, ...)` with appropriate filters (combining authors and tags with OR logic) for images (Kind 1063), videos (Kind 34235), and podcasts (Kind 31337). Processes results, shuffles images/videos, and provides callbacks for pagination.
+    *   **Function:** **Primary hook for fetching and processing all media content.**
+        *   **Fetching Strategy:**
+            *   Primarily fetches general `Kind 1` events from `followedAuthorPubkeys`.
+            *   Supplements this by also fetching specific `Kind 1063` (image) and `Kind 34235` (video) events using filters that combine `followedAuthorPubkeys` and `followedTags` (OR logic).
+        *   **Event Processing (`processApplesauceEvent`):**
+            *   For `Kind 1` events: Attempts to parse audio, image, or video URLs directly from the event `content` using regular expressions. Assigns a `mediaTypeHint` ('audio', 'image', 'video', or 'unknown').
+            *   For `Kind 1063` / `Kind 34235` events: Extracts URLs from standard tags (e.g., 'url', 'media', 'image') and sets the appropriate `mediaTypeHint`.
+        *   **Consolidated Processing & Deduplication:**
+            *   A single `useEffect` hook manages all fetched events (`Kind 1`, `Kind 1063`, `Kind 34235`).
+            *   All events are run through `processApplesauceEvent`.
+            *   The resulting notes are deduplicated by `event.id` (with basic prioritization for specific kinds or notes with URLs over less specific/URL-less duplicates).
+        *   **Categorization & Output:**
+            *   Deduplicated notes are categorized into `podcastNotes`, `imageNotes`, and `videoNotes` based on their `mediaTypeHint` and the presence of an extracted `url`.
+            *   `imageNotes` and `videoNotes` are then shuffled before being returned as `shuffledImageNotes` and `shuffledVideoNotes`.
+            *   Provides callbacks for pagination (`fetchOlderImages`, `fetchOlderVideos`).
+    *   **Stability:** Implements `useMemo` with `JSON.stringify` on the arrays returned by `Hooks.useStoreQuery` before they are used as dependencies in the main processing `useEffect`. This is to prevent re-render loops caused by unstable array references from the query hook.
 
 *   **`useMediaState` (`src/hooks/useMediaState.ts`):**
     *   **Input:** Notes arrays (`initialImageNotes`, etc. from `useMediaContent`), fetcher callbacks (from `useMediaContent`), note lengths.
@@ -161,7 +176,14 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   `useNDKInit`, `ndk.ts`.
     *   (Still need to evaluate `usePodcastNotes` and remove if `useMediaContent` covers it).
 
-## 5. Large Files (>500 Lines) - Potential Refactor Targets
+## 5. Type Definitions
+
+*   **`src/types/nostr.ts`:** Contains core Nostr-related type definitions for the application, including `NostrNote` which represents a processed Nostr event ready for display (often with an extracted `url` and other media-specific fields).
+*   **`src/types/Events.ts`:** Defines additional event-related types, notably:
+    *   `ApplesauceEvent`: Extends `NostrEvent` (from `nostr-tools`) to include common optional fields relevant for media content within the application context (e.g., `url`, `title`, `summary`, `image`, `duration`, `posterPubkey`). This type can be used for events that are in an intermediate processing stage or to standardize event structures before they become `NostrNote`s.
+    *   `ContentExtraction`, `EventContent`, `Url`: Placeholder/utility types for event content handling.
+
+## 6. Large Files (>500 Lines) - Potential Refactor Targets
 
 *   `src/components/MediaPanel.tsx`
 *   `src/components/SettingsModal.tsx`

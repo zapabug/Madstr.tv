@@ -48,39 +48,93 @@
     *   Added a diagnostic `useEffect` in `useMediaContent.ts` using `Hooks.useEventStore()` and `eventStore.getAll()` to synchronously check if matching Kind 1 events for NoSolutions exist in the store when the specific query (`podcastQueryArgs`) is active.
 *   **Next Step:** User to run app and check the new `[DEBUG] EventStore.getAll found...` logs to determine if relevant Kind 1 events are present in the `EventStore`.
 
-## 2024-07-22: Debugging Content Loading - Kind 3, Kind 1 Podcasts
+## 2024-07-22: Debugging Content Loading & Infinite Loop
 
-*   **Initial State:** App stuck on loading spinner. No media (images, videos, podcasts) displaying.
-*   **Kind 3 Contacts (Default User):**
-    *   `App.tsx` uses `Hooks.useStoreQuery(Queries.ContactsQuery, [defaultTvUserPubkey])`.
-    *   Initially, `contactsData` was `undefined` because the Kind 3 event for the default TV user wasn't in `EventStore` when `ContactsQuery` first ran.
-    *   `main.tsx` includes an initial `SimplePool` subscription for `{ kinds: [3], authors: [tvPubkeyHex], limit: 1 }`. The issue seemed to be timing – the query ran before the event was fetched and stored.
-*   **Kind 3 Contacts (Logged-in User):**
-    *   **Identified Issue:** No dynamic subscription was made for the logged-in user's Kind 3 event upon login.
-    *   **Fix Implemented:** Added a `useEffect` in `App.tsx` to:
-        *   Use `useRelayPool()` and `Hooks.useEventStore()`.
-        *   When `isLoggedIn` and `currentUserNpub` are set, decode the pubkey.
-        *   Call `pool.subscribeMany(RELAYS, [{ kinds: [3], authors: [loggedInUserHexPubkey], limit: 1 }], ...)` to fetch the user's contacts.
-        *   The `onevent` handler adds the received event to `eventStore`.
-        *   Includes cleanup to `unsub()` from the subscription.
-    *   **Outcome:** This successfully populates `contactsData` and `followedAuthorPubkeys` after login.
-*   **Podcast Fetching (Kind 1 - NoSolutions - Initial Focus):**
-    *   Refactored `useMediaContent.ts` to target Kind 1 events from `NOSOLUTIONS_PUBKEY_HEX` if that author is followed.
-    *   Added diagnostic `useEffect` in `useMediaContent.ts` using `eventStore.getAll(podcastQueryArgs)` to directly check the cache.
-    *   **Key Finding:** `eventStore.getAll()` consistently returned 0 events for the NoSolutions Kind 1 filter, even after login and with correct `podcastQueryArgs`.
-    *   This indicated the specific Kind 1 events from NoSolutions were not making it into the `EventStore`.
-*   **`SimplePool` Subscriptions for NoSolutions Kind 1:**
-    *   Modified `initialFilters` in `main.tsx` to add an explicit subscription: `{ kinds: [1], authors: [NOSOLUTIONS_PUBKEY_HEX], limit: 50 }`.
-    *   Added specific logging in `SimplePool`'s `onevent` handler in `main.tsx` for `"[SimplePool NoSolutions Kind 1 Received]"`.
-    *   **Key Finding:** These specific logs for NoSolutions Kind 1 events did **not** appear, while general Kind 1 events from other authors (caught by the broader `{ kinds: [0, 1, ...], limit: 250 }` filter) *were* being received.
-    *   This confirmed `SimplePool` was not receiving the targeted NoSolutions Kind 1 events from the configured relays.
-*   **Broadened Podcast Fetching (Kind 1 - All Followed Authors - Temporary Test):**
-    *   Modified `useMediaContent.ts`:
-        *   `podcastFiltersArray` changed to `{ kinds: [1], authors: followedAuthorPubkeys, limit: 50 }` (if authors followed).
-        *   `processApplesauceEvent` changed to attempt audio URL extraction from *any* Kind 1 event.
-    *   **Outcome:** A "playlist" appeared in the UI. Logs showed general Kind 1 events (from the broad filter in `main.tsx`) were being processed. If these happened to be from a followed author and contained an audio-like URL, they'd appear in the list. This explained the "playlist back" observation. Playback often failed as these weren't necessarily true audio files.
-*   **Current Understanding:** The primary issue for missing specific content (NoSolutions podcasts, and by extension images/videos) is that `SimplePool` is not receiving these specific events from the configured relays, even when explicitly asked. This contrasts with previous NDK behavior, suggesting differences in relay effectiveness or subscription management.
-*   **UI Issue (`RelayStatus.tsx`):**
-    *   Settings/Login button was hidden due to `opacity-0` and focus logic.
-    *   **Fix Implemented:** Removed `opacity-0` to make the button always visible.
-*   **Next Steps:** Revert `useMediaContent.ts` podcast fetching to be NoSolutions-specific for focused debugging. Investigate relay list (`RELAYS`) and potentially `SimplePool`'s interaction with them for specific, author-scoped event kinds. Then, address image/video fetching with dynamic subscriptions.
+*   **Initial State & Kind 3 Fixes:** (Covered previously - app stuck, Kind 3 for default/logged-in user fixed, `followedAuthorPubkeys` populating).
+*   **Podcast Fetching Strategy:** `useMediaContent.ts` configured to fetch Kind 1 events from all followed authors, attempting to extract audio URLs from content.
+*   **Relay List Update:** Updated `RELAYS` in `src/constants.ts` to a list of 9 relays previously used with NDK.
+*   **Persistent "Maximum Update Depth Exceeded" Error:** Despite relay changes and previous attempts to stabilize `followedPubkeys` and `isLoadingContent` in `App.tsx`, the application immediately encountered an infinite re-render loop upon loading data.
+*   **Applesauce Codebase Investigation Insights:**
+    *   A detailed review of `applesauce-react` (`Hooks.useStoreQuery`) and `applesauce-core` (`Queries.ContactsQuery`, `QueryStore`, `EventStore`) indicated that `Hooks.useStoreQuery` does not inherently guarantee reference stability for array/object results if the underlying observable pipeline emits new references.
+    *   Specifically, the `map` operator in `ContactsQuery` (using the `getContacts()` helper) is a likely point where new array references for `contactsData` are generated, even if the underlying contact list content is identical.
+    *   No deep `distinctUntilChanged` comparison seems to be applied by default to the *output* of such queries within the core Applesauce pipeline examined.
+*   **Latest Error Stack Trace & Hypothesis Shift:**
+    *   The most recent stack trace for the "Maximum update depth exceeded" error now prominently includes `useMediaContent.ts` (specifically citing line 243 in one trace) in addition to `App.tsx`.
+    *   This suggests that while `contactsData` reference instability (from `useStoreQuery(ContactsQuery,...)` in `App.tsx`) might still be an initial trigger propagating to `useMediaContent` (via `followedPubkeys`), the loop now critically involves `useMediaContent` itself.
+    *   **Revised Hypothesis:** `useMediaContent` is re-run due to unstable `followedPubkeys`. Then, its own internal data fetching using `Hooks.useStoreQuery(Queries.TimelineQuery, ...)` for images, videos, or podcasts (`fetchedImageEvents`, `fetchedPodcastEvents`, etc.) might *also* be returning unstable array references. This would cause `useMediaContent`'s internal `useEffect` hooks (which process these fetched events and call `setProcessedImageNotes`, `setProcessedPodcastNotes`, etc.) to run repeatedly, setting state, causing `useMediaContent` to return new output array references to `App.tsx`, which then continues the re-render loop.
+*   **Stabilization Attempts in `useMediaContent.ts` (2024-07-23):**
+    *   Refactored `useMediaContent.ts` to introduce "stable" versions of `fetchedImageEvents`, `fetchedVideoEvents`, and `fetchedPodcastEvents` using `useMemo` and `JSON.stringify`. These stable versions are now dependencies for the `useEffect` hooks that process media events and call `setProcessed...Notes` setters.
+    *   Corrected type inconsistencies within these processing `useEffect`s, ensuring `NostrNote[]` is used for arrays returned by `processApplesauceEvent`.
+    *   Created `src/types/Events.ts` defining `ApplesauceEvent` and other related types, resolving import errors.
+    *   Resolved duplicate `NostrNote` imports.
+*   **Current Status (2024-07-23):**
+    *   The "Maximum update depth exceeded" error appears to be resolved due to stabilization efforts.
+    *   **NEW ISSUE:** No media content (images, videos, podcasts) is being displayed in the UI. (Update: Podcasts *are* populating their list in `MediaPanel`, but playback fails).
+    *   Logs confirm `SimplePool` in `main.tsx` is receiving general Kind 1 events, indicating relay communication is active.
+    *   **NEW ISSUE (Playback Failure):** When attempting to play a podcast, the error "useMediaElementPlayback: togglePlayPause called with invalid state. Has media element: true, has currentItemUrl: false" occurs. This suggests the podcast list is populating, but the selected item's URL is not being correctly set or propagated to the playback hook.
+    *   **NEW ISSUE:** The placeholder chat functionality for non-logged-in users (previously available in `MessageBoard`) is reportedly missing or not working.
+*   **Next Steps (Focus on Data Flow & Placeholder Chat):**
+    1.  **Investigate Podcast Playback Failure (Priority):**
+        *   Trace `currentItemUrl` in `useMediaState`: Verify it updates when a podcast is selected.
+        *   Inspect the selected podcast `NostrNote` in `useMediaState` to ensure its `url` property is valid.
+        *   Review `MediaPanel.tsx` and `Podcastr.tsx` selection handling.
+    2.  **Investigate Image/Video Content Data Flow:** Deep dive into `useMediaContent.ts` to trace why fetched events (if any from `TimelineQuery`) are not resulting in displayed images/videos. This includes checking filters, query arguments, `TimelineQuery` results, `processApplesauceEvent` logic, and final state updates for `shuffledImageNotes`, `shuffledVideoNotes`.
+    3.  **Investigate Placeholder Chat:** Review `App.tsx` and `MessageBoard.tsx` to understand how `neventToFollow` (or equivalent) was set for non-logged-in users and reinstate this functionality. Determine if a default event ID or logic was used.
+
+## 2024-07-24: Podcast Playback Fixes, Image/Video Debug Prep, HMR Issues
+
+*   **Podcast Playback Logic Refined (`useMediaState.ts`):**
+    *   Modified the `useEffect` hook in `useMediaState.ts` that sets `currentItemUrl`. When `viewMode` is `'imagePodcast'`, it now correctly prioritizes `podcastNotes[currentPodcastIndex].url` if a valid podcast is selected and has a URL, before falling back to an image URL.
+    *   Added detailed logging to trace `currentPodcastIndex`, the selected podcast note (and its URL), and the setting of `currentItemUrl`.
+    *   **Result:** Logs confirmed `currentItemUrl` was being set correctly for NoSolutions podcasts, and sound playback was achieved.
+*   **Generalized Podcast Audio Extraction (`useMediaContent.ts`):**
+    *   Identified that `processApplesauceEvent` was only attempting audio URL extraction from Kind 1 events authored by `NOSOLUTIONS_PUBKEY_HEX`.
+    *   Modified `processApplesauceEvent` to attempt `AUDIO_URL_REGEX` extraction from the `content` of *any* Kind 1 event, to support podcasts from other followed authors.
+*   **Image/Video Fetching Debug Prep (`useMediaContent.ts`):**
+    *   Added extensive `console.log` statements to log the direct results of `Hooks.useStoreQuery` for `fetchedImageEvents` and `fetchedVideoEvents`.
+    *   Added logs for the output of `processApplesauceEvent` when processing potential image/video events.
+*   **Identified HMR / `main.tsx` Issues:**
+    *   User reported Vite HMR errors (`can't access lexical declaration 'App' before initialization`, `Failed to reload /src/App.tsx`) and a React `createRoot` warning.
+    *   These indicate potential instability in the dev environment or issues in `main.tsx` / `App.tsx` that need to be addressed for reliable debugging.
+*   **Current Status (End of Session):**
+    *   Podcast playback for NoSolutions is working.
+    *   Awaiting testing of generalized Kind 1 audio extraction for other followed authors.
+    *   Awaiting testing/log analysis for image and video content fetching with new detailed logs in place.
+    *   Vite HMR errors and `createRoot` warning need to be investigated, starting with a dev server restart.
+    *   Placeholder chat functionality remains an outstanding issue.
+*   **Plan for Next Session:**
+    1.  **Stabilize Dev Environment:** Restart Vite dev server. If HMR/`createRoot` issues persist, investigate `main.tsx` and `App.tsx` for syntax errors, or circular dependencies.
+    2.  **Test Generalized Podcast Fetching:** Verify if podcasts from authors other than NoSolutions can now be played.
+    3.  **Analyze Image/Video Fetching Logs:** Once `followedAuthorPubkeys` are populated (e.g., after login), examine the new logs in `useMediaContent.ts` to see if `TimelineQuery` returns image/video events and if `processApplesauceEvent` handles them correctly.
+    4.  **Address Placeholder Chat:** Investigate and restore this functionality.
+    5.  **Continue Image/Video Debugging:** Based on log analysis, proceed with fixing image/video display.
+
+## 2024-07-25: Refactor `useMediaContent.ts` - Unified Media Discovery Strategy
+
+*   **Context:** To simplify media fetching and ensure content display even if specific kinds (1063, 34235) are not found or not posted by authors, a new strategy was implemented. The goal is to get the app running with some media, with further refinement to follow.
+*   **Key Changes in `src/hooks/useMediaContent.ts`:**
+    *   **Primary Discovery via Kind 1 Events:**
+        *   The hook now primarily fetches general `Kind 1` events from all `followedAuthorPubkeys`.
+        *   `processApplesauceEvent` was significantly updated to attempt to parse URLs for audio, images, AND videos directly from the `content` of these `Kind 1` events using new regexes (`IMAGE_URL_REGEX`, `VIDEO_URL_REGEX`) in addition to the existing `AUDIO_URL_REGEX`.
+        *   A `mediaTypeHint` ('audio', 'image', 'video', 'unknown') is now added to the processed note.
+    *   **Supplementary Fetching of Specific Kinds:**
+        *   The hook continues to fetch specific `Kind 1063` (image) and `Kind 34235` (video) events as before, extracting URLs from their tags. These serve as a more explicit source of media.
+    *   **Consolidated Event Processing:**
+        *   The three separate `useEffect` hooks for processing podcasts, images, and videos have been replaced with a single, consolidated `useEffect` hook.
+        *   This new hook gathers all events (from `fetchedGeneralKind1Events`, `fetchedImageEvents`, `fetchedVideoEvents`), processes them with the updated `processApplesauceEvent`.
+        *   **Deduplication:** Implemented logic to deduplicate notes by event ID, with a basic prioritization (e.g., preferring a specific media kind event over a content-parsed Kind 1 event if both share an ID, or preferring a version with an extracted URL).
+        *   **Categorization:** Notes are then filtered into `processedPodcastNotes`, `processedImageNotes`, and `processedVideoNotes` based on their `mediaTypeHint` and the presence of a valid `url`.
+    *   **State Management & Filters:**
+        *   State variables for podcast fetch limits/until (`podcastFetchLimit`, etc.) were renamed to `generalKind1FetchLimit`, etc.
+        *   Filter construction (`mediaFilters`) was updated to create `generalKind1FiltersArray` for the broad Kind 1 fetch, while retaining specific filters for Kind 1063 and 34235.
+*   **Rationale:** This approach aims to make the app more resilient in displaying some form of media by broadly scanning Kind 1 events, which are common, while still respecting dedicated media kinds for richer metadata and more explicit typing when available.
+*   **Current Status:** The refactor of `useMediaContent.ts` with this new unified media discovery and processing strategy is complete.
+*   **Next Steps:**
+    1.  Thoroughly test the new media fetching and display logic:
+        *   Do podcasts, images, and videos now appear from various authors?
+        *   Is media correctly categorized?
+        *   How well does the content-based URL extraction from Kind 1 events work?
+        *   Is deduplication effective?
+    2.  Analyze console logs from `useMediaContent.ts` to verify the flow.
+    3.  Address any bugs or unexpected behavior arising from this new strategy.
+    4.  Once media display is satisfactory, revisit placeholder chat functionality.
