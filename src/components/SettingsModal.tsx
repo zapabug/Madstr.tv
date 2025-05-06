@@ -73,7 +73,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     useEffect(() => {
         if (isOpen && auth.isLoggedIn) { // Check only for login state now
             console.log('SettingsModal: Attempting to start deposit listener.');
-            wallet.startDepositListener(auth, null); // Pass null temporarily
+            wallet.startDepositListener(); 
         } else {
              console.log('SettingsModal: Stopping deposit listener (modal closed or not logged in).');
             wallet.stopDepositListener();

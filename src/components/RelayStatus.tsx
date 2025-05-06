@@ -41,7 +41,7 @@ const RelayStatus: React.FC<RelayStatusProps> = ({ isReceivingData, relayCount, 
         aria-label="Settings"
         tabIndex={0} 
         className="absolute inset-0 flex items-center justify-center p-0.5 rounded text-purple-500 
-                   opacity-0 focus:opacity-100 group-focus-within:opacity-100 
+                   focus:opacity-100 group-focus-within:opacity-100 
                    transition-opacity duration-150 
                    focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
         onClick={onSettingsClick}

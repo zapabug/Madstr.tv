@@ -175,3 +175,42 @@
 *   **Decision Made:** Implement relay communication using `SimplePool` from `nostr-tools` and provide its methods to `NostrConnectSigner`.
 *   **Steps Explained:** Iteratively fixed build errors. Investigated Applesauce source to understand the missing `subscribe`/`publish` methods. Concluded that relay management must be handled by the application itself.
 *   **Next Action:** Modify `main.tsx` to instantiate `SimplePool`, create a `RelayPoolContext`, and provide the pool instance to the app via the context provider. 
+
+## Current Debugging Session: Investigating TimelineQuery Failure (2024-07-18)
+
+*   **User Summary:** User provided a comprehensive summary of the debugging journey so far, highlighting that `useMediaContent` (using Applesauce `TimelineQuery`) is not returning image/video events.
+*   **VibeStorm Action (Step 1.1 of TODO):** Added detailed logging in `src/hooks/useMediaContent.ts` (via `console.log`) for `imageQueryArgs` and `videoQueryArgs` *before* the call to `Hooks.useStoreQuery`. This is to verify the exact filter structures being passed to `TimelineQuery`.
+*   **Next Action:** User to run `pnpm run dev` and observe the console output for the logged `imageQueryArgs` and `videoQueryArgs`. Based on the output, decide on the next debugging step for `TimelineQuery` (e.g., simplifying filters, checking `EventStore`). 
+
+## Interaction 12: 2024-07-19 (User-Led Codebase Investigation)
+
+*   **User Input:** Provided a detailed summary of their investigation into the Applesauce codebase, specifically `EventStore`, `ProfileQuery`, and `TimelineQuery`. This was framed as answers to questions about how these components work.
+*   **Key Findings (from user's investigation):**
+    *   **`EventStore` API:** Confirmed methods like `getEvent()`, `getAll(filters)` (synchronous, good for debugging filters), and `getTimeline(filters)` exist. This allows direct inspection of the current cache. `debug` library (`applesauce:*`) can be used for logging.
+    *   **`ProfileQuery`:** Returns `ProfileContent | undefined`. The `getProfileContent` helper parses Kind 0 event content. `ProfileContent` type includes standard fields and deprecated aliases; UI needs to handle optional fields.
+    *   **`TimelineQuery`:** Returns `NostrEvent[] | undefined`. It's a thin wrapper around `eventStore.timeline()`. The actual filtering logic is in `EventStore` using `matchFilters` (which applies OR logic for an array of filters). Failures with complex filters are likely due to data mismatches in the store vs. filter criteria.
+    *   **Debugging `TimelineQuery`:** Recommended direct inspection of events via `eventStore.getEvent()`, testing filters with `eventStore.getAll()`, and incremental simplification of filters.
+*   **Decision Made:** Incorporate this detailed knowledge into the project's understanding and documentation. Proceed with the user's established TODO list.
+*   **Next Action (From User's TODO):** Focus on "Fix Podcast Playback". First step is to verify URL extraction by running the app and checking logs from `processApplesauceEvent` in `useMediaContent.ts` for Kind 31234 events:
+    *   Is `basicUrl` a valid audio URL?
+    *   Are `url`, `media`, or `enclosure` tags present and correct?
+    Waiting for user to report findings from these logs.
+
+## Interaction 13: 2024-07-19 (Kind 1 Podcast Discovery & Refactor)
+
+*   **User Input:** Provided console logs showing `basicUrl: null` and expanded `allTags` for Kind 31234 events, confirming the absence of standard URL tags.
+*   **VibeStorm Action:** Analyzed logs and `processApplesauceEvent`, confirming the URL extraction logic was looking for the correct tags but they were missing on the events.
+*   **User Input:** Provided a raw Kind 1 event (`ea643df0...`) from NoSolutions (`9bde...`) containing a podcast episode link directly in the `content` field.
+*   **Key Finding:** Realized that NoSolutions uses Kind 1 events with URLs in the content for podcast distribution, not Kind 31234 with tags.
+*   **Decision Made:** Refactor podcast fetching to target Kind 1 events specifically from NoSolutions, abandoning the Kind 31234 approach for podcasts for now.
+*   **VibeStorm Action:** 
+    *   Refactored `src/hooks/useMediaContent.ts`:
+        *   Modified `podcastFiltersArray` logic to *only* include a filter for `{ kinds: [1], authors: [NOSOLUTIONS_PUBKEY_HEX], ... }` if NoSolutions is followed.
+        *   Updated `processApplesauceEvent` to check for Kind 1 from NoSolutions and use regex (`AUDIO_URL_REGEX`) on the `content` to extract the URL.
+        *   Removed Kind 31234 handling from podcast logic.
+        *   Added `.filter(note => note.url !== undefined)` to the podcast processing `useEffect`.
+    *   Added more detailed logging to the podcast processing `useEffect` to trace event counts before and after URL filtering.
+*   **Outcome:** App still displayed loading spinner with no media. Logs showed the Kind 1 filter was correctly created, but the detailed processing logs added in the previous step were missing, indicating `fetchedPodcastEvents` might not be updating/emitting correctly for the Kind 1 query.
+*   **Decision Made:** Add a direct, synchronous check of the `EventStore` to bypass `useStoreQuery` temporarily for debugging.
+*   **VibeStorm Action:** Added a diagnostic `useEffect` to `useMediaContent.ts` using `Hooks.useEventStore()` and `eventStore.getAll(podcastQueryArgs)` to log the count and content of matching Kind 1 events found directly in the store when the query becomes active.
+*   **Next Action:** User to run the app and report the results of the new `[DEBUG] EventStore.getAll found...` logs. 

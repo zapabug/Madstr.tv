@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 // import { Buffer } from 'buffer'; // REMOVE Buffer import
-import { nip19, generateSecretKey } from 'nostr-tools';
+import { nip19, generateSecretKey, NostrEvent } from 'nostr-tools';
 import { SimpleSigner, NostrConnectSigner, NostrConnectSignerOptions, NostrConnectAppMetadata } from 'applesauce-signers';
 import { EventStore } from 'applesauce-core'; // Import concrete EventStore class
 import { Hooks } from 'applesauce-react'; // Assuming Hooks.useQueryStore exists
 import { RELAYS } from '../constants';
 import { StoredNip46Data, saveNip46DataToDb, loadNip46DataFromDb, clearNip46DataFromDb } from '../utils/idb'; // Adjust path if needed
 import { bytesToHex, hexToBytes } from '../utils/hex'; // IMPORT new hex helpers
+import { useRelayPool } from '../main'; // Corrected import path
 
 // Define the return type for the hook
 export interface UseNip46AuthManagementReturn {
@@ -20,12 +21,25 @@ export interface UseNip46AuthManagementReturn {
 }
 
 export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
+    const pool = useRelayPool();
     const queryStore = Hooks.useQueryStore();
     const eventStore = Hooks.useEventStore() as EventStore | undefined;
     const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null);
     const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false);
     const [nip46Error, setNip46Error] = useState<string | null>(null);
     const connectingNip46SignerRef = useRef<NostrConnectSigner | null>(null);
+
+    // Define wrapper for publish method
+    const nostrPublishMethod: NostrConnectSignerOptions['publishMethod'] = useCallback(
+        (relays: string[], event: NostrEvent) => {
+            if (!pool) {
+                console.error("Cannot publish: Relay pool not available.");
+                return; // Return void
+            }
+            pool.publish(relays, event);
+        },
+        [pool]
+    );
 
     const cleanupNip46Attempt = useCallback(async (errorMessage?: string) => {
         console.info('Cleaning up NIP-46 connection attempt...');
@@ -51,9 +65,9 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
     }, []);
 
     const initiateNip46Connection = useCallback(async (): Promise<NostrConnectSigner | null> => {
-        if (!eventStore?.relayManager) {
-            setNip46Error("EventStore or RelayManager not available.");
-            console.error("useNip46Auth: EventStore or RelayManager not available.");
+        if (!pool) {
+            setNip46Error("Relay pool not available.");
+            console.error("useNip46Auth: Relay pool not available.");
             setIsGeneratingUri(false);
             return null;
         }
@@ -68,12 +82,11 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
             const localSigner = new SimpleSigner(localSecretKeyBytes);
             const localSecretKeyHex = bytesToHex(localSecretKeyBytes);
 
-            const relayManager = eventStore.relayManager;
             const signerOpts: NostrConnectSignerOptions = {
                 relays: RELAYS,
                 signer: localSigner,
-                subscriptionMethod: relayManager.subscribe.bind(relayManager),
-                publishMethod: relayManager.publish.bind(relayManager),
+                subscriptionMethod: pool.sub.bind(pool), // Use pool.sub again
+                publishMethod: nostrPublishMethod,      // Use wrapper
             };
             const nip46Signer = new NostrConnectSigner(signerOpts);
             connectingNip46SignerRef.current = nip46Signer;
@@ -127,7 +140,7 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
                 setIsGeneratingUri(false);
             }
         }
-    }, [eventStore, cleanupNip46Attempt]);
+    }, [pool, cleanupNip46Attempt, nostrPublishMethod]);
 
     const cancelNip46Connection = useCallback(() => {
         console.info("Cancelling NIP-46 connection attempt...");
@@ -135,8 +148,8 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
     }, [cleanupNip46Attempt]);
 
     const restoreNip46Session = useCallback(async (): Promise<NostrConnectSigner | null> => {
-        if (!eventStore?.relayManager) {
-            console.error("useNip46Auth: EventStore or RelayManager not available during restore attempt.");
+        if (!pool) {
+            console.error("useNip46Auth: Relay pool not available during restore attempt.");
             return null;
         }
         setNip46Error(null);
@@ -149,14 +162,13 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
                 const localSecretBytes = hexToBytes(persistedNip46.localSecret);
                 const localSignerForRestore = new SimpleSigner(localSecretBytes);
 
-                const relayManager = eventStore.relayManager;
                 const signerOpts: NostrConnectSignerOptions = {
                     signer: localSignerForRestore,
                     remote: persistedNip46.remotePubkey,
                     pubkey: persistedNip46.connectedUserPubkey,
                     relays: persistedNip46.relays || RELAYS,
-                    subscriptionMethod: relayManager.subscribe.bind(relayManager),
-                    publishMethod: relayManager.publish.bind(relayManager),
+                    subscriptionMethod: pool.sub.bind(pool), // Use pool.sub again
+                    publishMethod: nostrPublishMethod,      // Use wrapper
                 };
                 const signer = new NostrConnectSigner(signerOpts);
 
@@ -187,7 +199,7 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
             console.info("No complete NIP-46 data found in storage for restore.");
             return null;
         }
-    }, [eventStore]);
+    }, [pool, nostrPublishMethod]);
 
     const clearPersistedNip46Session = useCallback(async () => {
         console.info("Clearing persisted NIP-46 session data...");

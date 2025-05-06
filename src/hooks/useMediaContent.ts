@@ -1,55 +1,57 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNDK, useSubscribe } from '@nostr-dev-kit/ndk-hooks';
-import { NDKEvent, NDKFilter, NDKKind } from '@nostr-dev-kit/ndk';
-import { TV_PUBKEY_NPUB } from '../constants';
+// REMOVE NDK Hooks
+// import { useNDK, useSubscribe } from '@nostr-dev-kit/ndk-hooks';
+// import { NDKEvent, NDKFilter, NDKKind } from '@nostr-dev-kit/ndk';
+
+// ADD Applesauce Hooks & Types
+import { Filter, NostrEvent } from 'nostr-tools'; // Use nostr-tools types
+import { Hooks } from 'applesauce-react';
+import { Queries } from 'applesauce-core';
+
+// Keep constants and local types
+// import { TV_PUBKEY_NPUB } from '../constants'; // No longer needed here
 import { NostrNote } from '../types/nostr';
 import { shuffleArray } from '../utils/shuffleArray';
-import { buildMediaFilters, getHexPubkey, MediaType } from '../utils/filterUtils';
+// Keep filter utils, but getHexPubkey is no longer needed here
+// import { buildMediaFilters, getHexPubkey, MediaType } from '../utils/filterUtils'; 
+// Simplified: Let's rebuild filter logic here for clarity, assuming filterUtils might be outdated
 
 // Constants for initial fetch limits
-const INITIAL_IMAGE_FETCH_LIMIT = 200;
-const INITIAL_VIDEO_FETCH_LIMIT = 200;
-const INITIAL_PODCAST_FETCH_LIMIT = 200;
+const INITIAL_IMAGE_FETCH_LIMIT = 20;
+const INITIAL_VIDEO_FETCH_LIMIT = 20;
+const INITIAL_PODCAST_FETCH_LIMIT = 50; // Maybe more for podcasts?
 
-// Event processing function (copied and adapted from App.tsx)
-// TODO: Consider moving this to a shared utility if used elsewhere
-function processEvent(event: NDKEvent, type: MediaType): NostrNote | null {
-    const mimeTag = event.tags.find(t => t[0] === 'm');
-    const urlTag = event.tags.find(t => t[0] === 'url');
-    const mediaTag = event.tags.find(t => t[0] === 'media'); // NIP-96
-    const imageTag = event.tags.find(t => t[0] === 'image'); // Older convention
-    const enclosureTag = event.tags.find(t => t[0] === 'enclosure'); // RSS/Podcast
+// Pubkey for NoSolutions
+const NOSOLUTIONS_PUBKEY_HEX = "9bde421491f3ead1ac21bd1d01667aab947f4c1c4aed87624cf2273b06ca052b";
 
-    let mediaUrl: string | undefined;
-    let mimeType: string | undefined = mimeTag?.[1];
+// Regex to find audio URLs in content
+const AUDIO_URL_REGEX = /(https?:\/\/[^\s"']+\.(m4a|mp3|aac|ogg|wav|flac|opus))/i;
 
-    let mimeMatch = false;
-    if (mimeType) {
-        switch (type) {
-            case 'image': mimeMatch = mimeType.startsWith('image/'); break;
-            case 'video': mimeMatch = mimeType.startsWith('video/'); break;
-            case 'podcast': mimeMatch = mimeType.startsWith('audio/'); break;
+// Event processing function - simplified, assumes event is already NostrEvent
+// and URL extraction happens later or is handled by data structure.
+// This might need revisiting depending on what TimelineQuery returns.
+function processApplesauceEvent(event: NostrEvent): NostrNote {
+    let basicUrl: string | null = null;
+    let sourceType: string = 'unknown'; // For logging
+
+    if (event.kind === 1) { 
+        sourceType = 'Kind 1 (content audio URL attempt)';
+        const contentUrlMatch = event.content.match(AUDIO_URL_REGEX);
+        if (contentUrlMatch && contentUrlMatch[0]) {
+            basicUrl = contentUrlMatch[0];
+            console.log(`[processApplesauceEvent] Audio URL FOUND via ${sourceType}:`, { eventId: event.id, pubkey: event.pubkey, basicUrl, kind: event.kind });
+        } else {
+            console.log(`[processApplesauceEvent] Audio URL NOT FOUND via ${sourceType}. Event:`, 
+                { eventId: event.id, pubkey: event.pubkey, kind: event.kind, contentSnippet: event.content?.substring(0,100) }
+            );
         }
+    } else if (event.kind === 1063 || event.kind === 34235) { // Image or Video
+        sourceType = event.kind === 1063 ? 'Image (tags)' : 'Video (tags)';
+        basicUrl = event.tags.find(t => t[0] === 'url')?.[1] || 
+                   event.tags.find(t => t[0] === 'media')?.[1] || 
+                   event.tags.find(t => t[0] === 'image')?.[1] || // 'image' tag primarily for Kind 1063
+                   null;
     }
-
-    if (!mimeMatch) return null;
-
-    if (urlTag?.[1]) {
-        mediaUrl = urlTag[1];
-    } else if (mediaTag?.[1]) {
-        mediaUrl = mediaTag[1];
-    } else if (type === 'image' && imageTag?.[1]) {
-        mediaUrl = imageTag[1];
-    } else if (type === 'podcast' && enclosureTag?.[1]) {
-        mediaUrl = enclosureTag[1];
-    }
-
-    if (!mediaUrl) return null;
-
-    const title = event.tags.find(t => t[0] === 'title')?.[1];
-    const summary = event.tags.find(t => t[0] === 'summary')?.[1];
-    const image = event.tags.find(t => t[0] === 'image')?.[1];
-    const duration = event.tags.find(t => t[0] === 'duration')?.[1];
 
     return {
         id: event.id,
@@ -59,18 +61,19 @@ function processEvent(event: NDKEvent, type: MediaType): NostrNote | null {
         tags: event.tags,
         content: event.content,
         sig: event.sig || '',
-        url: mediaUrl,
+        url: basicUrl === null ? undefined : basicUrl, 
         posterPubkey: event.pubkey,
-        title: title,
-        summary: summary,
-        image: image,
-        duration: duration,
+        title: event.tags.find(t => t[0] === 'title')?.[1],
+        summary: event.tags.find(t => t[0] === 'summary')?.[1],
+        image: event.tags.find(t => t[0] === 'image')?.[1],
+        duration: event.tags.find(t => t[0] === 'duration')?.[1],
     };
 }
 
 interface UseMediaContentProps {
     followedTags: string[];
-    currentUserNpub: string | null; // Npub of the currently logged-in user, or null
+    // currentUserNpub: string | null; // REMOVED
+    followedAuthorPubkeys: string[]; // ADDED: Expect hex pubkeys
 }
 
 interface UseMediaContentReturn {
@@ -79,7 +82,7 @@ interface UseMediaContentReturn {
     podcastNotes: NostrNote[];
     fetchOlderImages: () => void;
     fetchOlderVideos: () => void;
-    isLoadingKind3: boolean;
+    // isLoadingKind3: boolean; // REMOVED
     isLoadingImages: boolean;
     isLoadingVideos: boolean;
     isLoadingPodcasts: boolean;
@@ -87,69 +90,24 @@ interface UseMediaContentReturn {
 
 export function useMediaContent({
     followedTags,
-    currentUserNpub,
+    // currentUserNpub, // REMOVED
+    followedAuthorPubkeys, // ADDED
 }: UseMediaContentProps): UseMediaContentReturn {
-    const { ndk } = useNDK();
+    console.log('[useMediaContent] PROPS RECEIVED:', { followedAuthorPubkeys, followedTags });
+    // REMOVE NDK instance
+    // const { ndk } = useNDK();
 
-    // --- State for Followed Author Pubkeys (from Kind 3) ---
-    const tvPubkeyHex = useMemo(() => getHexPubkey(TV_PUBKEY_NPUB), []);
-    const currentUserHexPubkey = useMemo(() => currentUserNpub ? getHexPubkey(currentUserNpub) : null, [currentUserNpub]);
-    const [followedAuthorPubkeys, setFollowedAuthorPubkeys] = useState<string[]>([]);
-    const [isLoadingKind3, setIsLoadingKind3] = useState<boolean>(true);
+    // REMOVE Internal Kind 3 fetching logic
+    // const tvPubkeyHex = ...;
+    // const currentUserHexPubkey = ...;
+    // const [followedAuthorPubkeys, setFollowedAuthorPubkeys] = useState<string[]>([]);
+    // const [isLoadingKind3, setIsLoadingKind3] = useState<boolean>(true);
+    // const kind3AuthorHex = ...;
+    // const kind3Filter = ...;
+    // const { events: kind3Events, eose: kind3Eose } = useSubscribe(...);
+    // useEffect(() => { ... process kind 3 ... }, ...);
 
-    // --- Determine Pubkey for Kind 3 Fetch ---
-    // Use the logged-in user's pubkey if available, otherwise default to TV pubkey.
-    const kind3AuthorHex = useMemo(() => {
-        console.log(`useMediaContent: Determining Kind 3 author. currentUserHexPubkey: ${currentUserHexPubkey}, tvPubkeyHex: ${tvPubkeyHex}`);
-        return currentUserHexPubkey || tvPubkeyHex;
-    }, [currentUserHexPubkey, tvPubkeyHex]);
-
-    console.log(`useMediaContent: Pubkey selected for Kind 3 fetch: ${kind3AuthorHex}`);
-
-    // --- Subscribe to Kind 3 Event ---
-    const kind3Filter = useMemo((): NDKFilter | null => {
-        if (!kind3AuthorHex) {
-            console.log("useMediaContent: No author pubkey available for Kind 3 fetch.");
-            return null;
-        }
-        return { kinds: [NDKKind.Contacts], authors: [kind3AuthorHex], limit: 1 };
-    }, [kind3AuthorHex]);
-
-    console.log('useMediaContent: Passing filter to useSubscribe (Kind 3):', JSON.stringify(kind3Filter ? [kind3Filter] : []));
-
-    const { events: kind3Events, eose: kind3Eose } = useSubscribe(
-        kind3Filter ? [kind3Filter] : [] // Pass empty array if filter is null
-        // { closeOnEose: true } // Temporarily removed for debugging Kind 3 fetch
-    );
-
-    // --- Process Kind 3 Event ---
-    useEffect(() => {
-        if (!kind3AuthorHex) {
-            setIsLoadingKind3(false);
-            setFollowedAuthorPubkeys([]);
-            console.log('useMediaContent: Set followedAuthorPubkeys state to empty array (no kind3AuthorHex).');
-            return;
-        }
-
-        const kind3Event = kind3Events[0];
-        if (kind3Event) {
-            console.log("useMediaContent: Found Kind 3 event:", kind3Event.rawEvent());
-            const followed = kind3Event.tags.filter(tag => tag[0] === 'p' && tag[1]).map(tag => tag[1]);
-            console.log(`useMediaContent: Setting followed authors: [${followed.join(', ')}]`);
-            setFollowedAuthorPubkeys(followed);
-            console.log('useMediaContent: Set followedAuthorPubkeys state:', followed);
-            setIsLoadingKind3(false);
-        } else if (kind3Eose) {
-            console.warn(`useMediaContent: No Kind 3 event found for pubkey ${kind3AuthorHex} after EOSE.`);
-            setFollowedAuthorPubkeys([]);
-            console.log('useMediaContent: Set followedAuthorPubkeys state to empty array (no Kind 3 found).');
-            setIsLoadingKind3(false);
-        }
-        // Keep loading true until EOSE or event found
-
-    }, [kind3Events, kind3Eose, kind3AuthorHex]);
-
-    // --- Fetch Parameters State ---
+    // --- Fetch Parameters State (Keep) ---
     const [imageFetchLimit, setImageFetchLimit] = useState<number>(INITIAL_IMAGE_FETCH_LIMIT);
     const [videoFetchLimit, setVideoFetchLimit] = useState<number>(INITIAL_VIDEO_FETCH_LIMIT);
     const [podcastFetchLimit, setPodcastFetchLimit] = useState<number>(INITIAL_PODCAST_FETCH_LIMIT);
@@ -157,144 +115,186 @@ export function useMediaContent({
     const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
     const [podcastFetchUntil, setPodcastFetchUntil] = useState<number | undefined>(undefined);
 
-    // --- State for Raw and Processed Notes ---
-    // Store raw events to handle potential updates from subscription
-    const [rawImageEvents, setRawImageEvents] = useState<NDKEvent[]>([]);
-    const [rawVideoEvents, setRawVideoEvents] = useState<NDKEvent[]>([]);
-    const [rawPodcastEvents, setRawPodcastEvents] = useState<NDKEvent[]>([]);
+    // --- State for Processed Notes (Keep, but simplify raw state removal) ---
+    // Store raw events to handle potential updates from subscription - REMOVED intermediate raw state
+    // const [rawImageEvents, setRawImageEvents] = useState<NDKEvent[]>([]);
+    // const [rawVideoEvents, setRawVideoEvents] = useState<NDKEvent[]>([]);
+    // const [rawPodcastEvents, setRawPodcastEvents] = useState<NDKEvent[]>([]);
 
+    // Store processed notes directly from useStoreQuery results
     const [processedImageNotes, setProcessedImageNotes] = useState<NostrNote[]>([]);
     const [processedVideoNotes, setProcessedVideoNotes] = useState<NostrNote[]>([]);
     const [processedPodcastNotes, setProcessedPodcastNotes] = useState<NostrNote[]>([]);
 
-    // --- State for Shuffled Notes ---
+    // --- State for Shuffled Notes (Keep) ---
     const [shuffledImageNotes, setShuffledImageNotes] = useState<NostrNote[]>([]);
     const [shuffledVideoNotes, setShuffledVideoNotes] = useState<NostrNote[]>([]);
 
-    // --- Loading States for Media Types ---
-    const [isLoadingImages, setIsLoadingImages] = useState<boolean>(true);
-    const [isLoadingVideos, setIsLoadingVideos] = useState<boolean>(true);
-    const [isLoadingPodcasts, setIsLoadingPodcasts] = useState<boolean>(true);
+    // --- Loading States for Media Types (Derive from query results) ---
+    // Let's rely on the undefined state of fetched...Notes from useStoreQuery
+    // const [isLoadingImages, setIsLoadingImages] = useState<boolean>(true);
+    // const [isLoadingVideos, setIsLoadingVideos] = useState<boolean>(true);
+    // const [isLoadingPodcasts, setIsLoadingPodcasts] = useState<boolean>(true);
 
-    // --- Build Filters ---
-    const imageFilters = useMemo(() => {
-        const filters = buildMediaFilters('image', imageFetchLimit, followedAuthorPubkeys, followedTags, imageFetchUntil, currentUserHexPubkey);
-        console.log('useMediaContent: Generated imageFilters:', JSON.stringify(filters));
-        return filters;
-    }, [imageFetchLimit, followedAuthorPubkeys, followedTags, imageFetchUntil, currentUserHexPubkey]);
+    // --- Build Filters (using props: followedAuthorPubkeys, followedTags) ---
+    const mediaFilters = useMemo(() => {
+        const authorsFilterPart = followedAuthorPubkeys.length > 0 ? { authors: followedAuthorPubkeys } : null;
+        const tagsFilterPart = followedTags.length > 0 ? { '#t': followedTags } : null;
+
+        const baseImageFilters: Filter = { kinds: [1063], limit: imageFetchLimit, ...(imageFetchUntil && { until: imageFetchUntil }) };
+        const baseVideoFilters: Filter = { kinds: [34235], limit: videoFetchLimit, ...(videoFetchUntil && { until: videoFetchUntil }) };
+        // REMOVED basePodcastKind31234Filters
+
+        const imageFiltersArray: Filter[] = [];
+        if (authorsFilterPart) imageFiltersArray.push({ ...baseImageFilters, ...authorsFilterPart });
+        if (tagsFilterPart) imageFiltersArray.push({ ...baseImageFilters, ...tagsFilterPart });
+        if (imageFiltersArray.length === 0 && !authorsFilterPart && !tagsFilterPart) imageFiltersArray.push(baseImageFilters);
+
+        const videoFiltersArray: Filter[] = [];
+        if (authorsFilterPart) videoFiltersArray.push({ ...baseVideoFilters, ...authorsFilterPart });
+        if (tagsFilterPart) videoFiltersArray.push({ ...baseVideoFilters, ...tagsFilterPart });
+        if (videoFiltersArray.length === 0 && !authorsFilterPart && !tagsFilterPart) videoFiltersArray.push(baseVideoFilters);
+        
+        // MODIFIED: Podcast filter: Kind 1 from ALL followed authors if any are followed
+        const podcastFiltersArray: Filter[] = [];
+        if (authorsFilterPart) { // Check if there are any followed authors
+            podcastFiltersArray.push({ 
+                kinds: [1], 
+                authors: followedAuthorPubkeys, // Use all followed authors
+                limit: podcastFetchLimit, 
+                ...(podcastFetchUntil && { until: podcastFetchUntil }),
+            });
+        } // If no authors are followed, podcastFiltersArray remains empty, so no Kind 1 audio query.
+        
+        console.log("[useMediaContent] Constructed Filters (Podcasts: Kind 1 from ALL Followed Authors):", { imageFiltersArray, videoFiltersArray, podcastFiltersArray });
+
+        return { imageFiltersArray, videoFiltersArray, podcastFiltersArray };
+
+    }, [followedAuthorPubkeys, followedTags, imageFetchLimit, videoFetchLimit, podcastFetchLimit, imageFetchUntil, videoFetchUntil, podcastFetchUntil]);
+
+    // --- Subscribe to Media Events using Applesauce Hooks ---
+    const imageQueryArgs = useMemo(() => mediaFilters.imageFiltersArray.length > 0 ? mediaFilters.imageFiltersArray : null, [mediaFilters.imageFiltersArray]);
+    const videoQueryArgs = useMemo(() => mediaFilters.videoFiltersArray.length > 0 ? mediaFilters.videoFiltersArray : null, [mediaFilters.videoFiltersArray]);
+    const podcastQueryArgs = useMemo(() => mediaFilters.podcastFiltersArray.length > 0 ? mediaFilters.podcastFiltersArray : null, [mediaFilters.podcastFiltersArray]);
+
+    console.log('[useMediaContent] imageQueryArgs:', JSON.stringify(imageQueryArgs, null, 2));
+    const fetchedImageEvents: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, imageQueryArgs ? [imageQueryArgs] : null);
     
-    const videoFilters = useMemo(() => {
-        const filters = buildMediaFilters('video', videoFetchLimit, followedAuthorPubkeys, followedTags, videoFetchUntil, currentUserHexPubkey);
-        console.log('useMediaContent: Generated videoFilters:', JSON.stringify(filters));
-        return filters;
-    }, [videoFetchLimit, followedAuthorPubkeys, followedTags, videoFetchUntil, currentUserHexPubkey]);
+    console.log('[useMediaContent] videoQueryArgs:', JSON.stringify(videoQueryArgs, null, 2));
+    const fetchedVideoEvents: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, videoQueryArgs ? [videoQueryArgs] : null);
     
-    const podcastFilters = useMemo(() => {
-        const filters = buildMediaFilters('podcast', podcastFetchLimit, followedAuthorPubkeys, followedTags, podcastFetchUntil, currentUserHexPubkey);
-        console.log('useMediaContent: Generated podcastFilters:', JSON.stringify(filters));
-        return filters;
-    }, [podcastFetchLimit, followedAuthorPubkeys, followedTags, podcastFetchUntil, currentUserHexPubkey]);
+    console.log('[useMediaContent] podcastQueryArgs (for TimelineQuery):', JSON.stringify(podcastQueryArgs, null, 2));
+    const fetchedPodcastEvents: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, podcastQueryArgs ? [podcastQueryArgs] : null);
 
-    // --- Subscribe to Media Events ---
-    // Pass empty array [] to useSubscribe if filters are null to prevent type errors
-    const finalImageFilters = imageFilters ?? [];
-    console.log('useMediaContent: Passing to useSubscribe (Images):', JSON.stringify(finalImageFilters));
-    const { events: imageEvents, eose: imageEose } = useSubscribe(finalImageFilters, { closeOnEose: false });
-    
-    const finalVideoFilters = videoFilters ?? [];
-    console.log('useMediaContent: Passing to useSubscribe (Videos):', JSON.stringify(finalVideoFilters));
-    const { events: videoEvents, eose: videoEose } = useSubscribe(finalVideoFilters, { closeOnEose: false });
-    
-    const finalPodcastFilters = podcastFilters ?? [];
-    console.log('useMediaContent: Passing to useSubscribe (Podcasts):', JSON.stringify(finalPodcastFilters));
-    const { events: podcastEvents, eose: podcastEose } = useSubscribe(finalPodcastFilters, { closeOnEose: false });
-
-    // --- Process Raw Events into Notes (with deduplication) ---
+    // --- Direct EventStore Check (DEBUGGING) --- 
+    const eventStore = Hooks.useEventStore(); // Get the store instance
     useEffect(() => {
-        console.log(`useMediaContent: Received ${imageEvents.length} raw image events from useSubscribe.`, imageEvents.map(e => e.rawEvent()));
-        console.log("useMediaContent: Processing raw image events", imageEvents);
-        const newNotes = new Map<string, NostrNote>();
-        imageEvents.forEach(event => {
-            const note = processEvent(event, 'image');
-            if (note && !newNotes.has(note.id)) {
-                newNotes.set(note.id, note);
-            }
-        });
-        // Merge with existing notes if needed, or just set?
-        // For simplicity now, just set. Could merge if supporting pagination better.
-        const notesArray = Array.from(newNotes.values());
-        setProcessedImageNotes(notesArray);
-        if (imageEose) setIsLoadingImages(false); // Stop loading on EOSE
-    }, [imageEvents, imageEose]);
+      // ADDED: Log to confirm effect execution and current state of podcastQueryArgs
+      console.log('[DEBUG] EventStore Check useEffect RUNNING. podcastQueryArgs:', JSON.stringify(podcastQueryArgs, null, 2), 'eventStore available:', !!eventStore);
 
+      if (podcastQueryArgs && eventStore && podcastQueryArgs.length > 0) { // Ensure query args are valid
+        console.log('[DEBUG] Checking EventStore directly for podcastQueryArgs:', podcastQueryArgs);
+        try {
+          // Note: eventStore.getAll expects Filter[], and podcastQueryArgs is Filter[] | null
+          const matchingEvents = eventStore.getAll(podcastQueryArgs); 
+          console.log(`[DEBUG] EventStore.getAll found ${matchingEvents.size} events matching the podcast filter.`);
+          if (matchingEvents.size > 0) {
+              console.log('[DEBUG] Events found by eventStore.getAll:', Array.from(matchingEvents).map(e => ({ id: e.id, kind: e.kind, pubkey: e.pubkey, content: e.content?.substring(0, 100) })));
+          }
+        } catch (error) {
+            console.error('[DEBUG] Error calling eventStore.getAll:', error);
+        }
+      } else {
+          // This log might be noisy if it logs every time args are null initially
+          // console.log('[DEBUG] Skipping direct EventStore check (podcastQueryArgs or eventStore not ready).');
+      }
+    }, [podcastQueryArgs, eventStore]); // Rerun when query args or store instance changes
+
+    // --- Process Applesauce Query Results into Notes --- 
     useEffect(() => {
-        console.log(`useMediaContent: Received ${videoEvents.length} raw video events from useSubscribe.`, videoEvents.map(e => e.rawEvent()));
-        console.log("useMediaContent: Processing raw video events", videoEvents);
-        const newNotes = new Map<string, NostrNote>();
-        videoEvents.forEach(event => {
-            const note = processEvent(event, 'video');
-            if (note && !newNotes.has(note.id)) {
-                newNotes.set(note.id, note);
-            }
-        });
-        const notesArray = Array.from(newNotes.values());
-        setProcessedVideoNotes(notesArray);
-        if (videoEose) setIsLoadingVideos(false); // Stop loading on EOSE
-    }, [videoEvents, videoEose]);
+        if (fetchedImageEvents) {
+            console.log(`useMediaContent: Processing ${fetchedImageEvents.length} fetched image events.`);
+            setProcessedImageNotes(fetchedImageEvents.map(processApplesauceEvent));
+        } else {
+             setProcessedImageNotes([]); // Clear if query args become null
+        }
+    }, [fetchedImageEvents]);
 
     useEffect(() => {
-        console.log(`useMediaContent: Received ${podcastEvents.length} raw podcast events from useSubscribe.`, podcastEvents.map(e => e.rawEvent()));
-        console.log("useMediaContent: Processing raw podcast events", podcastEvents);
-        const newNotes = new Map<string, NostrNote>();
-        podcastEvents.forEach(event => {
-            const note = processEvent(event, 'podcast');
-            if (note && !newNotes.has(note.id)) {
-                newNotes.set(note.id, note);
-            }
-        });
-        const notesArray = Array.from(newNotes.values());
-        setProcessedPodcastNotes(notesArray);
-        if (podcastEose) setIsLoadingPodcasts(false); // Stop loading on EOSE
-    }, [podcastEvents, podcastEose]);
+        if (fetchedVideoEvents) {
+            console.log(`useMediaContent: Processing ${fetchedVideoEvents.length} fetched video events.`);
+            setProcessedVideoNotes(fetchedVideoEvents.map(processApplesauceEvent));
+        } else {
+            setProcessedVideoNotes([]);
+        }
+    }, [fetchedVideoEvents]);
 
-    // --- Shuffle Image and Video Notes ---
     useEffect(() => {
-        console.log("useMediaContent: Shuffling processed image notes", processedImageNotes);
+        if (fetchedPodcastEvents) {
+            console.log(`useMediaContent: Raw fetchedPodcastEvents count (Kind 1 from followed): ${fetchedPodcastEvents.length}`);
+            const allProcessedNotes = fetchedPodcastEvents.map(processApplesauceEvent);
+            console.log('[useMediaContent] All processed notes (before URL filter - Kind 1 from followed):', allProcessedNotes.map(n => ({id: n.id, kind: n.kind, pubkey: n.pubkey, extractedUrl: n.url, content: n.content?.substring(0,100) })));
+
+            const notesWithUrls = allProcessedNotes.filter(note => note.url !== undefined); 
+            console.log(`useMediaContent: Notes with URLs after filter (Kind 1 from followed): ${notesWithUrls.length}`);
+
+            notesWithUrls.sort((a, b) => b.created_at - a.created_at);
+            setProcessedPodcastNotes(notesWithUrls);
+        } else {
+             setProcessedPodcastNotes([]);
+             // MODIFIED: Log if the query is skipped because podcastQueryArgs is null 
+             // (which happens if followedAuthorPubkeys is empty, thus authorsFilterPart would have been null, leading to empty podcastFiltersArray)
+             if (podcastQueryArgs === null) { 
+                 console.log('[useMediaContent] Skipping podcast fetch/processing: No authors followed, so no Kind 1 audio query was made.');
+             } else {
+                 // This case means podcastQueryArgs was not null, but fetchedPodcastEvents is still undefined/null
+                 console.log('[useMediaContent] fetchedPodcastEvents is undefined or null (TimelineQuery for Kind 1 audio might still be loading/returned no data).');
+             }
+        }
+    }, [fetchedPodcastEvents, podcastQueryArgs]); // podcastQueryArgs implies changes from followedAuthorPubkeys via mediaFilters
+
+    // --- Shuffle Image and Video Notes (Keep) ---
+    useEffect(() => {
         setShuffledImageNotes(shuffleArray([...processedImageNotes]));
     }, [processedImageNotes]);
 
     useEffect(() => {
-        console.log("useMediaContent: Shuffling processed video notes", processedVideoNotes);
         setShuffledVideoNotes(shuffleArray([...processedVideoNotes]));
     }, [processedVideoNotes]);
 
-    // --- Fetch Older Content Callbacks ---
+    // --- Fetch Older Content Callbacks (Keep logic, adjust dependencies) ---
     const fetchOlderImages = useCallback(() => {
+        // Use processed notes as the source for oldest timestamp
         if (processedImageNotes.length > 0) {
             const oldestTimestamp = Math.min(...processedImageNotes.map(note => note.created_at));
             console.log(`useMediaContent: Fetching older images (until ${oldestTimestamp})`);
-            setImageFetchUntil(oldestTimestamp);
-            setIsLoadingImages(true); // Indicate loading start
+            setImageFetchUntil(oldestTimestamp - 1); // Fetch until *before* the oldest
+            // Optional: Increase limit? setImageFetchLimit(prev => prev + X);
         }
     }, [processedImageNotes]);
 
     const fetchOlderVideos = useCallback(() => {
+        // Use processed notes as the source for oldest timestamp
         if (processedVideoNotes.length > 0) {
             const oldestTimestamp = Math.min(...processedVideoNotes.map(note => note.created_at));
             console.log(`useMediaContent: Fetching older videos (until ${oldestTimestamp})`);
-            setVideoFetchUntil(oldestTimestamp);
-            setIsLoadingVideos(true); // Indicate loading start
+            setVideoFetchUntil(oldestTimestamp - 1); // Fetch until *before* the oldest
         }
     }, [processedVideoNotes]);
+    
+    // --- Determine Loading States --- 
+    const isLoadingImages = fetchedImageEvents === undefined;
+    const isLoadingVideos = fetchedVideoEvents === undefined;
+    const isLoadingPodcasts = fetchedPodcastEvents === undefined;
 
     // --- Return Values ---
     return {
         shuffledImageNotes,
         shuffledVideoNotes,
-        podcastNotes: processedPodcastNotes, // Podcasts aren't shuffled in original App.tsx
+        podcastNotes: processedPodcastNotes, 
         fetchOlderImages,
         fetchOlderVideos,
-        isLoadingKind3,
+        // isLoadingKind3, // REMOVED
         isLoadingImages,
         isLoadingVideos,
         isLoadingPodcasts,

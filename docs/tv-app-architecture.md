@@ -1,19 +1,19 @@
-# TV App Architecture Documentation (Updated for NDK Hooks Refactoring & Wallet Features)
+# TV App Architecture Documentation (Updated for Applesauce Refactoring & Wallet Features)
 
 ## 1. Overview
 
-This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication, hashtag filtering, and Cashu-based tipping.
+This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication, hashtag filtering, and Cashu-based tipping. The application has been refactored to primarily use the **Applesauce** toolkit for Nostr data management and signing.
 
 **Key Features:**
 *   Displays images, podcasts (audio), and videos.
 *   Content is fetched from Nostr relays based on:
     *   **Author Follows:** By default, uses the authors followed by a predefined TV Npub (`TV_PUBKEY_NPUB` in `src/constants.ts`). If a user logs in, it **switches** to use the authors followed by the logged-in user (based on their Kind 3 list).
-    *   **Followed Hashtags:** Additionally fetches content tagged with hashtags the user follows (managed in settings), acting as an *additive* source alongside author-based content.
-*   Image and video feeds are **randomized** on load using `shuffleArray` (`src/utils/shuffleArray.ts`).
-*   Older content (images/videos) can be fetched dynamically ("infinite scroll" behavior) by navigating past the end of the current list.
+    *   **Followed Hashtags:** Additionally fetches content tagged with hashtags the user follows (managed in settings), acting as an *additive* source alongside author-based content (OR logic).
+*   Image and video feeds are **randomized** (shuffled) within the `useMediaContent` hook.
+*   Older content (images/videos) can be fetched dynamically ("infinite scroll" behavior) via callbacks provided by `useMediaContent`.
 *   Uses a **split-screen layout**, hiding the bottom panel in fullscreen mode.
 *   Enters **fullscreen mode** automatically after periods of inactivity or no new messages.
-*   Supports user **authentication** via nsec (generation/login) or NIP-46 remote signer.
+*   Supports user **authentication** via nsec (generation/login) or NIP-46 remote signer (using `useAuth` and Applesauce signers).
 *   Allows users to **follow specific hashtags** (`#t` tags) to filter image/video content.
 *   Includes an internal **Cashu wallet** for receiving deposits via encrypted DMs and **sending tips** (currently simplified, non-Zap standard) to content creators via encrypted DMs. Tipping is triggered by focusing the author QR code and pressing OK/Select.
 
@@ -24,14 +24,14 @@ This document describes the architecture of the React-based TV application desig
 ## 2. Core Technologies
 
 *   **Frontend Framework:** React (`useState`, `useEffect`, `useRef`, `useCallback`)
-*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaState`, etc.) and **Applesauce React hooks (e.g., `Hooks.useStoreQuery`)** orchestrated by the root `App` component. Core Nostr data state is managed by Applesauce's `EventStore` and `QueryStore`.
+*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaState`, `useMediaContent`, etc.) and **Applesauce React hooks (e.g., `Hooks.useStoreQuery`)**. Core Nostr data state is managed by Applesauce's `EventStore` and `QueryStore`.
 *   **Nostr Integration:**
     *   **Data/Cache:** `applesauce-core`, `applesauce-react`.
     *   **Signing:** `applesauce-signers` (for NIP-07/NIP-46 via `useAuth`).
-    *   **Relay Communication:** **`nostr-tools/SimplePool`** (Instantiated in `main.tsx`, provided via `RelayPoolContext`).
+    *   **Relay Communication:** **`nostr-tools/SimplePool`** (Instantiated in `main.tsx`, provided via context, feeds `EventStore`).
     *   **Utilities:** `nostr-tools` (for `nip19`, `Filter`, `NostrEvent` types).
 *   **Cashu (Ecash) Integration:** `@cashu/cashu-ts`
-*   **Caching:** IndexedDB via `idb` (`src/utils/idb.ts`) (`settings`, `cashuProofs`), **Applesauce's internal stores** (for profiles, events, etc.).
+*   **Caching:** IndexedDB via `idb` (`src/utils/idb.ts`) (`settings`, `nsec`, `cashuProofs`), **Applesauce's internal stores** (for profiles, events, etc.).
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
 *   **Icons:** `react-icons`
 *   **Utilities:** `shuffleArray` (`src/utils/shuffleArray.ts`), `react-qr-code`
@@ -48,168 +48,118 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
 ---
 
 *   **`App.tsx` (`src/App.tsx`) (Root Component):**
-    *   **Orchestrator:** Initialization is handled in `src/main.tsx` which sets up Applesauce\'s `EventStore` and `QueryStore` and wraps `App` in `QueryStoreProvider`. `App` manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind, **uses Applesauce\'s `useQuery` hook to:**
-        *   Fetch the current user\'s (or default TV user\'s) Kind 3 follow list.
-        *   Fetch media notes (images - Kind 1063, videos - Kind 34235, podcasts - Kind 31337) based on filters constructed from the Kind 3 list and `followedTags` (from `useAuth`).
-    *   It manages state for fetch parameters (`limit`, `until`) and the raw/shuffled notes. It defines callbacks (`fetchOlderImages`/`fetchOlderVideos`) to update `until` timestamps for pagination. It uses `useEffect` to merge incoming notes from `useQuery` and to shuffle image/video notes. Manages `SettingsModal` visibility, and passes state/props/callbacks down to child components and hooks. Applesauce stores are accessed using hooks like `useStore` or specific query hooks.
-    *   **State Held:** Fetch limits/timestamps (`imageFetchLimit`, `videoFetchLimit`, `imageFetchUntil`, `videoFetchUntil`), **raw notes (`rawImageNotes`, `rawVideoNotes`, `rawPodcastNotes`)**, shuffled notes (`shuffledImageNotes`, `shuffledVideoNotes`), initial podcast time (`initialPodcastTime`), settings modal visibility (`isSettingsOpen`).
+    *   **Orchestrator:** Manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind. Uses Applesauce's `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` to fetch the current user's (or default TV user's) Kind 3 follow list. **Calls the `useMediaContent` hook**, passing it the derived `followedPubkeys` and `followedTags` (from `useAuth`). Receives processed/shuffled media notes and loading states from `useMediaContent`. Manages `SettingsModal` visibility. Passes state/props/callbacks down to child components and other hooks (`useMediaState`, `useMediaElementPlayback`, etc.).
+    *   **State Held:** `initialPodcastTime`, settings modal visibility (`isSettingsOpen`). (Media note state is now managed within `useMediaContent`).
     *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
     *   **Hook Usage:**
-        *   **(Removed `useNDKInit`, `useNDK`)**
-        *   `useStore` (from `applesauce-react`): Accesses Applesauce stores (e.g., `QueryStore`, `SignerStore`).
-        *   `useQuery` (from `applesauce-react`): **Used multiple times:**
-            *   To fetch the Kind 3 follow list.
-            *   To fetch image notes (Kind 1063).
-            *   To fetch video notes (Kind 34235).
-            *   To fetch podcast notes (Kind 31337).
-        *   `useAuth` (`src/hooks/useAuth.ts`): Manages the primary authentication state of the application. Determines the `activeSigner` (either `SimpleSigner` for nsec or `NostrConnectSigner` from NIP-46) using local `useState`. Handles login via nsec (`SimpleSigner`), new key generation (`SimpleSigner`), and logout (clearing state and calling appropriate cleanup). Delegates NIP-46 connection initiation, cancellation, and session restoration logic to the `useNip46AuthManagement` hook. Provides NIP-04 DM methods that use the currently `activeSigner`. Loads/persists nsec via `idb` helpers. Manages followed hashtags list (placeholder persistence).
-        *   `useWallet` (`src/hooks/useWallet.ts`): Manages internal Cashu wallet state (`proofs`, `balanceSats`), handles DM deposits, and initiates tips (`sendCashuTipWithSplits`). **Will need refactoring to use Applesauce stores/signers via `useAuth`.**
-        *   `useMediaState` (`src/hooks/useMediaState.ts`): Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives **shuffled/raw notes**, fetcher callbacks, and note lengths. Passes `currentNoteId` up for potential tipping context.
-        *   `useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`): Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl`.
-        *   `useFullscreen` (`src/hooks/useFullscreen.ts`): Manages fullscreen state (`isFullScreen`) and provides `signalInteraction`/`signalMessage` callbacks.
-        *   `useKeyboardControls` (`src/hooks/useKeyboardControls.ts`): Sets up global keyboard listener, receives state (`isFullScreen`, `viewMode`) and callbacks from other hooks/component state (`signalInteraction`, `setViewMode`, `togglePlayPause`, `handleNext`, `handlePrevious`, `focusImageFeedToggle`). Settings modal trigger is now in `RelayStatus`.
-        *   `useImageCarousel` (`src/hooks/useImageCarousel.ts`): Manages the image auto-advance timer, receives `isActive` flag and `handleNext` callback.
-        *   (Removed `useMediaAuthors`, `useMediaNotes`, `useCurrentAuthor` as separate custom hooks - functionality integrated or replaced by **`useQuery`**/**profile fetching via Applesauce**).**
+        *   `Hooks.useStoreQuery` (from `applesauce-react`): **Used ONCE directly** to fetch the Kind 3 follow list (`Queries.ContactsQuery`).
+        *   `useAuth` (`src/hooks/useAuth.ts`): Manages authentication state and provides `followedTags`.
+        *   `useMediaContent` (`src/hooks/useMediaContent.ts`): **Delegated responsibility for fetching and processing all media notes (images, videos, podcasts) using Applesauce internally.** Returns notes, loading states, and fetcher callbacks.
+        *   `useMediaState` (`src/hooks/useMediaState.ts`): Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers. Receives notes and fetcher callbacks from `useMediaContent`.
+        *   `useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`): Manages media playback.
+        *   `useFullscreen` (`src/hooks/useFullscreen.ts`): Manages fullscreen state.
+        *   `useKeyboardControls` (`src/hooks/useKeyboardControls.ts`): Sets up global keyboard listener.
+        *   `useImageCarousel` (`src/hooks/useImageCarousel.ts`): Manages the image auto-advance timer.
+        *   **(Removed `useNDKInit`, `ndk.ts`)**
     *   **Data Handling:**
-        *   **Fetches Kind 3 list using `useQuery` based on `isLoggedIn` state.**
-        *   **Constructs filters for media kinds (1063, 34235, 31337) using `followedPubkeys` (from Kind 3) and `followedTags` (from `useAuth`).**
-        *   Receives notes directly from **multiple `useQuery`** calls (for Kind 3, images, videos, podcasts).
-        *   **Uses `useEffect` to merge new image/video notes into `raw...Notes` state for pagination.**
-        *   Uses `useEffect` to shuffle `rawImageNotes` and `rawVideoNotes` into `shuffledImageNotes`/`shuffledVideoNotes` state. Shuffling happens here before passing to `useMediaState` and components.
-        *   Defines `fetchOlderImages`/`fetchOlderVideos` callbacks (updates `Until` state and `Limit` state, triggering **`useQuery`** refetch via filter changes) and passes them to `useMediaState`.
-        *   ~~Gets `followedTags` from `useAuth` and uses them to build filters for **`useQuery`**.~~
-        *   ~~Fetches Kind 3 list for `TV_PUBKEY_NPUB`. **(Planned: Fetch logged-in user\'s Kind 3 and use it preferentially).**~~
+        *   Fetches Kind 3 list using `Hooks.useStoreQuery`. Derives `followedPubkeys`.
+        *   Gets `followedTags` from `useAuth`.
+        *   **Passes `followedPubkeys` and `followedTags` to `useMediaContent`.**
+        *   Receives `shuffledImageNotes`, `shuffledVideoNotes`, `podcastNotes`, loading states, and `fetchOlderImages`/`fetchOlderVideos` callbacks from `useMediaContent`.
+        *   Passes notes and callbacks down to `useMediaState` and relevant components.
     *   **Rendering Logic:**
-        *   Renders invisible `<audio>` element (`audioRef`).
-        *   Renders layout structure (Top Area, Bottom Panel).
-        *   Conditionally renders components based on `viewMode` (`ImageFeed` (`src/components/ImageFeed.tsx`) or `VideoPlayer` (`src/components/VideoPlayer.tsx`)) in the Top Area, passing necessary props including `currentNoteId`.
+        *   Handles initial loading state based on Kind 3 fetch.
+        *   Renders layout structure.
+        *   Conditionally renders `ImageFeed` or `VideoPlayer` based on `viewMode`.
         *   Conditionally renders the Bottom Panel based on `isFullScreen`.
-        *   Renders `MessageBoard` (`src/components/MessageBoard.tsx`) and `MediaPanel` (`src/components/MediaPanel.tsx`) within the Bottom Panel.
-        *   Renders `SettingsModal` (`src/components/SettingsModal.tsx`) (conditionally based on `isSettingsOpen`).
-        *   Renders `RelayStatus` (`src/components/RelayStatus.tsx`) (provides trigger for settings modal).
-        *   Passes necessary props (state, refs, callbacks from hooks) down to child components.
-        *   Handles overall loading state display (Note: **Applesauce aims** to minimize explicit loading states).
+        *   Renders `MessageBoard`, `MediaPanel`, `SettingsModal`, `RelayStatus`.
+        *   Passes necessary props (state, refs, callbacks) down.
 
 *   **`ImageFeed.tsx` (`src/components/ImageFeed.tsx`):**
     *   **Purpose:** Displays the main image feed with author QR code and tipping interaction.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'imagePodcast'`.
-    *   **Key Props:** `isLoading` (potentially removed), `handlePrevious`, `handleNext`, `currentImageIndex`, `imageNotes`, `authorNpub`.
-    *   **Hook Usage:** Uses `useAuth`, `useWallet`, **Applesauce hooks (e.g., `useStore`, `useProfile`)** (for author info).
-    *   **Functionality:** Displays images. **Uses Applesauce profile fetching (likely via `useProfile` or a similar hook)** to get author data (name, picture) based on `authorNpub`. Includes a grouped section for author display name, QR code, and timestamp. The author QR code container is focusable when logged in and tipping is possible (`canTip`). Pressing OK/Select triggers `handleTip` which calls `wallet.sendCashuTipWithSplits`. Displays a custom logged-in icon overlay and a ⚡️ icon overlay on the QR code when tipping is enabled. Shows loading/success/error overlays during/after tipping.
+    *   **Key Props:** `currentImageIndex`, `imageNotes` (received from `App.tsx` via `useMediaContent`).
+    *   **Hook Usage:** Uses `useAuth`, `useWallet`, **Applesauce hooks (e.g., `Hooks.useStoreQuery(ProfileQuery, ...)` for author info).**
+    *   **Functionality:** Displays images. Uses Applesauce profile fetching for author data. Handles tipping interaction (needs review for Applesauce signer/event store). Shows empty/loading state if `imageNotes` is empty.
 
 *   **`VideoPlayer.tsx` (`src/components/VideoPlayer.tsx`):**
-    *   **Purpose:** Displays the video player UI with author QR code and tipping interaction.
+    *   **Purpose:** Displays the video player UI.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'videoPlayer'`.
-    *   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`, `currentNoteId`.
-    *   **Hook Usage:** Uses `useAuth`, `useWallet`, **Applesauce hooks (e.g., `useStore`, `useProfile`)** (for author info).
-    *   **Functionality:** Renders the `<video>` element (`videoRef`), controls playback state based on props, shows overlay play button if autoplay fails. **Uses Applesauce profile fetching** to get author data. Includes a grouped section for the author QR code. The author QR code container is focusable when logged in and tipping is possible (`canTip`). Pressing OK/Select triggers `handleTip` which calls `wallet.sendCashuTipWithSplits`. Displays a custom logged-in icon overlay and a ⚡️ icon overlay on the QR code when tipping is enabled. Shows loading/success/error overlays during/after tipping.
+    *   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `autoplayFailed`, `isMuted`.
+    *   **Hook Usage:** (Potentially `useAuth`, `useWallet`, **Applesauce profile hooks** if author info/tipping is re-added).
+    *   **Functionality:** Renders the `<video>` element, controls playback state based on props. (Author info/tipping removed, can be re-added using Applesauce).
 
 *   **`MediaPanel.tsx` (`src/components/MediaPanel.tsx`):**
-    *   **Purpose:** Displays the relevant **list** (Podcasts or Videos) and the **playback controls**. Acts as the interactive panel in the bottom-right.
+    *   **Purpose:** Displays the relevant **list** (Podcasts or Videos via child components) and the **playback controls**. Acts as the interactive panel in the bottom-right.
     *   **Rendered In:** Bottom-Right Panel (B2) - *Rendered only when not fullscreen*.
-    *   **Key Props:** `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `videoNotes` (receives *shuffled* videos), indices, selection handlers, playback state/handlers (`isPlaying`, `currentTime`, etc.), `setViewMode`, `currentItemUrl`. (Removed `authors` prop).
-    *   **Hook Usage (Internal):** **Uses Applesauce profile fetching (e.g., `useProfile`)** directly within the list mapping or for the currently playing item's author info. Uses `useInactivityTimer`.
-    *   **Functionality:** Renders lists, playback controls, connects controls to props from `App`. Handles list item selection/navigation. **Uses Applesauce profile fetching** to fetch and display author info (name, picture) for the currently playing item and potentially list items. Does **not** render media elements directly. **(Note: Currently does not have integrated tipping functionality).**
+    *   **Key Props:** `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `videoNotes` (receives notes from `App.tsx` via `useMediaContent`), indices, selection handlers, playback state/handlers, `setViewMode`, `currentItemUrl`.
+    *   **Hook Usage (Internal):** Uses `useInactivityTimer`. Profile fetching happens within child components (`Podcastr`, `VideoList`).
+    *   **Functionality:** Renders lists (`Podcastr` or `VideoList`), playback controls. Connects controls to props from `App`. Handles list item selection/navigation. Passes notes down to `Podcastr`/`VideoList`.
 
 *   **`MessageBoard.tsx` (`src/components/MessageBoard.tsx`):**
     *   **Purpose:** Displays Nostr chat messages (Kind 1 replies) for a specific thread.
     *   **Rendered In:** Bottom-Left Panel (B1) - *Rendered only when not fullscreen*.
-    *   **Key Props:** `neventToFollow`, `onNewMessage` (callback to signal fullscreen hook). (Removed `ndk`, `authors` props).
-    *   **Hook Usage (Internal):** **Uses Applesauce\'s `useQuery` hook twice:**
-        *   Once in the main component to fetch Kind 1 replies based on an `#e` tag filter constructed from the decoded `neventToFollow` prop.
+    *   **Key Props:** `neventToFollow`, `onNewMessage`.
+    *   **Hook Usage (Internal):** **Uses Applesauce's `Hooks.useStoreQuery` hook twice:**
+        *   Once to fetch Kind 1 replies based on an `#e` tag filter.
         *   Once within the `MessageItem` sub-component to fetch the Kind 0 profile for each message author.
-    *   **Functionality:** Decodes `neventToFollow`. **Uses `useQuery`** to get messages. Renders messages using `MessageItem` (`src/components/MessageItem.tsx`) which handles displaying author profile data fetched via **its own internal `useQuery` call**.
+    *   **Functionality:** Decodes `neventToFollow`. Fetches and renders messages using `MessageItem`.
 
-*   **`PlaybackControls.tsx` (`src/components/PlaybackControls.tsx`) (Assumed Child of `MediaPanel.tsx`):**
-    *   **Purpose:** Renders the actual buttons, sliders, and time displays for media control.
+*   **`Podcastr.tsx` (`src/components/Podcastr.tsx`) & `VideoList.tsx` (`src/components/VideoList.tsx`):**
+    *   **Purpose:** Display scrollable lists of podcasts or videos.
     *   **Rendered In:** `MediaPanel.tsx`.
-    *   **Key Props:** Likely receives playback state (`isPlaying`, `currentTime`, `duration`, `playbackRate`, `isMuted`) and handlers (`togglePlayPause`, `handleSeek`, `setPlaybackRate`, `toggleMute`) from `MediaPanel`.
-    *   **`useQuery`:** Subscribes to Nostr events based on filters, similar to NDK\'s `useSubscribe`. **Used in `App.tsx` (for Kind 3, images, videos, podcasts) and `MessageBoard.tsx` (for Kind 1 replies and Kind 0 profiles within `MessageItem`).** Handles caching and updates via the underlying stores.
+    *   **Key Props:** `notes` (array of `NostrNote` objects received from `MediaPanel`), selection handlers, current index.
+    *   **Refactoring Needed:** **These components currently still contain NDK-based data fetching (`useNdk`, `useSubscribe`) and caching (`usePodcastNotes`, internal cache logic). This needs to be REMOVED. They should primarily be display components that render the `notes` array passed via props.** Profile fetching for list items should use Applesauce hooks (`Hooks.useStoreQuery(ProfileQuery, ...)`).
 
 *   **`SettingsModal.tsx` (`src/components/SettingsModal.tsx`):**
-    *   **Purpose:** Provides a UI for managing user identity (nsec generation/login, NIP-46 connection), application settings (followed hashtags), and the internal Cashu wallet.
+    *   **Purpose:** Provides a UI for managing user identity, followed hashtags, and the internal Cashu wallet.
     *   **Rendered By:** `App.tsx` (`src/App.tsx`) (conditionally).
     *   **Key Props:** `isOpen`, `onClose`.
     *   **Hook Usage (Internal):** `useAuth`, `useWallet`.
-    *   **Functionality:** Handles user login/logout via nsec or NIP-46, displays QR codes for connection/backup (with warnings), allows adding/removing followed hashtags. Includes a "Wallet" section displaying balance, deposit instructions (DM to TV npub), allows configuring the Cashu mint URL, shows wallet status/errors, and includes security warnings about browser-based proof storage. Manages focus internally for TV navigation. Starts/stops the wallet's deposit listener **(via internal `useWallet` logic based on `useQuery`/`eventStore` now)** when opened/closed while logged in. Uses Applesauce signers/stores via `useAuth` and `useWallet`.
+    *   **Functionality:** Handles login/logout, hashtag management, wallet functions. Relies on `useAuth` and `useWallet` using Applesauce correctly.
 
-*   **`RelayStatus.tsx` (`src/components/RelayStatus.tsx`), `QRCode.tsx` (`src/components/QRCode.tsx`):** Utility components. `RelayStatus` now includes the button to open the `SettingsModal`.
+*   **`RelayStatus.tsx` (`src/components/RelayStatus.tsx`):** Utility component. Includes settings button.
 
 ## 4. Core Hooks Deep Dive
 
-*   **REPLACED `@nostr-dev-kit/ndk-hooks` with `applesauce-react`:** Applesauce provides hooks for interacting with its stores:
-    *   **`QueryStoreProvider` (in `main.tsx`):** Makes the `QueryStore` (and underlying `EventStore`) available to the component tree.
-    *   **`useStore`:** Accesses specific Applesauce stores (e.g., `QueryStore`, `SignerStore`, `ProfileStore`) provided via context. Used by components/hooks needing direct store access.
-    *   **`useQuery`:** Subscribes to Nostr events based on filters, similar to NDK's `useSubscribe`. Used in `App.tsx` for media notes and `MessageBoard.tsx` for replies. Handles caching and updates via the underlying stores.
-    *   **`useProfile` (or similar):** Expected hook (or pattern using `useQuery`) to fetch and subscribe to profile metadata (Kind 0) for a given pubkey. Replaces NDK's `useProfile`. Used in `ImageFeed`, `VideoPlayer`, `MediaPanel`, and `MessageBoard` (via `MessageItem`). Handles caching and updates via Applesauce stores.
-    *   **(Removed `useNDKInit`, `useNDK`)**
+*   **`applesauce-react` Hooks:**
+    *   **`QueryStoreProvider` (in `main.tsx`):** Makes stores available.
+    *   **`Hooks.useStoreQuery`:** Primary hook for fetching data based on filters (Kind 3, Kind 1, Kind 0, Timeline). Handles caching and updates via underlying stores.
 
 *   **`useAuth` (`src/hooks/useAuth.ts`):** (Refactored)
-    *   **Input:** Uses `Hooks.useQueryStore()` internally. Calls `useNip46AuthManagement` hook.
-    *   **Output:** `UseAuthReturn` (exported interface) containing:
-        *   `activeSigner: Nip07Interface | undefined` (managed via local state)
-        *   User state (`currentUserNpub`, `isLoggedIn`, `currentUserNsecForBackup`)
-        *   Loading/Error state (`isLoadingAuth`, `authError`)
-        *   NIP-46 state/functions (`nip46ConnectUri`, `isGeneratingUri`, `initiateNip46Connection`, `cancelNip46Connection`) - *delegated from `useNip46AuthManagement`*
-        *   Nsec functions (`generateNewKeys`, `loginWithNsec`)
-        *   `logout` function (handles both signer types)
-        *   Followed tags state/setter (`followedTags`, `setFollowedTags`) (placeholder)
-        *   NIP-04 methods (`encryptDm`, `decryptDm`) - *delegates to `activeSigner`*
-    *   **Function:** Manages the primary authentication state of the application. Determines the `activeSigner` (either `SimpleSigner` for nsec or `NostrConnectSigner` from NIP-46) using local `useState`. Handles login via nsec (`SimpleSigner`), new key generation (`SimpleSigner`), and logout (clearing state and calling appropriate cleanup). Delegates NIP-46 connection initiation, cancellation, and session restoration logic to the `useNip46AuthManagement` hook. Provides NIP-04 DM methods that use the currently `activeSigner`. Loads/persists nsec via `idb` helpers. Manages followed hashtags list (placeholder persistence).
+    *   **Input:** Uses Applesauce stores internally. Calls `useNip46AuthManagement`.
+    *   **Output:** Provides `activeSigner` (Applesauce signer), user state, auth functions, NIP-04 methods (using Applesauce signer), `followedTags`.
+    *   **Function:** Manages authentication state using Applesauce signers.
 
-*   **`useNip46AuthManagement` (`src/hooks/useNip46AuthManagement.ts`):** (New)
-    *   **Input:** Uses `Hooks.useEventStore()` internally. Requires `SimplePool` instance from `RelayPoolContext` to provide subscribe/publish methods. Uses NIP-46 persistence helpers from `idb` utils.
-    *   **Output:** `UseNip46AuthManagementReturn` (exported interface) containing:
-        *   NIP-46 state (`nip46ConnectUri`, `isGeneratingUri`, `nip46Error`)
-        *   `initiateNip46Connection`: Function to start NIP-46 flow, returns connected `NostrConnectSigner` or `null`.
-        *   `cancelNip46Connection`: Function to abort an ongoing connection attempt.
-        *   `restoreNip46Session`: Function to attempt restoring session from storage, returns restored `NostrConnectSigner` or `null`.
-        *   `clearPersistedNip46Session`: Function to remove NIP-46 data from storage.
-    *   **Function:** Encapsulates all logic for the NIP-46 (Connect) authentication method. Manages the connection URI display, the connection lifecycle (using `NostrConnectSigner`), cleanup of attempts, and restoration from persisted data (IndexedDB). **Requires `subscriptionMethod` (from `pool.sub`) and `publishMethod` (from `pool.publish`) to be passed to the `NostrConnectSigner` constructor.** Handles persistence of the NIP-46 session data (`localSecret`, `remotePubkey`, `connectedUserPubkey`, `relays`). **(NOTE: Uses hex helpers instead of `Buffer`. Persistence enabled.)**
+*   **`useNip46AuthManagement` (`src/hooks/useNip46AuthManagement.ts`):** (Refactored)
+    *   **Input:** Uses Applesauce `EventStore`. Requires `SimplePool` subscribe/publish methods.
+    *   **Output:** NIP-46 state and connection functions.
+    *   **Function:** Encapsulates NIP-46 logic using `NostrConnectSigner` (Applesauce signer).
 
-*   **`useMediaState` (`src/hooks/useMediaState.ts`):** (Largely unchanged, inputs may simplify slightly if `useSubscribe` returns notes directly).
-    *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
-    *   **Output:** `viewMode`, `imageNotes` (internal), `podcastNotes` (internal), `videoNotes` (internal), `isLoadingPodcastNotes` (potentially removed), `isLoadingVideoNotes` (potentially removed), `currentImageIndex`, `currentPodcastIndex`, `currentVideoIndex`, `selectedVideoNpub` (potentially derived differently), `currentItemUrl`, `currentNoteId`, `handleVideoSelect`, `handlePrevious`, `handleNext`, `setViewMode`, `setCurrentPodcastIndex`.
-    *   **Function:** Core UI state machine. Manages `viewMode`, current indices for each media type, and the `currentItemUrl` based on the mode and index. Exposes `currentNoteId` for the currently active image/video. Handles navigation logic (`handlePrevious`, `handleNext`) respecting list boundaries and triggering fetch callbacks. Manages selection logic (`handleVideoSelect`, `setCurrentPodcastIndex`). Updates internal notes state based on props.
+*   **`useMediaContent` (`src/hooks/useMediaContent.ts`):** (Refactored)
+    *   **Input:** `followedAuthorPubkeys: string[]`, `followedTags: string[]`.
+    *   **Output:** `shuffledImageNotes`, `shuffledVideoNotes`, `podcastNotes`, `isLoadingImages`, `isLoadingVideos`, `isLoadingPodcasts`, `fetchOlderImages`, `fetchOlderVideos`.
+    *   **Function:** **Primary hook for fetching media content.** Uses `Hooks.useStoreQuery(Queries.TimelineQuery, ...)` with appropriate filters (combining authors and tags with OR logic) for images (Kind 1063), videos (Kind 34235), and podcasts (Kind 31337). Processes results, shuffles images/videos, and provides callbacks for pagination.
 
-*   **`useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`):** (Unchanged by NDK refactor)
-    *   **Input:** `mediaElementRef` (active `<audio>` or `<video>` ref), `currentItemUrl`, `viewMode`, `onEnded` (callback, usually `handleNext`), `initialTime`.
-    *   **Output:** `isPlaying`, `currentTime`, `duration`, `playbackRate`, `setPlaybackRate`, `togglePlayPause`, `handleSeek`, `play`, `pause`, `isSeeking`, `setIsSeeking`, `isMuted`, `autoplayFailed`, `toggleMute`.
-    *   **Function:** Directly interacts with the HTML media element via the ref. Manages playback state, updates current time/duration, handles seeking, play/pause actions, mute, and playback rate. Detects autoplay failures.
+*   **`useMediaState` (`src/hooks/useMediaState.ts`):**
+    *   **Input:** Notes arrays (`initialImageNotes`, etc. from `useMediaContent`), fetcher callbacks (from `useMediaContent`), note lengths.
+    *   **Output:** `viewMode`, indices, `currentItemUrl`, `currentNoteId`, navigation handlers.
+    *   **Function:** Core UI state machine for view mode and current item selection.
 
-*   **`useFullscreen` (`src/hooks/useFullscreen.ts`):** (Unchanged by NDK refactor)
-    *   **Input:** `interactionTimeout` (optional), `messageTimeout` (optional), `checkInterval` (optional).
-    *   **Output:** `isFullScreen` (boolean state), `signalInteraction` (callback), `signalMessage` (callback).
-    *   **Function:** Manages fullscreen entry/exit. Tracks `lastInteractionTimestamp` and `lastMessageTimestamp`. Runs an interval timer (`checkInterval`). Enters fullscreen (`setIsFullScreen(true)`) if `interactionTimeout` or `messageTimeout` is exceeded. Exits fullscreen (`setIsFullScreen(false)`) when `signalInteraction` or `signalMessage` is called.
+*   **`useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`):** (Unchanged by Applesauce refactor)
+    *   **Function:** Interacts directly with HTML media elements.
 
-*   **`useKeyboardControls` (`src/hooks/useKeyboardControls.ts`):** (Unchanged by NDK refactor)
-    *   **Input:** `isFullScreen`, `signalInteraction`, `onSetViewMode`, `onTogglePlayPause`, `onNext`, `onPrevious`, `onFocusToggle` (optional), `viewMode`.
-    *   **Output:** None (sets up side effect).
-    *   **Function:** Adds a window `keydown` event listener. Calls `signalInteraction` on *any* key press. If *not* fullscreen, it checks the key and calls the appropriate callback (`onSetViewMode`, `onTogglePlayPause`, etc.), preventing default browser actions. If fullscreen, it only signals interaction (which causes `useFullscreen` to exit fullscreen). Does not handle settings modal toggle.
+*   **`useFullscreen`, `useKeyboardControls`, `useImageCarousel`:** (Unchanged by Applesauce refactor)
+    *   **Function:** UI interaction logic.
 
-*   **`useImageCarousel` (`src/hooks/useImageCarousel.ts`):** (Unchanged by NDK refactor)
-    *   **Input:** `isActive` (boolean), `onTick` (callback, e.g., `handleNext`), `intervalDuration`.
-    *   **Output:** None (sets up side effect).
-    *   **Function:** Sets up an interval timer using `setInterval`. Calls `onTick` every `intervalDuration` milliseconds, but only if `isActive` is true. Clears the interval on cleanup or when `isActive` becomes false.
+*   **`useWallet` (`src/hooks/useWallet.ts`):** (Partially Refactored / Needs Review)
+    *   **Input:** Uses `useAuth()`, Applesauce stores internally.
+    *   **Output:** Wallet state and functions.
+    *   **Function:** Manages Cashu wallet. **DM listening uses `EventStore`. DM decryption uses `auth.decryptDm`. Tip sending needs review to ensure event signing uses `auth.activeSigner` and publishing uses `EventStore.add()`.**
 
-*   **`useWallet` (`src/hooks/useWallet.ts`):** (Refactored for Applesauce)
-    *   **Input:** Uses `useAuth()`, `Hooks.useQueryStore()`, `Hooks.useEventStore()` internally.
-    *   **Output:** `UseWalletReturn` (exported interface) containing:
-        *   `proofs`: Array of stored Cashu proofs (`Proof & { mintUrl: string }[]`).
-        *   `balanceSats`: Current total wallet balance (number).
-        *   `isListeningForDeposits`: Boolean flag derived from subscription status.
-        *   `walletError`: String or null for wallet errors.
-        *   `isLoadingWallet`: Boolean flag for initial loading/processing state.
-        *   `configuredMintUrl`: Currently configured Cashu mint URL (string | null).
-        *   `loadWalletState`: Function to load proofs/balance/mint from IDB (`src/utils/idb.ts`).
-        *   `startDepositListener`: Function to semantically signal intent (listener managed by internal `useEffect`/`eventStore.filters`).
-        *   `stopDepositListener`: Function to semantically signal intent (listener managed by internal `useEffect`/`eventStore.filters`).
-        *   `sendCashuTipWithSplits`: Function to initiate a Cashu tip via DMs (signs event via `auth.activeSigner`, adds to `eventStore`).
-        *   `setConfiguredMintUrl`: Function to set and save the mint URL.
-    *   **Function:** Manages the internal Cashu wallet. Loads/stores proofs (`cashuProofs` store) and configured mint URL (`settings` store) in IndexedDB via `idb` helpers. Calculates balance using `cashuHelper.getProofsBalance`. Interacts with `cashuHelper` (`src/utils/cashu.ts`) (`redeemToken`, `createTokenForAmount`) for Cashu operations. Uses `useEventStore().filters()` with an RxJS subscription to listen for incoming Kind 4 DMs tagged with the user's pubkey. Attempts to decrypt DMs using `auth.decryptDm` and redeem `cashuA...` tokens found within using the `configuredMintUrl`. Provides the `sendCashuTipWithSplits` function which generates tokens, constructs a Kind 4 event, signs it using the `activeSigner` (**assumed available via `auth` - requires `useAuth` refactor**), and adds the signed event to the `EventStore` (assuming this triggers relay publishing).
-
-*   **REMOVED Custom Hooks:**
-    *   `useMediaAuthors`: Replaced by direct **Applesauce queries** for Kind 3 in `App.tsx` and signer management via `SignerStore`.
+*   **REMOVED Hooks:**
+    *   `useNDKInit`, `ndk.ts`.
+    *   (Still need to evaluate `usePodcastNotes` and remove if `useMediaContent` covers it).
 
 ## 5. Large Files (>500 Lines) - Potential Refactor Targets
 
@@ -217,3 +167,4 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
 *   `src/components/SettingsModal.tsx`
 *   `src/App.tsx`
 *   `src/hooks/useAuth.ts`
+*   `src/hooks/useWallet.ts`

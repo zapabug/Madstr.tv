@@ -6,8 +6,10 @@ import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback'; // Keep for playback
 // Import Applesauce hooks and queries
 import { Hooks } from 'applesauce-react';
-import { ProfileQuery } from 'applesauce-core/queries'; // Adjust path if necessary
-import { NostrNote, ProfileContent } from '../types/nostr'; // Import ProfileContent type
+import { ProfileQuery } from 'applesauce-core/queries'; // Keep ProfileQuery import
+// Removed: import { type ProfileContent as ApplesauceProfileContent } from 'applesauce-core/queries';
+import { NostrNote } from '../types/nostr'; // Keep local NostrNote
+import { nip19 } from 'nostr-tools'; // For npub encoding
 
 // --- Helper to format time (seconds) into MM:SS ---
 const formatTime = (seconds: number): string => {
@@ -112,11 +114,12 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   // --- Get Author Profile using Applesauce ---
   const currentItemPubkey = notes[currentItemIndex]?.pubkey;
   const profileQueryArgs = useMemo((): [string] | null => (currentItemPubkey ? [currentItemPubkey] : null), [currentItemPubkey]);
-  // Fetch the raw Kind 0 event data
-  const profileData: ProfileContent | undefined = Hooks.useStoreQuery(ProfileQuery, profileQueryArgs);
+  // Fetch the profile data - TypeScript infers the type from ProfileQuery's return.
+  // This `profileData` IS the parsed profile content from Applesauce.
+  const profileData = Hooks.useStoreQuery(ProfileQuery, profileQueryArgs);
 
-  // Use the fetched profile data directly
-  const profile = profileData;
+  // We can directly use profileData in JSX with optional chaining, 
+  // as it's already the parsed profile object or undefined.
 
   // Use inactivity timer (No change)
   const [isInactive, resetInactivityTimer] = useInactivityTimer(45000);
@@ -357,9 +360,9 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                 let itemPictureUrl: string | undefined = undefined;
 
                 // If this list item IS the currently selected item, use its fetched profile
-                if (index === currentItemIndex && profile) {
-                    itemDisplayName = profile.name || profile.displayName || note.pubkey?.substring(0, 10) || 'Anon';
-                    itemPictureUrl = profile.picture;
+                if (index === currentItemIndex && profileData) {
+                    itemDisplayName = profileData.name || profileData.displayName || note.pubkey?.substring(0, 10) || 'Anon';
+                    itemPictureUrl = profileData.picture;
                 }
 
                 return (
@@ -461,16 +464,15 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
           </div>
 
           {/* --- Author Info Display --- */}
-          {profile && (
+          {profileData && currentItemPubkey && (
             <div className="flex items-center space-x-2 mt-2 px-2">
               <img 
-                src={profile.image || profile.picture || 'https://via.placeholder.com/32'} 
-                alt={profile.name || profile.displayName || 'author avatar'}
+                src={profileData.picture || 'https://via.placeholder.com/32'} // Use .picture, fallback
+                alt={profileData.name || profileData.displayName || 'author avatar'}
                 className="w-8 h-8 rounded-full bg-gray-600"
               />
-              <span className="text-sm text-gray-300 truncate" title={profile.name || profile.displayName}>
-                {/* Check profile properties exist before accessing */}
-                {profile.name || profile.displayName || (typeof profile.npub === 'string' ? profile.npub.substring(0, 12) + '...' : 'Author')}
+              <span className="text-sm text-gray-300 truncate" title={profileData.name || profileData.displayName}>
+                {profileData.name || profileData.displayName || nip19.npubEncode(currentItemPubkey).substring(0, 12) + '...'}
               </span>
             </div>
           )}

@@ -22,7 +22,7 @@ import { UnsignedEvent } from 'nostr-tools'; // Import UnsignedEvent
 // Import Applesauce hooks and queries/types
 import { Hooks } from 'applesauce-react';
 import { ProfileQuery } from 'applesauce-core/queries';
-import { EventStore, ProfileContent } from 'applesauce-core';
+import { EventStore } from 'applesauce-core';
 
 // Remove internal MediaNote interface if NostrNote is sufficient
 /*
@@ -47,7 +47,7 @@ export interface MediaFeedProps {
   // onNotesLoaded: (notes: NostrNote[]) => void; // Removed
 }
 
-// Loading messages array
+// Restore loading messages array
 const loadingMessages = [
   "Tuning into the cosmic streams...",
   "Aligning the digital constellations...",
@@ -89,9 +89,7 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   }
   // Removed ref parameter
 ) => {
-  // Remove NDK and internal fetching state
-  // const { ndk } = useNdk();
-  // const notesById = useRef<Map<string, NostrNote>>(new Map()); 
+  // Restore loading message state
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
   // const { profiles } = useProfileData(imageNotes); // <-- Remove old hook call
@@ -112,13 +110,13 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   const eventStore = Hooks.useEventStore(); // Get EventStore
   // const queryStore = Hooks.useQueryStore(); // Get QueryStore
 
-  // --- Loading Message Cycling (Keep, but conditionally render based on notes length) --- 
-   useEffect(() => {
+  // Restore Loading Message Cycling useEffect
+  useEffect(() => {
     const intervalId = setInterval(() => {
       setLoadingMessageIndex(prevIndex => (prevIndex + 1) % loadingMessages.length);
     }, 2500); 
     return () => clearInterval(intervalId); 
-  }, []);
+  }, []); // Empty dependency array ensures it runs once on mount
 
   // --- Effect to Scroll to Current Image (Keep) ---
   useEffect(() => {
@@ -142,7 +140,7 @@ const ImageFeed: React.FC<MediaFeedProps> = (
 
   // --- Fetch Profile for the Current Author using Applesauce ---
   const profileQueryArgs = useMemo((): [string] | null => (currentAuthorPubkey ? [currentAuthorPubkey] : null), [currentAuthorPubkey]);
-  const profileData: ProfileContent | undefined = Hooks.useStoreQuery(ProfileQuery, profileQueryArgs);
+  const profileData = Hooks.useStoreQuery(ProfileQuery, profileQueryArgs);
   const profile = profileData;
   // Infer loading state: if we expect a profile but don't have one yet
   // const isLoadingProfile = !!currentAuthorPubkey && !profile; // Removed unused variable
@@ -265,6 +263,7 @@ const ImageFeed: React.FC<MediaFeedProps> = (
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
         <div className="mb-4 w-16 h-16 animate-spin border-4 border-purple-600 border-t-transparent rounded-full"></div>
+        {/* Use cycling message */}
         <p className="animate-pulse">{loadingMessages[loadingMessageIndex]}</p>
       </div>
     );
