@@ -47,3 +47,40 @@
 *   **Action: Add Direct `EventStore` Check:**
     *   Added a diagnostic `useEffect` in `useMediaContent.ts` using `Hooks.useEventStore()` and `eventStore.getAll()` to synchronously check if matching Kind 1 events for NoSolutions exist in the store when the specific query (`podcastQueryArgs`) is active.
 *   **Next Step:** User to run app and check the new `[DEBUG] EventStore.getAll found...` logs to determine if relevant Kind 1 events are present in the `EventStore`.
+
+## 2024-07-22: Debugging Content Loading - Kind 3, Kind 1 Podcasts
+
+*   **Initial State:** App stuck on loading spinner. No media (images, videos, podcasts) displaying.
+*   **Kind 3 Contacts (Default User):**
+    *   `App.tsx` uses `Hooks.useStoreQuery(Queries.ContactsQuery, [defaultTvUserPubkey])`.
+    *   Initially, `contactsData` was `undefined` because the Kind 3 event for the default TV user wasn't in `EventStore` when `ContactsQuery` first ran.
+    *   `main.tsx` includes an initial `SimplePool` subscription for `{ kinds: [3], authors: [tvPubkeyHex], limit: 1 }`. The issue seemed to be timing – the query ran before the event was fetched and stored.
+*   **Kind 3 Contacts (Logged-in User):**
+    *   **Identified Issue:** No dynamic subscription was made for the logged-in user's Kind 3 event upon login.
+    *   **Fix Implemented:** Added a `useEffect` in `App.tsx` to:
+        *   Use `useRelayPool()` and `Hooks.useEventStore()`.
+        *   When `isLoggedIn` and `currentUserNpub` are set, decode the pubkey.
+        *   Call `pool.subscribeMany(RELAYS, [{ kinds: [3], authors: [loggedInUserHexPubkey], limit: 1 }], ...)` to fetch the user's contacts.
+        *   The `onevent` handler adds the received event to `eventStore`.
+        *   Includes cleanup to `unsub()` from the subscription.
+    *   **Outcome:** This successfully populates `contactsData` and `followedAuthorPubkeys` after login.
+*   **Podcast Fetching (Kind 1 - NoSolutions - Initial Focus):**
+    *   Refactored `useMediaContent.ts` to target Kind 1 events from `NOSOLUTIONS_PUBKEY_HEX` if that author is followed.
+    *   Added diagnostic `useEffect` in `useMediaContent.ts` using `eventStore.getAll(podcastQueryArgs)` to directly check the cache.
+    *   **Key Finding:** `eventStore.getAll()` consistently returned 0 events for the NoSolutions Kind 1 filter, even after login and with correct `podcastQueryArgs`.
+    *   This indicated the specific Kind 1 events from NoSolutions were not making it into the `EventStore`.
+*   **`SimplePool` Subscriptions for NoSolutions Kind 1:**
+    *   Modified `initialFilters` in `main.tsx` to add an explicit subscription: `{ kinds: [1], authors: [NOSOLUTIONS_PUBKEY_HEX], limit: 50 }`.
+    *   Added specific logging in `SimplePool`'s `onevent` handler in `main.tsx` for `"[SimplePool NoSolutions Kind 1 Received]"`.
+    *   **Key Finding:** These specific logs for NoSolutions Kind 1 events did **not** appear, while general Kind 1 events from other authors (caught by the broader `{ kinds: [0, 1, ...], limit: 250 }` filter) *were* being received.
+    *   This confirmed `SimplePool` was not receiving the targeted NoSolutions Kind 1 events from the configured relays.
+*   **Broadened Podcast Fetching (Kind 1 - All Followed Authors - Temporary Test):**
+    *   Modified `useMediaContent.ts`:
+        *   `podcastFiltersArray` changed to `{ kinds: [1], authors: followedAuthorPubkeys, limit: 50 }` (if authors followed).
+        *   `processApplesauceEvent` changed to attempt audio URL extraction from *any* Kind 1 event.
+    *   **Outcome:** A "playlist" appeared in the UI. Logs showed general Kind 1 events (from the broad filter in `main.tsx`) were being processed. If these happened to be from a followed author and contained an audio-like URL, they'd appear in the list. This explained the "playlist back" observation. Playback often failed as these weren't necessarily true audio files.
+*   **Current Understanding:** The primary issue for missing specific content (NoSolutions podcasts, and by extension images/videos) is that `SimplePool` is not receiving these specific events from the configured relays, even when explicitly asked. This contrasts with previous NDK behavior, suggesting differences in relay effectiveness or subscription management.
+*   **UI Issue (`RelayStatus.tsx`):**
+    *   Settings/Login button was hidden due to `opacity-0` and focus logic.
+    *   **Fix Implemented:** Removed `opacity-0` to make the button always visible.
+*   **Next Steps:** Revert `useMediaContent.ts` podcast fetching to be NoSolutions-specific for focused debugging. Investigate relay list (`RELAYS`) and potentially `SimplePool`'s interaction with them for specific, author-scoped event kinds. Then, address image/video fetching with dynamic subscriptions.

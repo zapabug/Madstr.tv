@@ -213,4 +213,31 @@
 *   **Outcome:** App still displayed loading spinner with no media. Logs showed the Kind 1 filter was correctly created, but the detailed processing logs added in the previous step were missing, indicating `fetchedPodcastEvents` might not be updating/emitting correctly for the Kind 1 query.
 *   **Decision Made:** Add a direct, synchronous check of the `EventStore` to bypass `useStoreQuery` temporarily for debugging.
 *   **VibeStorm Action:** Added a diagnostic `useEffect` to `useMediaContent.ts` using `Hooks.useEventStore()` and `eventStore.getAll(podcastQueryArgs)` to log the count and content of matching Kind 1 events found directly in the store when the query becomes active.
-*   **Next Action:** User to run the app and report the results of the new `[DEBUG] EventStore.getAll found...` logs. 
+*   **Next Action:** User to run the app and report the results of the new `[DEBUG] EventStore.getAll found...` logs.
+
+## Interaction 14 (Continued): 2024-07-22 (Content Loading Deep Dive)
+
+*   **Recap from Previous:** App stuck on loading. Kind 3 for default user not loading fast enough. NoSolutions Kind 1 podcasts not appearing.
+*   **Action (Kind 3 Login Fix):** Added dynamic subscription in `App.tsx` for logged-in user's Kind 3.
+    *   **Result:** SUCCESS. `contactsData` and `followedAuthorPubkeys` populate correctly after login. `isLoadingContent` becomes `false`.
+*   **Action (Podcast Debug - NoSolutions Kind 1):**
+    *   Focused `useMediaContent.ts` on Kind 1 from `NOSOLUTIONS_PUBKEY_HEX`.
+    *   Added direct `eventStore.getAll()` check.
+    *   **Finding:** `eventStore.getAll()` returned 0 matching NoSolutions Kind 1 events.
+*   **Action (SimplePool Subscription - NoSolutions Kind 1):**
+    *   Added explicit filter `{ kinds: [1], authors: [NOSOLUTIONS_PUBKEY_HEX], limit: 50 }` to `initialFilters` in `main.tsx`.
+    *   Added specific `console.log` in `SimplePool.onevent` for these events.
+    *   **Finding:** NO `"[SimplePool NoSolutions Kind 1 Received]"` logs appeared. General Kind 1 events *were* logged. Concluded `SimplePool` not receiving these specific events from relays.
+*   **User Feedback:** "Playlist is back."
+*   **Action (Broaden Podcast Fetch - Kind 1 All Followed):**
+    *   Modified `useMediaContent.ts` to query Kind 1 from *all* followed authors and attempt URL extraction from any Kind 1.
+    *   **Analysis:** The "playlist" was likely general Kind 1 text notes from followed authors (caught by the broad `main.tsx` filter) that coincidentally had URLs matching the audio regex. Playback failed. This confirmed the specific NoSolutions Kind 1s were still not the source.
+*   **User Feedback:** Noted that the app was working entirely with NDK previously (except NIP-46). This points to relay/subscription differences between NDK and `SimplePool`/Applesauce usage.
+*   **Action (UI Fix):** Made settings button in `RelayStatus.tsx` always visible by removing `opacity-0`.
+*   **Decision:** Simplify `useMediaContent.ts` back to NoSolutions-specific Kind 1 podcast fetching to isolate the problem of *why SimplePool isn't receiving explicitly requested, author-specific Kind 1 events.*
+*   **Next Steps Identified:**
+    1.  Revert `useMediaContent.ts` podcast logic to be NoSolutions-specific.
+    2.  Investigate `RELAYS` list in `constants.ts` – compare with NDK setup, consider adding more diverse/reliable relays.
+    3.  Potentially test `since` parameter for the NoSolutions filter in `main.tsx` if events are old.
+    4.  Once specific Kind 1 (NoSolutions) fetching is resolved, address image (Kind 1063) / video (Kind 34235) fetching by adding dynamic `SimplePool` subscriptions in `App.tsx` based on `followedAuthorPubkeys`.
+    5.  Debug podcast playback in `MediaPanel.tsx` once reliable audio notes are being fetched. 
