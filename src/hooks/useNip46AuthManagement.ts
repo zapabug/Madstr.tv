@@ -1,13 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Buffer } from 'buffer';
+// import { Buffer } from 'buffer'; // REMOVE Buffer import
 import { nip19, generateSecretKey } from 'nostr-tools';
-import { SimpleSigner, NostrConnectSigner } from 'applesauce-signers';
-import { QueryStore } from 'applesauce-core';
+import { SimpleSigner, NostrConnectSigner, NostrConnectSignerOptions, NostrConnectAppMetadata } from 'applesauce-signers';
+import { EventStore } from 'applesauce-core'; // Import concrete EventStore class
 import { Hooks } from 'applesauce-react'; // Assuming Hooks.useQueryStore exists
-
-// Assuming these are defined elsewhere and imported
 import { RELAYS } from '../constants';
 import { StoredNip46Data, saveNip46DataToDb, loadNip46DataFromDb, clearNip46DataFromDb } from '../utils/idb'; // Adjust path if needed
+import { bytesToHex, hexToBytes } from '../utils/hex'; // IMPORT new hex helpers
 
 // Define the return type for the hook
 export interface UseNip46AuthManagementReturn {
@@ -22,6 +21,7 @@ export interface UseNip46AuthManagementReturn {
 
 export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
     const queryStore = Hooks.useQueryStore();
+    const eventStore = Hooks.useEventStore() as EventStore | undefined;
     const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null);
     const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false);
     const [nip46Error, setNip46Error] = useState<string | null>(null);
@@ -51,10 +51,10 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
     }, []);
 
     const initiateNip46Connection = useCallback(async (): Promise<NostrConnectSigner | null> => {
-        if (!queryStore) {
-            setNip46Error("QueryStore not available.");
-            console.error("useNip46Auth: QueryStore not available.");
-            setIsGeneratingUri(false); // Ensure state is reset
+        if (!eventStore?.relayManager) {
+            setNip46Error("EventStore or RelayManager not available.");
+            console.error("useNip46Auth: EventStore or RelayManager not available.");
+            setIsGeneratingUri(false);
             return null;
         }
         console.info("Initiating NIP-46 connection...");
@@ -66,69 +66,68 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
         try {
             const localSecretKeyBytes = generateSecretKey();
             const localSigner = new SimpleSigner(localSecretKeyBytes);
-            const localSecretKeyHex = Buffer.from(localSecretKeyBytes).toString('hex');
+            const localSecretKeyHex = bytesToHex(localSecretKeyBytes);
 
-            const nip46Signer = new NostrConnectSigner({
-                localSigner: localSigner,
+            const relayManager = eventStore.relayManager;
+            const signerOpts: NostrConnectSignerOptions = {
                 relays: RELAYS,
-            });
+                signer: localSigner,
+                subscriptionMethod: relayManager.subscribe.bind(relayManager),
+                publishMethod: relayManager.publish.bind(relayManager),
+            };
+            const nip46Signer = new NostrConnectSigner(signerOpts);
             connectingNip46SignerRef.current = nip46Signer;
 
-            const connectUri = nip46Signer.getNostrConnectURI({
-                metadata: {
-                    name: "Nostr TV App",
-                    url: window.location.origin,
-                    description: "Nostr media experience for your TV",
-                },
-            });
+            const metadata: NostrConnectAppMetadata = {
+                name: "Nostr TV App",
+                url: window.location.origin,
+            };
+            const connectUri = nip46Signer.getNostrConnectURI(metadata);
             console.info("Generated NIP-46 Connect URI:", connectUri);
             setNip46ConnectUri(connectUri);
 
-            console.info("Waiting for NIP-46 connection...");
-            await nip46Signer.connect(); // Wait for connection
+            console.info("Waiting for NIP-46 signer connection...");
+            await nip46Signer.waitForSigner();
             console.info("NIP-46 connection successful!");
 
             const connectedSignerInstance = connectingNip46SignerRef.current;
-            connectingNip46SignerRef.current = null; // Clear ref, connection established
+            connectingNip46SignerRef.current = null;
 
-             if (!connectedSignerInstance) {
-                 throw new Error("NIP-46 Signer instance lost after successful connection.");
-             }
+            if (!connectedSignerInstance) {
+                throw new Error("NIP-46 Signer instance lost after successful connection.");
+            }
 
             const connectedUserPubkey = await connectedSignerInstance.getPublicKey();
+            const remotePubkey = connectedSignerInstance.remote;
 
-            // TODO: How to get remotePubkey after initial connection?
-            // const remotePubkey = connectedSignerInstance.remotePubkey; // This line caused a linter error
-            // const localSecretKeyHex = Buffer.from(localSigner.getSecretKey()).toString('hex'); // Incorrect: Re-declaration and SimpleSigner has no getSecretKey
+            if (!remotePubkey) {
+                throw new Error("Connected, but remote pubkey is missing from signer instance.");
+            }
 
-            /* // Temporarily disable persistence until remotePubkey is resolved
             const sessionDataToSave: Omit<StoredNip46Data, 'id'> = {
                 localSecret: localSecretKeyHex,
-                remotePubkey: remotePubkey, // Need this value
+                remotePubkey: remotePubkey,
                 connectedUserPubkey: connectedUserPubkey,
                 relays: RELAYS,
             };
             await saveNip46DataToDb(sessionDataToSave);
             console.info("NIP-46 session persisted for user:", nip19.npubEncode(connectedUserPubkey));
-            */
-            console.warn("NIP-46 session persistence temporarily disabled pending remotePubkey resolution.");
 
-            setNip46ConnectUri(null); // Clear URI, connection done
+            setNip46ConnectUri(null);
             setIsGeneratingUri(false);
-            return connectedSignerInstance; // Return the established signer
+            return connectedSignerInstance;
 
         } catch (error: any) {
-            console.error("NIP-46 Connection failed:", error);
+            console.error("NIP-46 Connection initiation failed:", error);
             const message = `NIP-46 Connection failed: ${error.message || 'Unknown error'}`;
-            await cleanupNip46Attempt(message); // Clean up fully on failure, passing the error
-            return null; // Indicate failure
+            await cleanupNip46Attempt(message);
+            return null;
         } finally {
-             // Ensure loading state is reset if somehow missed
-            if (connectingNip46SignerRef.current) { // If ref still exists (e.g., error before connect promise resolves/rejects)
+            if (connectingNip46SignerRef.current) {
                 setIsGeneratingUri(false);
             }
         }
-    }, [queryStore, cleanupNip46Attempt]);
+    }, [eventStore, cleanupNip46Attempt]);
 
     const cancelNip46Connection = useCallback(() => {
         console.info("Cancelling NIP-46 connection attempt...");
@@ -136,53 +135,59 @@ export const useNip46AuthManagement = (): UseNip46AuthManagementReturn => {
     }, [cleanupNip46Attempt]);
 
     const restoreNip46Session = useCallback(async (): Promise<NostrConnectSigner | null> => {
-        if (!queryStore) {
-            // Don't set error here, as this runs during init. Let useAuth handle general init errors.
-            console.error("useNip46Auth: QueryStore not available during restore attempt.");
+        if (!eventStore?.relayManager) {
+            console.error("useNip46Auth: EventStore or RelayManager not available during restore attempt.");
             return null;
         }
-        setNip46Error(null); // Clear previous NIP-46 errors during restore attempt
+        setNip46Error(null);
 
         console.info("Attempting to restore NIP-46 session...");
         const persistedNip46 = await loadNip46DataFromDb();
 
-        if (persistedNip46 && persistedNip46.localSecret && persistedNip46.remotePubkey && persistedNip46.connectedUserPubkey) {
+        if (persistedNip46?.localSecret && persistedNip46?.remotePubkey && persistedNip46?.connectedUserPubkey) {
             try {
-                const localSecretBytes = Buffer.from(persistedNip46.localSecret, 'hex');
-                const localSigner = new SimpleSigner(localSecretBytes);
+                const localSecretBytes = hexToBytes(persistedNip46.localSecret);
+                const localSignerForRestore = new SimpleSigner(localSecretBytes);
 
-                const signer = new NostrConnectSigner({
-                    localSigner: localSigner,
-                    remotePubkey: persistedNip46.remotePubkey,
+                const relayManager = eventStore.relayManager;
+                const signerOpts: NostrConnectSignerOptions = {
+                    signer: localSignerForRestore,
+                    remote: persistedNip46.remotePubkey,
+                    pubkey: persistedNip46.connectedUserPubkey,
                     relays: persistedNip46.relays || RELAYS,
-                });
+                    subscriptionMethod: relayManager.subscribe.bind(relayManager),
+                    publishMethod: relayManager.publish.bind(relayManager),
+                };
+                const signer = new NostrConnectSigner(signerOpts);
 
                 console.info("Attempting to connect restored NIP-46 signer...");
-                // Use connect() which should implicitly handle connection/verification
                 await signer.connect();
                 console.info("Restored NIP-46 signer connected successfully.");
 
                 const connectedPubkey = await signer.getPublicKey();
-                if (connectedPubkey === persistedNip46.connectedUserPubkey) {
-                    console.info("NIP-46 session restored successfully for user:", nip19.npubEncode(persistedNip46.connectedUserPubkey));
-                    return signer; // Return the restored signer
+                if (connectedPubkey === persistedNip46.connectedUserPubkey && signer.remote === persistedNip46.remotePubkey) {
+                    console.info("NIP-46 session restored and verified for user:", nip19.npubEncode(persistedNip46.connectedUserPubkey));
+                    return signer;
                 } else {
-                    console.error("Failed to restore NIP-46 session: Pubkey mismatch after connect.", { connected: connectedPubkey, expected: persistedNip46.connectedUserPubkey });
-                    await clearNip46DataFromDb(); // Clean up invalid session
-                    setNip46Error("NIP-46 session invalid (pubkey mismatch). Please log in again.");
+                    console.error("Failed to restore NIP-46 session: Key mismatch after connect.", {
+                        connectedUser: connectedPubkey, expectedUser: persistedNip46.connectedUserPubkey,
+                        connectedRemote: signer.remote, expectedRemote: persistedNip46.remotePubkey
+                    });
+                    await clearNip46DataFromDb();
+                    setNip46Error("NIP-46 session invalid (key mismatch). Please log in again.");
                     return null;
                 }
             } catch (e: any) {
                 console.error("Failed to connect restored NIP-46 session:", e);
-                await clearNip46DataFromDb(); // Clean up failed session
+                await clearNip46DataFromDb();
                 setNip46Error(`Failed to restore NIP-46 session: ${e.message || 'Connection error'}. Please log in again.`);
                 return null;
             }
         } else {
-            console.info("No complete NIP-46 data found in storage.");
-            return null; // No data to restore
+            console.info("No complete NIP-46 data found in storage for restore.");
+            return null;
         }
-    }, [queryStore]); // Dependency on queryStore
+    }, [eventStore]);
 
     const clearPersistedNip46Session = useCallback(async () => {
         console.info("Clearing persisted NIP-46 session data...");

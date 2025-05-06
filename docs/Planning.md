@@ -156,4 +156,22 @@
 *   **Findings:** `useAuth.ts` is significantly cleaner and correctly manages `activeSigner` state. NIP-46 logic is now encapsulated in `useNip46AuthManagement.ts`. Key remaining issue is resolving how to get `remotePubkey` for NIP-46 persistence and verifying the remaining linter warnings in `useNip46AuthManagement.ts`.
 *   **Decision Made:** Proceed with testing the refactored authentication logic.
 *   **Steps Explained:** Created a dedicated hook for NIP-46, refactored `useAuth` to use it, cleaned up imports and state management, addressed most linter errors, identified remaining issues for NIP-46 persistence.
-*   **Next Action:** Test the application (`pnpm run dev`) to verify nsec and NIP-46 authentication flows with the refactored hooks. Investigate remaining linter warnings and the `remotePubkey` issue if tests fail or reveal problems. 
+*   **Next Action:** Test the application (`pnpm run dev`) to verify nsec and NIP-46 authentication flows with the refactored hooks. Investigate remaining linter warnings and the `remotePubkey` issue if tests fail or reveal problems.
+
+## Interaction 11: [Get Current Date/Time - YYYY-MM-DD HH:MM]
+
+*   **User Input:** Attempt to run `pnpm run dev`, encountered build errors related to imports (`../constants/relays`, `buffer`, `useQuery`) and redeclarations (`isLoadingContent`, `Filter`).
+*   **VibeStorm Action:**
+    *   Corrected `RELAYS` import path in `useNip46AuthManagement.ts`.
+    *   Created `src/utils/hex.ts` with `bytesToHex`/`hexToBytes` helpers.
+    *   Refactored `useNip46AuthManagement.ts` to use hex helpers instead of `Buffer`.
+    *   Corrected `useQuery` usage in `App.tsx` and `MessageBoard.tsx` to `Hooks.useStoreQuery`.
+    *   Corrected numerous Applesauce type imports (`NostrEvent`, `Filter`, `ProfileQuery`, etc.) based on documentation lookup.
+    *   Refactored `App.tsx` data fetching logic (`FollowsQuery`, `TimelineQuery`) to use `Hooks.useStoreQuery` correctly, inferring types and handling loading state implicitly.
+    *   Fixed `isLoadingContent` and `Filter` redeclaration errors in `App.tsx`.
+    *   Identified that `useNip46AuthManagement.ts` still failed because `NostrConnectSigner` requires `subscriptionMethod` and `publishMethod`, which could not be found on `EventStore` or `QueryStore`.
+    *   Re-examined Applesauce source code (`EventStore`, `IEventStore`, `useEventStore`) and confirmed they do *not* handle direct relay communication or expose `relayManager` publicly.
+*   **Findings:** The core issue preventing NIP-46 from working is the lack of relay publish/subscribe functions being passed to `NostrConnectSigner`. Applesauce Core (`EventStore`/`QueryStore`) focuses on local data management. `tvapp` currently has no active relay communication layer.
+*   **Decision Made:** Implement relay communication using `SimplePool` from `nostr-tools` and provide its methods to `NostrConnectSigner`.
+*   **Steps Explained:** Iteratively fixed build errors. Investigated Applesauce source to understand the missing `subscribe`/`publish` methods. Concluded that relay management must be handled by the application itself.
+*   **Next Action:** Modify `main.tsx` to instantiate `SimplePool`, create a `RelayPoolContext`, and provide the pool instance to the app via the context provider. 

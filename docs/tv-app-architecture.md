@@ -24,8 +24,12 @@ This document describes the architecture of the React-based TV application desig
 ## 2. Core Technologies
 
 *   **Frontend Framework:** React (`useState`, `useEffect`, `useRef`, `useCallback`)
-*   **State Management & Side Effects:** Primarily custom hooks (`useAuth` (`src/hooks/useAuth.ts`), `useMediaState` (`src/hooks/useMediaState.ts`), `useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`), `useFullscreen` (`src/hooks/useFullscreen.ts`), `useKeyboardControls` (`src/hooks/useKeyboardControls.ts`), `useImageCarousel` (`src/hooks/useImageCarousel.ts`), `useWallet` (`src/hooks/useWallet.ts`)) and **Applesauce React hooks (e.g., `useStore`, `useQuery`)** orchestrated by the root `App` component (`src/App.tsx`). **Core Nostr state is managed by Applesauce's `EventStore` and `QueryStore`.**
-*   **Nostr Integration:** **`applesauce-core`**, **`applesauce-react`**, **`applesauce-signers`**, `nostr-tools` (for `nip19` utils).
+*   **State Management & Side Effects:** Primarily custom hooks (`useAuth`, `useMediaState`, etc.) and **Applesauce React hooks (e.g., `Hooks.useStoreQuery`)** orchestrated by the root `App` component. Core Nostr data state is managed by Applesauce's `EventStore` and `QueryStore`.
+*   **Nostr Integration:**
+    *   **Data/Cache:** `applesauce-core`, `applesauce-react`.
+    *   **Signing:** `applesauce-signers` (for NIP-07/NIP-46 via `useAuth`).
+    *   **Relay Communication:** **`nostr-tools/SimplePool`** (Instantiated in `main.tsx`, provided via `RelayPoolContext`).
+    *   **Utilities:** `nostr-tools` (for `nip19`, `Filter`, `NostrEvent` types).
 *   **Cashu (Ecash) Integration:** `@cashu/cashu-ts`
 *   **Caching:** IndexedDB via `idb` (`src/utils/idb.ts`) (`settings`, `cashuProofs`), **Applesauce's internal stores** (for profiles, events, etc.).
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
@@ -154,14 +158,14 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **Function:** Manages the primary authentication state of the application. Determines the `activeSigner` (either `SimpleSigner` for nsec or `NostrConnectSigner` from NIP-46) using local `useState`. Handles login via nsec (`SimpleSigner`), new key generation (`SimpleSigner`), and logout (clearing state and calling appropriate cleanup). Delegates NIP-46 connection initiation, cancellation, and session restoration logic to the `useNip46AuthManagement` hook. Provides NIP-04 DM methods that use the currently `activeSigner`. Loads/persists nsec via `idb` helpers. Manages followed hashtags list (placeholder persistence).
 
 *   **`useNip46AuthManagement` (`src/hooks/useNip46AuthManagement.ts`):** (New)
-    *   **Input:** Uses `Hooks.useQueryStore()` internally. Uses NIP-46 persistence helpers from `idb` utils.
+    *   **Input:** Uses `Hooks.useEventStore()` internally. Requires `SimplePool` instance from `RelayPoolContext` to provide subscribe/publish methods. Uses NIP-46 persistence helpers from `idb` utils.
     *   **Output:** `UseNip46AuthManagementReturn` (exported interface) containing:
         *   NIP-46 state (`nip46ConnectUri`, `isGeneratingUri`, `nip46Error`)
         *   `initiateNip46Connection`: Function to start NIP-46 flow, returns connected `NostrConnectSigner` or `null`.
         *   `cancelNip46Connection`: Function to abort an ongoing connection attempt.
         *   `restoreNip46Session`: Function to attempt restoring session from storage, returns restored `NostrConnectSigner` or `null`.
         *   `clearPersistedNip46Session`: Function to remove NIP-46 data from storage.
-    *   **Function:** Encapsulates all logic for the NIP-46 (Connect) authentication method. Manages the connection URI display, the connection lifecycle (using `NostrConnectSigner`), cleanup of attempts, and restoration from persisted data (IndexedDB). Handles persistence of the NIP-46 session data (`localSecret`, `remotePubkey`, `connectedUserPubkey`, `relays`). **(NOTE: Persistence is currently partial due to a `TODO` regarding retrieving `remotePubkey` post-connection. Some linter warnings regarding signer options/paths remain).**
+    *   **Function:** Encapsulates all logic for the NIP-46 (Connect) authentication method. Manages the connection URI display, the connection lifecycle (using `NostrConnectSigner`), cleanup of attempts, and restoration from persisted data (IndexedDB). **Requires `subscriptionMethod` (from `pool.sub`) and `publishMethod` (from `pool.publish`) to be passed to the `NostrConnectSigner` constructor.** Handles persistence of the NIP-46 session data (`localSecret`, `remotePubkey`, `connectedUserPubkey`, `relays`). **(NOTE: Uses hex helpers instead of `Buffer`. Persistence enabled.)**
 
 *   **`useMediaState` (`src/hooks/useMediaState.ts`):** (Largely unchanged, inputs may simplify slightly if `useSubscribe` returns notes directly).
     *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.

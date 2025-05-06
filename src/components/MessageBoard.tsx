@@ -4,8 +4,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { nip19 } from 'nostr-tools'; // Import nip19 for decoding
 // import { useNDK } from '@nostr-dev-kit/ndk-hooks'; // REMOVE useNDK
 // import { useSubscribe, useProfile } from '@nostr-dev-kit/ndk-hooks'; // REMOVE useSubscribe and useProfile
-import { NostrEvent, Filter } from 'applesauce-core'; // ADD Applesauce types
-import { useQuery } from 'applesauce-react'; // ADD Applesauce useQuery
+import { NostrEvent, Filter } from 'nostr-tools'; // Corrected: NostrEvent/Filter from nostr-tools
+import { Hooks } from 'applesauce-react'; // Correct: Hooks from -react
+import { Queries } from 'applesauce-core'; // Correct: Queries from -core
 import { RELAYS } from '../constants'; // ADD RELAYS import
 
 // Define the props for the component
@@ -23,24 +24,15 @@ const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   // Use useProfile hook to get author's profile
   // const profile = useProfile(message.pubkey); // REMOVE NDK useProfile for now
 
-  // --- Fetch Profile using Applesauce useQuery --- 
-  const profileFilter: Filter = useMemo(() => ({
-    kinds: [0],
-    authors: [message.pubkey],
-    limit: 1,
-  }), [message.pubkey]);
+  // --- Fetch Profile using Applesauce Hooks.useStoreQuery --- 
+  // Pass pubkey directly in the args array
+  const profileData = Hooks.useStoreQuery(Queries.ProfileQuery, message.pubkey ? [message.pubkey] : null);
+  const isLoadingProfile = profileData === undefined; // Implicit loading state
 
-  const { events: profileEvents, isLoading: isLoadingProfile } = useQuery({
-      filters: [profileFilter],
-      relays: RELAYS, // Use same relays for profile for now
-      enabled: !!message.pubkey, // Only run if pubkey exists
-  });
-
-  // Get the latest profile event if multiple are returned (shouldn't happen with limit: 1, but good practice)
-  const profileData = useMemo(() => {
-    if (!profileEvents || profileEvents.length === 0) return null;
-    return profileEvents.sort((a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at)[0];
-  }, [profileEvents]);
+  const profileContent = useMemo(() => {
+      // profileData is now the content itself, or undefined
+      return profileData ?? {}; // Use profileData directly, fallback to empty object
+  }, [profileData]);
 
   // TODO: Refactor profile fetching using Applesauce
   // const [profileData, setProfileData] = useState<NostrEvent | null>(null); // REMOVE Placeholder state
@@ -59,24 +51,14 @@ const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
   //   }, 50); // Short delay to simulate async
   // }, [message.pubkey]);
 
-  const profileContent = useMemo(() => {
-      if (!profileData?.content) return {};
-      try {
-          return JSON.parse(profileData.content);
-      } catch (e) {
-          console.error("Failed to parse profile content:", e);
-          return {};
-      }
-  }, [profileData]);
-
   // Format timestamp (example)
   const timestamp = message.created_at
     ? new Date(message.created_at * 1000).toLocaleString()
     : 'Processing...'; // Should ideally not show 'Processing'
 
   // Derive display info from profile data or fallback
-  const displayName = profileContent?.name || profileContent?.displayName || message.pubkey.substring(0, 8) + '...';
-  const displayPicture = profileContent?.image || profileContent?.picture || 'https://via.placeholder.com/40'; // Default placeholder
+  const displayName = profileContent?.name || profileContent?.display_name || message.pubkey.substring(0, 8) + '...'; // Adjusted access
+  const displayPicture = profileContent?.picture || profileContent?.image || 'https://via.placeholder.com/40'; // Adjusted access
 
   return (
     <div className="p-3 mb-2 bg-gray-800 rounded-lg shadow flex space-x-3">
@@ -150,26 +132,24 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ neventToFollow, onNewMessag
 
   console.log('[MessageBoard] Filter being passed to useQuery:', subscriptionFilter); // Log the filter being used
 
-  // Use Applesauce useQuery
-  const { events: messages, isLoading: isLoadingMessages } = useQuery({
-      filters: subscriptionFilter ? [subscriptionFilter] : [], // Pass filter array, or empty if no ID
-      relays: RELAYS,
-      enabled: !!subscriptionFilter, // Only enable if filter is valid
-      // closeOnEose: false, // Applesauce handles this differently, defaults usually fine
-  });
+  // Use Applesauce Hooks.useStoreQuery with TimelineQuery
+  // Pass filter array directly as args
+  const messages: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, subscriptionFilter ? [subscriptionFilter] : null);
+  const isLoadingMessages = messages === undefined; // Implicit loading state
 
   // console.log('[MessageBoard] Passed filter to useSubscribe:', JSON.stringify(subscriptionFilter)); // REMOVE old log
 
   // Effect to call onNewMessage when new messages arrive
   useEffect(() => {
-    if (messages.length > previousMessageCount.current) {
+    // Check if messages is defined and has length
+    if (messages && messages.length > previousMessageCount.current) {
       console.log('MessageBoard: New messages detected, calling onNewMessage.');
       onNewMessage?.();
     }
-    previousMessageCount.current = messages.length;
+    previousMessageCount.current = messages?.length ?? 0; // Update count safely
   }, [messages, onNewMessage]);
 
-  console.log('[MessageBoard] Received messages count:', messages?.length ?? 0); // Log the count of received messages
+  console.log('[MessageBoard] Received messages count:', messages?.length ?? 0);
 
   const renderStatus = () => {
     // if (!ndk) { // REMOVE NDK check
@@ -192,9 +172,9 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ neventToFollow, onNewMessag
       <h2 className="text-xl font-bold mb-4 text-purple-300">Live Chat</h2>
       <div className="flex-1 overflow-y-auto mb-4 pr-2">
         {renderStatus()}
-        {/* Render messages using MessageItem which handles profile fetching */} 
-        {/* Add null check for messages */}
-        {messages && messages.map((msg: NostrEvent) => (
+        {/* Render messages using MessageItem */} 
+        {/* Map directly over messages (which is NostrEvent[] | undefined) */}
+        {messages?.map((msg: NostrEvent) => (
           <MessageItem key={msg.id} message={msg} />
         ))}
       </div>
