@@ -214,3 +214,84 @@
     4.  **Address Settings Modal Functionality:** Systematically review and fix/re-implement missing features in `SettingsModal.tsx`, focusing on its interactions with `useAuth.ts` (tag management, NIP-46 initiation) and `useWallet.ts`.
     5.  **Verify Placeholder Chat Functionality.**
     6.  **(Longer Term) Robust Relay Status:** Improve `isReceivingData` and `connectedRelaysCount` in `App.tsx` for `RelayStatus.tsx` for more accurate feedback.
+
+## 2025-05-09: Verifying Data Flow to `useMediaContent` and Initial Processing Results
+
+*   **Context:** Continued debugging why videos are not appearing, focusing on the data pipeline into and within `useMediaContent.ts`.
+*   **Key Findings from Logs:**
+    *   **`App.tsx` to `useMediaContent` Data Flow Confirmed:**
+        *   `useAuth.ts` appears to be correctly loading `followedTags` from IDB (e.g., an array with 1 tag was observed).
+        *   `App.tsx` correctly fetches the 19 `followedAuthorPubkeys` from the `TV_PUBKEY_NPUB`'s Kind 3 list.
+        *   `useMediaContent` hook **is eventually called with both populated `followedAuthorPubkeys` and `followedTags`**.
+    *   **`useMediaContent.ts` Initial Processing:**
+        *   **Specific Kinds Not Found:** The `TimelineQuery` for Kind 1063 (images) and Kind 34235 (videos) returned empty arrays `[]`. This means no dedicated image/video events were found for the given authors/tags.
+        *   **General Kind 1 Events Fetched:** A significant number of general Kind 1 events (e.g., 50-58) *are* being fetched based on the `followedAuthorPubkeys`.
+        *   **Categorization of Kind 1s:**
+            *   `processApplesauceEvent` successfully categorizes some of these Kind 1 events as **podcasts** (e.g., 9-10 found) and **images** (e.g., 8 found), presumably by matching `AUDIO_URL_REGEX` and `IMAGE_URL_REGEX` in their content.
+            *   **Crucially, 0 Kind 1 events were categorized as videos.**
+*   **Conclusion on Missing Videos (Current Hypothesis):**
+    *   Videos are not appearing because neither dedicated Kind 34235 events are being fetched, nor are any of the currently fetched Kind 1 events being identified as videos by the `VIDEO_URL_REGEX` or processing logic within `useMediaContent`.
+*   **Current Debugging Focus / Next Steps:**
+    1.  **Analyze `processApplesauceEvent` Samples:** Inspect the `processedNotesWithHint` sample objects logged from `useMediaContent.ts` to see the `mediaTypeHint` and extracted `url` for Kind 1 events. This will help determine if any events *should* have been videos but were missed.
+    2.  **Manual Content Verification (User Task):** Manually check (via a Nostr client) if the 19 followed authors or the active test tag actually post videos, and in what format (Kind 34235, or Kind 1 with specific URL patterns/extensions).
+    3.  **Refine `VIDEO_URL_REGEX`:** Based on findings from the manual check, adjust `VIDEO_URL_REGEX` in `useMediaContent.ts` if current video URL patterns are not being caught.
+    4.  **(Lower Priority for now) Re-evaluate Re-rendering & Carousel/Pagination:** Address potential re-rendering issues affecting UI elements like the image carousel and pagination once the core content fetching for videos is improved.
+
+---
+Previous summary from 2025-05-09 (before detailed `useMediaContent` logs):
+
+**User Provided Summary of Current State & Understanding (2025-05-09):**
+
+*   **Goal:** The TV app should display media (images, podcasts, videos) sourced from two main channels:
+    1.  **Authors followed by a default "curator" Npub** (`TV_PUBKEY_NPUB` from `constants.ts`).
+    2.  **User-defined (or default) followed hashtags.**
+    This mirrors functionality that was largely working with NDK before the refactor to Applesauce (which was primarily for robust NIP-46 remote signer support).
+
+*   **Author Follows Data Flow (Working):**
+    *   `App.tsx` correctly identifies the `TV_PUBKEY_NPUB`.
+    *   It successfully fetches this curator's Kind 3 contact list using Applesauce's `Queries.ContactsQuery`.
+    *   It correctly processes this list into an array of 19 `followedAuthorPubkeys`.
+    *   These `followedAuthorPubkeys` are correctly passed as a prop to the `useMediaContent` hook.
+
+*   **Hashtag Follows Data Flow (Fixed & Verified Passing to useMediaContent):**
+    *   The `useAuth.ts` hook is responsible for managing `followedTags`.
+    *   IDB loading/saving logic for `followedTags` in `useAuth.ts` was implemented and verified.
+    *   `App.tsx` correctly receives `followedTags` from `useAuth`.
+    *   `useMediaContent` is confirmed to receive both populated `followedAuthorPubkeys` and `followedTags`.
+
+*   **Media Content Status (Focus on Videos):**
+    *   Some audio (podcasts) and images are appearing, sourced from the 19 `followedAuthorPubkeys` via Kind 1 content parsing, and potentially from `followedTags`.
+    *   **No videos are appearing.** This is the primary content issue.
+
+*   **UI Status:**
+    *   `RelayStatus.tsx` was invisible but is now temporarily visible after a style simplification. Its props (`relayCount`) are correctly calculated in `App.tsx`. The original styling needs to be restored with ensured visibility.
+    *   The Settings Modal is reportedly missing significant functionality and shows empty `followedTags` (this part needs re-verification now that IDB for tags is active).
+
+**Previous To-Do List (Prioritized as of 2025-05-09):**
+
+1.  **Fix Hashtag Loading & Saving (Largely Done, Verification Ongoing):**
+    *   **Task:** Implement `loadFollowedTagsFromDb()` and `saveFollowedTagsToDb()` functions in `src/utils/idb.ts`. (Done)
+    *   **Task:** Uncomment and fully integrate this loading/saving logic into `src/hooks/useAuth.ts`. (Done)
+    *   **Goal:** Ensure `followedTags` are correctly loaded from storage and passed to `useMediaContent`, enabling tag-based content filtering. (Verified that `useMediaContent` receives the tags; actual filtering effectiveness for videos is pending).
+
+2.  **Investigate Video Content Sources & `useMediaContent` (Active):**
+    *   **Task:** Manually inspect several of the 19 `followedAuthorPubkeys` (from `TV_PUBKEY_NPUB`'s list) and active tags on a Nostr client to determine *if* and *how* they post videos (e.g., Kind 1 URLs, Kind 34235 events, link formats).
+    *   **Task:** Analyze console logs from *within* `useMediaContent.ts` (detailed logging added) to verify:
+        *   Correct filter construction for specific kinds (1063, 34235) and general Kind 1s.
+        *   Results from `TimelineQuery` for these filters (are Kind 34235 events fetched? Are relevant Kind 1s fetched?).
+        *   How `processApplesauceEvent` handles any potential video events or Kind 1 notes from these authors/tags.
+    *   **Goal:** Identify why videos are not appearing – either due to lack of suitable content from followed sources or issues in fetching/processing within `useMediaContent`. Refine `VIDEO_URL_REGEX` or Kind 34235 handling if necessary.
+
+3.  **Restore `RelayStatus.tsx` Appearance:**
+    *   **Task:** Re-apply the original intended styling and structure.
+    *   **Goal:** Ensure the component is visually correct and functional while remaining visible.
+
+4.  **Address Settings Modal Functionality:**
+    *   **Task:** Systematically review `SettingsModal.tsx` and its interactions with `useAuth.ts` (tag management, NIP-46 initiation) and `useWallet.ts`.
+    *   **Goal:** Fix and re-implement missing functionalities.
+
+5.  **Verify Placeholder Chat Functionality:**
+    *   **Task:** Investigate and restore the default chat thread.
+
+6.  **(Lower Priority / Refinement) Robust Relay Status:**
+    *   **Task:** Improve accuracy of relay status indicators.

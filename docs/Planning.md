@@ -1733,3 +1733,26 @@
     3.  **Restore `RelayStatus.tsx` Appearance:** Re-apply original styles carefully ensuring visibility.
     4.  **Fix Settings Modal Functionality:** Address missing features by reviewing `useAuth`, `useNip46AuthManagement`, and `useWallet`.
     5.  **Address Placeholder Chat.**
+
+## Interaction 81 (Current): Analyzing `useMediaContent` Internal Logs
+
+*   **Context:** After confirming that `useMediaContent` receives populated `followedAuthorPubkeys` and `followedTags`, detailed logging was added inside `useMediaContent` to trace its internal operations.
+*   **Key Findings from `useMediaContent` Internal Logs:**
+    *   **Filter Construction:** Filters for Kind 1063 (image), Kind 34235 (video), and general Kind 1 events are being constructed based on the received `followedAuthorPubkeys` and `followedTags`.
+    *   **`TimelineQuery` for Specific Kinds (1063, 34235):** These queries are executing but consistently returning `[]` (empty arrays). This means no dedicated Kind 1063 or Kind 34235 events are being found that match the author/tag criteria from the connected relays.
+    *   **`TimelineQuery` for General Kind 1s:** This query *is* successfully fetching a batch of Kind 1 events (e.g., 50-58 events).
+    *   **Event Processing (`processApplesauceEvent`):**
+        *   The fetched Kind 1 events are processed.
+        *   Some are correctly identified as `mediaTypeHint: 'audio'` with a URL.
+        *   Some are correctly identified as `mediaTypeHint: 'image'` with a URL.
+        *   **Zero events are being identified as `mediaTypeHint: 'video'`.**
+    *   **Categorization:** Consequently, after deduplication, the categorization step results in some podcasts, some images, but **0 videos**.
+*   **Conclusion on Missing Videos:**
+    1.  The app is not finding any specific Kind 34235 (video) events from the followed authors or tags.
+    2.  None of the general Kind 1 events being fetched from followed authors contain video URLs that are currently detectable by `VIDEO_URL_REGEX` in `processApplesauceEvent`.
+*   **Current Debugging Focus / Next Steps:**
+    1.  **Analyze `processApplesauceEvent` Samples (User Task):** User to expand the logged samples of `processedNotesWithHint` in their browser console to inspect the `content`, assigned `mediaTypeHint`, and extracted `url` for the Kind 1 events. This is to see if any *should* have been videos but were missed (e.g., regex failure).
+    2.  **Manual Content Verification (User Task):** User to manually check (via a Nostr client) if the 19 followed authors or the active test tag actually post videos, and critically, *in what format* (Kind 34235, or Kind 1 with specific URL patterns/extensions like .mp4, .mov, youtube.com, etc.).
+    3.  **Refine `VIDEO_URL_REGEX`:** Based on findings from the manual check, adjust `VIDEO_URL_REGEX` in `useMediaContent.ts` if current video URL patterns are not being caught.
+    4.  **(If manual check shows Kind 34235 events exist but aren't fetched):** Investigate why `TimelineQuery` for Kind 34235 with the given authors/tags isn't finding them (e.g., relay issues for that specific kind, `limit` too low, event age).
+    5.  **(Lower Priority for now) Re-evaluate Re-rendering & Carousel/Pagination:** Address potential re-rendering issues affecting UI elements like the image carousel and pagination once the core content fetching for videos is improved.

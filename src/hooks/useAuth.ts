@@ -10,9 +10,14 @@ import { SimpleSigner, NostrConnectSigner, Nip07Interface } from 'applesauce-sig
 // Import the new NIP-46 hook
 import { useNip46AuthManagement } from './useNip46AuthManagement';
 
-// IDB Utilities (Assuming these are defined elsewhere and imported)
-import { saveNsecToDb, loadNsecFromDb, clearNsecFromDb } from '../utils/idb'; // Adjust path if needed
-// Removed NIP-46 specific IDB imports, handled by useNip46AuthManagement
+// IDB Utilities
+import {
+    saveNsecToDb,
+    loadNsecFromDb,
+    clearNsecFromDb,
+    loadFollowedTagsFromDb, // Added import
+    saveFollowedTagsToDb,   // Added import
+} from '../utils/idb';
 
 // Assuming RELAYS are defined elsewhere if needed directly (e.g., maybe not needed here anymore)
 // import { RELAYS } from '../constants/relays';
@@ -89,22 +94,39 @@ export const useAuth = (): UseAuthReturn => {
         updateNpub();
     }, [activeSigner]);
 
-    // --- Load/Persist followed tags --- (Placeholder logic)
+    // --- Load/Persist followed tags ---
     useEffect(() => {
-        console.info('Auth Hook: Mounted. (Need to load tags from IDB)');
-        // loadFollowedTagsFromDb().then(setFollowedTagsState).catch(...)
-    }, []);
+        const loadTags = async () => {
+            try {
+                console.info('Auth Hook: Attempting to load followed tags from IDB...');
+                const loadedTags = await loadFollowedTagsFromDb();
+                if (loadedTags) {
+                    setFollowedTagsState(loadedTags);
+                    console.info('Auth Hook: Successfully loaded followed tags:', loadedTags);
+                } else {
+                    setFollowedTagsState([]); // Initialize with empty array if nothing is stored
+                    console.info('Auth Hook: No followed tags found in IDB, initialized as empty.');
+                }
+            } catch (error) {
+                console.error('Auth Hook: Failed to load followed tags from IDB:', error);
+                setNsecAuthError("Failed to load followed tags."); // Use existing error state for simplicity
+                setFollowedTagsState([]); // Ensure it's an empty array on error
+            }
+        };
+        loadTags();
+    }, []); // Intentionally empty dependency array to run once on mount
 
     const setFollowedTags = useCallback(async (tags: string[]) => {
         try {
+            console.log('Auth Hook: setFollowedTags called with:', tags); // Added log
             setFollowedTagsState(tags);
-            console.info('Persisted followed tags to IDB (placeholder)', tags);
-            // await saveFollowedTagsToDb(tags);
+            await saveFollowedTagsToDb(tags);
+            console.info('Auth Hook: Successfully persisted followed tags to IDB:', tags);
         } catch (error) {
-            console.error('Failed to save followed tags:', error);
-            // setNsecAuthError("Failed to save followed tags."); // Maybe a specific error state for tags?
+            console.error('Auth Hook: Failed to save followed tags:', error);
+            setNsecAuthError("Failed to save followed tags.");
         }
-    }, []);
+    }, [setNsecAuthError]);
 
     // Removed NIP-46 cleanup logic - handled by useNip46AuthManagement
 

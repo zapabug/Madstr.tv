@@ -295,29 +295,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
      // --- Hashtag Management ---
 
      const handleAddTag = () => {
-        const tagToAdd = hashtagInput.trim().toLowerCase().replace(/^#+/, ''); // Remove leading # and spaces, lowercase
-        if (tagToAdd && auth.followedTags && !auth.followedTags.includes(tagToAdd) && auth.setFollowedTags) {
-            const newTags = [...auth.followedTags, tagToAdd];
-            auth.setFollowedTags(newTags); // Update state via auth hook
+        const newTag = hashtagInput.trim().toLowerCase();
+        if (newTag && !auth.followedTags.includes(newTag)) {
+            const updatedTags = [...auth.followedTags, newTag];
+            console.log('SettingsModal: Calling auth.setFollowedTags with (add):', updatedTags);
+            auth.setFollowedTags(updatedTags);
             setHashtagInput(''); // Clear input
-            setTimeout(() => hashtagInputRef.current?.focus(), 50); // Keep focus on input
-        } else if (!tagToAdd) {
-             setDisplayError("Please enter a tag to add.");
-        } else {
-             setDisplayError(`Tag "${tagToAdd}" is already followed.`);
+            setDisplayError(null);
+            // Try to focus the input again for quick multi-add
+            setTimeout(() => hashtagInputRef.current?.focus(), 50);
+        } else if (newTag && auth.followedTags.includes(newTag)) {
+            setDisplayError(`Tag "${newTag}" is already followed.`);
+        } else if (!newTag) {
+             setDisplayError("Hashtag cannot be empty.");
         }
-     };
+    };
 
      const handleRemoveTag = (tagToRemove: string) => {
-        if (auth.followedTags && auth.setFollowedTags) {
-            const newTags = auth.followedTags.filter(tag => tag !== tagToRemove);
-            auth.setFollowedTags(newTags);
-            setFocusedTagIndex(null); // Clear focus index after removal
-            setTimeout(() => addTagButtonRef.current?.focus(), 50); // Focus add button after removing
-        }
-     };
+        const updatedTags = auth.followedTags.filter(tag => tag !== tagToRemove);
+        console.log('SettingsModal: Calling auth.setFollowedTags with (remove):', updatedTags);
+        auth.setFollowedTags(updatedTags);
+        setDisplayError(null);
+        // If a tag was focused and is now removed, clear focus index
+        setFocusedTagIndex(null);
+        setTimeout(() => addTagButtonRef.current?.focus(), 50); // Focus add button after removing
+    };
 
-     // Handle D-pad navigation and deletion in the tag list
+    // Handle D-pad navigation and deletion in the tag list
     const handleTagListKeyDown = (event: React.KeyboardEvent<HTMLLIElement>, index: number, tag: string) => {
         if (!auth.followedTags) return;
 

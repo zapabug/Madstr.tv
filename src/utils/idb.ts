@@ -43,6 +43,12 @@ export interface StoredNip46Data {
 const DB_NAME = 'MadTripsDB';
 const DB_VERSION = 4; // Increment version number to reflect schema change
 
+// Define keys for specific stores
+const NSEC_KEY = 'currentUserNsec';
+const NIP46_KEY = 'currentNip46Session';
+const FOLLOWED_TAGS_KEY = 'userFollowedTags'; // Added key for followed tags
+const MINT_URL_KEY = 'configuredMintUrl';
+
 let dbPromise: Promise<IDBPDatabase<AppDbSchema>> | null = null;
 
 const getDb = (): Promise<IDBPDatabase<AppDbSchema>> => {
@@ -304,43 +310,49 @@ const deleteProofsBySecret = async (secretsToDelete: string[]): Promise<void> =>
 
 const deleteProofs = (mintUrl: string) => deleteDbEntry('cashuProofs', mintUrl);
 
-// Nsec storage
-const NSEC_KEY = 'currentUserNsec'; // Fixed key
+// Nsec
+export const NSEC_STORE_KEY = NSEC_KEY; // Exporting for use in useAuth or elsewhere if needed
 export const loadNsecFromDb = async (): Promise<string | null> => {
     const nsec = await get('nsec', NSEC_KEY);
-    return typeof nsec === 'string' ? nsec : null;
+    return nsec || null;
 };
 export const saveNsecToDb = (nsec: string) => put('nsec', nsec, NSEC_KEY);
 export const clearNsecFromDb = () => deleteDbEntry('nsec', NSEC_KEY);
 
-// NIP-46 storage
-const NIP46_KEY = 'currentNip46Session'; // Fixed key
+// NIP-46 Session Data
+export const NIP46_STORE_KEY = NIP46_KEY; // Exporting for use in useAuth
 export const loadNip46DataFromDb = async (): Promise<StoredNip46Data | null> => {
     const data = await get('nip46Session', NIP46_KEY);
-    // Basic validation - could add more checks
-    if (data && typeof data === 'object' && data.id === NIP46_KEY && data.localSecret && data.remotePubkey && data.connectedUserPubkey) {
-        return data as StoredNip46Data;
+    // Ensure the object matches the expected structure, especially after schema changes.
+    // For example, if 'id' was not always present or structure was different:
+    if (data && typeof data === 'object' && data.localSecret && data.remotePubkey) {
+        return {
+            id: NIP46_KEY, // Ensure the 'id' field is populated for consistency if it wasn't stored with it
+            localSecret: data.localSecret,
+            remotePubkey: data.remotePubkey,
+            connectedUserPubkey: data.connectedUserPubkey,
+            relays: data.relays,
+        };
     }
     return null;
 };
-// Note: The 'value' type here is StoredNip46Data, defined in the schema section
+
 export const saveNip46DataToDb = (data: Omit<StoredNip46Data, 'id'>) => {
     const dataToStore: StoredNip46Data = { ...data, id: NIP46_KEY };
-    return put('nip46Session', dataToStore);
+    return put('nip46Session', dataToStore, NIP46_KEY); // Use NIP46_KEY as the key for the single session object.
 };
 export const clearNip46DataFromDb = () => deleteDbEntry('nip46Session', NIP46_KEY);
 
-// Followed Tags storage
-const FOLLOWED_TAGS_KEY = 'userFollowedTags';
-const loadFollowedTagsFromDb = async (): Promise<string[] | null> => {
-    const result = await get('followedTags', FOLLOWED_TAGS_KEY);
-    return Array.isArray(result) ? result : null;
+// Followed Tags
+export const FOLLOWED_TAGS_STORE_KEY = FOLLOWED_TAGS_KEY; // Exporting for use in useAuth
+export const loadFollowedTagsFromDb = async (): Promise<string[] | null> => {
+    const tags = await get('followedTags', FOLLOWED_TAGS_KEY);
+    return tags || null; // Return null if not found, an empty array, or the tags themselves
 };
-const saveFollowedTagsToDb = (tags: string[]) => put('followedTags', tags, FOLLOWED_TAGS_KEY);
-const clearFollowedTagsFromDb = () => deleteDbEntry('followedTags', FOLLOWED_TAGS_KEY);
+export const saveFollowedTagsToDb = (tags: string[]) => put('followedTags', tags, FOLLOWED_TAGS_KEY);
+export const clearFollowedTagsFromDb = () => deleteDbEntry('followedTags', FOLLOWED_TAGS_KEY);
 
-// --- Specific Mint URL Helpers ---
-const MINT_URL_KEY = 'configuredMintUrl';
+// Mint URL Setting
 const loadMintUrlFromDb = async (): Promise<string | null> => {
     const result = await getSetting(MINT_URL_KEY);
     return typeof result === 'string' ? result : null; // Return null if not set or not a string
