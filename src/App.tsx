@@ -1,25 +1,45 @@
 import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
-// import ndkInstance from './ndk'; // <-- REMOVE singleton NDK instance
-import ImageFeed from './components/ImageFeed';
-import MessageBoard from './components/MessageBoard';
-import MediaPanel from './components/MediaPanel';
-import RelayStatus from './components/RelayStatus';
-import VideoPlayer from './components/VideoPlayer';
-import { MAIN_THREAD_NEVENT_URI, RELAYS, TV_PUBKEY_NPUB } from './constants'; // Added TV_PUBKEY_NPUB
+import { nip19, Filter, NostrEvent } from 'nostr-tools'; // Core Nostr types
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Applesauce imports
+import {
+    QueryStoreProvider, // React Context Provider
+    Hooks             // React Hooks namespace
+} from 'applesauce-react';
+import {
+    Queries,          // Core Query definitions
+    EventStore,       // Correct: from -core
+    QueryStore        // Correct: from -core
+} from 'applesauce-core';
+// Helpers/Types - Assuming these paths and existence based on previous info
+// import { ProfileContent } from 'applesauce-core/helpers/profile'; // Type not explicitly needed if relying on inference
+// import { getContactsPubkeys } from 'applesauce-core/helpers/contacts'; // Helper function - keep manual parsing for now
+
+// import { SimpleSigner } from 'applesauce-signers'; // Not directly used in App.tsx
+
+// Local Hooks
+import { useAuth } from './hooks/useAuth';
 import { useMediaState } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
-// import { useNDK, useNDKInit } from '@nostr-dev-kit/ndk-hooks'; // <-- REMOVE NDK Hooks import
-import { NostrEvent } from 'applesauce-core'; // <-- Use Applesauce types
-import { useQuery, useStore } from 'applesauce-react'; // <-- ADD Applesauce Hooks
-import { motion, AnimatePresence } from 'framer-motion';
+// import { useWallet } from './hooks/useWallet'; // Wallet hook not used directly in App.tsx
+
+// Local Components
+import ImageFeed from './components/ImageFeed';
+import MessageBoard from './components/MessageBoard';
+import MediaPanel from './components/MediaPanel';
+import RelayStatus from './components/RelayStatus';
+import VideoPlayer from './components/VideoPlayer';
 import SettingsModal from './components/SettingsModal';
-import { useAuth } from './hooks/useAuth';
-// import { useMediaContent } from './hooks/useMediaContent'; // <-- REMOVE useMediaContent import
-import { nip19 } from 'nostr-tools'; 
-import { shuffleArray } from './utils/shuffleArray'; // <-- ADD shuffleArray import
+
+// Local Constants
+import { MAIN_THREAD_NEVENT_URI, RELAYS, TV_PUBKEY_NPUB } from './constants';
+
+// Local Utils
+import { shuffleArray } from './utils/shuffleArray';
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -39,7 +59,8 @@ function App() {
   // console.log("[App.tsx] Value of ndk from useNDK():", ndk); // <-- REMOVE
   const auth = useAuth(); 
   const { followedTags, currentUserNpub, isLoggedIn } = auth; // Added isLoggedIn
-  const { queryStore } = useStore(); // Get queryStore for potential direct interaction if needed
+  const queryStore = Hooks.useQueryStore(); // Get queryStore instance
+  const eventStore = Hooks.useEventStore(); // Get eventStore instance for relay info
 
   // --- Initialize NDK Directly --- 
   // Remove the useEffect later in the file that did this.
@@ -192,17 +213,22 @@ function App() {
   // --- Render Logic --- 
   // Calculate Relay Status Props
   const relayStatusProps = useMemo(() => {
-      // TODO: Update this to use Applesauce store info
-      const connectedRelaysCount = queryStore?.eventStore?.relayManager?.connectedRelays?.length ?? 0;
-      const knownRelaysCount = queryStore?.eventStore?.relayManager?.relays?.size ?? RELAYS.length;
+      // TODO: Find correct way to access relay manager/status from eventStore
+      const connectedRelaysCount = 0; // Placeholder
+      const knownRelaysCount = RELAYS.length; // Placeholder
+      /* // Original logic - caused type error
+      const connectedRelaysCount = eventStore?.relayManager?.connectedRelays?.length ?? 0;
+      const knownRelaysCount = eventStore?.relayManager?.relays?.size ?? RELAYS.length;
+      */
       return {
           isReceivingData: connectedRelaysCount > 0, 
           relayCount: knownRelaysCount, 
       };
-  }, [queryStore]); // Depend on queryStore
+  // }, [eventStore]); // Keep dependency commented out until fixed
+  }, []); // Temporarily remove dependency
 
   // --- Placeholder for loading state ---
-  const [isLoadingContent, setIsLoadingContent] = useState(true); // Placeholder
+  // const [isLoadingContent, setIsLoadingContent] = useState(true); // Placeholder
 
   // --- Fetch Follow List (Kind 3) ---
   const pubkeyToFetchFollowsFor = useMemo(() => {
@@ -218,23 +244,17 @@ function App() {
       return nip19.decode(TV_PUBKEY_NPUB).data as string; // Default TV pubkey
   }, [isLoggedIn, currentUserNpub]);
 
-  const { events: kind3Events, isLoading: isLoadingKind3 } = useQuery({
-      filters: [{ kinds: [3], authors: [pubkeyToFetchFollowsFor], limit: 1 }],
-      relays: RELAYS,
-      enabled: !!pubkeyToFetchFollowsFor, // Only run if we have a pubkey
-  });
-
+  // Get contacts data (Type inferred - likely array of objects with pubkey)
+  const contactsData = Hooks.useStoreQuery(Queries.ContactsQuery, pubkeyToFetchFollowsFor ? [pubkeyToFetchFollowsFor] : null);
+  // Extract pubkeys from the inferred data structure
   const followedPubkeys = useMemo(() => {
-      if (kind3Events && kind3Events.length > 0) {
-          // Sort events to get the latest one
-          const latestKind3 = kind3Events.sort((a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at)[0];
-          // Extract pubkeys from 'p' tags
-          return latestKind3.tags
-              .filter((tag: string[]) => tag.length >= 2 && tag[0] === 'p') // Added length check
-              .map((tag: string[]) => tag[1]);
-      }
-      return []; // Return empty array if no Kind 3 found or no 'p' tags
-  }, [kind3Events]);
+    // Check if it's an array before mapping
+    if (!Array.isArray(contactsData)) return [];
+    // Assuming objects in the array have a 'pubkey' property
+    return contactsData
+        .map(pointer => pointer?.pubkey) // Safely access pubkey
+        .filter(Boolean); // Simple filter for truthy values
+   }, [contactsData]);
 
   // --- Construct Filters for Media ---
   const mediaFilters = useMemo(() => {
@@ -272,88 +292,71 @@ function App() {
   }, [followedPubkeys, followedTags, imageFetchLimit, videoFetchLimit, imageFetchUntil, videoFetchUntil]);
 
 
-  // --- Fetch Media Notes using useQuery ---
-  const { events: fetchedImageEvents, isLoading: isLoadingImages } = useQuery({
-      filters: [mediaFilters.imageFilter], // Pass filter as an array
-      relays: RELAYS,
-      enabled: !isLoadingKind3, // Don't fetch media until Kind 3 is loaded (or failed)
-  });
-
-  const { events: fetchedVideoEvents, isLoading: isLoadingVideos } = useQuery({
-      filters: [mediaFilters.videoFilter], // Pass filter as an array
-      relays: RELAYS,
-      enabled: !isLoadingKind3, 
-  });
-
-  const { events: fetchedPodcastEvents, isLoading: isLoadingPodcasts } = useQuery({
-      filters: [mediaFilters.podcastFilter], // Pass filter as an array
-      relays: RELAYS,
-      enabled: !isLoadingKind3,
-  });
+  // --- Fetch Media Notes using useStoreQuery with TimelineQuery ---
+  const fetchedImageNotes: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, [mediaFilters.imageFilter]);
+  const fetchedVideoNotes: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, [mediaFilters.videoFilter]);
+  const fetchedPodcastNotes: NostrEvent[] | undefined = Hooks.useStoreQuery(Queries.TimelineQuery, [mediaFilters.podcastFilter]);
 
   // --- Update Raw Notes State when Fetched Data Changes ---
   useEffect(() => {
-      if (fetchedImageEvents) {
-          console.log(`[App.tsx] Received ${fetchedImageEvents.length} image events for filter:`, mediaFilters.imageFilter);
-          // Merge new events with existing ones, avoiding duplicates
+      if (fetchedImageNotes) {
+          console.log(`[App.tsx] Received ${fetchedImageNotes.length} image events for filter:`, mediaFilters.imageFilter);
           setRawImageNotes(prevNotes => {
               const existingIds = new Set(prevNotes.map(note => note.id));
-              const newNotes = fetchedImageEvents.filter((note: NostrEvent) => !existingIds.has(note.id));
+              const newNotes = fetchedImageNotes.filter(note => !existingIds.has(note.id));
               if (newNotes.length > 0) {
                   console.log(`[App.tsx] Adding ${newNotes.length} new image events.`);
-                  // Combine and sort by creation time, descending (newest first)
-                  return [...prevNotes, ...newNotes].sort((a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at);
+                  return [...prevNotes, ...newNotes].sort((a, b) => b.created_at - a.created_at);
               }
-              return prevNotes; // No change if all fetched events were duplicates
+              return prevNotes;
           });
       }
-  }, [fetchedImageEvents]); // Re-run only when fetchedImageEvents reference changes
+  }, [fetchedImageNotes]);
 
   useEffect(() => {
-      if (fetchedVideoEvents) {
-          console.log(`[App.tsx] Received ${fetchedVideoEvents.length} video events for filter:`, mediaFilters.videoFilter);
-          // Merge new events with existing ones, avoiding duplicates
+      if (fetchedVideoNotes) {
+          console.log(`[App.tsx] Received ${fetchedVideoNotes.length} video events for filter:`, mediaFilters.videoFilter);
           setRawVideoNotes(prevNotes => {
               const existingIds = new Set(prevNotes.map(note => note.id));
-              const newNotes = fetchedVideoEvents.filter((note: NostrEvent) => !existingIds.has(note.id));
+              const newNotes = fetchedVideoNotes.filter(note => !existingIds.has(note.id));
               if (newNotes.length > 0) {
                   console.log(`[App.tsx] Adding ${newNotes.length} new video events.`);
-                  // Combine and sort by creation time, descending (newest first)
-                  return [...prevNotes, ...newNotes].sort((a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at);
+                  return [...prevNotes, ...newNotes].sort((a, b) => b.created_at - a.created_at);
               }
-              return prevNotes; // No change if all fetched events were duplicates
+              return prevNotes;
           });
       }
-  }, [fetchedVideoEvents]); // Re-run only when fetchedVideoEvents reference changes
+  }, [fetchedVideoNotes]);
 
   useEffect(() => {
-      // Podcasts: Assume we always want the latest set, no merging needed for now
-      if (fetchedPodcastEvents) {
-          console.log(`[App.tsx] Received ${fetchedPodcastEvents.length} podcast events for filter:`, mediaFilters.podcastFilter);
-          // Replace directly, sort by creation time descending
-          setRawPodcastNotes([...fetchedPodcastEvents].sort((a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at));
+      if (fetchedPodcastNotes) {
+          console.log(`[App.tsx] Received ${fetchedPodcastNotes.length} podcast events for filter:`, mediaFilters.podcastFilter);
+          setRawPodcastNotes([...fetchedPodcastNotes].sort((a, b) => b.created_at - a.created_at));
       }
-  }, [fetchedPodcastEvents]);
+  }, [fetchedPodcastNotes]);
 
 
   // --- Shuffle Image and Video Notes ---
   useEffect(() => {
       console.log("[App.tsx] Shuffling images...");
-      setShuffledImageNotes(shuffleArray([...rawImageNotes])); // Shuffle a copy
+      if (rawImageNotes) {
+        setShuffledImageNotes(shuffleArray([...rawImageNotes]));
+      }
   }, [rawImageNotes]);
 
   useEffect(() => {
       console.log("[App.tsx] Shuffling videos...");
-      setShuffledVideoNotes(shuffleArray([...rawVideoNotes])); // Shuffle a copy
+       if (rawVideoNotes) {
+        setShuffledVideoNotes(shuffleArray([...rawVideoNotes]));
+      }
   }, [rawVideoNotes]);
 
-  // --- Update Overall Loading State ---
-  useEffect(() => {
-      // Consider content loaded when Kind 3 is done loading, 
-      // and initial fetches for images/videos/podcasts are also done.
-      setIsLoadingContent(isLoadingKind3 || isLoadingImages || isLoadingVideos || isLoadingPodcasts);
-  }, [isLoadingKind3, isLoadingImages, isLoadingVideos, isLoadingPodcasts]);
-
+  // --- Update Overall Loading State (Implicit) --- Check if initial data is loaded
+  const isFollowsLoading = contactsData === undefined;
+  // Check if *any* of the media types have loaded initial data
+  // Note: This is a simplified check. Might need refinement based on UX.
+  const isMediaLoading = fetchedImageNotes === undefined && fetchedVideoNotes === undefined && fetchedPodcastNotes === undefined;
+  const isLoadingContent = isFollowsLoading || isMediaLoading; // Loading if follows OR media are undefined
 
   // --- Main Render (NDK is ready) --- 
   // console.log("App.tsx: NDK instance is ready, rendering main app."); // <-- REMOVE NDK log

@@ -58,7 +58,7 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
             *   To fetch image notes (Kind 1063).
             *   To fetch video notes (Kind 34235).
             *   To fetch podcast notes (Kind 31337).
-        *   `useAuth` (`src/hooks/useAuth.ts`): Initializes authentication state, provides login/logout methods, NIP-46 handling, `followedTags`, signing capabilities, and NIP-04 helpers (`encryptDm`/`decryptDm`). **(Refactored to use Applesauce stores/signers)**.
+        *   `useAuth` (`src/hooks/useAuth.ts`): Manages the primary authentication state of the application. Determines the `activeSigner` (either `SimpleSigner` for nsec or `NostrConnectSigner` from NIP-46) using local `useState`. Handles login via nsec (`SimpleSigner`), new key generation (`SimpleSigner`), and logout (clearing state and calling appropriate cleanup). Delegates NIP-46 connection initiation, cancellation, and session restoration logic to the `useNip46AuthManagement` hook. Provides NIP-04 DM methods that use the currently `activeSigner`. Loads/persists nsec via `idb` helpers. Manages followed hashtags list (placeholder persistence).
         *   `useWallet` (`src/hooks/useWallet.ts`): Manages internal Cashu wallet state (`proofs`, `balanceSats`), handles DM deposits, and initiates tips (`sendCashuTipWithSplits`). **Will need refactoring to use Applesauce stores/signers via `useAuth`.**
         *   `useMediaState` (`src/hooks/useMediaState.ts`): Manages core UI state (`viewMode`, indices, `currentItemUrl`), provides navigation handlers (`handlePrevious`, `handleNext`, etc.). Receives **shuffled/raw notes**, fetcher callbacks, and note lengths. Passes `currentNoteId` up for potential tipping context.
         *   `useMediaElementPlayback` (`src/hooks/useMediaElementPlayback.ts`): Manages media playback (`isPlaying`, `currentTime`, etc.), receives active media ref and `currentItemUrl`.
@@ -140,10 +140,28 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
     *   **`useProfile` (or similar):** Expected hook (or pattern using `useQuery`) to fetch and subscribe to profile metadata (Kind 0) for a given pubkey. Replaces NDK's `useProfile`. Used in `ImageFeed`, `VideoPlayer`, `MediaPanel`, and `MessageBoard` (via `MessageItem`). Handles caching and updates via Applesauce stores.
     *   **(Removed `useNDKInit`, `useNDK`)**
 
-*   **`useAuth` (`src/hooks/useAuth.ts`):**
-    *   **Input:** Needs access to Applesauce stores/providers (correct mechanism TBD, likely internal `useStore` for `QueryStore`).
-    *   **Output:** `UseAuthReturn` (exported interface) containing user state (npub, isLoggedIn, potentially nsec for backup), login/logout functions, NIP-46 connection methods, NIP-04 encrypt/decrypt methods, followed tags management, **and the `activeSigner` instance (`Nip07Interface | undefined`)**. **(NOTE: Current implementation is INCONSISTENT with Applesauce APIs and needs significant refactoring)**.
-    *   **Function:** Intended to handle user authentication via nsec (`SimpleSigner`) or NIP-46 (`NostrConnectSigner`). **Currently attempts (incorrectly) to use a central `SignerStore` accessed via `useStore`. Needs refactoring to manage `activeSigner` via local state (`useState`).** Must correctly use `SimpleSigner` (with `Uint8Array`) and `NostrConnectSigner` (correct constructor options and methods like `getNostrConnectURI`, `connect`, `close`). Needs to load/persist credentials via `idb`. Will provide NIP-04 methods delegating to the `activeSigner`. Also manages followed hashtags.
+*   **`useAuth` (`src/hooks/useAuth.ts`):** (Refactored)
+    *   **Input:** Uses `Hooks.useQueryStore()` internally. Calls `useNip46AuthManagement` hook.
+    *   **Output:** `UseAuthReturn` (exported interface) containing:
+        *   `activeSigner: Nip07Interface | undefined` (managed via local state)
+        *   User state (`currentUserNpub`, `isLoggedIn`, `currentUserNsecForBackup`)
+        *   Loading/Error state (`isLoadingAuth`, `authError`)
+        *   NIP-46 state/functions (`nip46ConnectUri`, `isGeneratingUri`, `initiateNip46Connection`, `cancelNip46Connection`) - *delegated from `useNip46AuthManagement`*
+        *   Nsec functions (`generateNewKeys`, `loginWithNsec`)
+        *   `logout` function (handles both signer types)
+        *   Followed tags state/setter (`followedTags`, `setFollowedTags`) (placeholder)
+        *   NIP-04 methods (`encryptDm`, `decryptDm`) - *delegates to `activeSigner`*
+    *   **Function:** Manages the primary authentication state of the application. Determines the `activeSigner` (either `SimpleSigner` for nsec or `NostrConnectSigner` from NIP-46) using local `useState`. Handles login via nsec (`SimpleSigner`), new key generation (`SimpleSigner`), and logout (clearing state and calling appropriate cleanup). Delegates NIP-46 connection initiation, cancellation, and session restoration logic to the `useNip46AuthManagement` hook. Provides NIP-04 DM methods that use the currently `activeSigner`. Loads/persists nsec via `idb` helpers. Manages followed hashtags list (placeholder persistence).
+
+*   **`useNip46AuthManagement` (`src/hooks/useNip46AuthManagement.ts`):** (New)
+    *   **Input:** Uses `Hooks.useQueryStore()` internally. Uses NIP-46 persistence helpers from `idb` utils.
+    *   **Output:** `UseNip46AuthManagementReturn` (exported interface) containing:
+        *   NIP-46 state (`nip46ConnectUri`, `isGeneratingUri`, `nip46Error`)
+        *   `initiateNip46Connection`: Function to start NIP-46 flow, returns connected `NostrConnectSigner` or `null`.
+        *   `cancelNip46Connection`: Function to abort an ongoing connection attempt.
+        *   `restoreNip46Session`: Function to attempt restoring session from storage, returns restored `NostrConnectSigner` or `null`.
+        *   `clearPersistedNip46Session`: Function to remove NIP-46 data from storage.
+    *   **Function:** Encapsulates all logic for the NIP-46 (Connect) authentication method. Manages the connection URI display, the connection lifecycle (using `NostrConnectSigner`), cleanup of attempts, and restoration from persisted data (IndexedDB). Handles persistence of the NIP-46 session data (`localSecret`, `remotePubkey`, `connectedUserPubkey`, `relays`). **(NOTE: Persistence is currently partial due to a `TODO` regarding retrieving `remotePubkey` post-connection. Some linter warnings regarding signer options/paths remain).**
 
 *   **`useMediaState` (`src/hooks/useMediaState.ts`):** (Largely unchanged, inputs may simplify slightly if `useSubscribe` returns notes directly).
     *   **Input:** `initialImageNotes`, `initialPodcastNotes`, `initialVideoNotes` (expects shuffled image/video notes), `fetchOlderImages`, `fetchOlderVideos` (callbacks), `shuffledImageNotesLength`, `shuffledVideoNotesLength`.

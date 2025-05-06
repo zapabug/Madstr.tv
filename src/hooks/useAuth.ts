@@ -1,263 +1,200 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-// Remove NDK imports
-// import NDK, { NDKPrivateKeySigner, NDKUser, NostrEvent, NDKRelaySet, NDKSubscription, NDKFilter, NDKEvent } from '@nostr-dev-kit/ndk';
-
-// Nostr Tools imports (keep)
-import * as nip19 from 'nostr-tools/nip19';
-import * as nip04 from 'nostr-tools/nip04'; // Keep for now, may be replaced by signer methods
-import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
-
-// Applesauce imports
-import { useStore } from 'applesauce-react';
-// Import QueryStore and NostrEvent type from core
-import { QueryStore, NostrEvent } from 'applesauce-core';
-// SignerStore will be inferred from useStore or imported correctly later if needed
-import { SimpleSigner, NostrConnectSigner, Signer } from 'applesauce-signers'; // Assuming Signer interface export
-
-// Local Utils/Constants imports
-import { RELAYS, TV_PUBKEY_NPUB } from '../constants';
-import {
-    loadNip46DataFromDb,
-    saveNip46DataToDb,
-    clearNip46DataFromDb,
-    loadNsecFromDb,
-    saveNsecToDb,
-    clearNsecFromDb,
-    StoredNip46Data
-} from '../utils/idb';
-
-// Buffer import (keep)
 import { Buffer } from 'buffer';
+import { nip19, generateSecretKey, getPublicKey } from 'nostr-tools';
+// Applesauce imports
+import { Hooks } from 'applesauce-react';
+import { QueryStore } from 'applesauce-core';
+import { SimpleSigner, NostrConnectSigner, Nip07Interface } from 'applesauce-signers';
+// import { Nip07Interface } from 'applesauce-signers/dist/nip07'; // Removed deep import
+
+// Import the new NIP-46 hook
+import { useNip46AuthManagement } from './useNip46AuthManagement';
+
+// IDB Utilities (Assuming these are defined elsewhere and imported)
+import { saveNsecToDb, loadNsecFromDb, clearNsecFromDb } from '../utils/idb'; // Adjust path if needed
+// Removed NIP-46 specific IDB imports, handled by useNip46AuthManagement
+
+// Assuming RELAYS are defined elsewhere if needed directly (e.g., maybe not needed here anymore)
+// import { RELAYS } from '../constants/relays';
+
 
 // Updated Return Type
 export interface UseAuthReturn {
+    activeSigner: Nip07Interface | undefined;
     currentUserNpub: string | null;
-    currentUserNsecForBackup: string | null; // Keep for backup UI
-    isLoggedIn: boolean; // Derived from SignerStore
+    currentUserNsecForBackup: string | null;
+    isLoggedIn: boolean;
     isLoadingAuth: boolean;
-    authError: string | null;
-    nip46ConnectUri: string | null; // URI for NIP-46 connection QR code
-    isGeneratingUri: boolean;
-    initiateNip46Connection: () => Promise<void>;
-    cancelNip46Connection: () => void;
+    authError: string | null; // Consolidated error state
+    nip46ConnectUri: string | null; // State from useNip46AuthManagement
+    isGeneratingUri: boolean; // State from useNip46AuthManagement
+    initiateNip46Connection: () => Promise<void>; // Updated signature
+    cancelNip46Connection: () => void; // Delegated
     generateNewKeys: () => Promise<{ npub: string; nsec: string } | null>;
     loginWithNsec: (nsec: string) => Promise<boolean>;
     logout: () => Promise<void>;
     followedTags: string[];
     setFollowedTags: (tags: string[]) => void;
-    // NIP-04 methods (will use active signer)
-    encryptDm: (recipientPubkeyHex: string, plaintext: string) => Promise<string>;
-    decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>;
+    encryptDm: (recipientNpub: string, plaintext: string) => Promise<string>; // Changed param name for clarity
+    decryptDm: (senderNpub: string, ciphertext: string) => Promise<string>; // Changed param name for clarity
 }
 
-// Placeholder for signer instance during NIP-46 connection attempt
-let activeNip46Signer: NostrConnectSigner | null = null;
 
-// The hook itself - Remove ndkInstance prop
+// The hook itself
 export const useAuth = (): UseAuthReturn => {
     // --- Get Stores from Context ---
-    const queryStore = useStore(QueryStore);
-    // Get SignerStore via useStore - TS should infer the type if SignerStore class is available at runtime
-    const signerStore = useStore(SignerStore);
+    const queryStore = Hooks.useQueryStore(); // Correct way to get QueryStore
 
-    // --- State ---
-    // Removed currentUserNpub state - will derive from signerStore
-    // Removed isLoggedIn state - will derive from signerStore
-    const [currentUserNsecForBackup, setCurrentUserNsecForBackup] = useState<string | null>(null); // Keep for backup UI
+    // --- Use the NIP-46 Hook ---
+    const {
+        nip46ConnectUri,
+        isGeneratingUri,
+        initiateNip46Connection: initiateNip46ConnectionInternal, // Rename internal hook function
+        cancelNip46Connection: cancelNip46ConnectionInternal,   // Rename internal hook function
+        restoreNip46Session,
+        clearPersistedNip46Session,
+        nip46Error,
+    } = useNip46AuthManagement();
+
+    // --- Core State ---
+    const [activeSigner, setActiveSigner] = useState<Nip07Interface | undefined>(undefined);
+    const [currentUserNpub, setCurrentUserNpub] = useState<string | null>(null);
+    const [currentUserNsecForBackup, setCurrentUserNsecForBackup] = useState<string | null>(null);
     const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
-    const [authError, setAuthError] = useState<string | null>(null);
-    // NIP-46 connection state
-    const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null); // State for the URI
-    const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false);
-    // Refs/State for NIP-46 connection process (may simplify with Applesauce Signer)
-    // const nip46TempPrivKeyRef = useRef<Uint8Array | null>(null); // Likely managed by NostrConnectSigner
-    // const nip46SubscriptionRef = useRef<NDKSubscription | null>(null); // Handled by NostrConnectSigner
-    // const nip46TimeoutRef = useRef<number | null>(null); // Handled by NostrConnectSigner
-    const connectingNip46SignerRef = useRef<NostrConnectSigner | null>(null); // Ref to hold the signer *during* connection attempt
+    const [nsecAuthError, setNsecAuthError] = useState<string | null>(null); // Specific error for nsec/general
+    const authError = nip46Error || nsecAuthError; // Combined error state, prioritize NIP-46
+
+    // Removed NIP-46 specific state and refs - handled by useNip46AuthManagement
 
     // Followed tags state
-    const [followedTags, setFollowedTagsState] = useState<string[]>([]); // Initialize with defaults
+    const [followedTags, setFollowedTagsState] = useState<string[]>([]);
 
-    // --- Derived State from SignerStore ---
-    const activeSigner = signerStore.activeSigner;
-    const isLoggedIn = !!activeSigner;
-    const currentUserNpub = useMemo(() => {
-        if (activeSigner?.pubkey) {
-            try {
-                return nip19.npubEncode(activeSigner.pubkey);
-            } catch (e) {
-                // console.error or handle silently
-                console.error("Failed to encode active signer pubkey:", e);
-                return null;
+    // --- Update derived currentUserNpub when activeSigner changes ---
+    useEffect(() => {
+        const updateNpub = async () => {
+            if (activeSigner) {
+                try {
+                    const pubkey = await activeSigner.getPublicKey();
+                    setCurrentUserNpub(nip19.npubEncode(pubkey));
+                } catch (e) {
+                    console.error("Failed to get public key from active signer:", e);
+                    setCurrentUserNpub(null);
+                    // Potentially set an error state here?
+                    setNsecAuthError(`Failed to get pubkey from active signer: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            } else {
+                setCurrentUserNpub(null);
             }
-        }
-        return null;
+        };
+        updateNpub();
     }, [activeSigner]);
 
-    // --- Load persisted tags --- (Removed logger)
+    // --- Load/Persist followed tags --- (Placeholder logic)
     useEffect(() => {
-        // Load followed tags from IDB on mount (Placeholder)
         console.info('Auth Hook: Mounted. (Need to load tags from IDB)');
+        // loadFollowedTagsFromDb().then(setFollowedTagsState).catch(...)
     }, []);
 
-    // --- Persist tags on change --- (Removed logger)
     const setFollowedTags = useCallback(async (tags: string[]) => {
         try {
             setFollowedTagsState(tags);
-            // Persist tags to IDB (Placeholder)
             console.info('Persisted followed tags to IDB (placeholder)', tags);
+            // await saveFollowedTagsToDb(tags);
         } catch (error) {
             console.error('Failed to save followed tags:', error);
+            // setNsecAuthError("Failed to save followed tags."); // Maybe a specific error state for tags?
         }
     }, []);
 
-    // --- NIP-46 Cleanup Logic --- (Removed logger)
-    const cleanupNip46Attempt = useCallback(async () => {
-        console.info('Cleaning up NIP-46 connection attempt...');
-        if (connectingNip46SignerRef.current) {
-            try {
-                await connectingNip46SignerRef.current.disconnect();
-                console.info('Disconnected NIP-46 signer instance.');
-            } catch (e) {
-                console.error("Error disconnecting NIP-46 signer:", e);
-            }
-            connectingNip46SignerRef.current = null;
-        }
-        setNip46ConnectUri(null);
-        setIsGeneratingUri(false);
-    }, []);
+    // Removed NIP-46 cleanup logic - handled by useNip46AuthManagement
 
-    // --- NIP-46 Connection Initiation --- (Removed logger)
+    // --- NIP-46 Connection Initiation (Wrapper) ---
     const initiateNip46Connection = useCallback(async () => {
-        if (!queryStore || !signerStore) {
-            setAuthError("Applesauce stores not available.");
-            console.error("useAuth: Stores not available in initiateNip46Connection.");
-            setIsGeneratingUri(false);
-            return;
+        setIsLoadingAuth(true); // Indicate general auth process is happening
+        setNsecAuthError(null); // Clear other auth errors
+        setActiveSigner(undefined); // Clear any existing signer
+        setCurrentUserNpub(null);
+        setCurrentUserNsecForBackup(null);
+
+        console.info("useAuth: Initiating NIP-46 connection via useNip46AuthManagement...");
+        const connectedSigner = await initiateNip46ConnectionInternal();
+
+        if (connectedSigner) {
+            console.info("useAuth: NIP-46 connection successful, activating signer.");
+            setActiveSigner(connectedSigner); // Activate the signer returned by the hook
+            await clearNsecFromDb(); // Clear any potentially conflicting nsec
+            // User pubkey/npub will be updated by the useEffect watching activeSigner
+        } else {
+            console.info("useAuth: NIP-46 connection failed or cancelled.");
+            // Error state (nip46Error) is handled by the useNip46AuthManagement hook and combined in authError
+            setActiveSigner(undefined); // Ensure signer is cleared on failure
+            setCurrentUserNpub(null);
         }
-        console.info("Initiating NIP-46 connection...");
-        setIsGeneratingUri(true);
-        setAuthError(null);
-        setNip46ConnectUri(null);
-        await cleanupNip46Attempt(); // Clean up any previous attempt
+        setIsLoadingAuth(false); // Auth process finished (success or fail)
+    }, [initiateNip46ConnectionInternal, setActiveSigner]); // Depend on the internal hook function
 
-        try {
-            // 1. Create a temporary local signer (SimpleSigner)
-            const localSecretKeyBytes = generateSecretKey();
-            const localSecretKeyHex = Buffer.from(localSecretKeyBytes).toString('hex');
-            const localSigner = new SimpleSigner(localSecretKeyHex);
-
-            // 2. Create the NostrConnectSigner instance
-            const nip46Signer = new NostrConnectSigner({
-                queryStore: queryStore,
-                localSigner: localSigner,
-                relays: RELAYS, // Use imported RELAYS constant
-                // Optional: timeout, logger
-                // timeout: 60000, // Example: 60 seconds
-            });
-            connectingNip46SignerRef.current = nip46Signer; // Store ref for cleanup
-
-            // 3. Generate the connection URI
-            const connectUri = nip46Signer.generateURI({
-                metadata: {
-                    name: "Nostr TV App", // Hardcoded App Name
-                    url: window.location.origin,
-                    description: "Nostr media experience for your TV",
-                    // icons: ["url_to_icon.png"]
-                },
-                // Optional: Specify permissions if needed
-                // permissions: ["nip04_encrypt", "nip04_decrypt", "sign_event"], // Example
-            });
-            console.info("Generated NIP-46 Connect URI:", connectUri);
-            setNip46ConnectUri(connectUri);
-
-            // 4. Listen for the connection
-            // This promise resolves when connected, rejects on error/timeout
-            console.info("Waiting for NIP-46 connection...");
-            const connectedSigner = await nip46Signer.listen(); // This likely blocks until connection/error
-            console.info("NIP-46 connection successful!");
-
-            // 5. Activate the connected signer in the SignerStore
-            signerStore.activateSigner(connectedSigner);
-            setCurrentUserNsecForBackup(null); // Clear any nsec backup
-
-            // 6. Persist the session with the correct structure
-            const sessionDataToSave: Omit<StoredNip46Data, 'id'> = {
-                localSecret: localSecretKeyHex,
-                remotePubkey: connectedSigner.remotePubkey,
-                connectedUserPubkey: connectedSigner.pubkey,
-                relays: RELAYS,
-            };
-            await saveNip46DataToDb(sessionDataToSave);
-            console.info("NIP-46 session persisted.");
-
-            // 7. Clean up UI state
-            setNip46ConnectUri(null);
-            setIsGeneratingUri(false);
-            connectingNip46SignerRef.current = null; // Clear ref as connection is complete
-
-        } catch (error: any) {
-            console.error("NIP-46 Connection failed:", error);
-            setAuthError(`NIP-46 Connection failed: ${error.message || 'Unknown error'}`);
-            await cleanupNip46Attempt(); // Clean up fully on failure
-        } finally {
-            // Ensure loading state is reset if somehow missed
-            setIsGeneratingUri(false);
-        }
-    }, [queryStore, signerStore, cleanupNip46Attempt]);
-
-    // --- Cancel NIP-46 Connection --- (Removed logger)
+    // --- Cancel NIP-46 Connection (Delegated) ---
     const cancelNip46Connection = useCallback(() => {
-        console.info("Cancelling NIP-46 connection attempt...");
-        // Cleanup function already handles disconnecting the signer instance
-        cleanupNip46Attempt();
-    }, [cleanupNip46Attempt]);
+        console.info("useAuth: Cancelling NIP-46 connection via useNip46AuthManagement...");
+        cancelNip46ConnectionInternal(); // Just call the hook's function
+        // isLoadingAuth might need to be reset depending on UX, but initiate handles it generally
+    }, [cancelNip46ConnectionInternal]);
 
-    // --- Login / Logout Logic --- (Removed logger, removed setCurrentUserNpub)
+
+    // --- Login / Logout Logic ---
     const loginWithNsec = useCallback(async (nsec: string): Promise<boolean> => {
-        if (!signerStore) {
-            setAuthError("SignerStore not available.");
-            console.error("useAuth: SignerStore not available in loginWithNsec.");
-            return false;
-        }
         setIsLoadingAuth(true);
-        setAuthError(null);
+        setNsecAuthError(null);
+        setActiveSigner(undefined);
+        setCurrentUserNpub(null);
+        setCurrentUserNsecForBackup(null);
         console.info("Attempting login with nsec...");
-        await cleanupNip46Attempt();
+        // Ensure no NIP-46 attempt is ongoing or persisted incorrectly
+        cancelNip46ConnectionInternal(); // Cancel any active attempt
+        await clearPersistedNip46Session(); // Clear any potentially invalid persisted NIP-46 session
+
         try {
-            const decoded = nip19.decode(nsec);
+            const trimmedNsec = nsec.trim();
+            const decoded = nip19.decode(trimmedNsec);
             if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
                 throw new Error("Invalid nsec format provided.");
             }
-            const privateKeySigner = new SimpleSigner(nsec.trim());
-            signerStore.activateSigner(privateKeySigner);
-            const pubkey = privateKeySigner.pubkey;
-            if (pubkey) {
-                console.info("Logged in with nsec, user:", nip19.npubEncode(pubkey));
-            } else {
-                console.warn("Logged in with nsec, but could not get pubkey from SimpleSigner.");
-            }
-            setCurrentUserNsecForBackup(nsec.trim());
-            await clearNip46DataFromDb();
-            await saveNsecToDb(nsec.trim());
+            const privateKeySigner = new SimpleSigner(decoded.data);
+            const pubkey = await privateKeySigner.getPublicKey();
+
+            setActiveSigner(privateKeySigner);
+            console.info("Logged in with nsec, user:", nip19.npubEncode(pubkey));
+            setCurrentUserNsecForBackup(trimmedNsec); // Set backup nsec
+            await saveNsecToDb(trimmedNsec); // Persist nsec
+
             setIsLoadingAuth(false);
             return true;
         } catch (e: any) {
             console.error("Error logging in with nsec:", e);
-            setAuthError(`Login failed: ${e.message || 'Invalid nsec'}`);
-            signerStore.activateSigner(undefined);
+            const message = `Login failed: ${e.message || 'Invalid nsec'}`;
+            setNsecAuthError(message);
+            setActiveSigner(undefined);
+            setCurrentUserNpub(null);
             setCurrentUserNsecForBackup(null);
-            await clearNsecFromDb();
-            await clearNip46DataFromDb();
+            await clearNsecFromDb(); // Ensure nsec is cleared on failure
+            // Don't clear NIP-46 again here
             setIsLoadingAuth(false);
             return false;
         }
-    }, [signerStore, cleanupNip46Attempt]);
+    }, [setActiveSigner, clearPersistedNip46Session, cancelNip46ConnectionInternal]); // Added NIP-46 cleanup dependencies
+
 
     const generateNewKeys = useCallback(async (): Promise<{ npub: string; nsec: string } | null> => {
         console.info("Generating new keys...");
         setIsLoadingAuth(true);
-        setAuthError(null);
+        setNsecAuthError(null);
+        setActiveSigner(undefined); // Clear previous signer/state
+        setCurrentUserNpub(null);
+        setCurrentUserNsecForBackup(null);
+        // Ensure no NIP-46 attempt is ongoing or persisted incorrectly
+        cancelNip46ConnectionInternal(); // Cancel any active attempt
+        await clearPersistedNip46Session(); // Clear any potentially invalid persisted NIP-46 session
+
         try {
             const skBytes = generateSecretKey();
             const pkHex = getPublicKey(skBytes);
@@ -265,207 +202,216 @@ export const useAuth = (): UseAuthReturn => {
             const npub = nip19.npubEncode(pkHex);
             console.info("Generated new keys - npub:", npub);
 
-            const loggedIn = await loginWithNsec(nsec);
+            // Use the login function which handles setting state and persistence
+            const loggedIn = await loginWithNsec(nsec); // loginWithNsec handles setting loading state
             if (loggedIn) {
                 return { npub, nsec };
             } else {
+                // Error should be set by loginWithNsec
                 throw new Error("Failed to log in with newly generated keys.");
             }
         } catch (error) {
             console.error("Failed to generate or login with new keys:", error);
-            setAuthError(`Key generation failed: ${error instanceof Error ? error.message : String(error)}`);
-            setIsLoadingAuth(false);
-            if(signerStore) signerStore.activateSigner(undefined);
+            // Avoid duplicate state setting if loginWithNsec failed and set the error
+            if (!nsecAuthError) {
+                 setNsecAuthError(`Key generation failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+            // Ensure cleanup even if loginWithNsec wasn't reached or failed early
+            setActiveSigner(undefined);
+            setCurrentUserNpub(null);
             setCurrentUserNsecForBackup(null);
+            setIsLoadingAuth(false); // Ensure loading is false if login didn't handle it
             return null;
         }
-    }, [signerStore, loginWithNsec]);
+    }, [loginWithNsec, setActiveSigner, nsecAuthError, clearPersistedNip46Session, cancelNip46ConnectionInternal]);
+
 
     const logout = useCallback(async () => {
-        if (!signerStore) {
-            console.error("useAuth: SignerStore not available in logout.");
-            return;
-        }
         console.info("Logging out...");
         setIsLoadingAuth(true);
-        setAuthError(null);
-        signerStore.activateSigner(undefined);
+        setNsecAuthError(null);
+        // No need to clear nip46Error here, it will clear if user tries NIP-46 again
+
+        // Close NIP-46 signer if active
+        if (activeSigner && typeof (activeSigner as any).close === 'function') {
+            try {
+                console.info("Closing active NostrConnectSigner session...");
+                await (activeSigner as NostrConnectSigner).close();
+            } catch (e) {
+                 console.error("Error closing NostrConnectSigner on logout:", e);
+                 // Set error state? Maybe less critical on logout.
+            }
+        }
+
+        setActiveSigner(undefined); // Clear the active signer state
+        setCurrentUserNpub(null);
         setCurrentUserNsecForBackup(null);
+
+        // Clear all persisted auth data
         await clearNsecFromDb();
-        await clearNip46DataFromDb();
+        await clearPersistedNip46Session(); // Use the function from the NIP-46 hook
+
         setIsLoadingAuth(false);
         console.info("Logout complete.");
-    }, [signerStore]);
+    }, [activeSigner, setActiveSigner, clearPersistedNip46Session]); // Added NIP-46 clear dependency
 
-    // --- Initialization Effect --- (Removed logger, removed setCurrentUserNpub)
+
+    // --- Initialization Effect ---
     useEffect(() => {
         const initializeAuth = async () => {
             console.info("useAuth: Initializing authentication...");
-            if (!signerStore || !queryStore) { // Also check queryStore for NIP-46 restore
-                console.info("useAuth: Stores not ready yet, waiting...");
-                setIsLoadingAuth(false);
+            if (!queryStore) {
+                console.info("useAuth: QueryStore not ready yet, waiting...");
+                // Don't set loading false here, wait for store
                 return;
             }
-            if (signerStore.activeSigner) {
-                 console.info("useAuth: Already logged in (signer exists). Skipping storage check.");
-                 setIsLoadingAuth(false);
+            if (activeSigner) {
+                 console.info("useAuth: Already logged in (activeSigner state exists). Skipping initialization.");
+                 setIsLoadingAuth(false); // Already initialized
                  return;
             }
+
             console.info("useAuth: No active signer found, checking storage...");
-            setAuthError(null);
             setIsLoadingAuth(true);
+            setNsecAuthError(null);
+            // nip46Error will be handled by restoreNip46Session if it runs
 
             try {
-                const persistedNip46 = await loadNip46DataFromDb();
-                if (persistedNip46) {
-                    console.info("Found persisted NIP-46 session. Attempting to restore...");
-                    try {
-                        // Recreate local signer from persisted secret
-                        const localSigner = new SimpleSigner(persistedNip46.localSecret);
+                // Attempt to restore NIP-46 session first
+                const restoredNip46Signer = await restoreNip46Session();
 
-                        // Recreate NostrConnectSigner instance for reconnection/verification
-                        const signer = new NostrConnectSigner({
-                            queryStore: queryStore,
-                            localSigner: localSigner,
-                            remotePubkey: persistedNip46.remotePubkey, // Provide remote pubkey
-                            relays: persistedNip46.relays || RELAYS, // Use stored or default relays
-                            // Note: We don't provide connectedUserPubkey here,
-                            // the signer gets it upon successful (re)connection/auth
-                        });
-
-                        // Attempt to implicitly connect/verify by activating
-                        // Assuming activateSigner handles potential connection errors
-                        // OR NostrConnectSigner might need an explicit connect()/authenticate() call
-                        // Check Applesauce docs for restoring NostrConnectSigner
-                        console.info("Activating restored NIP-46 signer...");
-                        signerStore.activateSigner(signer);
-
-                        // We might need to wait/check connection status here.
-                        // For now, assume activation implies successful restoration if no error.
-                        // Check if signer.pubkey matches the persisted one after activation?
-                        if (signerStore.activeSigner?.pubkey === persistedNip46.connectedUserPubkey) {
-                             console.info("NIP-46 session restored successfully for user:", nip19.npubEncode(persistedNip46.connectedUserPubkey));
-                             setCurrentUserNsecForBackup(null);
-                        } else {
-                             console.error("Failed to restore NIP-46 session: Pubkey mismatch or connection failed after activation.");
-                             await clearNip46DataFromDb();
-                             signerStore.activateSigner(undefined);
-                        }
-                    } catch (e: any) {
-                        console.error("Failed to restore NIP-46 session:", e);
-                        await clearNip46DataFromDb();
-                        signerStore.activateSigner(undefined);
-                    }
+                if (restoredNip46Signer) {
+                    console.info("useAuth: NIP-46 session restored successfully.");
+                    setActiveSigner(restoredNip46Signer);
+                    setCurrentUserNsecForBackup(null); // Ensure no nsec backup if NIP-46 is active
+                    // Pubkey/npub set by effect watching activeSigner
                 } else {
-                    // Try loading nsec if no NIP-46 session
-                    console.info("useAuth: No complete NIP-46 data found, checking for nsec...");
+                    // If NIP-46 restore failed or no data, try nsec
+                    console.info("useAuth: No NIP-46 session restored, checking for nsec...");
+                    // Note: nip46Error might be set by restoreNip46Session if it failed
                     const nsec = await loadNsecFromDb();
                     if (nsec) {
                         console.info("useAuth: Found stored nsec. Logging in...");
                         try {
-                            const privateKeySigner = new SimpleSigner(nsec);
-                            signerStore.activateSigner(privateKeySigner);
-                            const pubkey = privateKeySigner.pubkey;
-                            if (pubkey) {
-                                console.info("useAuth: Logged in successfully with nsec for user:", nip19.npubEncode(pubkey));
-                                setCurrentUserNsecForBackup(nsec);
-                            } else {
-                                console.error("useAuth: Created SimpleSigner but failed to get pubkey.");
-                                throw new Error("Failed to derive public key from stored nsec.");
-                            }
+                             const decoded = nip19.decode(nsec);
+                             if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
+                                 throw new Error("Invalid stored nsec format.");
+                             }
+                            const privateKeySigner = new SimpleSigner(decoded.data);
+                            const pubkey = await privateKeySigner.getPublicKey(); // Verify key
+                            console.info("useAuth: Logged in successfully with nsec for user:", nip19.npubEncode(pubkey));
+                            setActiveSigner(privateKeySigner);
+                            setCurrentUserNsecForBackup(nsec);
+                            // Clear any lingering NIP-46 error from failed restore attempt
+                            // Note: clearPersistedNip46Session is NOT called here, preserve potentially recoverable NIP-46 data
                         } catch (nsecError) {
                             console.error("useAuth: Failed to create signer from stored nsec:", nsecError);
-                            setAuthError("Invalid stored login key. Please log in again.");
-                            await clearNsecFromDb();
-                            signerStore.activateSigner(undefined);
+                            setNsecAuthError("Invalid stored login key. Please log in again.");
+                            await clearNsecFromDb(); // Clear invalid nsec
+                            setActiveSigner(undefined);
                             setCurrentUserNsecForBackup(null);
                         }
                     } else {
                         console.info("useAuth: No nsec found. User is not logged in.");
-                        signerStore.activateSigner(undefined);
+                        setActiveSigner(undefined);
                         setCurrentUserNsecForBackup(null);
+                        // No auth methods succeeded. nip46Error might still be set if restore failed.
                     }
                 }
 
             } catch (error) {
                 console.error("useAuth: Error during auth initialization:", error);
-                setAuthError("An error occurred during login check.");
-                if (signerStore) signerStore.activateSigner(undefined);
+                setNsecAuthError("An error occurred during login check.");
+                setActiveSigner(undefined);
                 setCurrentUserNsecForBackup(null);
+                // Potentially clear all storage? Maybe too aggressive.
+                // await clearNsecFromDb();
+                // await clearPersistedNip46Session();
             } finally {
                 setIsLoadingAuth(false);
                 console.info("useAuth: Auth initialization finished.");
             }
         }; // End of initializeAuth
 
-        initializeAuth();
+        // Only run init if queryStore is available and not already logged in
+        if (queryStore && !activeSigner) {
+             initializeAuth();
+        } else if (!queryStore) {
+             // Still waiting for queryStore, keep loading true
+             setIsLoadingAuth(true);
+        } else {
+             // queryStore exists AND activeSigner exists, we are done loading
+             setIsLoadingAuth(false);
+        }
 
+         // Cleanup function (optional, maybe not needed here)
          return () => {
-             // console.info("useAuth: Cleanup effect (if needed).");
+              console.info("useAuth: Unmounting.");
          };
-    }, [signerStore, queryStore]); // Dependencies updated
+    // Dependencies: queryStore changes trigger re-check; activeSigner prevents re-run once logged in.
+    // restoreNip46Session is stable from useCallback in its hook.
+    }, [queryStore, activeSigner, setActiveSigner, restoreNip46Session]);
 
-    // --- NIP-04 DM Helpers --- (Removed logger)
+    // --- NIP-04 DM Helpers ---
     const encryptDm = useCallback(async (recipientNpub: string, content: string): Promise<string> => {
-        const currentSigner = signerStore?.activeSigner;
+        const currentSigner = activeSigner;
         if (!currentSigner) throw new Error("Not logged in / Signer not available");
-        if (!currentSigner.encrypt) throw new Error("Active signer does not support NIP-04 encryption");
+        if (!currentSigner.nip04?.encrypt) throw new Error("Active signer does not support NIP-04 encryption");
 
         let recipientHex: string;
         try {
             const decoded = nip19.decode(recipientNpub.trim());
             if (decoded.type !== 'npub') throw new Error("Invalid recipient format (expected npub)");
-            recipientHex = decoded.data as string;
+            recipientHex = decoded.data as string; // data is string for npub
         } catch (e: any) {
              throw new Error(`Invalid recipient npub: ${e.message}`);
         }
         try {
-            // Applesauce signer encrypt method likely takes hex pubkey directly
-            return await currentSigner.encrypt(recipientHex, content);
+            return await currentSigner.nip04.encrypt(recipientHex, content);
         } catch (error) {
             console.error("Encryption failed:", error);
             throw new Error(`Encryption failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
-    }, [signerStore]); // Dependency only on signerStore
+    }, [activeSigner]);
 
      const decryptDm = useCallback(async (senderNpub: string, encryptedContent: string): Promise<string> => {
-        const currentSigner = signerStore?.activeSigner;
+        const currentSigner = activeSigner;
         if (!currentSigner) throw new Error("Not logged in / Signer not available");
-        if (!currentSigner.decrypt) throw new Error("Active signer does not support NIP-04 decryption");
+        if (!currentSigner.nip04?.decrypt) throw new Error("Active signer does not support NIP-04 decryption");
 
         let senderHex: string;
         try {
             const decoded = nip19.decode(senderNpub.trim());
             if (decoded.type !== 'npub') throw new Error("Invalid sender format (expected npub)");
-            senderHex = decoded.data as string;
+            senderHex = decoded.data as string; // data is string for npub
          } catch (e: any) {
              throw new Error(`Invalid sender npub: ${e.message}`);
          }
          try {
-             // Applesauce signer decrypt method likely takes hex pubkey directly
-            return await currentSigner.decrypt(senderHex, encryptedContent);
+            return await currentSigner.nip04.decrypt(senderHex, encryptedContent);
         } catch (error) {
             console.error("Decryption failed:", error);
             throw new Error(`Decryption failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
-    }, [signerStore]); // Dependency only on signerStore
+    }, [activeSigner]);
 
-    // --- Return hook state and methods --- (Updated setFollowedTags)
+    // --- Return hook state and methods ---
     return {
+        activeSigner,
         currentUserNpub,
         currentUserNsecForBackup,
-        isLoggedIn,
+        isLoggedIn: !!activeSigner, // Derived
         isLoadingAuth,
-        authError,
-        nip46ConnectUri,
-        isGeneratingUri,
-        initiateNip46Connection,
-        cancelNip46Connection,
+        authError, // Use the combined error state
+        nip46ConnectUri, // From useNip46AuthManagement
+        isGeneratingUri, // From useNip46AuthManagement
+        initiateNip46Connection, // Wrapper function
+        cancelNip46Connection, // Delegated function
         generateNewKeys,
         loginWithNsec,
         logout,
         followedTags,
-        setFollowedTags, // Use the useCallback version defined earlier
+        setFollowedTags,
         encryptDm,
         decryptDm,
     };
