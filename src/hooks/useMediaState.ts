@@ -34,6 +34,7 @@ interface UseMediaStateReturn {
   currentVideoIndex: number;
   selectedVideoNpub: string | null; 
   currentItemUrl: string | null;
+  currentVideoNote: NostrNote | null;
   // Remove handle...NotesLoaded
   // handleImageNotesLoaded: (notes: NostrNote[]) => void;
   // handlePodcastNotesLoaded: (notes: NostrNote[]) => void;
@@ -86,6 +87,7 @@ export function useMediaState({
     const [isLoadingPodcastNotes, setIsLoadingPodcastNotes] = useState<boolean>(true); // Start as true
     
     const [currentItemUrl, setCurrentItemUrl] = useState<string | null>(null);
+    const [currentVideoNote, setCurrentVideoNote] = useState<NostrNote | null>(null);
 
     // Refs to store previous prop references
     const prevInitialImageNotesRef = useRef<NostrNote[] | undefined>(undefined);
@@ -154,7 +156,8 @@ export function useMediaState({
     // Update currentItemUrl whenever the relevant source changes
     useEffect(() => {
         let newUrl: string | null = null;
-        // Enhanced logging for podcast selection
+        let newVideoNoteState: NostrNote | null = null;
+
         console.log(
             `[DEBUG useMediaState URL Effect Trigger] Mode: ${viewMode}, ` +
             `Podcast Idx: ${currentPodcastIndex}, Podcast Notes Count: ${podcastNotes.length}, ` +
@@ -173,8 +176,10 @@ export function useMediaState({
             }
         } else { // viewMode === 'videoPlayer'
             if (videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
-                newUrl = videoNotes[currentVideoIndex]?.url || null;
-                console.log(`[DEBUG useMediaState] Setting video URL: ${newUrl}`);
+                const selectedNote = videoNotes[currentVideoIndex];
+                newUrl = selectedNote?.url || null;
+                newVideoNoteState = selectedNote || null;
+                console.log(`[DEBUG useMediaState] Setting video URL: ${newUrl} and video note:`, newVideoNoteState);
             }
         }
         
@@ -182,13 +187,15 @@ export function useMediaState({
             console.log(`[DEBUG useMediaState URL Effect] Setting currentItemUrl FROM: ${currentItemUrl} TO: ${newUrl}`);
             setCurrentItemUrl(newUrl);
         } else {
-            // Only log if there's actually something to compare, to reduce noise when both are null initially
             if (currentItemUrl !== null || newUrl !== null) { 
                 console.log(`[DEBUG useMediaState URL Effect] currentItemUrl (${currentItemUrl}) already matches newUrl (${newUrl}). No change.`);
             }
         }
+        if (newVideoNoteState !== currentVideoNote) {
+            setCurrentVideoNote(newVideoNoteState);
+        }
 
-    }, [viewMode, currentPodcastIndex, currentVideoIndex, currentImageIndex, podcastNotes, videoNotes, imageNotes, currentItemUrl]);
+    }, [viewMode, currentPodcastIndex, currentVideoIndex, currentImageIndex, podcastNotes, videoNotes, imageNotes, currentItemUrl, currentVideoNote]);
 
     // Set Podcast Index (does NOT change viewMode)
     const setCurrentPodcastIndex = useCallback((index: number) => {
@@ -299,12 +306,11 @@ export function useMediaState({
         currentVideoIndex,
         selectedVideoNpub,
         currentItemUrl,
-        // Removed handle...NotesLoaded
+        currentVideoNote,
         handleVideoSelect,
         handlePrevious,
         handleNext,
         setViewMode,
         setCurrentPodcastIndex,
-        // Removed setIsLoading...
     };
 } 

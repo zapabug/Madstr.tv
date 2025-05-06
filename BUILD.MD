@@ -1,3 +1,15 @@
+## 2025-05-06: Documentation Update & UI/UX Issues Post-Refactor
+
+*   **Documentation Update:** `TV_Remote_Interaction_Summary.md` updated to reflect the recent major refactor of `src/hooks/useMediaContent.ts` (unified media discovery strategy) and to document the current critical UI/UX issues.
+*   **Current Critical Issues:**
+    *   **UI elements not displaying:** Certain UI components or media items are not being rendered as expected after the `useMediaContent.ts` refactor.
+    *   **VideoPlayer rendering failure:** The `VideoPlayer.tsx` component is failing to render properly.
+*   **Immediate Focus (as per user's to-do list):**
+    1.  Test new media fetching & display strategy in `useMediaContent.ts`.
+    2.  Analyze console logs from `useMediaContent.ts`.
+    3.  Debug & refine the media strategy (regexes, deduplication, categorization).
+    4.  (Lower Priority) Address placeholder chat functionality.
+
 ## 2024-07-18
 
 *   **Investigate `TimelineQuery` Failure (useMediaContent.ts & main.tsx):**
@@ -138,3 +150,23 @@
     2.  Analyze console logs from `useMediaContent.ts` to verify the flow.
     3.  Address any bugs or unexpected behavior arising from this new strategy.
     4.  Once media display is satisfactory, revisit placeholder chat functionality.
+
+## 2024-07-26 (Current Session): Video Player Props & Linter Fix
+
+*   **Goal:** Ensure `VideoPlayer.tsx` receives correct `src` and `authorPubkey` props.
+*   **`useMediaState.ts` Changes:**
+    *   Added `currentVideoNote: NostrNote | null` state.
+    *   Modified `useEffect` for `currentItemUrl` to also set `currentVideoNote` in `videoPlayer` mode.
+    *   Exposed `currentVideoNote` in the hook's return.
+*   **`App.tsx` Changes:**
+    *   Retrieved `currentVideoNote` from `useMediaState`.
+    *   Passed `currentItemUrl` as `src` to `VideoPlayer`.
+    *   Passed `currentVideoNote?.pubkey || null` as `authorPubkey` to `VideoPlayer`.
+*   **Linter Error Fix (`App.tsx` / `ImageFeed.tsx`):
+    *   Identified that `imageFeedRef`, `onNext`, and `onPrevious` props were passed to `ImageFeed` in `App.tsx` but not defined in `ImageFeed.tsx`'s `MediaFeedProps`.
+    *   Removed these extraneous props from the `ImageFeed` invocation in `App.tsx`.
+*   **Next Steps:**
+    *   Test video player functionality.
+    *   If videos don't display, debug `useMediaContent.ts` to ensure `shuffledVideoNotes` are populated.
+    *   Address missing placeholder chat.
+    *   Verify image feed navigation.

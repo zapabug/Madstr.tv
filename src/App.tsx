@@ -180,10 +180,10 @@ function App() {
   const { 
       shuffledImageNotes, 
       shuffledVideoNotes, 
-      podcastNotes,         // Get processed podcasts directly
+      podcastNotes,         
       fetchOlderImages, 
       fetchOlderVideos, 
-      isLoadingImages,      // Use loading states from hook
+      isLoadingImages,      
       isLoadingVideos, 
       isLoadingPodcasts 
   } = useMediaContent({ followedAuthorPubkeys: followedPubkeys, followedTags });
@@ -209,24 +209,29 @@ function App() {
 
   // --- UI State & Playback Hooks --- 
   const { 
-      viewMode, 
-      currentImageIndex, 
-      currentPodcastIndex, 
-      currentVideoIndex, 
-      currentItemUrl, 
-      handleVideoSelect, 
-      handlePrevious, 
-      handleNext, 
-      setViewMode, 
-      setCurrentPodcastIndex 
-  } = useMediaState({ // Pass notes directly from useMediaContent
-      initialImageNotes: shuffledImageNotes, 
-      initialPodcastNotes: podcastNotes, 
-      initialVideoNotes: shuffledVideoNotes,
-      fetchOlderImages: fetchOlderImages, // Pass fetchers from useMediaContent
-      fetchOlderVideos: fetchOlderVideos,
-      shuffledImageNotesLength: shuffledImageNotes.length, 
-      shuffledVideoNotesLength: shuffledVideoNotes.length,
+      viewMode,
+      imageNotes, // from useMediaState, if needed directly by App
+      // podcastNotes, // from useMediaState, if needed directly by App (already have from useMediaContent)
+      // videoNotes, // from useMediaState, if needed directly by App (already have from useMediaContent)
+      currentImageIndex,
+      currentPodcastIndex,
+      currentVideoIndex,
+      selectedVideoNpub,
+      currentItemUrl,
+      currentVideoNote, // <<< ADDED: Get currentVideoNote from useMediaState
+      handleVideoSelect,
+      handlePrevious,
+      handleNext,
+      setViewMode,
+      setCurrentPodcastIndex,
+  } = useMediaState({
+    initialImageNotes: shuffledImageNotes,
+    initialPodcastNotes: podcastNotes, // Pass processed podcasts from useMediaContent
+    initialVideoNotes: shuffledVideoNotes,
+    fetchOlderImages,
+    fetchOlderVideos,
+    shuffledImageNotesLength: shuffledImageNotes.length,
+    shuffledVideoNotesLength: shuffledVideoNotes.length,
   });
 
   // --- Derive currentNoteId --- 
@@ -360,34 +365,33 @@ function App() {
       {/* Main Content Area */}
       <div className="flex-grow flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
-          {viewMode === 'imagePodcast' && (
+          {viewMode === 'imagePodcast' ? (
             <motion.div
               key="imageFeed"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 }}
-              className="flex-grow overflow-hidden"
+              className="w-full h-full"
             >
-              <ImageFeed
-                currentImageIndex={currentImageIndex}
-                imageNotes={shuffledImageNotes}
+              <ImageFeed 
+                imageNotes={shuffledImageNotes} 
+                currentImageIndex={currentImageIndex} 
               />
             </motion.div>
-          )}
-
-          {viewMode === 'videoPlayer' && (
+          ) : (
             <motion.div
               key="videoPlayer"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 }}
-              className="flex-grow overflow-hidden"
+              className="w-full h-full"
             >
-              <VideoPlayer
+              <VideoPlayer 
                 videoRef={videoRef}
-                src={currentItemUrl}
+                src={currentItemUrl} // currentItemUrl should be set by useMediaState for videos
+                authorPubkey={currentVideoNote?.pubkey || null} // <<< ADDED: Pass authorPubkey
                 isPlaying={isPlaying}
                 togglePlayPause={togglePlayPause}
                 autoplayFailed={autoplayFailed}

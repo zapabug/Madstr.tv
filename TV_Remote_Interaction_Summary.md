@@ -37,3 +37,33 @@ Comparing my findings to the latest commit, which the user has reverted to and c
 - **User Feedback**: Continue to rely on user feedback to identify any deviations from the working state if future changes are made.
 
 This summary reflects the understanding based on the code reviewed in October 2023 and the user's confirmation of a working state in the latest commit. 
+
+## Update 2025-05-06: Impact of `useMediaContent.ts` Refactor and Current UI/UX Issues
+
+A significant refactor of the `src/hooks/useMediaContent.ts` hook was recently undertaken to improve the reliability and breadth of media content (podcasts, images, videos) displayed in the application.
+
+**Summary of `useMediaContent.ts` Refactor:**
+
+*   **Goal:** To get the application displaying a broader range of media more reliably, as previous attempts to fetch specific media kinds (1063 for images, 34235 for videos) were not consistently yielding results.
+*   **New Strategy Implemented:**
+    *   **Primary Media Discovery via Kind 1 Content:** The hook now primarily fetches general `Kind 1` events from all `followedAuthorPubkeys`. It then attempts to parse URLs for audio, images, AND videos directly from the `content` of these `Kind 1` events using regular expressions (`AUDIO_URL_REGEX`, `IMAGE_URL_REGEX`, `VIDEO_URL_REGEX`). A `mediaTypeHint` ('audio', 'image', 'video', 'unknown') is added to the processed note.
+    *   **Supplementary Fetching of Specific Kinds:** The hook continues to fetch specific `Kind 1063` (image) and `Kind 34235` (video) events. URLs for these are extracted from their tags. These serve as a more explicit and potentially richer source of media information.
+    *   **Consolidated Event Processing:** The three separate `useEffect` hooks for processing different media types were replaced with a single, consolidated `useEffect` hook. This new hook gathers all fetched events, processes them with the updated `processApplesauceEvent`, deduplicates the resulting notes by `event.id` (with basic prioritization), and then categorizes them.
+    *   **State Management & Filters:** Relevant state variables and filter construction logic were updated to support this new strategy.
+*   **Rationale:** This approach aims to make the app more resilient in displaying media by broadly scanning common `Kind 1` events, while still respecting dedicated media kinds when available.
+
+**Current UI/UX Status and Issues:**
+
+Despite this refactor, the application is currently experiencing issues:
+*   **UI elements not displaying:** Certain UI components or media items are reportedly not being rendered as expected.
+*   **VideoPlayer rendering failure:** The `VideoPlayer.tsx` component is failing to render properly.
+
+These issues indicate that the new media fetching and processing strategy in `useMediaContent.ts` may not yet be fully functional or may have introduced new complexities affecting the UI. Effective TV remote interaction is compromised if the target UI elements and media are not correctly displayed.
+
+**Next Steps (from User's To-Do List):**
+The immediate focus is on testing and debugging this new media fetching strategy to resolve these display and rendering problems. This involves:
+1.  Thoroughly testing the new media fetching and display logic.
+2.  Analyzing console logs from `useMediaContent.ts` to trace event flow and processing.
+3.  Refining the media strategy, including regexes and deduplication logic, based on findings.
+
+Addressing these problems is critical to restoring full application functionality and ensuring that TV remote interactions behave as intended with the displayed content. 

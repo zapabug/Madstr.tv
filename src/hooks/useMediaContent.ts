@@ -188,219 +188,188 @@ export function useMediaContent({
     // --- Build Filters (using props: followedAuthorPubkeys, followedTags) ---
     const mediaFilters = useMemo(() => {
         const authorsFilterPart = followedAuthorPubkeys.length > 0 ? { authors: followedAuthorPubkeys } : null;
-        const tagsFilterPart = followedTags.length > 0 ? { '#t': followedTags } : null;
+        // const tagsFilterPart = followedTags.length > 0 ? { '#t': followedTags } : null; // Tags not used for Kind 1 only focus
 
-        const baseImageFilters: Filter = { kinds: [1063], limit: imageFetchLimit, ...(imageFetchUntil && { until: imageFetchUntil }) };
-        const baseVideoFilters: Filter = { kinds: [34235], limit: videoFetchLimit, ...(videoFetchUntil && { until: videoFetchUntil }) };
-        // REMOVED basePodcastKind31234Filters
+        // --- RESTORED LOGIC for image and video specific kinds ---
+        const imageFiltersArray: Filter[] | null = (() => {
+            if (followedAuthorPubkeys.length === 0 && followedTags.length === 0) return null;
+            const filters: Filter[] = [];
+            if (followedAuthorPubkeys.length > 0) {
+                filters.push({ 
+                    kinds: [1063], 
+                    authors: followedAuthorPubkeys, 
+                    limit: imageFetchLimit, 
+                    until: imageFetchUntil 
+                });
+            }
+            if (followedTags.length > 0) {
+                filters.push({ 
+                    kinds: [1063], 
+                    '#t': followedTags, 
+                    limit: imageFetchLimit, 
+                    until: imageFetchUntil 
+                });
+            }
+            return filters.length > 0 ? filters : null;
+        })();
 
-        const imageFiltersArray: Filter[] = [];
-        if (authorsFilterPart) imageFiltersArray.push({ ...baseImageFilters, ...authorsFilterPart });
-        if (tagsFilterPart) imageFiltersArray.push({ ...baseImageFilters, ...tagsFilterPart });
-        if (imageFiltersArray.length === 0 && !authorsFilterPart && !tagsFilterPart) imageFiltersArray.push(baseImageFilters);
+        const videoFiltersArray: Filter[] | null = (() => {
+            if (followedAuthorPubkeys.length === 0 && followedTags.length === 0) return null;
+            const filters: Filter[] = [];
+            if (followedAuthorPubkeys.length > 0) {
+                filters.push({ 
+                    kinds: [34235], 
+                    authors: followedAuthorPubkeys, 
+                    limit: videoFetchLimit, 
+                    until: videoFetchUntil 
+                });
+            }
+            if (followedTags.length > 0) {
+                filters.push({ 
+                    kinds: [34235], 
+                    '#t': followedTags, 
+                    limit: videoFetchLimit, 
+                    until: videoFetchUntil 
+                });
+            }
+            return filters.length > 0 ? filters : null;
+        })();
+        // --- END RESTORED LOGIC ---
 
-        const videoFiltersArray: Filter[] = [];
-        if (authorsFilterPart) videoFiltersArray.push({ ...baseVideoFilters, ...authorsFilterPart });
-        if (tagsFilterPart) videoFiltersArray.push({ ...baseVideoFilters, ...tagsFilterPart });
-        if (videoFiltersArray.length === 0 && !authorsFilterPart && !tagsFilterPart) videoFiltersArray.push(baseVideoFilters);
+        // General Kind 1 filters (sole focus for now)
+        const baseGeneralKind1Filters: Filter = { 
+            kinds: [1], 
+            limit: generalKind1FetchLimit, 
+            ...(generalKind1FetchUntil && { until: generalKind1FetchUntil }) 
+        };
+        const generalKind1FiltersArray: Filter[] = [];
+        if (authorsFilterPart) {
+            generalKind1FiltersArray.push({ ...baseGeneralKind1Filters, ...authorsFilterPart });
+        } else {
+            // If no authors followed, maybe fetch generic Kind 1s? Or an empty array to fetch nothing.
+            // For now, let's fetch nothing if no authors are followed to keep it consistent.
+            // generalKind1FiltersArray.push(baseGeneralKind1Filters); // Potentially noisy
+        }
         
-        // MODIFIED: General Kind 1 filter from ALL followed authors if any are followed
-        const generalKind1FiltersArray: Filter[] = []; // RENAMED from podcastFiltersArray
-        if (authorsFilterPart) { // Check if there are any followed authors
-            generalKind1FiltersArray.push({ // RENAMED from podcastFiltersArray
-                kinds: [1], 
-                authors: followedAuthorPubkeys, // Use all followed authors
-                limit: generalKind1FetchLimit, 
-                ...(generalKind1FetchUntil && { until: generalKind1FetchUntil }),
-            });
-        } // If no authors are followed, generalKind1FiltersArray remains empty
-        
-        console.log("[useMediaContent] Constructed Filters:", { imageFiltersArray, videoFiltersArray, generalKind1FiltersArray }); // UPDATED Log
+        // If NoSolutions is specifically followed, ensure we query their Kind 1s even if generalKind1FiltersArray is empty
+        // (e.g. if followedAuthorPubkeys was initially empty but then populated with only NoSolutions)
+        // This logic might be redundant if NOSOLUTIONS_PUBKEY_HEX is already in followedAuthorPubkeys
+        // For now, the main authorsFilterPart should cover this.
 
-        return { imageFiltersArray, videoFiltersArray, generalKind1FiltersArray }; // UPDATED Return
+        console.log('[useMediaContent] Constructed Filters:', {
+            imageFiltersArray,
+            videoFiltersArray,
+            generalKind1FiltersArray,
+        });
 
-    }, [followedAuthorPubkeys, followedTags, imageFetchLimit, videoFetchLimit, generalKind1FetchLimit, imageFetchUntil, videoFetchUntil, generalKind1FetchUntil]);
+        return { imageFiltersArray, videoFiltersArray, generalKind1FiltersArray };
+    }, [
+        followedAuthorPubkeys,
+        // followedTags, // Tags not used for Kind 1 only focus
+        imageFetchLimit,
+        imageFetchUntil,
+        videoFetchLimit,
+        videoFetchUntil,
+        generalKind1FetchLimit,
+        generalKind1FetchUntil,
+    ]);
 
-    // --- Subscribe to Media Events using Applesauce Hooks ---
-    const imageQueryArgs = useMemo(() => mediaFilters.imageFiltersArray.length > 0 ? mediaFilters.imageFiltersArray : null, [mediaFilters.imageFiltersArray]);
-    const videoQueryArgs = useMemo(() => mediaFilters.videoFiltersArray.length > 0 ? mediaFilters.videoFiltersArray : null, [mediaFilters.videoFiltersArray]);
-    // const podcastQueryArgs = useMemo(() => mediaFilters.podcastFiltersArray.length > 0 ? mediaFilters.podcastFiltersArray : null, [mediaFilters.podcastFiltersArray]); // REMOVED
-    const generalKind1QueryArgs = useMemo(() => mediaFilters.generalKind1FiltersArray.length > 0 ? mediaFilters.generalKind1FiltersArray : null, [mediaFilters.generalKind1FiltersArray]); // ADDED
+    // --- Setup Query Args for Applesauce --- 
+    const imageQueryArgs = useMemo(() => mediaFilters.imageFiltersArray, [mediaFilters.imageFiltersArray]);
+    const videoQueryArgs = useMemo(() => mediaFilters.videoFiltersArray, [mediaFilters.videoFiltersArray]);
+    const generalKind1QueryArgs = useMemo(() => mediaFilters.generalKind1FiltersArray.length > 0 ? mediaFilters.generalKind1FiltersArray : null, [mediaFilters.generalKind1FiltersArray]);
 
-    console.log('[useMediaContent] imageQueryArgs constructed:', JSON.stringify(imageQueryArgs, null, 2));
+    console.log('[useMediaContent] imageQueryArgs constructed:', imageQueryArgs);
+    // Wrap params in a tuple: [filtersArray]
     const fetchedImageEvents = Hooks.useStoreQuery(Queries.TimelineQuery, imageQueryArgs ? [imageQueryArgs] : null);
     console.log('[useMediaContent] fetchedImageEvents RESULT:', fetchedImageEvents);
-    
-    console.log('[useMediaContent] videoQueryArgs constructed:', JSON.stringify(videoQueryArgs, null, 2));
+
+    console.log('[useMediaContent] videoQueryArgs constructed:', videoQueryArgs);
+    // Wrap params in a tuple: [filtersArray]
     const fetchedVideoEvents = Hooks.useStoreQuery(Queries.TimelineQuery, videoQueryArgs ? [videoQueryArgs] : null);
     console.log('[useMediaContent] fetchedVideoEvents RESULT:', fetchedVideoEvents);
-    
-    console.log('[useMediaContent] generalKind1QueryArgs (for TimelineQuery) constructed:', JSON.stringify(generalKind1QueryArgs, null, 2)); // ADDED
-    const fetchedGeneralKind1Events = Hooks.useStoreQuery(Queries.TimelineQuery, generalKind1QueryArgs ? [generalKind1QueryArgs] : null); // ADDED
-    console.log('[useMediaContent] fetchedGeneralKind1Events RESULT:', fetchedGeneralKind1Events); // ADDED
 
-    // Stabilize fetched events to prevent useEffect loops from unstable array references
-    const stableFetchedImageEvents: NostrEvent[] | null = useMemo(() => {
-        if (!fetchedImageEvents) return null;
-        try {
-            const eventsToStabilize = Array.isArray(fetchedImageEvents) ? fetchedImageEvents : [];
-            return JSON.parse(JSON.stringify(eventsToStabilize)) as NostrEvent[];
-        } catch (e) {
-            console.error("Error stabilizing fetchedImageEvents:", e);
-            // Fallback to the original unstable array or null if it wasn't an array initially
-            return Array.isArray(fetchedImageEvents) ? fetchedImageEvents : null;
-        }
-    }, [fetchedImageEvents ? JSON.stringify(fetchedImageEvents) : null]);
+    console.log('[useMediaContent] generalKind1QueryArgs (for TimelineQuery) constructed:', generalKind1QueryArgs);
+    // Wrap params in a tuple: [filtersArray]
+    const fetchedGeneralKind1Events = Hooks.useStoreQuery(Queries.TimelineQuery, generalKind1QueryArgs ? [generalKind1QueryArgs] : null);
+    console.log('[useMediaContent] fetchedGeneralKind1Events RESULT:', fetchedGeneralKind1Events);
 
-    const stableFetchedVideoEvents: NostrEvent[] | null = useMemo(() => {
-        if (!fetchedVideoEvents) return null;
-        try {
-            const eventsToStabilize = Array.isArray(fetchedVideoEvents) ? fetchedVideoEvents : [];
-            return JSON.parse(JSON.stringify(eventsToStabilize)) as NostrEvent[];
-        } catch (e) {
-            console.error("Error stabilizing fetchedVideoEvents:", e);
-            return Array.isArray(fetchedVideoEvents) ? fetchedVideoEvents : null;
-        }
-    }, [fetchedVideoEvents ? JSON.stringify(fetchedVideoEvents) : null]);
+    // --- Stabilize fetched events for useEffect dependencies (Keep) ---
+    const stableFetchedImageEvents = useMemo(() => fetchedImageEvents ? [...fetchedImageEvents] : [], [fetchedImageEvents]);
+    const stableFetchedVideoEvents = useMemo(() => fetchedVideoEvents ? [...fetchedVideoEvents] : [], [fetchedVideoEvents]);
+    const stableFetchedGeneralKind1Events = useMemo(() => fetchedGeneralKind1Events ? [...fetchedGeneralKind1Events] : [], [fetchedGeneralKind1Events]);
 
-    const stableFetchedGeneralKind1Events: NostrEvent[] | null = useMemo(() => {
-        if (!fetchedGeneralKind1Events) return null;
-        try {
-            const eventsToStabilize = Array.isArray(fetchedGeneralKind1Events) ? fetchedGeneralKind1Events : [];
-            return JSON.parse(JSON.stringify(eventsToStabilize)) as NostrEvent[];
-        } catch (e) {
-            console.error("Error stabilizing fetchedGeneralKind1Events:", e);
-            return Array.isArray(fetchedGeneralKind1Events) ? fetchedGeneralKind1Events : null;
-        }
-    }, [fetchedGeneralKind1Events ? JSON.stringify(fetchedGeneralKind1Events) : null]);
-
-    // --- Direct EventStore Check (DEBUGGING) --- 
-    const eventStore = Hooks.useEventStore(); // Get the store instance
+    // --- Consolidated useEffect for Processing All Media Notes (Keep, it will now mostly process Kind 1) ---
     useEffect(() => {
-      // ADDED: Log to confirm effect execution and current state of podcastQueryArgs
-      console.log('[DEBUG] EventStore Check useEffect RUNNING. podcastQueryArgs:', JSON.stringify(generalKind1QueryArgs, null, 2), 'eventStore available:', !!eventStore);
+        console.log('[useMediaContent] Processing useEffect triggered. Dependencies:', {
+            stableFetchedGeneralKind1EventsCount: stableFetchedGeneralKind1Events?.length,
+            stableFetchedImageEventsCount: stableFetchedImageEvents?.length,
+            stableFetchedVideoEventsCount: stableFetchedVideoEvents?.length,
+        });
 
-      if (generalKind1QueryArgs && eventStore && generalKind1QueryArgs.length > 0) { // Ensure query args are valid
-        console.log('[DEBUG] Checking EventStore directly for podcastQueryArgs:', generalKind1QueryArgs);
-        try {
-          // Note: eventStore.getAll expects Filter[], and podcastQueryArgs is Filter[] | null
-          const matchingEvents = eventStore.getAll(generalKind1QueryArgs); 
-          console.log(`[DEBUG] EventStore.getAll found ${matchingEvents.size} events matching the podcast filter.`);
-          if (matchingEvents.size > 0) {
-              console.log('[DEBUG] Events found by eventStore.getAll:', Array.from(matchingEvents).map(e => ({ id: e.id, kind: e.kind, pubkey: e.pubkey, content: e.content?.substring(0, 100) })));
-          }
-        } catch (error) {
-            console.error('[DEBUG] Error calling eventStore.getAll:', error);
-        }
-      } else {
-          // This log might be noisy if it logs every time args are null initially
-          // console.log('[DEBUG] Skipping direct EventStore check (podcastQueryArgs or eventStore not ready).');
-      }
-    }, [generalKind1QueryArgs, eventStore]); // Rerun when query args or store instance changes
+        const allEventsToProcess: NostrEvent[] = [
+            ...(stableFetchedGeneralKind1Events || []),
+            ...(stableFetchedImageEvents || []),
+            ...(stableFetchedVideoEvents || []),
+        ];
+        
+        console.log(`[useMediaContent] Total events to process before deduplication: ${allEventsToProcess.length}`);
 
-    // --- Process Applesauce Query Results into Notes --- 
-    // REMOVED old useEffect for Image processing
-    // REMOVED old useEffect for Video processing
-    // REMOVED old useEffect for Podcast processing
-
-    // ADDED: Consolidated useEffect for processing all media types
-    useEffect(() => {
-        console.log('[useMediaContent] Consolidated media processing useEffect RUNS.', 
-            { 
-                stableFetchedGeneralKind1EventsCount: stableFetchedGeneralKind1Events?.length,
-                stableFetchedImageEventsCount: stableFetchedImageEvents?.length,
-                stableFetchedVideoEventsCount: stableFetchedVideoEvents?.length 
+        if (allEventsToProcess.length === 0) {
+            // If there are no events from any source, clear all processed notes.
+            // Only do this if the underlying queries are not undefined (i.e., have resolved, even if to empty).
+            if (fetchedGeneralKind1Events !== undefined && fetchedImageEvents !== undefined && fetchedVideoEvents !== undefined) {
+                console.log('[useMediaContent] No events from any source after queries resolved, clearing all processed notes.');
+                setProcessedPodcastNotes([]);
+                setProcessedImageNotes([]);
+                setProcessedVideoNotes([]);
             }
-        );
-
-        const allEventsToProcess: NostrEvent[] = [];
-        if (stableFetchedGeneralKind1Events) {
-            allEventsToProcess.push(...stableFetchedGeneralKind1Events);
-        }
-        if (stableFetchedImageEvents) {
-            allEventsToProcess.push(...stableFetchedImageEvents);
-        }
-        if (stableFetchedVideoEvents) {
-            allEventsToProcess.push(...stableFetchedVideoEvents);
+            return;
         }
 
-        console.log('[useMediaContent] Total events collected for processing:', allEventsToProcess.length);
-        if (allEventsToProcess.length === 0 && 
-            stableFetchedGeneralKind1Events !== undefined && 
-            stableFetchedImageEvents !== undefined && 
-            stableFetchedVideoEvents !== undefined) {
-            // All sources have resolved (not undefined) but yielded no events to process
-            setProcessedPodcastNotes([]);
-            setProcessedImageNotes([]);
-            setProcessedVideoNotes([]);
-            console.log('[useMediaContent] All media sources loaded, no events to process. Clearing notes.');
-            return; // Early exit if no events from any source after loading
-        }
+        const processedNotes: ProcessedNostrNote[] = allEventsToProcess.map(processApplesauceEvent);
+        console.log(`[useMediaContent] Processed ${processedNotes.length} notes initially.`);
 
-        // Only proceed if at least one source is still undefined (loading) or there are events
-        if (allEventsToProcess.length > 0 || 
-            stableFetchedGeneralKind1Events === undefined || 
-            stableFetchedImageEvents === undefined || 
-            stableFetchedVideoEvents === undefined) {
-
-            // Process all collected events
-            const processedNotesFromAllSources: ProcessedNostrNote[] = allEventsToProcess.map(event => processApplesauceEvent(event));
-            console.log('[useMediaContent] Processed notes from all sources:', processedNotesFromAllSources.length, processedNotesFromAllSources.map(p => ({id: p.id, kind: p.kind, hint: p.mediaTypeHint, url: p.url !== undefined}) ) );
-
-            // Deduplicate events based on ID, preferring events from specific kinds if content-parsed Kind 1 has same ID
-            // This simple deduplication takes the first one encountered. More sophisticated logic could prioritize.
-            const uniqueProcessedNotesMap = new Map<string, ProcessedNostrNote>();
-            processedNotesFromAllSources.forEach(note => {
-                if (!uniqueProcessedNotesMap.has(note.id)) {
-                    uniqueProcessedNotesMap.set(note.id, note);
-                } else {
-                    // Basic prioritization: if existing is Kind 1 and new is specific media kind, replace.
-                    // Or if new one has a URL and old one didn't (for same ID).
-                    const existingNote = uniqueProcessedNotesMap.get(note.id)!;
-                    if ( (existingNote.kind === 1 && note.kind !== 1) || 
-                         (note.url && !existingNote.url) ) {
-                        uniqueProcessedNotesMap.set(note.id, note); // Prioritize specific kind or one with URL
-                        console.log(`[useMediaContent] Deduplication: Replaced note ${note.id} with more specific or URL-having version.`);
-                    }
+        // Deduplication by event ID, prioritizing specific kinds if IDs match
+        const uniqueNotesMap = new Map<string, ProcessedNostrNote>();
+        processedNotes.forEach(note => {
+            const existing = uniqueNotesMap.get(note.id);
+            if (!existing) {
+                uniqueNotesMap.set(note.id, note);
+            } else {
+                // Basic prioritization: keep specific media kind if current is Kind 1, or keep if new one has URL and old doesn't
+                if (existing.kind === 1 && note.kind !== 1) {
+                    uniqueNotesMap.set(note.id, note); // Prefer specific kind over general Kind 1
+                } else if (!existing.url && note.url) {
+                    uniqueNotesMap.set(note.id, note); // Prefer version with a URL
                 }
-            });
-            const uniqueProcessedNotes = Array.from(uniqueProcessedNotesMap.values());
-            console.log('[useMediaContent] Unique processed notes after deduplication:', uniqueProcessedNotes.length, uniqueProcessedNotes.map(p => ({id: p.id, kind: p.kind, hint: p.mediaTypeHint, url: p.url !== undefined}) ));
+                // Could add more prioritization logic here if needed
+            }
+        });
+        const uniqueProcessedNotes = Array.from(uniqueNotesMap.values());
+        console.log(`[useMediaContent] Notes after deduplication: ${uniqueProcessedNotes.length}`);
 
-            // Filter into respective categories
-            const currentPodcastNotes: ProcessedNostrNote[] = [];
-            const currentImageNotes: ProcessedNostrNote[] = [];
-            const currentVideoNotes: ProcessedNostrNote[] = [];
+        // Filter into categories based on mediaTypeHint and presence of URL
+        const currentPodcastNotes = uniqueProcessedNotes.filter(note => note.mediaTypeHint === 'audio' && note.url);
+        const currentImageNotes = uniqueProcessedNotes.filter(note => note.mediaTypeHint === 'image' && note.url);
+        const currentVideoNotes = uniqueProcessedNotes.filter(note => note.mediaTypeHint === 'video' && note.url);
 
-            uniqueProcessedNotes.forEach(note => {
-                if (note.url) { // Only consider notes with an extracted URL
-                    if (note.mediaTypeHint === 'audio') {
-                        currentPodcastNotes.push(note);
-                    } else if (note.mediaTypeHint === 'image') {
-                        currentImageNotes.push(note);
-                    } else if (note.mediaTypeHint === 'video') {
-                        currentVideoNotes.push(note);
-                    }
-                }
-            });
+        console.log('[useMediaContent] Categorized notes:', {
+            podcasts: currentPodcastNotes.length,
+            images: currentImageNotes.length,
+            videos: currentVideoNotes.length,
+        });
 
-            currentPodcastNotes.sort((a, b) => b.created_at - a.created_at);
-            currentImageNotes.sort((a, b) => b.created_at - a.created_at);
-            currentVideoNotes.sort((a, b) => b.created_at - a.created_at);
+        // Sort podcasts by creation date (newest first)
+        currentPodcastNotes.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
 
-            console.log('[useMediaContent] Categorized notes:', {
-                podcastCount: currentPodcastNotes.length,
-                imageCount: currentImageNotes.length,
-                videoCount: currentVideoNotes.length
-            });
+        setProcessedPodcastNotes(currentPodcastNotes);
+        setProcessedImageNotes(currentImageNotes); // Images will be shuffled later
+        setProcessedVideoNotes(currentVideoNotes); // Videos will be shuffled later
 
-            setProcessedPodcastNotes(currentPodcastNotes);
-            setProcessedImageNotes(currentImageNotes);
-            setProcessedVideoNotes(currentVideoNotes);
-        } // else all sources are undefined (initial load, still waiting) or no events yet, do nothing until they load or events arrive
+    // IMPORTANT: Ensure all dependencies that can change filters or data are included
+    }, [stableFetchedGeneralKind1Events, stableFetchedImageEvents, stableFetchedVideoEvents, fetchedGeneralKind1Events, fetchedImageEvents, fetchedVideoEvents]); // Added raw fetched events as deps too
 
-    }, [stableFetchedGeneralKind1Events, stableFetchedImageEvents, stableFetchedVideoEvents]); // queryArgs not needed here as we only care about fetched data
-    
     // --- Shuffle Image and Video Notes (Keep) ---
     useEffect(() => {
         setShuffledImageNotes(shuffleArray([...processedImageNotes]));

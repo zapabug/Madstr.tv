@@ -50,7 +50,7 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
 *   **`App.tsx` (`src/App.tsx`) (Root Component):**
     *   **Orchestrator:** Manages media element refs (`audioRef`, `videoRef`), defines the main JSX layout structure with Tailwind. Uses Applesauce's `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` to fetch the current user's (or default TV user's) Kind 3 follow list. **Calls the `useMediaContent` hook**, passing it the derived `followedPubkeys` and `followedTags` (from `useAuth`). Receives processed/shuffled media notes and loading states from `useMediaContent`. Manages `SettingsModal` visibility. Passes state/props/callbacks down to child components and other hooks (`useMediaState`, `useMediaElementPlayback`, etc.).
     *   **State Held:** `initialPodcastTime`, settings modal visibility (`isSettingsOpen`). (Media note state is now managed within `useMediaContent`).
-    *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
+    *   **Refs Created:** `audioRef`, `videoRef`.
     *   **Hook Usage:**
         *   `Hooks.useStoreQuery` (from `applesauce-react`): **Used ONCE directly** to fetch the Kind 3 follow list (`Queries.ContactsQuery`).
         *   `useAuth` (`src/hooks/useAuth.ts`): Manages authentication state and provides `followedTags`.
@@ -74,11 +74,13 @@ The main layout is defined in `App.tsx` (`src/App.tsx`) and consists of two prim
         *   Conditionally renders the Bottom Panel based on `isFullScreen`.
         *   Renders `MessageBoard`, `MediaPanel`, `SettingsModal`, `RelayStatus`.
         *   Passes necessary props (state, refs, callbacks) down.
+        *   **Note:** Does not pass `imageFeedRef`, `onNext`, or `onPrevious` to `ImageFeed` as these are handled by `useMediaState` and global controls.
 
 *   **`ImageFeed.tsx` (`src/components/ImageFeed.tsx`):**
     *   **Purpose:** Displays the main image feed with author QR code and tipping interaction.
     *   **Rendered In:** Top Media Area (A) when `viewMode === 'imagePodcast'`.
-    *   **Key Props:** `currentImageIndex`, `imageNotes` (received from `App.tsx` via `useMediaContent`).
+    *   **Key Props:** `currentImageIndex`, `imageNotes`.
+    *   **Removed Props:** `imageFeedRef`, `onNext`, `onPrevious` (navigation is now handled externally by `useMediaState` and `useKeyboardControls`).
     *   **Hook Usage:** Uses `useAuth`, `useWallet`, **Applesauce hooks (e.g., `Hooks.useStoreQuery(ProfileQuery, ...)` for author info).**
     *   **Functionality:** Displays images. Uses Applesauce profile fetching for author data. Handles tipping interaction (needs review for Applesauce signer/event store). Shows empty/loading state if `imageNotes` is empty.
 

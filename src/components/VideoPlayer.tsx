@@ -1,75 +1,58 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 // import QRCode from 'react-qr-code'; // Removed QRCode import
 import { motion, AnimatePresence } from 'framer-motion';
-import { NDKEvent } from '@nostr-dev-kit/ndk';
-import { useNdk, useProfile } from '@nostr-dev-kit/ndk-hooks'; // Use NDK hooks
+// import { NDKEvent } from '@nostr-dev-kit/ndk'; // Removed NDK import
+// import { useNdk, useProfile } from '@nostr-dev-kit/ndk-hooks'; // Removed NDK hooks
 import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback';
-import { VideoNote } from '../types/nostr';
+// import { VideoNote } from '../types/nostr'; // Potentially unused if NostrNote is comprehensive
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
-import { useFocusManager } from '../hooks/useFocusManager';
-import { NostrNote } from '../types/nostr';
-import { formatTime } from '../utils/timeUtils';
-import FullscreenButton from './shared/FullscreenButton';
-import Slider from './shared/Slider';
+// import { useFocusManager } from '../hooks/useFocusManager'; // Commented out: File not found
+import { NostrNote } from '../types/nostr'; // Assuming this contains author pubkey
+// import { formatTime } from '../utils/timeUtils'; // Commented out: File not found
+// import FullscreenButton from './shared/FullscreenButton'; // Commented out: Directory/File not found
+// import Slider from './shared/Slider'; // Commented out: Directory not found
+
+// Applesauce imports for profile fetching
+import { Hooks } from 'applesauce-react';
+import { ProfileQuery } from 'applesauce-core/queries'; 
+import { ProfileContent } from 'applesauce-core/helpers';
+
 // Remove unused wallet/auth/tipping related imports if tipping is removed
 // import { useWallet, SendTipParams } from '../hooks/useWallet';
 // import { useAuth } from '../hooks/useAuth';
 // import { FiZap } from 'react-icons/fi';
 // import NDK from '@nostr-dev-kit/ndk';
 
-// Remove CustomLoggedInIcon if not used elsewhere after removing tipping section
-/*
-const CustomLoggedInIcon = () => (
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-    <path 
-      d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" 
-      fill="#8B5CF6" 
-      stroke="#F7931A" 
-      strokeWidth="1.5"
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-*/
-
 export interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   src: string | null;
   isPlaying: boolean;
   togglePlayPause: () => void;
-  // authorNpub: string | null; // Removed prop
+  authorPubkey: string | null; // Added prop for author's pubkey
   autoplayFailed: boolean;
   isMuted: boolean;
-  // currentNoteId?: string; // Removed prop (was only used for tipping)
 }
-
-// Remove DEFAULT_TIP_AMOUNT
-// const DEFAULT_TIP_AMOUNT = 121; // Sats
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   videoRef, 
   src,
   isPlaying,
   togglePlayPause,
-  // authorNpub, // Removed from destructuring
+  authorPubkey, // Destructure new prop
   autoplayFailed,
   isMuted,
-  // currentNoteId // Removed from destructuring
 }) => {
-  // Remove unused hooks and state related to tipping/author
-  // const wallet = useWallet();
-  // const auth = useAuth(undefined);
-  // const { ndk } = useMediaAuthors();
-  // const ndkInstance = ndk;
-  // const [isTipping, setIsTipping] = useState(false);
-  // const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
-  // const authorContainerRef = useRef<HTMLDivElement>(null);
   const playButtonRef = useRef<HTMLButtonElement>(null);
-  const [isHoveringControls, setIsHoveringControls] = useState(false);
-  const lastInteractionTime = useRef(Date.now());
-  const { ndk, profile } = useNdkProfile(activeNote?.posterPubkey); // <<< Refactored NDK/Profile logic
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // const [isHoveringControls, setIsHoveringControls] = useState(false); // Seemingly unused
+  // const lastInteractionTime = useRef(Date.now()); // Seemingly unused
+  
+  const profileData = Hooks.useStoreQuery(
+    ProfileQuery,
+    [authorPubkey ?? ''] 
+  );
+  const profile = profileData as ProfileContent | undefined;
+
+  // const [isFullscreen, setIsFullscreen] = useState(false); // Seemingly unused, and FullscreenButton is not used
 
   // --- Load video source when src changes ---
   useEffect(() => {
@@ -117,8 +100,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay Play/Pause Button - Show only if autoplay failed */}
-      { autoplayFailed && !isPlaying && (
+      {/* Overlay Play/Pause Button - Show only if autoplay failed or video is muted and not playing */}
+      { (autoplayFailed || (isMuted && !isPlaying)) && !isPlaying && (
         <button 
           ref={playButtonRef}
           onClick={togglePlayPause}
@@ -132,8 +115,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </button>
       )}
 
+      {/* Display Author Info if profile is fetched */}
+      {profile && (
+        <div className="absolute bottom-2 left-2 bg-black/50 p-2 rounded-md text-white text-xs z-20">
+          {profile.picture && (
+            <img src={profile.picture} alt={profile.name || authorPubkey || 'author'} className="w-8 h-8 rounded-full inline-block mr-2" />
+          )}
+          <span>{profile.display_name || profile.name || authorPubkey?.substring(0,10)+'...'}</span>
+        </div>
+      )}
+
       {/* --- REMOVED Author Info / QR Code / Tipping Container --- */}
-      {/* {authorNpub && ( ... )} */}
 
     </div>
   );
