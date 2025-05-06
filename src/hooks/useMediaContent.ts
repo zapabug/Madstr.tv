@@ -46,6 +46,7 @@ function processApplesauceEvent(event: NostrEvent): ProcessedNostrNote { // MODI
 
     if (event.kind === 1) { // General Kind 1 event processing for potential audio, image, or video
         sourceType = `Kind 1 from ${event.pubkey}`;
+        console.log(`[processApplesauceEvent] Processing Kind 1: ${event.id} from ${event.pubkey.substring(0,6)}... Content snippet: "${event.content?.substring(0, 70)}..."`); // LOG SNIPPET
         const audioMatch = event.content.match(AUDIO_URL_REGEX);
         if (audioMatch && audioMatch[0]) {
             basicUrl = audioMatch[0];
@@ -53,6 +54,7 @@ function processApplesauceEvent(event: NostrEvent): ProcessedNostrNote { // MODI
             sourceType += ' (audio URL in content)';
             console.log(`[processApplesauceEvent] Audio URL FOUND via ${sourceType}:`, { eventId: event.id, pubkey: event.pubkey, basicUrl, kind: event.kind });
         } else {
+            // console.log(`[processApplesauceEvent] No audio match for Kind 1: ${event.id}`); // DEBUG
             const imageMatch = event.content.match(IMAGE_URL_REGEX); // Check for image
             if (imageMatch && imageMatch[0]) {
                 basicUrl = imageMatch[0];
@@ -60,6 +62,7 @@ function processApplesauceEvent(event: NostrEvent): ProcessedNostrNote { // MODI
                 sourceType += ' (image URL in content)';
                 console.log(`[processApplesauceEvent] Image URL FOUND via ${sourceType}:`, { eventId: event.id, pubkey: event.pubkey, basicUrl, kind: event.kind });
             } else {
+                // console.log(`[processApplesauceEvent] No image match for Kind 1: ${event.id}`); // DEBUG
                 const videoMatch = event.content.match(VIDEO_URL_REGEX); // Check for video
                 if (videoMatch && videoMatch[0]) {
                     basicUrl = videoMatch[0];
@@ -67,9 +70,10 @@ function processApplesauceEvent(event: NostrEvent): ProcessedNostrNote { // MODI
                     sourceType += ' (video URL in content)';
                     console.log(`[processApplesauceEvent] Video URL FOUND via ${sourceType}:`, { eventId: event.id, pubkey: event.pubkey, basicUrl, kind: event.kind });
                 } else {
+                    // console.log(`[processApplesauceEvent] No video match for Kind 1: ${event.id}`); // DEBUG
                     // Only log if it's NoSolutions and fails, to reduce noise for general Kind 1s without audio/image/video
                     if (event.pubkey === NOSOLUTIONS_PUBKEY_HEX) {
-                        console.log(`[processApplesauceEvent] No media URL (audio, image, video) NOT FOUND for NoSolutions Kind 1. Event:`, 
+                        console.log(`[processApplesauceEvent] No media URL (audio, image, video) NOT FOUND for NoSolutions Kind 1. Event:`,
                             { eventId: event.id, pubkey: event.pubkey, kind: event.kind, contentSnippet: event.content?.substring(0,100) }
                         );
                     }
@@ -142,7 +146,7 @@ export function useMediaContent({
     // currentUserNpub, // REMOVED
     followedAuthorPubkeys, // ADDED
 }: UseMediaContentProps): UseMediaContentReturn {
-    console.log('[useMediaContent] PROPS RECEIVED:', { followedAuthorPubkeys, followedTags });
+    console.log('[useMediaContent] HOOK EXECUTION, PROPS RECEIVED:', { followedAuthorPubkeys: JSON.parse(JSON.stringify(followedAuthorPubkeys)), followedTags }); // Deep copy for reliable logging
     // REMOVE NDK instance
     // const { ndk } = useNDK();
 
@@ -195,19 +199,19 @@ export function useMediaContent({
             if (followedAuthorPubkeys.length === 0 && followedTags.length === 0) return null;
             const filters: Filter[] = [];
             if (followedAuthorPubkeys.length > 0) {
-                filters.push({ 
-                    kinds: [1063], 
-                    authors: followedAuthorPubkeys, 
-                    limit: imageFetchLimit, 
-                    until: imageFetchUntil 
+                filters.push({
+                    kinds: [1063],
+                    authors: followedAuthorPubkeys,
+                    limit: imageFetchLimit,
+                    until: imageFetchUntil
                 });
             }
             if (followedTags.length > 0) {
-                filters.push({ 
-                    kinds: [1063], 
-                    '#t': followedTags, 
-                    limit: imageFetchLimit, 
-                    until: imageFetchUntil 
+                filters.push({
+                    kinds: [1063],
+                    '#t': followedTags,
+                    limit: imageFetchLimit,
+                    until: imageFetchUntil
                 });
             }
             return filters.length > 0 ? filters : null;
@@ -217,19 +221,19 @@ export function useMediaContent({
             if (followedAuthorPubkeys.length === 0 && followedTags.length === 0) return null;
             const filters: Filter[] = [];
             if (followedAuthorPubkeys.length > 0) {
-                filters.push({ 
-                    kinds: [34235], 
-                    authors: followedAuthorPubkeys, 
-                    limit: videoFetchLimit, 
-                    until: videoFetchUntil 
+                filters.push({
+                    kinds: [34235],
+                    authors: followedAuthorPubkeys,
+                    limit: videoFetchLimit,
+                    until: videoFetchUntil
                 });
             }
             if (followedTags.length > 0) {
-                filters.push({ 
-                    kinds: [34235], 
-                    '#t': followedTags, 
-                    limit: videoFetchLimit, 
-                    until: videoFetchUntil 
+                filters.push({
+                    kinds: [34235],
+                    '#t': followedTags,
+                    limit: videoFetchLimit,
+                    until: videoFetchUntil
                 });
             }
             return filters.length > 0 ? filters : null;

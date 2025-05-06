@@ -65,118 +65,94 @@ const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 
 function App() {
   console.log("[App.tsx] Function body execution START");
-
-  // --- Add state for loading message index ---
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
-  const [isLoadingContent, setIsLoadingContent] = useState(true); // Start as true
-
-  // --- Call Hooks --- 
+  const [isLoadingContent, setIsLoadingContent] = useState(true); 
   const auth = useAuth(); 
-  const { followedTags, currentUserNpub, isLoggedIn } = auth; // Added isLoggedIn
-  
-  // Get RelayPool and EventStore from Applesauce/context
-  const pool = useRelayPool(); // ADDED: Get pool instance
-  const eventStore = Hooks.useEventStore(); // ADDED: Get eventStore instance (ensure Hooks.useEventStore exists and is correctly provided)
+  const { followedTags, currentUserNpub, isLoggedIn } = auth;
+  const pool = useRelayPool(); 
+  const eventStore = Hooks.useEventStore(); 
 
-  // --- Fetch Follow List (Kind 3) --- (Keep this)
   const pubkeyToFetchFollowsFor = useMemo(() => {
       if (isLoggedIn && currentUserNpub) {
           try {
               return nip19.decode(currentUserNpub).data as string;
           } catch (e) {
               console.error("Error decoding currentUserNpub:", e);
-              return nip19.decode(TV_PUBKEY_NPUB).data as string;
+              // Fallback to default TV_PUBKEY_NPUB's hex
+              try {
+                return nip19.decode(TV_PUBKEY_NPUB).data as string;
+              } catch (e2) {
+                console.error("Error decoding TV_PUBKEY_NPUB:", e2);
+                return null; // Or some other safe default
+              }
           }
       }
-      return nip19.decode(TV_PUBKEY_NPUB).data as string; // Default TV pubkey
+      // Default TV_PUBKEY_NPUB's hex
+      try {
+        return nip19.decode(TV_PUBKEY_NPUB).data as string; 
+      } catch (e) {
+        console.error("Error decoding TV_PUBKEY_NPUB for default:", e);
+        return null; // Or some other safe default
+      }
   }, [isLoggedIn, currentUserNpub]);
+  // --- Log pubkey directly ---
+  console.log('[App.tsx BODY] pubkeyToFetchFollowsFor:', pubkeyToFetchFollowsFor);
 
   const contactsData = Hooks.useStoreQuery(Queries.ContactsQuery, pubkeyToFetchFollowsFor ? [pubkeyToFetchFollowsFor] : null);
-  
+  // --- Log contactsData directly ---
+  console.log("[App.tsx BODY] contactsData:", contactsData ? JSON.parse(JSON.stringify(contactsData)) : contactsData); 
+  // --- Detailed contactsData inspection ---
+  if (Array.isArray(contactsData) && contactsData.length > 0) {
+      console.log("[App.tsx BODY] First item in contactsData:", JSON.parse(JSON.stringify(contactsData[0])));
+      const attemptedPubkeys = contactsData.map((p: any) => p?.pubkey);
+      console.log("[App.tsx BODY] Attempted pubkeys from contactsData:", attemptedPubkeys);
+  } else if (contactsData !== undefined) {
+      console.log("[App.tsx BODY] contactsData is defined but not a non-empty array.");
+  }
+
+  // --- Manage isLoadingContent State ---
   useEffect(() => {
-    console.log("[App.tsx] contactsData updated (raw from useStoreQuery):", contactsData);
     const newIsLoading = contactsData === undefined;
     if (newIsLoading !== isLoadingContent) {
-        console.log(`[App.tsx] isLoadingContent changing from ${isLoadingContent} to ${newIsLoading}`);
+        console.log(`[App.tsx EFFECT] isLoadingContent changing from ${isLoadingContent} to ${newIsLoading}`); 
         setIsLoadingContent(newIsLoading);
     }
-  }, [contactsData, isLoadingContent]); // Added isLoadingContent to dependency array for correct comparison
+    // We only need this effect to SET the loading state based on contactsData resolving.
+    // The direct logs above will show the contactsData content itself.
+  }, [contactsData, isLoadingContent]);
 
-  // Stabilize followedPubkeys to prevent unnecessary re-renders down the chain
   const followedPubkeysString = useMemo(() => {
-    if (!Array.isArray(contactsData)) return '[]';
-    // Sort to ensure order doesn't cause changes if the set is the same
-    // and filter out any undefined/null pubkeys before sorting & stringifying.
+    if (!Array.isArray(contactsData)) {
+      console.log('[App.tsx] contactsData is not an array or undefined, defaulting followedPubkeysString to []. contactsData:', contactsData);
+      return '[]';
+    }
     const pubkeys = contactsData
-        .map((pointer: any) => pointer?.pubkey)
-        .filter((pubkey): pubkey is string => typeof pubkey === 'string'); // Ensure only strings
+        .map((pointer: any) => pointer?.pubkey) // Assuming pointer.pubkey is correct
+        .filter((pubkey): pubkey is string => {
+          if (typeof pubkey !== 'string') {
+            // console.warn('[App.tsx] Filtered out non-string pubkey from contactsData item:', pointer);
+            return false;
+          }
+          return true;
+        }); 
     pubkeys.sort();
+    // console.log('[App.tsx] Extracted and sorted pubkeys for followedPubkeysString:', pubkeys);
     return JSON.stringify(pubkeys);
   }, [contactsData]);
 
   const followedPubkeys = useMemo(() => {
-      console.log("[App.tsx] Recomputing followedPubkeys from string. contactsData ref may have changed, but stringified content is:", followedPubkeysString);
+      // console.log("[App.tsx] Recomputing followedPubkeys..."); // Log moved
       return JSON.parse(followedPubkeysString);
   }, [followedPubkeysString]);
+  // --- Log followedPubkeys directly ---
+  console.log("[App.tsx BODY] followedPubkeys:", followedPubkeys ? JSON.parse(JSON.stringify(followedPubkeys)) : followedPubkeys);
 
-  // --- Effect to subscribe to logged-in user's Kind 3 (Contact List) ---
-  useEffect(() => {
-    // According to nostr-tools, pool.subscribeMany returns SubCloser[], which is is an array of subscriptions.
-    // Each element in the array should have an `unsub` method.
-    let userContactsSubscriptions: Array<{ unsub: () => void }> | null = null;
+  // --- Log Inputs to useMediaContent directly ---
+  console.log('[App.tsx BODY] Inputs to useMediaContent:', { 
+      followedAuthorPubkeys: JSON.parse(JSON.stringify(followedPubkeys)), 
+      followedTags: JSON.parse(JSON.stringify(followedTags)) 
+  });
 
-    if (isLoggedIn && currentUserNpub && pool && eventStore) {
-      try {
-        const loggedInUserHexPubkey = nip19.decode(currentUserNpub).data as string;
-        console.log(`[App.tsx] Logged in user detected: ${currentUserNpub} (hex: ${loggedInUserHexPubkey}). Subscribing to their Kind 3 event.`);
-
-        const userContactsFilter: Filter[] = [{ kinds: [3], authors: [loggedInUserHexPubkey], limit: 1 }];
-        
-        const subClosers = pool.subscribeMany(RELAYS, userContactsFilter, {
-          onevent(event: NostrEvent) {
-            console.log(`[App.tsx] Received Kind 3 event for logged-in user ${loggedInUserHexPubkey}:`, event);
-            eventStore.add(event);
-          },
-          oneose() {
-            console.log(`[App.tsx] EOSE received for logged-in user ${loggedInUserHexPubkey} Kind 3 subscription.`);
-          },
-          onclose(reason) {
-            console.warn(`[App.tsx] Subscription for logged-in user ${loggedInUserHexPubkey} Kind 3 closed:`, reason);
-          }
-        });
-
-        // Ensure subClosers is an array and its elements have an unsub method.
-        if (Array.isArray(subClosers) && subClosers.every(sc => typeof sc.unsub === 'function')) {
-          userContactsSubscriptions = subClosers as Array<{ unsub: () => void }>;
-        } else {
-          console.warn("[App.tsx] pool.subscribeMany did not return the expected SubCloser[] array. Actual return:", subClosers);
-          // Attempt to handle if it's a single object with unsub (less likely based on SubCloser type)
-          if (subClosers && typeof (subClosers as any).unsub === 'function') {
-             userContactsSubscriptions = [subClosers as any]; 
-          }
-        }
-
-      } catch (error) {
-        console.error("[App.tsx] Error setting up Kind 3 subscription for logged-in user:", error);
-      }
-    }
-
-    // Cleanup function to unsubscribe when component unmounts or dependencies change
-    return () => {
-      if (userContactsSubscriptions && userContactsSubscriptions.length > 0) {
-        console.log("[App.tsx] Cleaning up Kind 3 subscriptions for user:", currentUserNpub);
-        userContactsSubscriptions.forEach(sub => {
-          try {
-            sub.unsub();
-          } catch (e) {
-            console.warn("[App.tsx] Error during unsub:", e, sub);
-          }
-        });
-      }
-    };
-  }, [isLoggedIn, currentUserNpub, pool, eventStore, RELAYS]);
-
-  // --- Fetch Media Content using the Refactored Hook --- 
   const { 
       shuffledImageNotes, 
       shuffledVideoNotes, 
@@ -187,17 +163,6 @@ function App() {
       isLoadingVideos, 
       isLoadingPodcasts 
   } = useMediaContent({ followedAuthorPubkeys: followedPubkeys, followedTags });
-
-  // --- REMOVE state for Fetching Control & Raw/Shuffled Notes --- 
-  // const [imageFetchLimit, setImageFetchLimit] = useState(INITIAL_IMAGE_FETCH_LIMIT);
-  // const [videoFetchLimit, setVideoFetchLimit] = useState(INITIAL_VIDEO_FETCH_LIMIT);
-  // const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
-  // const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
-  // const [rawImageNotes, setRawImageNotes] = useState<NostrEvent[]>([]);
-  // const [rawVideoNotes, setRawVideoNotes] = useState<NostrEvent[]>([]);
-  // const [rawPodcastNotes, setRawPodcastNotes] = useState<NostrEvent[]>([]); 
-  // const [shuffledImageNotes, setShuffledImageNotes] = useState<NostrEvent[]>([]);
-  // const [shuffledVideoNotes, setShuffledVideoNotes] = useState<NostrEvent[]>([]);
 
   // --- State for Podcast Initial Time (if needed) --- 
   const [initialPodcastTime] = useState<number>(0);
@@ -294,36 +259,20 @@ function App() {
   // --- Render Logic --- 
   // Calculate Relay Status Props
   const relayStatusProps = useMemo(() => {
-      // TODO: Find correct way to access relay manager/status from eventStore or pool?
-      const connectedRelaysCount = 0; // Placeholder
-      const knownRelaysCount = RELAYS.length; // Placeholder
+      const knownCount = RELAYS.length; // Use the length of the configured RELAYS array
+      // For now, assume data is being received if the pool object exists.
+      // A more robust check would involve tracking actual event flow or relay connection events.
+      const isDataReceiving = !!pool; 
+      
+      console.log('[App.tsx] RelayStatusProps Calculated (Simplified):', { knownCount, isDataReceiving });
+
       return {
-          isReceivingData: connectedRelaysCount > 0, 
-          relayCount: knownRelaysCount, 
+          isReceivingData: isDataReceiving, 
+          relayCount: knownCount, 
       };
-  }, []);
-
-  // REMOVE media filter construction logic
-  // const mediaFilters = useMemo(() => { ... }, ...);
-
-  // REMOVE direct media fetching calls
-  // const fetchedImageNotes: NostrEvent[] | undefined = Hooks.useStoreQuery(...);
-  // const fetchedVideoNotes: NostrEvent[] | undefined = Hooks.useStoreQuery(...);
-  // const fetchedPodcastNotes: NostrEvent[] | undefined = Hooks.useStoreQuery(...);
-
-  // REMOVE useEffects for processing/shuffling raw notes
-  // useEffect(() => { if (fetchedImageNotes) { ... setRawImageNotes ... } }, [fetchedImageNotes]);
-  // useEffect(() => { if (fetchedVideoNotes) { ... setRawVideoNotes ... } }, [fetchedVideoNotes]);
-  // useEffect(() => { if (fetchedPodcastNotes) { ... setRawPodcastNotes ... } }, [fetchedPodcastNotes]);
-  // useEffect(() => { ... setShuffledImageNotes ... }, [rawImageNotes]);
-  // useEffect(() => { ... setShuffledVideoNotes ... }, [rawVideoNotes]);
-
-  // --- Update Overall Loading State --- 
-  // Base loading on contacts query resolving, as media loading is handled by useMediaContent
-  // const isFollowsLoading = contactsData === undefined; // Replaced by isLoadingContent state
-  // const isLoadingContent = isFollowsLoading; // Replaced by isLoadingContent state
-  // DEBUG: Keep log for now
-  console.log('[App.tsx DEBUG] Final isLoadingContent (from state):', isLoadingContent);
+  }, [pool, RELAYS]); // Depend on pool (to react if it becomes available) and RELAYS (if it could ever change)
+  // --- Log relayStatusProps directly ---
+  console.log("[App.tsx BODY] relayStatusProps:", relayStatusProps ? JSON.parse(JSON.stringify(relayStatusProps)) : relayStatusProps);
 
   // --- Effect to cycle loading message --- 
   useEffect(() => {
@@ -344,7 +293,7 @@ function App() {
 
   // --- Loading State --- 
   if (isLoadingContent) {
-    console.log("[App.tsx] Rendering LOADING SPINNER (Waiting for Follows)"); 
+    console.log("[App.tsx] Rendering LOADING SPINNER (Waiting for Follows/Contacts)"); 
     return (
       <div className="relative flex flex-col min-h-screen h-screen text-white border-2 border-purple-900 bg-gradient-radial from-gray-900 via-black to-black items-center justify-center">
           <div className="mb-4 w-16 h-16 animate-spin border-4 border-purple-600 border-t-transparent rounded-full"></div>

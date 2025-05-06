@@ -170,3 +170,19 @@
     *   If videos don't display, debug `useMediaContent.ts` to ensure `shuffledVideoNotes` are populated.
     *   Address missing placeholder chat.
     *   Verify image feed navigation.
+
+## 2025-05-07: Verifying TV Npub Curator Logic & RelayStatus Display
+
+*   **Context Refinement:** Discussion clarified that the application intends to display content from authors *followed by* a predefined `TV_PUBKEY_NPUB` (curator pattern), as this TV Npub itself does not post content. This is documented in `docs/tv-app-architecture.md`.
+*   **Relevant Architecture:** See `docs/tv-app-architecture.md` for details on the intended Kind 3 fetching logic in `App.tsx` and how `followedAuthorPubkeys` are derived.
+*   **Current Content Fetching Status:** While `useMediaContent` receives 19 `followedAuthorPubkeys`, and successfully fetches some Kind 1 audio/images, no videos are appearing. This could be due to an incorrect list of `followedAuthorPubkeys` being generated (if the Kind 3 processing for `TV_PUBKEY_NPUB` in `App.tsx` is flawed) or because the actual followed authors don't post videos in a detectable way.
+*   **UI Issue:** `RelayStatus.tsx` is reported as completely invisible. This component is crucial for accessing settings.
+*   **Immediate Focus:**
+    1.  **Verify `TV_PUBKEY_NPUB` & `App.tsx` Kind 3 Processing:**
+        *   Confirm `TV_PUBKEY_NPUB` value in `src/constants.ts`.
+        *   Review `App.tsx` logic for selecting the curator pubkey, fetching its Kind 3 list (`Queries.ContactsQuery`), and parsing this list into `followedAuthorPubkeys` for `useMediaContent`.
+        *   Add logging in `App.tsx` to trace this data flow.
+    2.  **Diagnose `RelayStatus.tsx` Invisibility:**
+        *   Review how `RelayStatus` is rendered in `App.tsx`.
+        *   Investigate how `relayCount` prop is derived (should now be based on `SimplePool` status).
+    3.  **Analyze Video Content (Post-Verification):** Once the source of `followedAuthorPubkeys` is verified, re-assess why videos from those authors aren't appearing.
