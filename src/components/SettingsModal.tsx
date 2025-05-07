@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Assuming useAuth provides all necessary states and functions, and exports its return type
 import { useWallet, UseWalletReturn } from '../hooks/useWallet'; // Import useWallet
@@ -27,7 +27,40 @@ const truncateNpub = (npub: string | null): string => {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     // Use auth hook (gets necessary stores internally via useStore)
+    // DIAGNOSTIC: Temporarily comment out useAuth() call and provide dummy values
+    /*
     const auth = useAuth();
+    */
+    const auth: UseAuthReturn = useMemo(() => ({
+        isLoggedIn: false,
+        currentUserNpub: null,
+        currentUserNsecForBackup: null,
+        activeSigner: undefined,
+        isLoadingAuth: false,
+        authError: null,
+        nip46ConnectUri: null,
+        isGeneratingUri: false,
+        initiateNip46Connection: async () => { console.warn('SettingsModal-Auth DIAGNOSTIC: initiateNip46Connection no-op'); },
+        cancelNip46Connection: () => { console.warn('SettingsModal-Auth DIAGNOSTIC: cancelNip46Connection no-op'); },
+        generateNewKeys: async () => { 
+            console.warn('SettingsModal-Auth DIAGNOSTIC: generateNewKeys no-op'); 
+            // Simulate key generation for UI testing if needed
+            // setGeneratedNpub("npub1dummygeneratedkeysforui"); 
+            // setGeneratedNsec("nsec1dummygeneratedkeysforui");
+            return null; 
+        },
+        loginWithNsec: async (nsec: string) => { console.warn('SettingsModal-Auth DIAGNOSTIC: loginWithNsec no-op', nsec); return false; },
+        logout: async () => { console.warn('SettingsModal-Auth DIAGNOSTIC: logout no-op'); },
+        followedTags: [],
+        setFollowedTags: (tags: string[]) => { console.warn('SettingsModal-Auth DIAGNOSTIC: setFollowedTags no-op', tags); },
+        fetchImagesByTagEnabled: false,
+        setFetchImagesByTagEnabled: (enabled: boolean) => { console.warn('SettingsModal-Auth DIAGNOSTIC: setFetchImagesByTagEnabled no-op', enabled); },
+        fetchVideosByTagEnabled: false,
+        setFetchVideosByTagEnabled: (enabled: boolean) => { console.warn('SettingsModal-Auth DIAGNOSTIC: setFetchVideosByTagEnabled no-op', enabled); },
+        encryptDm: async () => { console.warn('SettingsModal-Auth DIAGNOSTIC: encryptDm no-op'); return ''; },
+        decryptDm: async () => { console.warn('SettingsModal-Auth DIAGNOSTIC: decryptDm no-op'); return ''; },
+    }), []);
+
     const wallet: UseWalletReturn = useWallet(); // Use the wallet hook
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
@@ -83,8 +116,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             console.log('SettingsModal: Cleaning up deposit listener effect.');
             wallet.stopDepositListener();
         };
-        // Dependencies: isOpen, auth object, wallet hook instance (ndk removed)
-    }, [isOpen, auth, wallet]);
+        // Dependencies: Use specific properties and stable callbacks
+    }, [isOpen, auth.isLoggedIn, wallet.startDepositListener, wallet.stopDepositListener]);
 
     // Focus trapping and initial focus
     useEffect(() => {

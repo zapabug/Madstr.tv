@@ -6,16 +6,106 @@
 *   `madstrtvSPEC.md`: The canonical functional specification for the application.
 *   `docs/tv-app-architecture.md`: Describes the Applesauce-based implementation approach for the features in `madstrtvSPEC.md`.
 *   `BUILD.MD`: Tracks development progress and key decisions.
+*   `DIAGNOSTIC_NOTES.md`: Tracks temporary code changes during debugging sessions.
 
-## Current State & Recent Milestones (as of 2025-05-06)
+## Current Debugging Focus (Re-Render Loop in `App.tsx` - Session Paused)
 
-1.  **Functional Specification Established:** `madstrtvSPEC.md` has been created, capturing the detailed intended features, user experience, and operational logic for the application. This serves as the primary reference for *what* the app should do.
-2.  **Architecture Aligned with Spec:** `docs/tv-app-architecture.md` has been significantly updated. It now details how the Madstr TV app, using the Applesauce toolkit, will implement the functional requirements outlined in `madstrtvSPEC.md`.
-3.  **Core Refactoring to Applesauce:** The application has undergone a foundational refactor to use Applesauce for Nostr data management (`EventStore`, `QueryStore`, `Hooks.useStoreQuery`), signing (`applesauce-signers` via `useAuth`), and DM handling (`useWallet`).
-4.  **Video Content Debugging (Ongoing):**
-    *   Confirmed that the `VIDEO_URL_REGEX` in `useMediaContent` *should* match direct `.mp4` links.
-    *   Identified that the current fetching strategy (low initial limits for Kind 1, Kind 1063, Kind 34235) might not be retrieving older video content or a sufficient volume of notes to match the experience defined in `madstrtvSPEC.md`.
-    *   The `madstrtvSPEC.md` outlines a more sophisticated fetching and caching strategy (large initial fetch of general notes, resampling for display, specific batch sizes for images/videos, deduplication, sequential video play, preloading) that `useMediaContent` and `useMediaState` need to implement.
+**Summary of Investigation (Detailed in `DIAGNOSTIC_NOTES.md` - Part 2):
+After extensive, systematic neutralization of hooks and state, the re-render loop in `App.tsx` was traced to a subtle interaction. The loop occurred when `App.tsx` called `useAuth()` AND `App.tsx`'s own `isLoadingContent` state logic was active. Neutralizing `App.tsx`'s `isLoadingContent` logic stabilized `App.tsx`, even when calling a progressively re-activated `useAuth.ts`.
+
+**Current Phased Re-activation of `useAuth.ts` (App.tsx Stable):**
+*   **Goal:** Ensure `useAuth.ts` can be fully re-activated internally without destabilizing the now-stable `App.tsx` (which has its `isLoadingContent` logic dummied).
+*   **Progress:**
+    1.  `loadAllSettings` `useEffect` (with all 3 `setState` calls) in `useAuth.ts`: **Re-activated. App Stable.**
+    2.  `loadTags` `useEffect` (with `setState` call) in `useAuth.ts`: **Re-activated. App Stable.**
+    3.  `Hooks.useQueryStore()` call in `useAuth.ts`: **Re-activated. App Stable.**
+    4.  `useNip46AuthManagement()` call in `useAuth.ts`: **Re-activated. App Stable.**
+    5.  Content of `initializeAuth` `async` function (within `useEffect`) in `useAuth.ts`: **Re-activated.**
+        *   Initial calls to `setIsLoadingAuth` within `initializeAuth` and its `useEffect` conditions: **COMMENTED OUT.**
+        *   Dependency array of `initializeAuth` `useEffect`: Temporarily changed to `[queryStore, activeSigner]` (from `[queryStore, activeSigner, restoreNip46Session]`) to test stability of `restoreNip46Session` callback.
+
+*   **Current State (Awaiting Test Results for `initializeAuth` deps change):**
+    *   **`src/App.tsx`:**
+        *   `useState` for `loadingMessageIndex` & `isLoadingContent`, and `useEffect` for `setIsLoadingContent`: **COMMENTED OUT** (values static).
+        *   `useAuth()` call: **ACTIVE**.
+        *   All other `App.tsx` custom hooks, Applesauce data hooks, `setInterval` `useEffect`: Still **COMMENTED OUT / DUMMIED**.
+        *   Data inputs (`rawContactsData`, `viewMode`): Still **HARDCODED**.
+    *   **`src/hooks/useAuth.ts`:**
+        *   `loadAllSettings` & `loadTags` `useEffect`s: **Active**.
+        *   `Hooks.useQueryStore()` & `useNip46AuthManagement()`: **Active**.
+        *   `initializeAuth` `async` function content: **Active**.
+        *   `setIsLoadingAuth` calls related to `initializeAuth`: **Commented Out**.
+        *   `initializeAuth` `useEffect` dependency array: **`[queryStore, activeSigner]`** (pending test results).
+        *   `updateNpub` `useEffect` & `isLoadingAuth` fallback `useEffect`: Still **COMMENTED OUT / EMPTIED**.
+        *   Return object of `useAuth`: Wrapped in `useMemo` with a full dependency list.
+    *   **Calls to `useAuth()` in other components**: Still **COMMENTED OUT / DUMMIED**.
+
+*   **Immediate Next Action (When Session Resumes):**
+    1.  **Observe Console Logs:** With `initializeAuth` `useEffect` deps set to `[queryStore, activeSigner]`, check if `App.tsx` re-render loop is gone. Logs to monitor: `[App.tsx] Function body execution START` and `initializeAuth` internal logs.
+    2.  **If Stable:** This points to `restoreNip46Session` callback from `useNip46AuthManagement` possibly being unstable. The next step would be to investigate `useNip46AuthManagement` to ensure `restoreNip46Session` is a stable `useCallback`. If it can be stabilized, restore it to `initializeAuth`'s dependency array.
+    3.  **If Loop Persists (even with modified deps):** The issue is likely within the `initializeAuth` logic itself, specifically how `setActiveSigner` changes might be interacting with `App.tsx` re-renders, despite `useAuth`'s memoized return. Further isolation within `initializeAuth` would be needed (e.g., temporarily preventing `setActiveSigner` calls after successful load).
+    4.  **Continue `useAuth.ts` Reactivation:** Once `initializeAuth` is stable, proceed to re-enable `updateNpub` `useEffect` and then `setIsLoadingAuth` calls.
+
+*   **(Future Priorities - Post `useAuth.ts` Full Stability):**
+    *   Cautiously re-activate `App.tsx`'s `isLoadingContent` `useState` and `useEffect`.
+    *   Gradually re-activate other hooks/data sources in `App.tsx`.
+    *   Re-activate `useAuth()` calls in `useWallet.ts`, `ImageFeed.tsx`, `SettingsModal.tsx`.
+    *   Address the original `ContactsQuery` instability.
+
+---
+*Previous planning sections retained below for historical context.*
+
+## Current State & Recent Milestones (as of 2024-05-XX - Debugging Session)
+
+1.  **Functional Specification & Architecture:** Established (`madstrtvSPEC.md`, `docs/tv-app-architecture.md`).
+2.  **Core Refactoring to Applesauce:** Completed for data, signing, DMs.
+3.  **"Maximum Update Depth Exceeded" Debugging (Ongoing -> Breakthrough!):**
+    *   **Initial Symptoms:** Application unusable due to a persistent re-render loop, manifesting as a "crazy carousel" for images and errors in `App.tsx` and child components like `ImageFeed.tsx` and `SettingsModal.tsx`.
+    *   **Extensive Diagnostic Steps Undertaken (see `DIAGNOSTIC_NOTES.md` for details):
+        *   Stabilization attempts for props and state within `useMediaContent`, `useMediaState` using `JSON.stringify`.
+        *   Scoped `useEffect` dependencies in various hooks.
+        *   Systematic bypass/hardcoding of `useAuth` outputs in `App.tsx`.
+        *   Systematic bypass/hardcoding of `ImageFeed` props in `App.tsx`.
+        *   Systematic bypass/hardcoding of `viewMode` in `App.tsx`.
+        *   Temporary removal of `framer-motion` components around `ImageFeed`.
+        *   Temporary disabling of `useAuth` and `useWallet` via internal flags.
+    *   **BREAKTHROUGH FINDING:** The "Maximum update depth exceeded" loop was **resolved** when the `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` call in `App.tsx` (used to fetch the follow list for `pubkeyToFetchFollowsFor`) was completely bypassed (by hardcoding `rawContactsData = null;`). This occurred even with `useAuth` and `useWallet` fully re-enabled. This strongly indicates an issue with `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` or its underlying observable causing excessive re-renders of `App.tsx`.
+
+## Next Steps & Priorities (Revised after Loop Resolution):
+
+*   **(HIGHEST PRIORITY) Investigate and Stabilize `ContactsQuery` in `App.tsx`:**
+    *   **Goal:** Understand why `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` triggers a re-render loop in `App.tsx` and implement a stable way to consume this data.
+    *   **Actions:**
+        1.  Restore the `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` call in `App.tsx`.
+        2.  Add detailed logging for `rawContactsData` to observe its reference and content changes upon app start and when `pubkeyToFetchFollowsFor` (derived from `isLoggedIn` and `currentUserNpub` from `useAuth`) changes.
+        3.  If `rawContactsData` shows frequent reference changes for identical content, this confirms the instability with `useStoreQuery`'s output for this specific query.
+        4.  **Explore Solutions:**
+            *   **Option A (Preferred if feasible):** Manually subscribe to the contacts data observable (e.g., via `eventStore.contacts(pubkey)` or similar in Applesauce) within a `useEffect` in `App.tsx`. This allows for manual control over `setState` for `contactsData`, enabling deeper comparisons or custom stabilization logic.
+            *   **Option B (Wrapper):** Create a custom hook that wraps `Hooks.useStoreQuery(Queries.ContactsQuery, ...)`, implementing more aggressive memoization or stabilization for the returned `contactsData` (e.g., deep equality check before returning a new reference).
+            *   **Option C (Applesauce Issue):** If the problem lies deep within `useStoreQuery` or the `ContactsQuery` observable itself, document this for potential upstream reporting/fixing.
+
+*   **(Medium Priority) Gradual Reversion of Diagnostics & System Stability Checks:**
+    *   Once `contactsData` in `App.tsx` is stable and the main loop is confirmed gone:
+        1.  Restore `ImageFeed` props in `App.tsx` (remove hardcoding of `imageNotes` and `currentImageIndex`). *Test stability.*
+        2.  Restore dynamic `viewMode` in `App.tsx` (remove hardcoding, use value from `useMediaState`). *Test stability.*
+        3.  Restore `framer-motion` components (`AnimatePresence`, `motion.div`) around `ImageFeed` in `App.tsx`. *Test stability.*
+        4.  Restore `motion.img` and its `AnimatePresence` wrapper within `ImageFeed.tsx`. *Test stability.*
+        5.  Re-enable tipping logic in `ImageFeed.tsx`. *Test stability.*
+    *   At each step, verify that the UI behaves as expected (carousel, video playback, etc.) and no new loops are introduced.
+
+*   **(Medium Priority) Verify Full Media Content Flow:**
+    *   Once `contactsData` is stable and provides `followedAuthorPubkeys`, ensure `useMediaContent` correctly fetches and processes media (images, videos, podcasts) from these authors and any followed tags.
+    *   Ensure `useMediaState` correctly manages and displays this content.
+    *   Test all features outlined in `madstrtvSPEC.md` related to media fetching, display, and playback. Playback for videos and podcasts needs to be re-verified.
+
+*   **(Lower Priority) Address Linter Errors & Code Cleanup:**
+    *   Resolve any outstanding linter errors (e.g., related to `viewMode` comparisons once it's dynamic).
+    *   Remove all diagnostic code, console logs, and comments added during this debugging session (refer to `DIAGNOSTIC_NOTES.md`).
+
+*   **(Lower Priority) Review `useAuth` & `useWallet` for General Stability:**
+    *   Even though they weren't the primary cause of *this* loop, review their internal `useEffect` dependencies and state management for any potential instabilities or areas for improvement, especially regarding how they interact with `EventStore` or `QueryStore` subscriptions.
+
+**Old `Planning.md` content related to `madstrtvSPEC.md` feature implementation (video handling, settings modal) remains relevant once core stability is fully restored.**
 
 ## Interaction 15: 2024-07-22 (Infinite Loop Persists - Focus Shifts to useMediaContent)
 

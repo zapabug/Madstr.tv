@@ -237,66 +237,61 @@
     3.  **Refine `VIDEO_URL_REGEX`:** Based on findings from the manual check, adjust `VIDEO_URL_REGEX` in `useMediaContent.ts` if current video URL patterns are not being caught.
     4.  **(Lower Priority for now) Re-evaluate Re-rendering & Carousel/Pagination:** Address potential re-rendering issues affecting UI elements like the image carousel and pagination once the core content fetching for videos is improved.
 
-## 2025-05-06: Functional Specification and Architecture Alignment
+## 2025-05-13 (Ongoing): Debugging Persistent `App.tsx` Re-Render Loop
 
-*   **New Functional Specification:** Created `madstrtvSPEC.md` to serve as the canonical document detailing all intended features, user experiences, and operational logic for the Madstr TV application. This document is based on the comprehensive pre-Applesauce design documentation.
-*   **Architecture Document Update:** `docs/tv-app-architecture.md` has been significantly updated to align with `madstrtvSPEC.md`. The architecture document now describes how the application, built with the Applesauce toolkit, will achieve the functional requirements outlined in the new specification.
-*   **Current Focus:** Continue implementing and refining features (especially video content handling, including larger initial fetches and advanced playlist management) as per `madstrtvSPEC.md`, ensuring the Applesauce-based implementation in `useMediaContent`, `useMediaState`, and other hooks meets these detailed requirements.
+*   **Context:** After resolving an earlier "Maximum update depth exceeded" error (traced to `setState` calls within `useAuth.ts` initial `useEffect`s), a new, more subtle issue emerged: `App.tsx` is re-rendering repeatedly.
+*   **Symptom:** The `useEffect` in `useAuth.ts` containing `loadAllSettings` (which has `[]` dependencies and makes no `setState` calls in its current diagnostic state) logs its execution multiple times. This indicates `useAuth()` is being re-invoked due to `App.tsx` re-renders.
+*   **Extensive Neutralization Efforts (see `DIAGNOSTIC_NOTES.md` for full details):
+    *   **`src/hooks/useAuth.ts`:** Made almost entirely inert. Most internal `useEffect`s are empty or commented out. The `loadAllSettings` `useEffect` no longer calls `setState`.
+    *   **`src/App.tsx`:**
+        *   Local `useEffect` for loading message interval: **COMMENTED OUT**.
+        *   `useRelayPool()` and `Hooks.useEventStore()`: **COMMENTED OUT** (using dummy objects).
+        *   `rawContactsData` (for `ContactsQuery`): **HARDCODED to `null`**.
+        *   Most other props/states derived from these are static or point to empty data (`viewMode`, `ImageFeed` props).
+*   **Current Hypothesis:** The repeated re-renders of `App.tsx` are likely caused by one of the other custom hooks it calls (`useMediaContent`, `useMediaState`, `useMediaElementPlayback`, `useFullscreen`, `useKeyboardControls`, `useImageCarousel`), even if they receive mostly static props. Their internal logic or state management might still trigger updates causing `App.tsx` to re-render.
+*   **Next Steps:** Systematically comment out these remaining hook calls within `App.tsx` one by one, providing mock return values, to isolate the source of `App.tsx`'s re-renders. Once `App.tsx` is stable, gradually re-enable functionality, starting with `useAuth.ts`'s internal effects, then `App.tsx`'s data sources.
 
-## 2025-05-10: Runtime Error Investigation & Linter Error Resolution
+## 2025-05-14: Debugging `App.tsx` Re-Render Loop (Post-"Max Depth" Fix)
 
-*   **Runtime Error (`useRelayPool` Import):**
-    *   Investigated `Uncaught SyntaxError: The requested module 'http://localhost:3000/src/main.tsx' doesn't provide an export named: 'useRelayPool'`.
-    *   Confirmed `src/App.tsx` imports `useRelayPool` correctly from `src/contexts/RelayPoolContext.tsx`.
-    *   Confirmed `src/main.tsx` does not incorrectly export or import `useRelayPool`.
-    *   A global search found no incorrect import paths for `useRelayPool`.
-    *   **Conclusion:** Error likely due to stale browser cache or dev server build. Recommended cache clearing and server restart.
+*   **Context:** After resolving a hard "Maximum update depth exceeded" error (traced to `Hooks.useStoreQuery(Queries.ContactsQuery, ...)` in `App.tsx`), a more subtle, persistent re-render loop in `App.tsx` was identified. This was observed via repeated logs from an inert `useEffect` in `useAuth.ts`.
 
-*   **Linter Error Resolution (Prop Mismatches in `App.tsx`):
-    *   Completed updates to `src/hooks/useAuth.ts` to include and persist `fetchImagesByTagEnabled` and `fetchVideosByTagEnabled`.
-    *   Completed updates to `src/utils/idb.ts` to support new settings persistence (`loadSettingsFromDb`, `saveSettingsToDb`).
-    *   Verified `UseMediaContentProps` and `UseMediaStateProps` are correctly exported from their respective hooks.
-    *   Reviewed `src/App.tsx` and confirmed it now correctly passes the required props to `useMediaContent` and `useMediaState`.
-    *   **Conclusion:** The previously identified linter errors related to these prop mismatches in `App.tsx` should be resolved.
+*   **Debugging Journey (Summary - see `DIAGNOSTIC_NOTES.md` Part 2 for full details):
+    1.  **Systematic Neutralization of `App.tsx` Internals:** Most custom hooks (`useMediaContent`, `useMediaState`, etc.), Applesauce data hooks (`useRelayPool`, `useEventStore`), and local `useEffect`s in `App.tsx` were commented out or dummied. `useAuth()` was still called by `App.tsx`.
+    2.  **Systematic Neutralization of `useAuth.ts` Internals:** The `useAuth.ts` hook was made almost entirely inert: `useNip46AuthManagement` and `Hooks.useQueryStore` calls were dummied, most internal `useEffect`s were emptied/commented, and its return object was memoized. Loop persisted as long as `App.tsx` called this inert `useAuth`.
+    3.  **Global `useAuth()` Neutralization:** All calls to `useAuth()` (in `App.tsx`, `useWallet.ts`, `ImageFeed.tsx`, `SettingsModal.tsx`) were commented out. **Result: `App.tsx` stabilized.** This confirmed the loop was tied to `useAuth()` being in the active component tree via `App.tsx`.
+    4.  **Re-introducing `useAuth()` in `App.tsx` (inert version):** The loop in `App.tsx` returned.
+    5.  **BREAKTHROUGH - Stabilizing `App.tsx`:** The loop finally stopped when `App.tsx`'s local `useState` for `isLoadingContent` and its related `useEffect` were commented out (while `App.tsx` continued to call the inert `useAuth.ts`). This highlighted a subtle interaction between `App.tsx`'s local loading state management and the presence of the `useAuth` hook call.
 
-## Session Ending 2024-07-27 (Approx.)
+*   **Current Status & Phased Re-activation Plan:**
+    *   `App.tsx` is currently stable. Its local `isLoadingContent` logic is dummied. It calls a highly inert `useAuth.ts`.
+    *   **`useAuth.ts` Reactivation (In Progress):**
+        *   Began re-enabling `setState` calls within `useAuth.ts`'s `loadAllSettings` `useEffect` one by one.
+        *   Currently, `setFetchImagesByTagEnabledState(...)` is active.
+        *   Other parts of `useAuth.ts` (sub-hook calls, other effects) remain dummied/inert.
+        *   **Next Step:** Monitor console logs. If `App.tsx` remains stable with this single `setState` active in `useAuth.ts`, proceed to re-enable the next `setState` in `useAuth.ts` (`setFetchVideosByTagEnabledState`). If the loop returns, the most recently enabled `setState` is a key trigger. Following this, other parts of `useAuth.ts` and then `App.tsx` will be gradually re-enabled.
 
-### Key Changes & Fixes:
+## BUILD.MD - Madstr TV App (Applesauce Native)
 
-**1. `src/hooks/useNip46AuthManagement.ts`:**
-    *   **`useRelayPool` Import Correction**: Fixed runtime error by changing the import path for `useRelayPool` from `../main` to `../contexts/RelayPoolContext`.
-    *   **`NostrConnectSigner` Integration Rework (`subscriptionMethod`)**:
-        *   Addressed a critical type mismatch for `NostrConnectSignerOptions['subscriptionMethod']`.
-        *   Implemented a robust adapter to bridge `SimplePool.subscribeMany` (from `nostr-tools`) with the RxJS-like `Subscribable<NostrEvent>` interface that `NostrConnectSigner` internally expects.
-        *   This involved defining local minimal interfaces: `MinimalUnsubscribable`, `MinimalObserver`, `MinimalSubscribable`, and `MinimalPoolSubscription` (for the return type of `pool.subscribeMany` as `SubCloser` is not an exported type from `nostr-tools`).
-        *   Ensured the adapter correctly uses the NIP-46 specific `relays` argument when calling `pool.subscribeMany`.
-        *   Imported `Filter` from `nostr-tools`.
+**Latest Entry: 2024-05-15 - Debugging Session Paused (Re-Render Loop in `App.tsx`)**
 
-**2. `src/components/ImageFeed.tsx`:**
-    *   **Runtime Error Fix**: Resolved an `Uncaught TypeError: imageNotes is undefined`.
-    *   Modified the conditional rendering logic to check `if (!imageNotes || imageNotes.length === 0)` before accessing `imageNotes.length`, preventing the error when `imageNotes` is initially undefined. Further refinements made to `currentImageNote` derivation.
+*   **Context:** Investigation into a persistent re-render loop in `App.tsx` that occurs when the `useAuth()` hook is active and `App.tsx`'s own `isLoadingContent` state logic is also active.
 
-### Application State entering this session:
-*   The application now loads past the critical runtime errors that were preventing startup.
-*   The NIP-46 authentication flow should be more stable due to the corrected `subscriptionMethod` implementation.
-*   The `ImageFeed` component should no longer crash due to undefined `imageNotes`.
+*   **Current Diagnostic State (Session Paused - Awaiting Test):**
+    *   **`App.tsx`:** Stabilized by commenting out its internal `isLoadingContent` state management (`useState` and `useEffect`). It currently calls a progressively re-activated `useAuth.ts`.
+    *   **`src/hooks/useAuth.ts`:** Most core functionalities (settings/tag loading, query store, NIP-46 management) have been re-activated. The current focus is on the `initializeAuth` `useEffect`.
+        *   The content of the `async initializeAuth` function has been re-activated.
+        *   Calls to `setIsLoadingAuth(true/false)` within and around `initializeAuth` are currently **commented out**.
+        *   The dependency array for the `initializeAuth` `useEffect` has been **temporarily changed to `[queryStore, activeSigner]`**, removing `restoreNip46Session` to test if an unstable callback from `useNip46AuthManagement` was triggering excessive re-runs.
 
-## 2025-05-12: Debugging Re-render Loops & Carousel Issues
+*   **Pending Action (When Session Resumes):**
+    1.  **Observe Console Logs:** Check `App.tsx` re-render logs and `initializeAuth` logs to see if modifying the dependency array has stabilized the `initializeAuth` effect. This will confirm if `restoreNip46Session` was the culprit.
+    2.  Based on the outcome, either investigate `useNip46AuthManagement` to stabilize its `restoreNip46Session` callback or, if the loop persists, further isolate the issue within the `initializeAuth` logic itself (e.g., around `setActiveSigner` calls).
+    3.  Continue the phased re-activation of `useAuth.ts` (remaining `setIsLoadingAuth` calls, `updateNpub` effect).
+    4.  Eventually, attempt to re-integrate `App.tsx`'s original `isLoadingContent` logic.
 
-*   **Initial State:** App loaded but encountered `Uncaught TypeError: imageNotes is undefined` in `ImageFeed.tsx` again.
-*   **Fix 1 (`ImageFeed.tsx`):** Refined `currentImageNote` derivation in `ImageFeed.tsx` to more robustly handle potentially undefined `imageNotes` during initial render cycles. Also added a check to the scroll `useEffect` for `imageNotes`.
-*   **New Issue:** `Uncaught ReferenceError: hookInstanceId is not defined` in `useMediaContent.ts` after adding extensive logging.
-*   **Fix 2 (`useMediaContent.ts`):** Modified `hookInstanceId` definition in `useMediaContent.ts` to use `useRef` for more robust instantiation, resolving the ReferenceError.
-*   **Persistent Issue:** "Maximum update depth exceeded" error emerged, with stack traces pointing to `ImageFeed.tsx` and `App.tsx`.
-    *   **Symptom:** Image carousel "flipping through images like crazy."
-*   **Diagnostics & Fixes for Loop:**
-    *   Temporarily neutralized tipping logic in `ImageFeed.tsx` to isolate `useAuth` and `useWallet` as loop contributors. Loop persisted, pointing higher up.
-    *   Modified `isLoadingContent` `useEffect` in `App.tsx` to be less sensitive to `contactsData` reference changes. Loop persisted.
-    *   Corrected linter error in `App.tsx` where `imageNotes` was destructured instead of `imageNotesForDisplay` from `useMediaState`. Updated usages.
-    *   **Key Insight:** The crazy carousel and "Maximum update depth" error strongly point to instability in props passed to `useImageCarousel` (likely `onTick` which is `handleNext` from `useMediaState`), or `useMediaState` itself being caught in a loop due to unstable inputs from `useMediaContent`.
-    *   **Fix 3 (`useMediaState.ts`):** Added `JSON.stringify` checks before calling `setImageNotesForDisplay` (in `generateNewImageDisplayBatch`) and `setVideoNotesForDisplay` (in its init effect) to ensure these display batch state setters are only called if the actual content changes. This aims to stabilize the references of `imageNotesForDisplay` and `videoNotesForDisplay`.
-*   **Current Status:**
-    *   Images are displaying.
-    *   "Maximum update depth exceeded" error persists.
-    *   Image carousel is still "flipping like crazy." This indicates the `handleNext` function (passed as `onTick` to `useImageCarousel`) is still being called too rapidly, likely due to its own reference instability originating from its dependencies (`imageNotesForDisplay`, etc.) in `useMediaState`.
-*   **Next Steps:** Focus on `useImageCarousel` and the stability of its `onTick` prop (`handleNext` from `useMediaState`). Investigate dependencies of `handleNext` in `useMediaState.ts`.
+*   **Detailed history of this debugging session can be found in `DIAGNOSTIC_NOTES.md` (Part 2) and `Planning.md`.**
+
+---
+*Previous Build Log Entries Below*
+## 2025-05-06: Documentation Update & UI/UX Issues Post-Refactor
+...

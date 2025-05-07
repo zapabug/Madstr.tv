@@ -106,7 +106,8 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   // Hooks
   const wallet = useWallet();
   // Get auth context without passing NDK; useAuth uses useNDK internally
-  const auth = useAuth(); 
+  // DIAGNOSTIC: Temporarily comment out useAuth() call
+  // const auth = useAuth(); 
   const eventStore = Hooks.useEventStore(); // Get EventStore
   // const queryStore = Hooks.useQueryStore(); // Get QueryStore
 
@@ -234,94 +235,99 @@ const ImageFeed: React.FC<MediaFeedProps> = (
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-        {/* Image Container */}
-        <AnimatePresence mode="wait">
-          <motion.div
-             key={currentImageNote?.id || currentImageIndex} // Ensure key changes
-            className="w-full h-full flex items-center justify-center"
-          >
-             {imageUrl ? (
-                <img 
-                    src={imageUrl} 
-                    alt={`Nostr media ${currentImageNote?.id}`}
-                    className="max-w-full max-h-full object-contain shadow-lg"
-                    // loading="lazy" // Let the browser handle lazy loading if needed
-                    onError={(e) => {
-                        console.error(`ImageFeed: Error loading image ${imageUrl}`);
-                        // Optionally handle image errors, e.g., show placeholder
-                        (e.target as HTMLImageElement).style.display = 'none'; // Hide broken image
-                    }}
-                />
-            ) : (
-                <div className="text-gray-500">No Image Available</div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+    <div className="relative w-full h-full flex flex-col items-center justify-center bg-black select-none overflow-hidden group">
+      {/* Main Image Display */}
+      {imageUrl ? (
+        // --- DIAGNOSTIC: Temporarily replace framer-motion animation with simple img ---
+        <img
+          // key={currentNoteId || currentImageIndex} // DIAGNOSTIC: Remove key to prevent remounting
+          className="absolute top-0 left-0 w-full h-full object-contain select-none"
+          src={imageUrl}
+          alt={`Nostr Media ${currentImageNote?.id}`}
+          style={{ opacity: 1, transform: 'scale(1)' }} // Mimic final state of animation
+        />
+        // <AnimatePresence mode="wait">
+        //   <motion.img
+        //     key={currentNoteId || currentImageIndex} // Crucial for AnimatePresence to detect changes
+        //     className="absolute top-0 left-0 w-full h-full object-contain select-none"
+        //     src={imageUrl}
+        //     alt={`Nostr Media ${currentImageNote?.id}`}
+        //     initial={{ opacity: 0, scale: 0.9 }}
+        //     animate={{ opacity: 1, scale: 1 }}
+        //     exit={{ opacity: 0, scale: 0.9 }}
+        //     transition={{ duration: 0.5 }}
+        //   />
+        // </AnimatePresence>
+      ) : (
+        <div className="flex flex-col items-center justify-center text-gray-400">
+          <div className="w-12 h-12 mb-4 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+          <p>{loadingMessages[loadingMessageIndex]}</p>
+        </div>
+      )}
 
-        {/* Author Info Overlay */}
-        {currentAuthorNpub && (
-          <div
-            ref={authorContainerRef}
-            className={`absolute bottom-2 right-2 z-20 flex flex-col items-center space-y-0.5 transition-all duration-200 ease-in-out 
-                         ${canTip ? 'cursor-pointer focus:outline-none focus:ring-4 focus:ring-purple-600 focus:ring-opacity-75 rounded-lg p-1 bg-black/30' : 'p-1'}`}
-            tabIndex={canTip ? 0 : -1} // Make focusable only when tipping is possible
-            onKeyDown={handleAuthorKeyDown}
-            title={canTip ? `Press OK to tip ${DEFAULT_TIP_AMOUNT} sats` : displayName}
-          >
-            {/* Author Name */} 
-            {currentImageNote && (
-              <p className="text-xs text-purple-500 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none truncate max-w-[120px] text-center">
-                {displayName}
-              </p>
-            )}
+      {/* Author Info Overlay */}
+      {currentAuthorNpub && (
+        <div
+          ref={authorContainerRef}
+          className={`absolute bottom-2 right-2 z-20 flex flex-col items-center space-y-0.5 transition-all duration-200 ease-in-out 
+                       ${canTip ? 'cursor-pointer focus:outline-none focus:ring-4 focus:ring-purple-600 focus:ring-opacity-75 rounded-lg p-1 bg-black/30' : 'p-1'}`}
+          tabIndex={canTip ? 0 : -1} // Make focusable only when tipping is possible
+          onKeyDown={handleAuthorKeyDown}
+          title={canTip ? `Press OK to tip ${DEFAULT_TIP_AMOUNT} sats` : displayName}
+        >
+          {/* Author Name */} 
+          {currentImageNote && (
+            <p className="text-xs text-purple-500 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none truncate max-w-[120px] text-center">
+              {displayName}
+            </p>
+          )}
 
-            {/* Author QR Code + Overlays */} 
-            <div className="relative bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
-                {/* QR Code itself */}
-                <QRCode
-                    value={currentAuthorNpub}
-                    size={256}
-                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                    viewBox={`0 0 256 256`}
-                    level="H" // High error correction crucial for overlays
-                    bgColor="#FFFFFF"
-                    fgColor="#000000"
-                />
+          {/* Author QR Code + Overlays */} 
+          <div className="relative bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
+              {/* QR Code itself */}
+              <QRCode
+                  value={currentAuthorNpub}
+                  size={256}
+                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                  viewBox={`0 0 256 256`}
+                  level="H" // High error correction crucial for overlays
+                  bgColor="#FFFFFF"
+                  fgColor="#000000"
+              />
 
-                {/* --- Overlays Container --- */} 
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    
-                    {/* Custom Logged-in Icon (Always shown when logged in) */} 
-                    {auth.isLoggedIn && (
-                        <div className="absolute w-1/3 h-1/3 opacity-80">
-                           <CustomLoggedInIcon />
-                        </div>
-                    )}
+              {/* --- Overlays Container --- */} 
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  
+                  {/* Custom Logged-in Icon (Always shown when logged in) */} 
+                  {/* auth.isLoggedIn && (
+                      <div className="absolute w-1/3 h-1/3 opacity-80">
+                         <CustomLoggedInIcon />
+                      </div>
+                  ) */}
 
-                    {/* Tip possible indicator (Zap icon) */} 
-                    {canTip && !isTipping && (
-                        // Position the Zap icon; it might overlap the custom icon or be offset
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-sm">
-                             <FiZap className="w-3/5 h-3/5 text-yellow-400 opacity-90 filter drop-shadow(0 1px 1px rgba(0,0,0,0.7))" />
-                        </div>
-                    )}
-                </div>
+                  {/* Tip possible indicator (Zap icon) */} 
+                  {canTip && !isTipping && (
+                      // Position the Zap icon; it might overlap the custom icon or be offset
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-sm">
+                           <FiZap className="w-3/5 h-3/5 text-yellow-400 opacity-90 filter drop-shadow(0 1px 1px rgba(0,0,0,0.7))" />
+                      </div>
+                  )}
+              </div>
 
-                 {/* --- Tipping Status Overlays (Should cover everything else) --- */} 
-                 {/* Use a separate container or ensure higher z-index if needed */} 
-                 <div className="absolute inset-0 pointer-events-none"> 
-                   <AnimatePresence>
-                     {isTipping && (
-                         <motion.div /* Loading Spinner Overlay */
-                              key="tipping"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-sm"
-                          >
-                               <svg className="animate-spin h-6 w-6 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                          </motion.div>
+               {/* --- Tipping Status Overlays (Should cover everything else) --- */} 
+               {/* Use a separate container or ensure higher z-index if needed */} 
+               <div className="absolute inset-0 pointer-events-none"> 
+                 <AnimatePresence>
+                   {isTipping && (
+                       <motion.div /* Loading Spinner Overlay */
+                            key="tipping"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-sm"
+                         >
+                              <svg className="animate-spin h-6 w-6 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                         </motion.div>
                      )}
                      {tipStatus === 'success' && (
                           <motion.div /* Success Checkmark Overlay */
@@ -345,29 +351,29 @@ const ImageFeed: React.FC<MediaFeedProps> = (
                               <svg className="h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                           </motion.div>
                       )}
-                   </AnimatePresence>
-                 </div>
-            </div>
-
-            {/* Timestamp */} 
-            {currentImageNote && (
-              <p className="text-[10px] text-purple-500 bg-black/40 px-1 py-0.5 rounded pointer-events-none text-center">
-                {timestamp}
-              </p>
-            )}
-
+                 </AnimatePresence>
+               </div>
           </div>
-        )}
 
-        {/* Hidden Toggle Button (Keep outside the info container) */}
-        <button
-          ref={toggleButtonRef}
-          className="absolute opacity-0 pointer-events-none" // Make it truly hidden
-          aria-hidden="true"
-          tabIndex={-1} // Prevent tabbing
-        >
-          Focus Target
-        </button>
+          {/* Timestamp */} 
+          {currentImageNote && (
+            <p className="text-[10px] text-purple-500 bg-black/40 px-1 py-0.5 rounded pointer-events-none text-center">
+              {timestamp}
+            </p>
+          )}
+
+        </div>
+      )}
+
+      {/* Hidden Toggle Button (Keep outside the info container) */}
+      <button
+        ref={toggleButtonRef}
+        className="absolute opacity-0 pointer-events-none" // Make it truly hidden
+        aria-hidden="true"
+        tabIndex={-1} // Prevent tabbing
+      >
+        Focus Target
+      </button>
     </div>
   );
 };

@@ -10,6 +10,8 @@ import { QueryStore, EventStore } from 'applesauce-core';
 import { Subscription } from 'rxjs'; // Import RxJS Subscription type
 import { UnsignedEvent } from 'nostr-tools'; // Import UnsignedEvent
 
+const DIAGNOSTIC_DISABLE_FUNCTIONALITY = false; // <-- REVERT DIAGNOSTIC FLAG
+
 // Type alias for clarity within this file
 type StoredProof = Proof & { mintUrl: string };
 
@@ -47,11 +49,59 @@ export interface SendTipParams {
 const DEFAULT_MINT_URL = 'https://8333.space:3338'; // Example - Confirm this!
 
 export const useWallet = (): UseWalletReturn => {
+    if (DIAGNOSTIC_DISABLE_FUNCTIONALITY) { // Check will now be false
+        console.warn('Wallet Hook: DIAGNOSTIC_DISABLE_FUNCTIONALITY is TRUE. Returning minimal state.');
+        return {
+            proofs: [],
+            balanceSats: 0,
+            isListeningForDeposits: false,
+            walletError: null,
+            isLoadingWallet: false,
+            configuredMintUrl: null,
+            loadWalletState: async () => { console.warn('Wallet DIAGNOSTIC: loadWalletState no-op'); },
+            startDepositListener: () => { console.warn('Wallet DIAGNOSTIC: startDepositListener no-op'); },
+            stopDepositListener: () => { console.warn('Wallet DIAGNOSTIC: stopDepositListener no-op'); },
+            sendCashuTipWithSplits: async () => { console.warn('Wallet DIAGNOSTIC: sendCashuTipWithSplits no-op'); return false; },
+            setConfiguredMintUrl: async () => { console.warn('Wallet DIAGNOSTIC: setConfiguredMintUrl no-op'); },
+        };
+    }
+
     // Get Applesauce Stores via specific hooks
     const queryStore = Hooks.useQueryStore();
     const eventStore = Hooks.useEventStore(); // Get EventStore
     // Get Auth state/methods internally
+    // DIAGNOSTIC: Temporarily comment out useAuth() call and provide dummy values
+    /*
     const auth = useAuth();
+    */
+    const auth = useMemo(() => ({
+        isLoggedIn: false,
+        currentUserNpub: null,
+        decryptDm: async (senderNpub: string, ciphertext: string) => {
+            console.log("Diag: auth.decryptDm no-op", senderNpub, ciphertext.substring(0,10)+"..."); 
+            return ''; 
+        },
+        // Add other properties from UseAuthReturn with dummy/default values if useWallet uses them
+        // For now, these are the main ones identified from the depositFilter and handleIncomingDm
+        activeSigner: undefined,
+        currentUserNsecForBackup: null,
+        isLoadingAuth: false,
+        authError: null,
+        nip46ConnectUri: null,
+        isGeneratingUri: false,
+        initiateNip46Connection: async () => { console.warn('Wallet-Auth DIAGNOSTIC: initiateNip46Connection no-op'); },
+        cancelNip46Connection: () => { console.warn('Wallet-Auth DIAGNOSTIC: cancelNip46Connection no-op'); },
+        generateNewKeys: async () => { console.warn('Wallet-Auth DIAGNOSTIC: generateNewKeys no-op'); return null; },
+        loginWithNsec: async () => { console.warn('Wallet-Auth DIAGNOSTIC: loginWithNsec no-op'); return false; },
+        logout: async () => { console.warn('Wallet-Auth DIAGNOSTIC: logout no-op'); },
+        followedTags: [],
+        setFollowedTags: () => { console.warn('Wallet-Auth DIAGNOSTIC: setFollowedTags no-op'); },
+        fetchImagesByTagEnabled: false,
+        setFetchImagesByTagEnabled: () => { console.warn('Wallet-Auth DIAGNOSTIC: setFetchImagesByTagEnabled no-op'); },
+        fetchVideosByTagEnabled: false,
+        setFetchVideosByTagEnabled: () => { console.warn('Wallet-Auth DIAGNOSTIC: setFetchVideosByTagEnabled no-op'); },
+        encryptDm: async () => { console.warn('Wallet-Auth DIAGNOSTIC: encryptDm no-op'); return ''; },
+    }), []);
 
     const [proofs, setProofs] = useState<StoredProof[]>([]); // Use alias
     const [balanceSats, setBalanceSats] = useState<number>(0);

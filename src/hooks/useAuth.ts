@@ -24,6 +24,8 @@ import {
 // Assuming RELAYS are defined elsewhere if needed directly (e.g., maybe not needed here anymore)
 // import { RELAYS } from '../constants/relays';
 
+const DIAGNOSTIC_DISABLE_FUNCTIONALITY = false; // <-- SET BACK TO FALSE TO RE-ENABLE
+
 // Interface for settings stored in IDB
 interface AppSettings {
     followedTags?: string[];
@@ -61,10 +63,40 @@ export interface UseAuthReturn {
 
 // The hook itself
 export const useAuth = (): UseAuthReturn => {
+    if (DIAGNOSTIC_DISABLE_FUNCTIONALITY) { // This condition will now be false
+        console.warn('Auth Hook: DIAGNOSTIC_DISABLE_FUNCTIONALITY is TRUE. Returning minimal state.');
+        return {
+            activeSigner: undefined,
+            currentUserNpub: null,
+            currentUserNsecForBackup: null,
+            isLoggedIn: false,
+            isLoadingAuth: false,
+            authError: null,
+            nip46ConnectUri: null,
+            isGeneratingUri: false,
+            initiateNip46Connection: async () => { console.warn('Auth DIAGNOSTIC: initiateNip46Connection no-op'); },
+            cancelNip46Connection: () => { console.warn('Auth DIAGNOSTIC: cancelNip46Connection no-op'); },
+            generateNewKeys: async () => { console.warn('Auth DIAGNOSTIC: generateNewKeys no-op'); return null; },
+            loginWithNsec: async () => { console.warn('Auth DIAGNOSTIC: loginWithNsec no-op'); return false; },
+            logout: async () => { console.warn('Auth DIAGNOSTIC: logout no-op'); },
+            followedTags: [],
+            setFollowedTags: () => { console.warn('Auth DIAGNOSTIC: setFollowedTags no-op'); },
+            fetchImagesByTagEnabled: false,
+            setFetchImagesByTagEnabled: () => { console.warn('Auth DIAGNOSTIC: setFetchImagesByTagEnabled no-op'); },
+            fetchVideosByTagEnabled: false,
+            setFetchVideosByTagEnabled: () => { console.warn('Auth DIAGNOSTIC: setFetchVideosByTagEnabled no-op'); },
+            encryptDm: async () => { console.warn('Auth DIAGNOSTIC: encryptDm no-op'); return ''; },
+            decryptDm: async () => { console.warn('Auth DIAGNOSTIC: decryptDm no-op'); return ''; },
+        };
+    }
+
     // --- Get Stores from Context ---
+    // DIAGNOSTIC: Restore useQueryStore
     const queryStore = Hooks.useQueryStore(); // Correct way to get QueryStore
+    // const queryStore: QueryStore | null = null; // Or useMemo(() => ({}), []) if methods are called
 
     // --- Use the NIP-46 Hook ---
+    // DIAGNOSTIC: Restore useNip46AuthManagement call
     const {
         nip46ConnectUri,
         isGeneratingUri,
@@ -74,6 +106,16 @@ export const useAuth = (): UseAuthReturn => {
         clearPersistedNip46Session,
         nip46Error,
     } = useNip46AuthManagement();
+    /*
+    const nip46ConnectUri: string | null = null;
+    const isGeneratingUri = false;
+    const initiateNip46ConnectionInternal = useCallback(async () => { console.log("Diag: useAuth.initiateNip46ConnectionInternal no-op"); return undefined; }, []);
+    const cancelNip46ConnectionInternal = useCallback(() => { console.log("Diag: useAuth.cancelNip46ConnectionInternal no-op"); }, []);
+    const restoreNip46Session = useCallback(async () => { console.log("Diag: useAuth.restoreNip46Session no-op"); return undefined; }, []);
+    const clearPersistedNip46Session = useCallback(async () => { console.log("Diag: useAuth.clearPersistedNip46Session no-op"); }, []);
+    const nip46Error: string | null = null;
+    */
+    // --- END DIAGNOSTIC ---
 
     // --- Core State ---
     const [activeSigner, setActiveSigner] = useState<Nip07Interface | undefined>(undefined);
@@ -92,62 +134,46 @@ export const useAuth = (): UseAuthReturn => {
     const [fetchImagesByTagEnabled, setFetchImagesByTagEnabledState] = useState<boolean>(true); // Default to true
     const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(true); // Default to true
 
-    // --- Update derived currentUserNpub when activeSigner changes ---
-    useEffect(() => {
-        const updateNpub = async () => {
-            if (activeSigner) {
-                try {
-                    const pubkey = await activeSigner.getPublicKey();
-                    setCurrentUserNpub(nip19.npubEncode(pubkey));
-                } catch (e) {
-                    console.error("Failed to get public key from active signer:", e);
-                    setCurrentUserNpub(null);
-                    // Potentially set an error state here?
-                    setNsecAuthError(`Failed to get pubkey from active signer: ${e instanceof Error ? e.message : String(e)}`);
-                }
-            } else {
-                setCurrentUserNpub(null);
-            }
-        };
-        updateNpub();
-    }, [activeSigner]);
-
     // --- Load/Persist followed tags ---
     useEffect(() => {
         const loadTags = async () => {
+            // DIAGNOSTIC: Restore content of this function
+            console.info('Auth Hook: Attempting to load followed tags from IDB (loadTags effect)...');
             try {
-                console.info('Auth Hook: Attempting to load followed tags from IDB...');
                 const loadedTags = await loadFollowedTagsFromDb();
                 if (loadedTags) {
                     setFollowedTagsState(loadedTags);
-                    console.info('Auth Hook: Successfully loaded followed tags:', loadedTags);
+                    console.info('Auth Hook: Successfully loaded followed tags (loadTags effect):', loadedTags);
                 } else {
-                    setFollowedTagsState([]); // Initialize with empty array if nothing is stored
-                    console.info('Auth Hook: No followed tags found in IDB, initialized as empty.');
+                    setFollowedTagsState([]); 
+                    console.info('Auth Hook: No followed tags found in IDB, initialized as empty (loadTags effect).');
                 }
             } catch (error) {
-                console.error('Auth Hook: Failed to load followed tags from IDB:', error);
-                setNsecAuthError("Failed to load followed tags."); // Use existing error state for simplicity
-                setFollowedTagsState([]); // Ensure it's an empty array on error
+                console.error('Auth Hook: Failed to load followed tags from IDB (loadTags effect):', error);
+                setNsecAuthError("Failed to load followed tags."); 
+                setFollowedTagsState([]); 
             }
         };
         loadTags();
-    }, []); // Intentionally empty dependency array to run once on mount
+    }, []); 
 
     // Load all settings from IDB on mount
     useEffect(() => {
         const loadAllSettings = async () => {
+            // DIAGNOSTIC: Content of this function is RESTORED, but most setStates are commented out
             try {
-                console.info('Auth Hook: Attempting to load settings from IDB...');
+                console.info('Auth Hook: Attempting to load settings from IDB (ALL three setStates in loadAllSettings active)...');
                 const settings = await loadSettingsFromDb();
                 if (settings) {
+                    // DIAGNOSTIC: RE-ENABLE setFollowedTagsState
                     setFollowedTagsState(settings.followedTags || []);
+                    // DIAGNOSTIC: setFetchImagesByTagEnabledState is ACTIVE
                     setFetchImagesByTagEnabledState(settings.fetchImagesByTagEnabled === undefined ? true : settings.fetchImagesByTagEnabled);
+                    // DIAGNOSTIC: setFetchVideosByTagEnabledState is ACTIVE
                     setFetchVideosByTagEnabledState(settings.fetchVideosByTagEnabled === undefined ? true : settings.fetchVideosByTagEnabled);
-                    console.info('Auth Hook: Successfully loaded settings:', settings);
+                    console.info('Auth Hook: Successfully loaded settings (ALL three setStates in loadAllSettings active):', settings);
                 } else {
-                    console.info('Auth Hook: No settings found in IDB, using defaults.');
-                    // Defaults are already set by useState initial values
+                    console.info('Auth Hook: No settings found in IDB, using defaults (ALL three setStates in loadAllSettings active).');
                 }
             } catch (error) {
                 console.error('Auth Hook: Failed to load settings from IDB:', error);
@@ -156,6 +182,112 @@ export const useAuth = (): UseAuthReturn => {
         };
         loadAllSettings();
     }, []);
+
+    // --- Initialization Effect ---
+    useEffect(() => {
+        const initializeAuth = async () => {
+            // DIAGNOSTIC: Restore content of this function
+            console.info("useAuth: Initializing authentication (initializeAuth effect)...");
+            if (!queryStore) {
+                console.info("useAuth: QueryStore not ready yet, waiting (initializeAuth effect)...");
+                // setIsLoadingAuth(true); // Prevent loop if queryStore is initially undefined then defined rapidly
+                return;
+            }
+            // if (activeSigner) { // Check moved after isLoadingAuth set to true
+            //      console.info("useAuth: Already logged in (activeSigner state exists). Skipping initialization.");
+            //      setIsLoadingAuth(false);
+            //      return;
+            // }
+            console.info("useAuth: No active signer found OR queryStore just became available, checking storage (initializeAuth effect)...");
+            // DIAGNOSTIC: Comment out setIsLoadingAuth(true)
+            // setIsLoadingAuth(true);
+            setNsecAuthError(null);
+
+            if (activeSigner) { // Re-check activeSigner after setting isLoadingAuth to true
+                 console.info("useAuth: ActiveSigner became available while waiting for queryStore or during init. Skipping further storage checks.");
+                 // DIAGNOSTIC: Comment out setIsLoadingAuth(false)
+                 // setIsLoadingAuth(false);
+                 return;
+            }
+
+            try {
+                const restoredNip46Signer = await restoreNip46Session();
+                if (restoredNip46Signer) {
+                    console.info("useAuth: NIP-46 session restored successfully (initializeAuth effect).");
+                    setActiveSigner(restoredNip46Signer);
+                    setCurrentUserNsecForBackup(null);
+                } else {
+                    console.info("useAuth: No NIP-46 session restored, checking for nsec (initializeAuth effect)...");
+                    const nsec = await loadNsecFromDb();
+                    if (nsec) {
+                        console.info("useAuth: Found stored nsec. Logging in (initializeAuth effect)...");
+                        try {
+                             const decoded = nip19.decode(nsec);
+                             if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
+                                 throw new Error("Invalid stored nsec format.");
+                             }
+                            const privateKeySigner = new SimpleSigner(decoded.data);
+                            await privateKeySigner.getPublicKey(); // Verify key
+                            setActiveSigner(privateKeySigner);
+                            setCurrentUserNsecForBackup(nsec);
+                        } catch (nsecError) {
+                            console.error("useAuth: Failed to create signer from stored nsec (initializeAuth effect):", nsecError);
+                            setNsecAuthError("Invalid stored login key. Please log in again.");
+                            await clearNsecFromDb();
+                            setActiveSigner(undefined);
+                            setCurrentUserNsecForBackup(null);
+                        }
+                    } else {
+                        console.info("useAuth: No nsec found. User is not logged in (initializeAuth effect).");
+                        setActiveSigner(undefined);
+                        setCurrentUserNsecForBackup(null);
+                    }
+                }
+            } catch (error) {
+                console.error("useAuth: Error during auth initialization (initializeAuth effect):", error);
+                setNsecAuthError("An error occurred during login check.");
+                setActiveSigner(undefined);
+                setCurrentUserNsecForBackup(null);
+            } finally {
+                // DIAGNOSTIC: Comment out setIsLoadingAuth(false)
+                // setIsLoadingAuth(false);
+                console.info("useAuth: Auth initialization finished (initializeAuth effect).");
+            }
+        }; 
+        
+        // Condition for running initializeAuth
+        if (queryStore && !activeSigner) { // Only run if queryStore is available AND no signer yet
+             console.log("initializeAuth effect: queryStore available and no activeSigner. Running init.");
+             initializeAuth();
+        } else if (!queryStore) {
+             console.log("initializeAuth effect: queryStore NOT available. Will re-run when it is.");
+             // setIsLoadingAuth(true); // Keep loading true if queryStore is missing
+        } else if (activeSigner) {
+             console.log("initializeAuth effect: activeSigner already exists. Not running init. Setting isLoadingAuth to false (COMMENTED OUT).");
+             // DIAGNOSTIC: Comment out setIsLoadingAuth(false)
+             // setIsLoadingAuth(false); // Already initialized and have a signer
+        }
+
+         return () => {
+              // console.info("useAuth: Unmounting initializeAuth effect / deps changed.");
+         };
+    }, [queryStore, activeSigner]); // DIAGNOSTIC: Temporarily remove restoreNip46Session from deps
+
+    // --- Fallback for isLoadingAuth if all init effects are effectively empty ---
+    /* DIAGNOSTIC: Temporarily comment out isLoadingAuth fallback useEffect
+    useEffect(() => {
+        // If initializeAuth, loadTags, and loadAllSettings are commented out,
+        // isLoadingAuth might remain true. This ensures it becomes false.
+        // This is a DIAGNOSTIC fallback.
+        const timer = setTimeout(() => {
+            if (isLoadingAuth) {
+                console.warn("useAuth DIAGNOSTIC: Forcing isLoadingAuth to false as init effects are out.");
+                setIsLoadingAuth(false);
+            }
+        }, 100); // Short delay
+        return () => clearTimeout(timer);
+    }, [isLoadingAuth]);
+    */
 
     // Helper to save all settings
     const saveCurrentSettings = useCallback(async (updatedSettings: Partial<AppSettings>) => {
@@ -345,102 +477,6 @@ export const useAuth = (): UseAuthReturn => {
     }, [activeSigner, setActiveSigner, clearPersistedNip46Session]); // Added NIP-46 clear dependency
 
 
-    // --- Initialization Effect ---
-    useEffect(() => {
-        const initializeAuth = async () => {
-            console.info("useAuth: Initializing authentication...");
-            if (!queryStore) {
-                console.info("useAuth: QueryStore not ready yet, waiting...");
-                // Don't set loading false here, wait for store
-                return;
-            }
-            if (activeSigner) {
-                 console.info("useAuth: Already logged in (activeSigner state exists). Skipping initialization.");
-                 setIsLoadingAuth(false); // Already initialized
-                 return;
-            }
-
-            console.info("useAuth: No active signer found, checking storage...");
-            setIsLoadingAuth(true);
-            setNsecAuthError(null);
-            // nip46Error will be handled by restoreNip46Session if it runs
-
-            try {
-                // Attempt to restore NIP-46 session first
-                const restoredNip46Signer = await restoreNip46Session();
-
-                if (restoredNip46Signer) {
-                    console.info("useAuth: NIP-46 session restored successfully.");
-                    setActiveSigner(restoredNip46Signer);
-                    setCurrentUserNsecForBackup(null); // Ensure no nsec backup if NIP-46 is active
-                    // Pubkey/npub set by effect watching activeSigner
-                } else {
-                    // If NIP-46 restore failed or no data, try nsec
-                    console.info("useAuth: No NIP-46 session restored, checking for nsec...");
-                    // Note: nip46Error might be set by restoreNip46Session if it failed
-                    const nsec = await loadNsecFromDb();
-                    if (nsec) {
-                        console.info("useAuth: Found stored nsec. Logging in...");
-                        try {
-                             const decoded = nip19.decode(nsec);
-                             if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
-                                 throw new Error("Invalid stored nsec format.");
-                             }
-                            const privateKeySigner = new SimpleSigner(decoded.data);
-                            const pubkey = await privateKeySigner.getPublicKey(); // Verify key
-                            console.info("useAuth: Logged in successfully with nsec for user:", nip19.npubEncode(pubkey));
-                            setActiveSigner(privateKeySigner);
-                            setCurrentUserNsecForBackup(nsec);
-                            // Clear any lingering NIP-46 error from failed restore attempt
-                            // Note: clearPersistedNip46Session is NOT called here, preserve potentially recoverable NIP-46 data
-                        } catch (nsecError) {
-                            console.error("useAuth: Failed to create signer from stored nsec:", nsecError);
-                            setNsecAuthError("Invalid stored login key. Please log in again.");
-                            await clearNsecFromDb(); // Clear invalid nsec
-                            setActiveSigner(undefined);
-                            setCurrentUserNsecForBackup(null);
-                        }
-                    } else {
-                        console.info("useAuth: No nsec found. User is not logged in.");
-                        setActiveSigner(undefined);
-                        setCurrentUserNsecForBackup(null);
-                        // No auth methods succeeded. nip46Error might still be set if restore failed.
-                    }
-                }
-
-            } catch (error) {
-                console.error("useAuth: Error during auth initialization:", error);
-                setNsecAuthError("An error occurred during login check.");
-                setActiveSigner(undefined);
-                setCurrentUserNsecForBackup(null);
-                // Potentially clear all storage? Maybe too aggressive.
-                // await clearNsecFromDb();
-                // await clearPersistedNip46Session();
-            } finally {
-                setIsLoadingAuth(false);
-                console.info("useAuth: Auth initialization finished.");
-            }
-        }; // End of initializeAuth
-
-        // Only run init if queryStore is available and not already logged in
-        if (queryStore && !activeSigner) {
-             initializeAuth();
-        } else if (!queryStore) {
-             // Still waiting for queryStore, keep loading true
-             setIsLoadingAuth(true);
-        } else {
-             // queryStore exists AND activeSigner exists, we are done loading
-             setIsLoadingAuth(false);
-        }
-
-         // Cleanup function (optional, maybe not needed here)
-         return () => {
-              console.info("useAuth: Unmounting.");
-         };
-    // Dependencies: queryStore changes trigger re-check; activeSigner prevents re-run once logged in.
-    // restoreNip46Session is stable from useCallback in its hook.
-    }, [queryStore, activeSigner, setActiveSigner, restoreNip46Session]);
-
     // --- NIP-04 DM Helpers ---
     const encryptDm = useCallback(async (recipientNpub: string, content: string): Promise<string> => {
         const currentSigner = activeSigner;
@@ -485,7 +521,7 @@ export const useAuth = (): UseAuthReturn => {
     }, [activeSigner]);
 
     // --- Return hook state and methods ---
-    return {
+    const returnValue = {
         activeSigner,
         currentUserNpub,
         currentUserNsecForBackup,
@@ -508,4 +544,32 @@ export const useAuth = (): UseAuthReturn => {
         encryptDm,
         decryptDm,
     };
+
+    // DIAGNOSTIC: Wrap the entire return object in useMemo, but make it depend on its contents.
+    // This ensures App.tsx gets a new object reference IFF any of these primitive values change.
+    return useMemo(() => returnValue, [
+        activeSigner,
+        currentUserNpub,
+        currentUserNsecForBackup,
+        isLoadingAuth,
+        authError,
+        nip46ConnectUri,
+        isGeneratingUri,
+        initiateNip46Connection, // These are callbacks, ensure they are stable (useCallback)
+        cancelNip46Connection,
+        generateNewKeys,
+        loginWithNsec,
+        logout,
+        followedTags, // This is a state variable (array)
+        setFollowedTags, // Stable callback
+        fetchImagesByTagEnabled, // This is a state variable (boolean)
+        setFetchImagesByTagEnabled, // Stable callback
+        fetchVideosByTagEnabled, // This is a state variable (boolean)
+        setFetchVideosByTagEnabled, // Stable callback
+        encryptDm, // Stable callback
+        decryptDm // Stable callback
+    ]); 
+
+    // Original return:
+    // return returnValue;
 };
