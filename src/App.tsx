@@ -3,7 +3,7 @@ import { nip19 } from 'nostr-tools';
 import { useNDKInit } from './hooks/useNDKInit';
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import MediaPanel from './components/MediaPanel';
-import RelayStatus, { RelayStatusHandle } from './components/RelayStatus'; // <<< Import Handle
+import RelayStatus, { RelayStatusHandle } from './components/RelayStatus';
 import VideoPlayer from './components/VideoPlayer';
 import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
@@ -19,7 +19,7 @@ import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
 import { AuthProvider, useAuthContext } from './context/AuthContext';
-import { WalletProvider, useWalletContext } from './context/WalletContext';
+import { WalletProvider } from './context/WalletContext';
 import MessageBoard from './components/MessageBoard';
 import { useProfile } from 'nostr-hooks';
 import NDK from '@nostr-dev-kit/ndk';
@@ -219,18 +219,16 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
     handleNext,
     setViewMode,
     setCurrentPodcastIndex,
-    imageNotes: stateImageNotes, // Prop name might differ from internal state name
-    podcastNotes: statePodcastNotes,
-    videoNotes: stateVideoNotes, // This will now receive uniqueVideoNotes derived from combinedVideoNotes
+    videoNotes: stateVideoNotes,
     currentItemUrl,
   } = useMediaState({
       initialImageNotes: shuffledImageNotes,
-      initialPodcastNotes: combinedPodcastNotes, // <<< Use combined/deduped podcasts
+      initialPodcastNotes: combinedPodcastNotes,
       initialVideoNotes: visibleVideoNotes, 
       fetchOlderImages: fetchOlderImages,
-      fetchOlderVideos: fetchOlderVideos, // Pass the modified callback
+      fetchOlderVideos: fetchOlderVideos,
       shuffledImageNotesLength: shuffledImageNotes.length,
-      shuffledVideoNotesLength: visibleVideoNotes.length, // <<< Pass length of sliced array
+      shuffledVideoNotesLength: visibleVideoNotes.length,
   });
 
   // --- Effect for deduplicating video notes BY URL (using combinedVideoNotes) ---
@@ -314,10 +312,6 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Determine active media ref and initial time based on viewMode
-  const activeMediaRef = viewMode === 'videoPlayer' ? videoRef : audioRef;
-  const playbackInitialTime = viewMode === 'imagePodcast' ? initialPodcastTime : 0;
-
   // --- Determine URLs and Active States for Playback Hooks ---
   const isAudioMode = viewMode === 'imagePodcast';
   const isVideoMode = viewMode === 'videoPlayer';
@@ -347,8 +341,7 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
 
   // ... select activePlayback state/controls ...
   const activePlayback = isVideoMode ? videoPlayback : audioPlayback;
-  // ... destructure activePlayback ...
-  
+
   // Ref for ImageFeed component
   const imageFeedRef = useRef<ImageFeedRef>(null);
 
