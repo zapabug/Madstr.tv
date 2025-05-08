@@ -1,28 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
-import { nip19 } from 'nostr-tools';
-import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
-import { RELAYS } from '../constants'; // Adjust path as needed
-import { TV_PUBKEY_NPUB } from '../constants'; // Import separately if needed or combine if exported
+import NDK, { NDKFilter, NDKKind, NDKSubscription, NDKEvent } from '@nostr-dev-kit/ndk';
+import { TV_PUBKEY_NPUB } from '../constants'; // Assuming TV_PUBKEY_NPUB is in constants
+// import { RELAYS } from '../constants'; // RELAYS not used
+import * as nip19 from 'nostr-tools/nip19';
 
-// Function to safely decode npub (moved from App.tsx)
-function getHexPubkey(npub: string): string | null {
-    try {
-        const decoded = nip19.decode(npub);
-        if (decoded.type === 'npub') {
-            return decoded.data;
-        }
-        console.warn(`useMediaAuthors: Decoded type is not npub: ${decoded.type}`);
-        return null;
-    } catch (e) {
-        console.error(`useMediaAuthors: Failed to decode npub ${npub}:`, e);
-        return null;
-    }
-}
+// Utility to convert npub to hex, moved from useAuth or defined locally if small
+// const getHexPubkey = (npub: string): string | null => {
+//   try {
+//     const decoded = nip19.decode(npub);
+//     if (decoded.type === 'npub') {
+//       return decoded.data as string;
+//     }
+//   } catch (e) {
+//     console.error(`Error decoding npub ${npub}:`, e);
+//   }
+//   return null;
+// };
 
 // Define props for the hook
 interface UseMediaAuthorsProps {
     ndk?: NDK;
     isReady: boolean;
+    loggedInUserNpub?: string | null; // New optional prop
 }
 
 interface MediaAuthorsState {
@@ -32,18 +31,21 @@ interface MediaAuthorsState {
 
 const AUTHOR_FETCH_TIMEOUT = 15000; // 15 seconds timeout
 
-export const useMediaAuthors = ({ ndk, isReady }: UseMediaAuthorsProps): MediaAuthorsState => {
+export const useMediaAuthors = ({ ndk, isReady, loggedInUserNpub }: UseMediaAuthorsProps): MediaAuthorsState => {
     const [mediaAuthors, setMediaAuthors] = useState<string[]>([]);
     const [isLoadingAuthors, setIsLoadingAuthors] = useState<boolean>(true);
 
+    const targetNpubForKind3 = useMemo(() => loggedInUserNpub || TV_PUBKEY_NPUB, [loggedInUserNpub]);
+
     const pubkey = useMemo(() => {
+        if (!targetNpubForKind3) return null;
         try {
-            return nip19.decode(TV_PUBKEY_NPUB).data as string;
+            return nip19.decode(targetNpubForKind3).data as string;
         } catch (e) {
-            console.error("Error decoding TV_PUBKEY_NPUB:", e);
+            console.error(`Error decoding targetNpubForKind3 (${targetNpubForKind3}):`, e);
             return null;
         }
-    }, []);
+    }, [targetNpubForKind3]);
 
     useEffect(() => {
         console.log("useMediaAuthors: Effect running/re-running.");
@@ -63,7 +65,7 @@ export const useMediaAuthors = ({ ndk, isReady }: UseMediaAuthorsProps): MediaAu
         if (!isLoadingAuthors) setIsLoadingAuthors(true);
 
         const authorsFilter: NDKFilter = {
-            kinds: [3],
+            kinds: [NDKKind.Contacts],
             authors: [pubkey],
             limit: 1,
         };
@@ -88,8 +90,8 @@ export const useMediaAuthors = ({ ndk, isReady }: UseMediaAuthorsProps): MediaAu
 
             try {
                 const followedPubkeys = event.tags
-                    .filter(tag => tag[0] === 'p' && tag[1])
-                    .map(tag => tag[1]);
+                    .filter((tag: string[]) => tag[0] === 'p' && tag[1])
+                    .map((tag: string[]) => tag[1]);
 
                 const allAuthors = Array.from(new Set(pubkey ? [pubkey, ...followedPubkeys] : followedPubkeys));
 

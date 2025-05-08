@@ -1,8 +1,6 @@
 import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
-import QRCode from 'react-qr-code';
 import { nip19 } from 'nostr-tools';
-import ndkInstance from './ndk'; // <-- Import the singleton NDK instance
-import { useNDKInit } from './hooks/useNDKInit'; // <-- Import useNDKInit
+import { useNDKInit } from './hooks/useNDKInit';
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import MediaPanel from './components/MediaPanel';
 import RelayStatus, { RelayStatusHandle } from './components/RelayStatus'; // <<< Import Handle
@@ -11,7 +9,6 @@ import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
 import { useMediaState } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
-import { useMediaNotes } from './hooks/useMediaNotes';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
@@ -25,7 +22,7 @@ import { AuthProvider, useAuthContext } from './context/AuthContext';
 import { WalletProvider, useWalletContext } from './context/WalletContext';
 import MessageBoard from './components/MessageBoard';
 import { useProfile } from 'nostr-hooks';
-import NDK, { NDKUser } from '@nostr-dev-kit/ndk';
+import NDK from '@nostr-dev-kit/ndk';
 import { useAppMediaNotes } from './hooks/useAppMediaNotes';
 
 // Restore original timeout constants
@@ -46,13 +43,15 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
   const ndk = ndkInstance;
 
   const auth = useAuthContext();
-  const wallet = useWalletContext();
 
   // <<< Ref for RelayStatus component >>>
   const relayStatusRef = useRef<RelayStatusHandle>(null);
 
-  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk, isReady: isNdkReady });
-  // const { followedTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchPodcastsByTagEnabled } = auth; // auth is passed directly to useAppMediaNotes
+  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({
+    ndk,
+    isReady: isNdkReady,
+    loggedInUserNpub: auth.currentUserNpub,
+  });
 
   useEffect(() => {
     if (!isLoadingAuthors) {
@@ -100,7 +99,7 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
     tagFetchLimit: VIDEO_TAG_FETCH_LIMIT,
   });
 
-  const { combinedNotes: combinedPodcastNotes, isLoading: isLoadingPodcasts, fetchOlderNotes: fetchOlderRawPodcasts } = useAppMediaNotes({
+  const { combinedNotes: combinedPodcastNotes, isLoading: isLoadingPodcasts /*, fetchOlderNotes: fetchOlderRawPodcasts*/ } = useAppMediaNotes({
     mediaType: 'podcast',
     auth,
     mediaAuthors,
@@ -354,11 +353,11 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
   const imageFeedRef = useRef<ImageFeedRef>(null);
 
   // Function to focus the toggle button in ImageFeed
-  const focusImageFeedToggle = useCallback(() => {
-    if (imageFeedRef.current) {
-      imageFeedRef.current.focusToggleButton();
-    }
-  }, []);
+  // const focusImageFeedToggle = useCallback(() => {
+  //   if (imageFeedRef.current) {
+  //     imageFeedRef.current.focusToggleButton();
+  //   }
+  // }, []);
 
   // <<< Function to focus the settings button in RelayStatus >>>
   const handleFocusSettingsRequest = useCallback(() => {
@@ -401,7 +400,7 @@ function AppContent({ isNdkReady, ndkInstance }: { isNdkReady: boolean, ndkInsta
     }
   }, [currentAuthorNpub]);
 
-  const { profile: currentAuthorProfile, isLoading: isLoadingAuthorProfile } = useUserProfile(
+  const { profile: currentAuthorProfile /*, isLoading: isLoadingAuthorProfile*/ } = useUserProfile(
     currentAuthorHexPubkey,
     ndkInstance
   );
