@@ -34,5 +34,5 @@ export interface NostrNote {
     title?: string;        // e.g., from 'title' tag in Kind 30402
     summary?: string;      // e.g., from 'summary' tag
     image?: string;        // e.g., from 'image' tag (cover art)
-    duration?: string;     // e.g., from 'duration' tag (podcast/video length)
+    duration?: string;     // e.g., from 'duration' tag (audio/video length)
 } 

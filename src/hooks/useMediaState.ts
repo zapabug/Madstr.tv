@@ -9,7 +9,7 @@ import { NostrNote } from '../types/nostr';
 interface UseMediaStateProps {
   // Accept note arrays directly
   initialImageNotes?: NostrNote[];
-  initialPodcastNotes?: NostrNote[];
+  initialAudioNotes?: NostrNote[];
   initialVideoNotes?: NostrNote[];
   // Keep fetchers and lengths
   fetchOlderImages?: () => void;
@@ -23,14 +23,14 @@ interface UseMediaStateReturn {
   viewMode: 'imagePodcast' | 'videoPlayer';
   // Return internal notes state
   imageNotes: NostrNote[];
-  podcastNotes: NostrNote[];
+  audioNotes: NostrNote[];
   videoNotes: NostrNote[];
   // Keep loading states
-  isLoadingPodcastNotes: boolean;
+  isLoadingAudioNotes: boolean;
   isLoadingVideoNotes: boolean;
   // Indices and URL
   currentImageIndex: number;
-  currentPodcastIndex: number;
+  currentAudioIndex: number;
   currentVideoIndex: number;
   selectedVideoNpub: string | null; 
   currentItemUrl: string | null;
@@ -43,7 +43,7 @@ interface UseMediaStateReturn {
   handlePrevious: () => void;
   handleNext: () => void;
   setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
-  setCurrentPodcastIndex: (index: number) => void;
+  setCurrentAudioIndex: (index: number) => void;
   // Keep setters for loading state?
   // Or manage loading state internally based on prop changes?
   // Let's manage internally for now.
@@ -59,7 +59,7 @@ const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
 export function useMediaState({ 
     // Destructure new props
     initialImageNotes = [],
-    initialPodcastNotes = [],
+    initialAudioNotes = [],
     initialVideoNotes = [],
     // Keep others
     fetchOlderImages, 
@@ -81,15 +81,15 @@ export function useMediaState({
     const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
     const [isLoadingVideoNotes, setIsLoadingVideoNotes] = useState<boolean>(true); // Start as true
 
-    const [podcastNotes, setPodcastNotes] = useState<NostrNote[]>([]);
-    const [currentPodcastIndex, setCurrentPodcastIndexInternal] = useState<number>(0);
-    const [isLoadingPodcastNotes, setIsLoadingPodcastNotes] = useState<boolean>(true); // Start as true
+    const [audioNotes, setAudioNotes] = useState<NostrNote[]>([]);
+    const [currentAudioIndex, setCurrentAudioIndexInternal] = useState<number>(0);
+    const [isLoadingAudioNotes, setIsLoadingAudioNotes] = useState<boolean>(true); // Start as true
     
     const [currentItemUrl, setCurrentItemUrl] = useState<string | null>(null);
 
     // Refs to store previous prop references
     const prevInitialImageNotesRef = useRef<NostrNote[] | undefined>(undefined);
-    const prevInitialPodcastNotesRef = useRef<NostrNote[] | undefined>(undefined);
+    const prevInitialAudioNotesRef = useRef<NostrNote[] | undefined>(undefined);
     const prevInitialVideoNotesRef = useRef<NostrNote[] | undefined>(undefined);
 
     // --- NEW: Effect to process initialImageNotes prop --- 
@@ -109,26 +109,26 @@ export function useMediaState({
         }
     }, [initialImageNotes, currentImageIndex]); // Keep currentImageIndex dependency for reset logic
 
-    // --- NEW: Effect to process initialPodcastNotes prop --- 
+    // --- NEW: Effect to process initialAudioNotes prop --- 
     useEffect(() => {
          // Only process if the reference has actually changed
-        if (initialPodcastNotes !== prevInitialPodcastNotesRef.current) {
-            console.log(`useMediaState: Processing ${initialPodcastNotes.length} initial podcast notes (Reference changed).`);
-            const sortedNotes = [...initialPodcastNotes].sort((a, b) => b.created_at - a.created_at);
-            setPodcastNotes(sortedNotes);
-            setIsLoadingPodcastNotes(false); // Set loading false here
+        if (initialAudioNotes !== prevInitialAudioNotesRef.current) {
+            console.log(`useMediaState: Processing ${initialAudioNotes.length} initial audio notes (Reference changed).`);
+            const sortedNotes = [...initialAudioNotes].sort((a, b) => b.created_at - a.created_at);
+            setAudioNotes(sortedNotes);
+            setIsLoadingAudioNotes(false); // Set loading false here
             // Reset index if needed
-            const newIndex = (currentPodcastIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentPodcastIndex;
-            if (newIndex !== currentPodcastIndex) {
-                setCurrentPodcastIndexInternal(newIndex);
+            const newIndex = (currentAudioIndex >= sortedNotes.length && sortedNotes.length > 0) ? 0 : currentAudioIndex;
+            if (newIndex !== currentAudioIndex) {
+                setCurrentAudioIndexInternal(newIndex);
             }
-             prevInitialPodcastNotesRef.current = initialPodcastNotes; // Update the ref
+             prevInitialAudioNotesRef.current = initialAudioNotes; // Update the ref
         } else {
-           console.log("useMediaState: Skipping podcast notes processing - reference hasn't changed.");
+           console.log("useMediaState: Skipping audio notes processing - reference hasn't changed.");
            // Still ensure loading is false if the ref hasn't changed but notes are present
-           if(podcastNotes.length > 0 && isLoadingPodcastNotes) setIsLoadingPodcastNotes(false);
+           if(audioNotes.length > 0 && isLoadingAudioNotes) setIsLoadingAudioNotes(false);
         }
-    }, [initialPodcastNotes, currentPodcastIndex, podcastNotes.length, isLoadingPodcastNotes]); // Add dependencies for reset and loading logic
+    }, [initialAudioNotes, currentAudioIndex, audioNotes.length, isLoadingAudioNotes]); // Add dependencies for reset and loading logic
 
     // --- NEW: Effect to process initialVideoNotes prop --- 
     useEffect(() => {
@@ -154,11 +154,11 @@ export function useMediaState({
     // Update currentItemUrl whenever the relevant source changes
     useEffect(() => {
         let newUrl: string | null = null;
-        console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, pIdx=${currentPodcastIndex}, vIdx=${currentVideoIndex}, iIdx=${currentImageIndex}`);
+        console.log(`useMediaState URL Effect Trigger: mode=${viewMode}, aIdx=${currentAudioIndex}, vIdx=${currentVideoIndex}, iIdx=${currentImageIndex}`);
 
         if (viewMode === 'imagePodcast') {
-            if (podcastNotes.length > 0 && currentPodcastIndex < podcastNotes.length) {
-                newUrl = podcastNotes[currentPodcastIndex]?.url || null;
+            if (audioNotes.length > 0 && currentAudioIndex < audioNotes.length) {
+                newUrl = audioNotes[currentAudioIndex]?.url || null;
             }
         } else { // viewMode === 'videoPlayer'
             if (videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
@@ -175,17 +175,17 @@ export function useMediaState({
             }
         }
 
-    }, [viewMode, currentPodcastIndex, currentVideoIndex, podcastNotes, videoNotes, currentItemUrl]);
+    }, [viewMode, currentAudioIndex, currentVideoIndex, audioNotes, videoNotes, currentItemUrl]);
 
-    // Set Podcast Index (does NOT change viewMode)
-    const setCurrentPodcastIndex = useCallback((index: number) => {
-        console.log("useMediaState: setCurrentPodcastIndex called with", index);
-        if (index >= 0 && index < podcastNotes.length) {
-            setCurrentPodcastIndexInternal(index);
+    // Set Audio Index (does NOT change viewMode)
+    const setCurrentAudioIndex = useCallback((index: number) => {
+        console.log("useMediaState: setCurrentAudioIndex called with", index);
+        if (index >= 0 && index < audioNotes.length) {
+            setCurrentAudioIndexInternal(index);
         } else {
-            console.warn(`useMediaState: Attempted to set invalid podcast index ${index}`);
+            console.warn(`useMediaState: Attempted to set invalid audio index ${index}`);
         }
-    }, [podcastNotes]);
+    }, [audioNotes]);
 
     // Function to set view mode directly
     const setViewMode = useCallback((mode: 'imagePodcast' | 'videoPlayer') => {
@@ -272,12 +272,12 @@ export function useMediaState({
     return {
         viewMode,
         imageNotes, // Return internal state
-        podcastNotes, // Return internal state
+        audioNotes, // Return internal state
         videoNotes, // Return internal state
-        isLoadingPodcastNotes,
+        isLoadingAudioNotes,
         isLoadingVideoNotes,
         currentImageIndex,
-        currentPodcastIndex,
+        currentAudioIndex,
         currentVideoIndex,
         selectedVideoNpub,
         currentItemUrl,
@@ -286,7 +286,7 @@ export function useMediaState({
         handlePrevious,
         handleNext,
         setViewMode,
-        setCurrentPodcastIndex,
+        setCurrentAudioIndex,
         // Removed setIsLoading...
     };
 } 

@@ -4,7 +4,7 @@ import { NostrNote } from '../types/nostr';
 import { cacheMediaNotes, getCachedNotesByAuthors } from '../utils/mediaNoteCache';
 
 // Media type for filtering
-export type MediaType = 'podcast' | 'video' | 'image';
+export type MediaType = 'audio' | 'video' | 'image';
 
 // Minimum video duration in seconds (2 minutes)
 export const MIN_VIDEO_DURATION_SECONDS = 120;
@@ -41,7 +41,7 @@ const ALL_MEDIA_KINDS = [1, 1063, 31338, 34235, 34236];
 // Helper to get URL Regex based on MediaType
 function getUrlRegexForMediaType(mediaType: MediaType): RegExp {
     switch (mediaType) {
-        case 'podcast': return audioRegex;
+        case 'audio': return audioRegex;
         case 'video': return videoRegex;
         case 'image': return imageRegex;
         default: return imageRegex;
@@ -153,7 +153,7 @@ export function useMediaNotes({
                      if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + video regex'; }
                  }
             }
-        } else if (type === 'podcast') {
+        } else if (type === 'audio') {
             // Podcast logic - prioritize NIP-94 m tag with audio/*, then enclosure, url, media
             const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('audio/'));
             if (mimeTag) {
@@ -200,17 +200,21 @@ export function useMediaNotes({
         if (!mediaUrl) {
             if (type === 'image') {
                 console.log(`processEvent (image): Skipping event ${event.id} - No valid URL found in tags or content.`);
+                console.log(`  Content: "${event.content.substring(0, 150)}..."`);
+                console.log(`  Tags (${event.tags.length}):`, event.tags.map(t => `[${t[0]}]${t[1]?.substring(0, 50) || ''}`).join(', '));
             }
-            if (type === 'podcast') {
-                console.log(`processEvent (podcast): Skipping event ${event.id} - No valid audio URL found. Content preview: ${event.content.substring(0, 100)}`);
+            if (type === 'audio') {
+                console.log(`processEvent (audio): Skipping event ${event.id} - No valid audio URL found.`);
+                console.log(`  Content: "${event.content.substring(0, 150)}..."`);
+                console.log(`  Tags (${event.tags.length}):`, event.tags.map(t => `[${t[0]}]${t[1]?.substring(0, 50) || ''}`).join(', '));
             }
             return null;
         } else {
             if (type === 'image') {
                  console.log(`processEvent (image): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
             }
-            if (type === 'podcast') {
-                 console.log(`processEvent (podcast): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
+            if (type === 'audio') {
+                 console.log(`processEvent (audio): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
             }
         }
 
@@ -347,19 +351,16 @@ export function useMediaNotes({
             if (until !== undefined) {
                 filter.until = until;
             }
-            if (followedTags && followedTags.length > 0) {
-                filter['#t'] = followedTags.map(tag => tag.toLowerCase()); 
-            }
+            // Removed tag filtering - authors already filter content
+            // Tag filtering can be added client-side later if needed for UI
 
             // <<< Moved logging after filter definition >>>
             if (mediaType === 'image') {
                  console.log(`useMediaNotes (image): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Until: ${until ? new Date(until * 1000).toISOString() : 'N/A'})...`);
-                 if (filter['#t']) console.log(`useMediaNotes (image): Filtering by tags:`, filter['#t']);
             }
-            if (mediaType === 'podcast') {
-                 console.log(`useMediaNotes (podcast): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Authors: ${authorsList.length})...`);
-                 if (filter['#t']) console.log(`useMediaNotes (podcast): Filtering by tags:`, filter['#t']);
-                 console.log(`useMediaNotes (podcast): Author hex values (first 5):`, authorsList.slice(0, 5));
+            if (mediaType === 'audio') {
+                 console.log(`useMediaNotes (audio): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Authors: ${authorsList.length})...`);
+                 console.log(`useMediaNotes (audio): Author hex values (first 5):`, authorsList.slice(0, 5));
             }
             
             // Helper to parse duration string to seconds
@@ -390,8 +391,8 @@ export function useMediaNotes({
                 currentSubscription.current = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
 
                 currentSubscription.current.on('event', (event: NDKEvent) => {
-                    if (mediaType === 'podcast') {
-                        console.log(`useMediaNotes (podcast): Received event ${event.id} from pubkey ${event.pubkey}, kind ${event.kind}`);
+                    if (mediaType === 'audio' || mediaType === 'image') {
+                        console.log(`useMediaNotes (${mediaType}): Received event ${event.id} from pubkey ${event.pubkey.substring(0, 16)}..., kind ${event.kind}`);
                     }
                     const note = processEvent(event, urlRegex, mediaType);
                     if (note && !notesById.current.has(note.id)) {
@@ -406,12 +407,12 @@ export function useMediaNotes({
                         if (mediaType === 'image') {
                              console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
                         }
-                        if (mediaType === 'podcast') {
-                             console.log(`useMediaNotes (podcast): Adding new note ${note.id} to internal map. URL: ${note.url}`);
+                        if (mediaType === 'audio') {
+                             console.log(`useMediaNotes (audio): Adding new note ${note.id} to internal map. URL: ${note.url}`);
                         }
                         notesById.current.set(note.id, note);
-                    } else if (!note && mediaType === 'podcast') {
-                        console.log(`useMediaNotes (podcast): Event ${event.id} processed but no valid audio URL found`);
+                    } else if (!note && mediaType === 'audio') {
+                        console.log(`useMediaNotes (audio): Event ${event.id} processed but no valid audio URL found`);
                     }
                 });
 
@@ -419,8 +420,8 @@ export function useMediaNotes({
                     eoseReceived = true;
                     retryCount = 0;
                     console.log(`useMediaNotes (${mediaType}): EOSE received. Total notes: ${notesById.current.size}`);
-                    if (mediaType === 'podcast') {
-                        console.log(`useMediaNotes (podcast): EOSE - Total notes collected: ${notesById.current.size}`);
+                    if (mediaType === 'audio') {
+                        console.log(`useMediaNotes (audio): EOSE - Total notes collected: ${notesById.current.size}`);
                     }
                     let finalNotes = Array.from(notesById.current.values());
                     

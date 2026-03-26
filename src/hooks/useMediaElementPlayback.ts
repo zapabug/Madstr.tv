@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 // --- Playback Position Storage (copied from Podcastr) ---
-const PLAYBACK_POS_PREFIX = 'podcastPlaybackPos_';
+const PLAYBACK_POS_PREFIX = 'audioPlaybackPos_';
 
 const savePlaybackTime = (url: string, time: number) => {
   try {
@@ -63,6 +63,10 @@ export function useMediaElementPlayback({
   const hasAttemptedPlayRef = useRef(false);
   const initialPlaySuccessfulRef = useRef(false);
 
+  // Use refs for callbacks to prevent effect re-runs
+  const playRef = useRef<() => void>(() => {});
+  const onEndedRef = useRef<(() => void) | undefined>(undefined);
+
   // Define play/pause early
   const play = useCallback(async () => {
     const mediaElement = mediaElementRef.current;
@@ -103,6 +107,15 @@ export function useMediaElementPlayback({
     }
   }, [mediaElementRef]);
 
+  // Update refs when callbacks change
+  useEffect(() => {
+    playRef.current = play;
+  }, [play]);
+
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
   const handleCanPlay = useCallback(() => {
     const mediaElement = mediaElementRef.current;
     if (!mediaElement) return;
@@ -122,13 +135,13 @@ export function useMediaElementPlayback({
 
     if (isActiveMode && autoplayEnabled && (elementType === 'audio' || elementType === 'video')) {
       console.log(`useMediaElementPlayback (${elementType}): Autoplaying on canplay`);
-      play();
+      playRef.current();
     } else if (isActiveMode && elementType === 'video') {
       console.log(`useMediaElementPlayback (${elementType}): Video ready, manual play required.`);
     } else {
       console.log(`useMediaElementPlayback (${elementType}): Ready, but not active mode or autoplay disabled.`);
     }
-  }, [mediaElementRef, isActiveMode, elementType, autoplayEnabled, play]);
+  }, [mediaElementRef, isActiveMode, elementType, autoplayEnabled]);
 
   useEffect(() => {
     const mediaElement = mediaElementRef.current;
@@ -236,7 +249,7 @@ export function useMediaElementPlayback({
       // Don't pause or reset the element, just remove listeners
       // This allows the next video to start loading immediately
     };
-  }, [currentItemUrl, mediaElementRef, onEnded, isSeeking, initialTime, isActiveMode, elementType, autoplayEnabled, duration, play]);
+  }, [currentItemUrl, mediaElementRef, isSeeking, initialTime, isActiveMode, elementType, autoplayEnabled]);
 
   useEffect(() => {
     const mediaElement = mediaElementRef.current;
@@ -329,10 +342,10 @@ export function useMediaElementPlayback({
 
     if (elementType === 'video' && next && isActiveMode) {
       console.log(`useMediaElementPlayback (${elementType}): Video ended, calling onEnded to advance sequence.`);
-      onEnded?.();
+      onEndedRef.current?.();
     } else if (elementType === 'audio' && isActiveMode) {
         console.log(`useMediaElementPlayback (${elementType}): Audio ended, calling provided onEnded.`);
-        onEnded?.();
+        onEndedRef.current?.();
     } else {
         console.log(`useMediaElementPlayback (${elementType}): Ended, but not advancing (not video/next or not active mode).`);
     }

@@ -55,7 +55,7 @@ function App() {
   // Fetch notes using dynamic parameters
   const { notes: audioNotes, isLoading: isLoadingAudioNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
-    mediaType: 'podcast', 
+    mediaType: 'audio', 
     ndk: ndkInstance, 
     limit: 25,
     followedTags: fetchMusicByTagEnabled ? musicTags : undefined
@@ -81,14 +81,17 @@ function App() {
   const [shuffledImageNotes, setShuffledImageNotes] = useState<NostrNote[]>([]);
   const [uniqueVideoNotes, setUniqueVideoNotes] = useState<NostrNote[]>([]);
 
-  // State for podcast saved position
-  const [initialPodcastTime] = useState<number>(0);
+  // State for audio saved position
+  const [initialAudioTime] = useState<number>(0);
 
   // State for preload URL
   const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
 
   // State for video author filter
   const [selectedVideoAuthor, setSelectedVideoAuthor] = useState<string | null>(null);
+
+  // State for music filter
+  const [showMusicOnly, setShowMusicOnly] = useState<boolean>(false);
 
   // Filtered video notes by selected author (computed from uniqueVideoNotes)
   const filteredVideoNotes = selectedVideoAuthor
@@ -126,19 +129,19 @@ function App() {
   const {
     viewMode, 
     currentImageIndex,
-    currentPodcastIndex,
+    currentAudioIndex,
     currentVideoIndex,
     handleVideoSelect, 
     handlePrevious,
     handleNext, 
     setViewMode, 
-    setCurrentPodcastIndex,
-    podcastNotes: statePodcastNotes, 
+    setCurrentAudioIndex,
+    audioNotes: stateAudioNotes, 
     videoNotes: stateVideoNotes,
     currentItemUrl,
   } = useMediaState({ 
       initialImageNotes: keywordSearch ? filterByKeyword(shuffledImageNotes, keywordSearch) : shuffledImageNotes, 
-      initialPodcastNotes: keywordFilteredAudioNotes,
+      initialAudioNotes: keywordFilteredAudioNotes,
       initialVideoNotes: keywordSearch ? filterByKeyword(filteredVideoNotes, keywordSearch) : filteredVideoNotes,
       fetchOlderImages: fetchOlderImages, 
       fetchOlderVideos: fetchOlderVideos,
@@ -204,7 +207,7 @@ function App() {
     isActiveMode: isAudioMode,
     elementType: 'audio',
     onEnded: isAudioMode ? handleNext : undefined, 
-    initialTime: initialPodcastTime, 
+    initialTime: initialAudioTime, 
     autoplayEnabled: true,
     next: true,
   });
@@ -552,13 +555,13 @@ function App() {
                     <div className="w-1/3 h-full pl-1 flex flex-col"> 
                         <MediaPanel
                             viewMode={viewMode}
-                            podcastNotes={statePodcastNotes}
+                            audioNotes={stateAudioNotes}
                             videoNotes={stateVideoNotes}
-                            isLoadingPodcastNotes={isLoadingAudioNotes}
+                            isLoadingAudioNotes={isLoadingAudioNotes}
                             isLoadingVideoNotes={isLoadingVideoNotes}
-                            currentPodcastIndex={currentPodcastIndex}
+                            currentAudioIndex={currentAudioIndex}
                             currentVideoIndex={currentVideoIndex}
-                            setCurrentPodcastIndex={setCurrentPodcastIndex}
+                            setCurrentAudioIndex={setCurrentAudioIndex}
                             onVideoSelect={handleVideoSelect}
                             setViewMode={setViewMode}
                             isPlaying={activePlayback.isPlaying}
@@ -568,6 +571,8 @@ function App() {
                             setPlaybackRate={activePlayback.setPlaybackRate}
                             togglePlayPause={activePlayback.togglePlayPause}
                             handleSeek={activePlayback.handleSeek}
+                            showMusicOnly={showMusicOnly}
+                            setShowMusicOnly={setShowMusicOnly}
                         />
                     </div>
                  </motion.div>

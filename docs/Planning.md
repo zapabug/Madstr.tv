@@ -14,16 +14,16 @@
 - [x] Dual playback hooks (audio + video) working in parallel
 - [x] **Add minimum video length filter (2 minutes minimum)**
 - [x] **Implement back-to-back video playback with sound (autoplay next)**
+- [x] **Fix video playback infinite loop bug (on "next video" click)**
 - [ ] Improve buffering strategy
 - [ ] Add quality selection for videos
 - [ ] Implement adaptive bitrate streaming
 - [ ] Add support for more media formats
-- [ ] **Fix video playback infinite loop bug (on "next video" click)**
 
 ### Nostr Integration
 - [x] Basic NDK v2 integration with singleton pattern
 - [x] Profile data fetching
-- [x] Media note subscriptions (images, videos, podcasts)
+- [x] Media note subscriptions (images, videos, audio)
 - [x] Kind 3 contact list fetching with timeout fallback
 - [x] NIP-94 File Metadata (kind 1063) support for images, audio, video
 - [x] Fix podcast kinds (was 30402, now 1, 1063, 31338)
@@ -54,7 +54,7 @@
 |------------|---------------|-----------------|
 | **Images** | Followed authors + hashtags | N/A |
 | **Videos** | Followed authors + hashtags | ≥ 2 minutes (already implemented) |
-| **Podcasts** | Followed authors + hashtags | ≥ 6 minutes (on preload) |
+| **Audio** | Followed authors + hashtags | ≥ 6 minutes (on preload) |
 | **Music** | Followed authors + hashtags | < 6 minutes (on preload) |
 
 ### Duration Classification Approach
@@ -62,7 +62,7 @@
 - Fetch all audio from follows
 - On preload: estimate duration from file headers/size
 - If < 6min → add to "music" bucket
-- If ≥ 6min → add to "podcast" bucket
+- If ≥ 6min → add to "audio" bucket
 - If can't estimate → default to music (can filter out if too long on playback)
 - Pros: No DB schema changes, always current
 - Cons: Re-estimates each session (acceptable for TV use case)

@@ -768,26 +768,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                 <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchMusicByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
                             </div>
                         </div>
-                        {/* Keyword Search for Follows */}
-                        <div className="mt-3 pt-3 border-t border-gray-600">
-                            <label className="text-xs text-gray-400 mb-1 block">Search Follows by Keyword</label>
-                            <input
-                                type="text"
-                                value={auth.keywordSearch}
-                                onChange={(e) => auth.setKeywordSearch(e.target.value)}
-                                placeholder="keyword"
-                                className="w-full px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-sm"
-                                aria-label="Search follows content by keyword"
-                            />
-                            {auth.keywordSearch && (
-                                <button
-                                    onClick={() => auth.setKeywordSearch('')}
-                                    className="mt-1 text-xs text-purple-400 hover:text-purple-300"
-                                >
-                                    Clear keyword
-                                </button>
-                            )}
-                        </div>
                     </div>
                     {auth.isLoggedIn ? (
                         <>
@@ -851,7 +831,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                                      type="text"
                                      value={videoTagInput}
                                      onChange={(e) => setVideoTagInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-                                     placeholder="podcast"
+                                      placeholder="audio"
                                      className="flex-grow px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                      aria-label="Enter video tag to follow (without #)"
                                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddVideoTag(); }}

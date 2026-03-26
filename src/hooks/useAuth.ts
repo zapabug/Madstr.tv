@@ -12,7 +12,7 @@ import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, Stored
 // import { bytesToHex } from '../utils/misc';
 
 // Define default tags (can be customized)
-const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast'];
+const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast', 'nosolutions'];
 
 // Define the shape of the hook's return value
 // Export the interface so it can be used externally
@@ -35,7 +35,7 @@ export interface UseAuthReturn {
     // Hashtag state and setter
     followedTags: string[];
     setFollowedTags: (tags: string[]) => void;
-    // Video hashtag state and setter (separate from image/podcast tags)
+    // Video hashtag state and setter (separate from image/audio tags)
     videoTags: string[];
     setVideoTags: (tags: string[]) => void;
     // Music hashtag state and setter

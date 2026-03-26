@@ -19,6 +19,14 @@ const formatTime = (seconds: number): string => {
     return `${formattedMinutes}:${formattedSeconds}`;
 };
 
+// --- Helper to parse duration string to seconds ---
+const parseDuration = (duration: string): number => {
+    const parts = duration.split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parseInt(duration) || 0;
+};
+
 // --- Skeleton Item Component ---
 const SkeletonItem: React.FC = () => (
     <div className="flex items-center p-2 mb-1 rounded-md bg-gray-700 animate-pulse">
@@ -33,9 +41,9 @@ export interface MediaPanelProps {
   viewMode: 'imagePodcast' | 'videoPlayer';
   setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
   
-  podcastNotes: NostrNote[];
+  audioNotes: NostrNote[];
   videoNotes: NostrNote[];
-  isLoadingPodcastNotes: boolean;
+  isLoadingAudioNotes: boolean;
   isLoadingVideoNotes: boolean;
   
   isPlaying: boolean;
@@ -46,19 +54,23 @@ export interface MediaPanelProps {
   togglePlayPause: () => void;
   handleSeek: (event: React.ChangeEvent<HTMLInputElement>) => void;
 
-  currentPodcastIndex: number;
-  setCurrentPodcastIndex: (index: number) => void;
+  currentAudioIndex: number;
+  setCurrentAudioIndex: (index: number) => void;
   currentVideoIndex: number;
   onVideoSelect: (note: NostrNote, index: number) => void; 
+
+  // Music filter state
+  showMusicOnly: boolean;
+  setShowMusicOnly: (show: boolean) => void;
 }
 
 // --- The Unified MediaPanel Component (Reverted) ---
 const MediaPanel: React.FC<MediaPanelProps> = ({ 
     viewMode,
     setViewMode,
-    podcastNotes, 
+    audioNotes, 
     videoNotes,
-    isLoadingPodcastNotes,
+    isLoadingAudioNotes,
     isLoadingVideoNotes,
     isPlaying,
     currentTime,
@@ -67,18 +79,24 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     setPlaybackRate,
     togglePlayPause,
     handleSeek,
-    currentPodcastIndex,
-    setCurrentPodcastIndex,
+    currentAudioIndex,
+    setCurrentAudioIndex,
     currentVideoIndex,
     onVideoSelect,
+    showMusicOnly,
+    setShowMusicOnly,
 }) => {
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   
   // Determine current notes and loading state based on viewMode
-  const notes = viewMode === 'imagePodcast' ? podcastNotes : videoNotes;
-  const isLoadingNotes = viewMode === 'imagePodcast' ? isLoadingPodcastNotes : isLoadingVideoNotes;
-  const currentItemIndex = viewMode === 'imagePodcast' ? currentPodcastIndex : currentVideoIndex;
+  // In audio mode, filter by music if showMusicOnly is true
+  const filteredAudioNotes = showMusicOnly 
+    ? audioNotes.filter(note => !note.duration || parseDuration(note.duration) < 420) // < 7 min
+    : audioNotes;
+  const notes = viewMode === 'imagePodcast' ? filteredAudioNotes : videoNotes;
+  const isLoadingNotes = viewMode === 'imagePodcast' ? isLoadingAudioNotes : isLoadingVideoNotes;
+  const currentItemIndex = viewMode === 'imagePodcast' ? currentAudioIndex : currentVideoIndex;
 
   // Combine notes for profile fetching (using derived 'notes')
   const { profiles } = useProfileData(notes);
@@ -160,7 +178,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
           progressBarRef.current?.focus(); event.preventDefault(); return;
       }
       if (event.key === 'ArrowLeft') {
-          // Speed button only relevant in image/podcast mode?
+          // Speed button only relevant in image/audio mode?
           if (viewMode === 'imagePodcast') {
             speedButtonRef.current?.focus(); event.preventDefault(); return;
           } else {
@@ -181,7 +199,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
          playPauseButtonRef.current?.focus(); event.preventDefault(); return; 
       }
       if (event.key === 'ArrowRight') {
-          // Go to Speed button only if in image/podcast mode
+          // Go to Speed button only if in image/audio mode
           if (viewMode === 'imagePodcast') {
              speedButtonRef.current?.focus(); event.preventDefault(); return;
           } else {
@@ -202,7 +220,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   };
 
   const handleSpeedButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      // This button is only enabled/visible in image/podcast mode now
+      // This button is only enabled/visible in image/audio mode now
       if (viewMode !== 'imagePodcast') return; 
       
       if (event.key === 'Enter' || event.key === ' ') {
@@ -260,9 +278,9 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   const handleItemKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, note: NostrNote, index: number) => {
       console.log(`MediaPanel Item KeyDown: ${event.key} on index ${index} in mode ${viewMode}`);
       if (event.key === 'Enter' || event.key === ' ') {
-          if (viewMode === 'imagePodcast') { // Was podcast
-              console.log(`MediaPanel: Setting podcast index to ${index}`);
-              setCurrentPodcastIndex(index);
+          if (viewMode === 'imagePodcast') {
+              console.log(`MediaPanel: Setting audio index to ${index}`);
+              setCurrentAudioIndex(index);
           } else { // Video mode
               console.log(`MediaPanel: Selecting video index ${index}`);
               onVideoSelect(note, index); 
@@ -282,7 +300,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   // Decide button text based on viewMode
   const toggleButtonText = viewMode === 'imagePodcast' ? 'Videos' : 'Images'; // Updated text
   const listAriaLabel = viewMode === 'imagePodcast' ? 'Podcast List' : 'Video List'; // Updated label
-  const listEmptyText = viewMode === 'imagePodcast' ? 'No podcasts found.' : 'No videos found.'; // Updated text
+  const listEmptyText = viewMode === 'imagePodcast' ? 'No audio found.' : 'No videos found.';
 
   return (
     <div
@@ -360,7 +378,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                             onClick={() => {
                                console.log(`MediaPanel Item Click: index ${index} in mode ${viewMode}`);
                                if (isImageMode) {
-                                   setCurrentPodcastIndex(index);
+                                    setCurrentAudioIndex(index);
                                } else {
                                    onVideoSelect(note, index);
                                }
@@ -368,20 +386,10 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                             onKeyDown={(e) => handleItemKeyDown(e, note, index)}
                             title={note.content || note.url}
                         >
-                            {/* Item Content */}
+                            {/* Item Content - Shared styling for both modes */}
                             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
                                 <span className="text-xs font-semibold text-white">{notes.length - index}</span> 
                             </div>
-                            {/* Only show avatar in imagePodcast mode */}
-                            {isImageMode && (
-                                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
-                                     {itemPictureUrl ? (
-                                        <img src={itemPictureUrl} alt={itemDisplayName} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">{itemDisplayName.substring(0, 1)}</span>
-                                    )}
-                                </div>
-                            )}
                             <div className="flex-grow flex flex-col">
                                 <p className="text-sm text-white truncate" title={itemDisplayName}>
                                    {itemDisplayName} 
@@ -398,18 +406,18 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
       {/* {viewMode === 'image' && <audio ref={audioRef} />} */}
       {/* {viewMode === 'video' && <video ref={videoRef} key={...} src={...} className="hidden" />} */}
        
-      {/* Playback Controls (Shared Structure) - Removed p-1 */}
-      <div className={`w-full flex flex-row items-center justify-between bg-black rounded h-[60px]`}> 
+      {/* Playback Controls (Shared Structure) */}
+      <div className={`w-full flex flex-row items-center justify-between bg-black rounded h-[60px] px-1`}> 
           
           {/* Play/Pause Button (Blue Background, Purple Icon) */}
           <button
             ref={playPauseButtonRef}
-            onClick={togglePlayPause} // Use prop handler
+            onClick={togglePlayPause}
             onKeyDown={handlePlayPauseKeyDown}
             className={`
               flex-shrink-0 p-1 rounded-md 
-              bg-blue-700 text-purple-500 // Use blue background, purple icon
-              hover:bg-blue-600 // Darken blue on hover
+              bg-blue-700 text-purple-500
+              hover:bg-blue-600
               focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black 
               transition-colors duration-150
             `}
@@ -429,7 +437,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
             )}
           </button>
 
-          {/* Seek Bar Area (No change) */}
+          {/* Seek Bar Area - Only current time */}
           <div className="flex-grow flex items-center justify-center mx-2">
               <span className="text-xs text-gray-300 w-10 text-right mr-2 flex-shrink-0">{formatTime(currentTime)}</span>
               <input
@@ -438,68 +446,66 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                 min={0}
                 max={duration || 100}
                 value={currentTime}
-                onChange={handleSeek} // Use prop handler
+                onChange={handleSeek}
                 className="w-full h-1 bg-purple-600 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
                 aria-label="Seek through media"
                 tabIndex={0} 
                 disabled={!duration || duration <= 0} 
                 onKeyDown={handleSeekBarKeyDown}
               />
-              <span className="text-xs text-gray-300 w-10 text-left ml-2 flex-shrink-0">{formatTime(duration)}</span>
           </div>
 
-          {/* Speed Button Area (Conditionally render based on viewMode) */}
-          <div className="relative flex-shrink-0 mr-1"> 
-              {viewMode === 'imagePodcast' && ( // Only show speed controls in image/podcast mode
-                 <>
+          {/* Right side buttons - Speed + Toggle */}
+          <div className="flex-shrink-0 flex items-center gap-1">
+            {/* Speed Button - Only in audio mode */}
+            {viewMode === 'imagePodcast' && (
+              <button
+                ref={speedButtonRef}
+                onClick={() => setIsSpeedMenuOpen(prev => !prev)} 
+                onKeyDown={handleSpeedButtonKeyDown}
+                className="p-1 text-purple-400 bg-purple-700 hover:bg-purple-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black transition-colors duration-150 text-xs"
+                aria-label="Change playback speed"
+                tabIndex={0}
+              >
+                 {playbackRate === 1 ? '1x' : playbackRate === 1.5 ? '1.5x' : playbackRate === 2 ? '2x' : `${playbackRate}x`}
+              </button>
+            )}
+            {/* Speed Menu */}
+            {isSpeedMenuOpen && (
+              <div 
+                ref={speedMenuRef}
+                className="absolute bottom-full right-0 mb-1 w-16 bg-blue-800 shadow-lg rounded-md py-1 z-10 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
+                role="menu" aria-label="Playback speed options"
+              >
+                {[2, 1.5, 1].map(rate => (
                   <button
-                    ref={speedButtonRef}
-                    onClick={() => setIsSpeedMenuOpen(prev => !prev)} 
-                    onKeyDown={handleSpeedButtonKeyDown}
-                    className="p-1 text-purple-400 bg-purple-700 hover:bg-purple-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black transition-colors duration-150 text-xs"
-                    aria-label="Change playback speed"
-                    tabIndex={0}
+                    key={rate}
+                    onClick={() => handleSpeedChange(rate)}
+                    className={`w-full text-left px-3 py-1 text-white hover:bg-blue-700 text-sm font-medium ${playbackRate === rate ? 'bg-purple-700' : ''}`}
+                    role="menuitem" tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { handleSpeedChange(rate); e.preventDefault(); } }}
                   >
-                     {playbackRate.toFixed(2)}x
+                    {rate}x
                   </button>
-                  {/* Speed Menu */}
-                  {isSpeedMenuOpen && (
-                    <div 
-                      ref={speedMenuRef}
-                      className="absolute bottom-full right-0 mb-1 w-24 bg-blue-800 shadow-lg rounded-md py-1 z-10 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black"
-                      role="menu" aria-label="Playback speed options"
-                    >
-                      {[2.0, 1.75, 1.5, 1.25, 1.0, 0.75].map(rate => (
-                        <button
-                          key={rate}
-                          onClick={() => handleSpeedChange(rate)}
-                          className={`w-full text-left px-3 py-1 text-white hover:bg-blue-700 text-xs ${playbackRate === rate ? 'font-bold' : ''}`}
-                          role="menuitem" tabIndex={0}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { handleSpeedChange(rate); e.preventDefault(); } }}
-                        >
-                          {rate.toFixed(2)}x
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                 </>
-              )}
+                ))}
+              </div>
+            )}
+
+            {/* Toggle Button - Same styling in both modes */}
+            <button
+                ref={toggleButtonRef}
+                onClick={() => viewMode === 'imagePodcast' ? setShowMusicOnly(!showMusicOnly) : setViewMode('imagePodcast')}
+                onKeyDown={handleToggleButtonKeyDown}
+                tabIndex={0}
+                className={`flex-shrink-0 px-2 py-1 bg-blue-700 bg-opacity-80 rounded text-purple-300 hover:text-purple-100 hover:bg-blue-600 focus:text-purple-100 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black transition-all duration-150 text-xs font-semibold uppercase ${viewMode === 'imagePodcast' && showMusicOnly ? 'bg-purple-700' : ''}`}
+                aria-label={viewMode === 'imagePodcast' ? (showMusicOnly ? 'Show all audio' : 'Show music only') : 'Show Images'}
+                title={viewMode === 'imagePodcast' ? (showMusicOnly ? 'Show all audio' : 'Show music only') : 'Show Images'}
+            >
+                {viewMode === 'imagePodcast' ? (showMusicOnly ? 'All' : 'Music') : 'Images'}
+            </button>
           </div>
 
-            {/* Mode Toggle Button (Updated onClick) */}
-             <button
-                 ref={toggleButtonRef}
-                 onClick={() => setViewMode(viewMode === 'imagePodcast' ? 'videoPlayer' : 'imagePodcast')} // Use prop handler
-                 onKeyDown={handleToggleButtonKeyDown}
-                 tabIndex={0}
-                 className="flex-shrink-0 p-1 bg-blue-700 bg-opacity-80 rounded text-purple-300 hover:text-purple-100 hover:bg-blue-600 focus:text-purple-100 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1 focus:ring-offset-black transition-all duration-150 text-xs font-semibold uppercase"
-                 aria-label={`Show ${toggleButtonText}`}
-                 title={`Show ${toggleButtonText}`}
-             >
-                 {toggleButtonText}
-             </button>
-
-      </div> 
+      </div>
 
     </div>
   );
