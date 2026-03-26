@@ -21,6 +21,7 @@ interface UseMediaNotesProps {
     limit?: number;
     until?: number;
     followedTags?: string[];
+    refreshKey?: number;
 }
 
 // Define hook return value
@@ -62,6 +63,7 @@ export function useMediaNotes({
     limit = 200, // Default limit if not provided
     until,       // Use provided until timestamp
     followedTags, // <<< Destructure followedTags prop
+    refreshKey = 0, // Key to trigger refresh
 }: UseMediaNotesProps): UseMediaNotesReturn {
     const [notes, setNotes] = useState<NostrNote[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -275,6 +277,15 @@ export function useMediaNotes({
         prevFollowedTagsRef.current = followedTags;
         // ---------------------------------
 
+        // Check if authors changed significantly (different users, not just order)
+        const authorsChanged = JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors);
+        if (authorsChanged) {
+            console.log(`useMediaNotes (${mediaType}): Authors changed - clearing notes and resetting.`);
+            notesById.current.clear();
+            setNotes([]);
+            isFetching.current = false; // Reset to allow new subscription
+        }
+
         // Debounce or prevent fetch if already fetching or no NDK/authors
         if (isFetching.current || !ndk || authors.length === 0) {
             // If no authors/ndk, clear state
@@ -306,7 +317,7 @@ export function useMediaNotes({
             }
             
             // --- Cache Check (Always read and merge) ---
-            console.log(`useMediaNotes (${mediaType}): Checking cache for ${authorsList.length} authors.`);
+            console.log(`useMediaNotes (${mediaType}): Checking cache for ${authorsList.length} authors. Current authors:`, authorsList);
             // <<< Always try to load from cache >>>
             const cachedNotes = await getCachedNotesByAuthors(authorsList);
             console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`); 
@@ -314,6 +325,11 @@ export function useMediaNotes({
             let newNotesAddedFromCache = false;
             if (cachedNotes.length > 0) {
                 cachedNotes.forEach(note => {
+                    // Double-check this note is from a current author (handles author switch)
+                    if (!authorsList.includes(note.pubkey)) {
+                        console.log(`useMediaNotes (${mediaType}): Skipping cached note from non-current-author: ${note.pubkey.substring(0, 16)}...`);
+                        return;
+                    }
                     // Filter for relevance (kind, matching URL regex for the *current* mediaType)
                     if (kindsToFetch.includes(note.kind) && note.url && note.url.match(urlRegex)) { 
                         if (!notesById.current.has(note.id)) {
@@ -327,12 +343,31 @@ export function useMediaNotes({
                     console.log(`useMediaNotes (${mediaType}): Added ${relevantCachedNotes.length} relevant notes from cache to map.`); 
                     // <<< Update UI immediately with combined notes from map >>>
                     const allNotesFromMap = Array.from(notesById.current.values());
-                    const sortedNotes = allNotesFromMap.sort((a, b) => b.created_at - a.created_at);
+                    
+                    // Apply hashtag filtering to cached notes display
+                    let filteredNotes = allNotesFromMap;
+                    if (followedTags && followedTags.length > 0) {
+                        const lowerFollowedTags = followedTags.map(t => t.toLowerCase());
+                        filteredNotes = allNotesFromMap.filter(note => {
+                            const noteTags = note.tags
+                                .filter(tag => tag[0] === 't')
+                                .map(tag => tag[1]?.toLowerCase())
+                                .filter(Boolean);
+                            const contentHashtagRegex = /#(\w+)/g;
+                            const contentTags: string[] = [];
+                            let match;
+                            while ((match = contentHashtagRegex.exec(note.content)) !== null) {
+                                contentTags.push(match[1].toLowerCase());
+                            }
+                            const allNoteTags = [...new Set([...noteTags, ...contentTags])];
+                            return allNoteTags.some(tag => lowerFollowedTags.includes(tag));
+                        });
+                    }
+                    
+                    const sortedNotes = filteredNotes.sort((a, b) => b.created_at - a.created_at);
                     if (isMounted) {
                         console.log(`useMediaNotes (${mediaType}): Updating state immediately with ${sortedNotes.length} notes from cache/map.`);
                         setNotes(sortedNotes); 
-                        // Maybe set isLoading false briefly if only cache was hit?
-                        // setIsLoading(false); // Consider implications
                     }
                 } else {
                     console.log(`useMediaNotes (${mediaType}): No *new* relevant notes found in cache after filtering.`);
@@ -391,6 +426,12 @@ export function useMediaNotes({
                 currentSubscription.current = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
 
                 currentSubscription.current.on('event', (event: NDKEvent) => {
+                    // Verify this event is from the current authors list (handles author switch)
+                    if (!authorsList.includes(event.pubkey)) {
+                        console.log(`useMediaNotes (${mediaType}): Ignoring event from non-current-author: ${event.pubkey.substring(0, 16)}...`);
+                        return;
+                    }
+                    
                     if (mediaType === 'audio' || mediaType === 'image') {
                         console.log(`useMediaNotes (${mediaType}): Received event ${event.id} from pubkey ${event.pubkey.substring(0, 16)}..., kind ${event.kind}`);
                     }
@@ -431,6 +472,39 @@ export function useMediaNotes({
                             if (!note.duration) return true;
                             return parseDuration(note.duration) >= MIN_VIDEO_DURATION_SECONDS;
                         });
+                    }
+                    
+                    // Apply hashtag filtering if followedTags is provided
+                    if (followedTags && followedTags.length > 0) {
+                        console.log(`useMediaNotes (${mediaType}): Filtering by hashtags:`, followedTags);
+                        const lowerFollowedTags = followedTags.map(t => t.toLowerCase());
+                        finalNotes = finalNotes.filter(note => {
+                            // Get 't' tags from the note
+                            const noteTags = note.tags
+                                .filter(tag => tag[0] === 't')
+                                .map(tag => tag[1]?.toLowerCase())
+                                .filter(Boolean);
+                            
+                            // Also check content for hashtags
+                            const contentHashtagRegex = /#(\w+)/g;
+                            const contentTags: string[] = [];
+                            let match;
+                            while ((match = contentHashtagRegex.exec(note.content)) !== null) {
+                                contentTags.push(match[1].toLowerCase());
+                            }
+                            
+                            const allNoteTags = [...new Set([...noteTags, ...contentTags])];
+                            
+                            // Check if any note tag matches any followed tag
+                            const hasMatchingTag = allNoteTags.some(tag => lowerFollowedTags.includes(tag));
+                            
+                            if (mediaType === 'image') {
+                                console.log(`useMediaNotes (image): Note ${note.id} tags: ${allNoteTags.join(', ') || 'none'}, matches: ${hasMatchingTag}`);
+                            }
+                            
+                            return hasMatchingTag;
+                        });
+                        console.log(`useMediaNotes (${mediaType}): After hashtag filtering: ${finalNotes.length} notes`);
                     }
                     
                     const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
@@ -487,8 +561,8 @@ export function useMediaNotes({
             }
             isFetching.current = false; // Ensure fetching flag is reset if component unmounts during fetch
         };
-    // Re-run effect if ndk, authors, mediaType, limit, or until changes
-    }, [ndk, authors, mediaType, limit, until, followedTags, processEvent]); // <<< Add followedTags to dependency array
+    // Re-run effect if ndk, authors, mediaType, limit, until, followedTags, or refreshKey changes
+    }, [ndk, authors, mediaType, limit, until, followedTags, refreshKey, processEvent]);
 
     // <<< Log return value >>>
     if (mediaType === 'image') {

@@ -35,18 +35,19 @@ function App() {
   const { isConnecting: isNdkConnecting, connectionError: ndkConnectionError, ndkInstance } = useNDKInit();
   const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
 
-  // Use the authors hook, passing the singleton ndk instance
-  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance });
-
-  // --- Auth Hook --- 
+  // --- Auth Hook (must be before useMediaAuthors) --- 
   const auth = useAuth(ndkInstance);
-  const { followedTags, videoTags, musicTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchMusicByTagEnabled, keywordSearch } = auth;
+  const { followedTags, videoTags, musicTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchMusicByTagEnabled, keywordSearch, currentUserNpub } = auth;
+
+  // Use the authors hook - uses logged-in user's follows if available, otherwise TV's follows
+  const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance, currentUserNpub });
 
   // State for fetch parameters
   const [imageFetchLimit] = useState<number>(500);
   const [videoFetchLimit] = useState<number>(30);
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
+  const [notesRefreshKey, setNotesRefreshKey] = useState<number>(0);
 
   // Fetch notes using dynamic parameters
   const { notes: audioNotes, isLoading: isLoadingAudioNotes } = useMediaNotes({ 
@@ -54,7 +55,8 @@ function App() {
     mediaType: 'audio', 
     ndk: ndkInstance, 
     limit: 25,
-    followedTags: fetchMusicByTagEnabled ? musicTags : undefined
+    followedTags: fetchMusicByTagEnabled ? musicTags : undefined,
+    refreshKey: notesRefreshKey,
   });
   const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
@@ -62,7 +64,8 @@ function App() {
     ndk: ndkInstance, 
     limit: videoFetchLimit,
     until: videoFetchUntil,
-    followedTags: fetchVideosByTagEnabled ? videoTags : undefined
+    followedTags: fetchVideosByTagEnabled ? videoTags : undefined,
+    refreshKey: notesRefreshKey,
   });
   const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
     authors: mediaAuthors, 
@@ -70,7 +73,8 @@ function App() {
     ndk: ndkInstance, 
     limit: imageFetchLimit,
     until: imageFetchUntil,
-    followedTags: fetchImagesByTagEnabled ? followedTags : undefined
+    followedTags: fetchImagesByTagEnabled ? followedTags : undefined,
+    refreshKey: notesRefreshKey,
   });
   
   // State for shuffled notes for display
@@ -582,6 +586,7 @@ function App() {
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
         ndkInstance={ndkInstance}
+        onCloseAndRefresh={() => setNotesRefreshKey(k => k + 1)}
     />
 
     </>

@@ -6,6 +6,18 @@ import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
 import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKUser } from '@nostr-dev-kit/ndk';
 import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredNip46Session } from '../utils/idb';
 
+interface NostrWindow {
+    nostr?: {
+        getPublicKey(): Promise<string>;
+        signEvent(event: any): Promise<any>;
+        getRelays?(): Promise<Record<string, { read: boolean; write: boolean }>>;
+    };
+}
+
+declare global {
+    interface Window extends NostrWindow {}
+}
+
 // NIP-44 helper functions
 const nip44Encrypt = (sk: Uint8Array, pk: string, data: string): string => {
     const key = getConversationKey(sk, pk);
@@ -30,8 +42,10 @@ export interface UseAuthReturn {
     authError: string | null;
     nip46ConnectUri: string | null; // Expose the generated URI
     isGeneratingUri: boolean; // Loading state for URI generation
+    hasExtension: boolean; // NIP-07 extension detected
     initiateNip46Connection: () => Promise<void>; // QR code flow - generate URI and wait
     connectWithBunkerUri: (bunkerUri: string) => Promise<void>; // Paste flow - parse URI and connect
+    connectWithExtension: () => Promise<void>; // NIP-07 extension flow
     cancelNip46Connection: () => void; // Function to cancel NIP-46 attempt
     generateNewKeys: () => Promise<{ npub: string; nsec: string } | null>;
     loginWithNsec: (nsec: string) => Promise<boolean>;
@@ -82,6 +96,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     const [authError, setAuthError] = useState<string | null>(null);
     const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null);
     const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false);
+    const hasExtension = !!(typeof window !== 'undefined' && window.nostr);
+    const [isExtensionSession, setIsExtensionSession] = useState<boolean>(false);
     const [followedTags, setFollowedTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
     const [videoTags, setVideoTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
     const [musicTags, setMusicTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
@@ -90,8 +106,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     const [fetchMusicByTagEnabled, setFetchMusicByTagEnabledState] = useState<boolean>(false);
     const [keywordSearch, setKeywordSearchState] = useState<string>('');
 
-    // Derived state for isLoggedIn based on nsec or nip46 session
-    const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SessionPayload));
+    // Derived state for isLoggedIn based on nsec, nip46 session, or extension session
+    const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SessionPayload || isExtensionSession));
 
     // --- Hashtag Persistence ---
     const loadFollowedTags = useCallback(async () => {
@@ -702,6 +718,41 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
     }, [ndkInstance, loadNip46SessionFromDb, loadFollowedTags, clearNip46SessionFromDb]);
 
+    const connectWithExtension = useCallback(async (): Promise<void> => {
+        if (typeof window === 'undefined' || !window.nostr) {
+            setAuthError("No Nostr extension found.");
+            return;
+        }
+
+        console.log("[extension] Connecting with NIP-07 extension...");
+        setIsLoadingAuth(true);
+        setAuthError(null);
+
+        try {
+            const pubkey = await window.nostr.getPublicKey();
+            const npub = nip19.npubEncode(pubkey);
+            
+            setCurrentUserNpub(npub);
+            setCurrentUserNsec(null);
+            setNip46SessionPayload(null);
+            setIsExtensionSession(true);
+            setAuthError(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            setIsLoadingAuth(false);
+            console.log("[extension] Logged in with extension:", npub);
+
+        } catch (error: unknown) {
+            console.error("[extension] Connection failed:", error);
+            const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+            setAuthError(`Extension Error: ${errorMessage}`);
+            setIsLoadingAuth(false);
+        }
+    }, [loadFollowedTags]);
+
     const cancelNip46Connection = useCallback(() => {
         console.log("User cancelled NIP-46 connection attempt.");
         setAuthError("Connection cancelled.");
@@ -719,6 +770,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         setCurrentUserNsec(null);
         setNip46SessionPayload(null);
         setNip46ConnectUri(null);
+        setIsExtensionSession(false);
         await clearNsecFromDb();
         await clearNip46SessionFromDb();
         setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
@@ -825,6 +877,19 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     }, [currentUserNsec, nip46SessionPayload, ndkInstance]);
 
       const signEvent = useCallback(async (event: NostrEvent): Promise<NostrEvent | null> => {
+        if (isExtensionSession && window.nostr) {
+            try {
+                console.log("[extension] Signing event with extension...");
+                const signedEvent = await window.nostr.signEvent(event);
+                console.log("[extension] Signed event:", signedEvent);
+                return signedEvent as NostrEvent;
+            } catch (error) {
+                console.error("[extension] Failed to sign event:", error);
+                setAuthError(`Extension sign failed: ${error instanceof Error ? error.message : String(error)}`);
+                return null;
+            }
+        }
+
         const signer = await getNdkSigner();
         if (!signer) {
             setAuthError("Cannot sign event: No active signer (not logged in?).");
@@ -846,7 +911,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
              setAuthError(`Failed to sign event: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
-     }, [getNdkSigner, ndkInstance]);
+     }, [isExtensionSession, getNdkSigner, ndkInstance]);
 
     // --- NIP-44 Encryption/Decryption Helpers ---
 
@@ -959,8 +1024,10 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         authError,
         nip46ConnectUri,
         isGeneratingUri,
+        hasExtension,
         initiateNip46Connection,
         connectWithBunkerUri,
+        connectWithExtension,
         cancelNip46Connection,
         generateNewKeys,
         loginWithNsec,

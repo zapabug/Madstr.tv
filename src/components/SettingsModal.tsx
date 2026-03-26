@@ -16,6 +16,7 @@ interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     ndkInstance: NDKInstance | undefined;
+    onCloseAndRefresh?: () => void;
 }
 
 const truncateNpub = (npub: string | null): string => {
@@ -24,7 +25,7 @@ const truncateNpub = (npub: string | null): string => {
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, onCloseAndRefresh }) => {
     const auth: UseAuthReturn = useAuth(ndkInstance);
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
@@ -107,8 +108,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         setNpubPressCount(0);
         setNsecInput('');
         setHashtagInput('');
+        onCloseAndRefresh?.();
         onClose();
-    }, [onClose]);
+    }, [onClose, onCloseAndRefresh]);
 
     const handleGenerateKeys = async () => {
         const confirmGeneration = window.confirm(
@@ -199,6 +201,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         } catch (error) {
             console.error("Paste bunker URI Error:", error);
             setDisplayError(`Error reading clipboard: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    };
+
+    const handleConnectWithExtension = async () => {
+        setDisplayError(null);
+        try {
+            await auth.connectWithExtension();
+        } catch (error) {
+            console.error("Extension connection error:", error);
+            setDisplayError(`Error: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
 
@@ -480,6 +492,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                          <div className="space-y-4">
 
                              <div className='text-center space-y-3'>
+                                 {auth.hasExtension && (
+                                     <button
+                                         onClick={handleConnectWithExtension}
+                                         disabled={auth.isLoadingAuth}
+                                         className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
+                                     >
+                                         Connect with Extension
+                                     </button>
+                                 )}
                                  <button
                                      ref={connectSignerButtonRef}
                                      onClick={handleInitiateNip46}
@@ -599,40 +620,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                     <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Follow Hashtags</h3>
                     <div className="space-y-3 mb-3">
                         <div className="flex items-center justify-between">
-                            <label className="text-sm text-gray-300">Enable Image Hashtag Filtering</label>
-                            <div className="relative inline-block w-12 h-6 rounded-full bg-gray-600">
-                                <input
-                                    type="checkbox"
-                                    checked={auth.fetchImagesByTagEnabled}
-                                    onChange={() => auth.setFetchImagesByTagEnabled(!auth.fetchImagesByTagEnabled)}
-                                    className="sr-only"
-                                />
-                                <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchImagesByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
-                            </div>
+                            <span className="text-sm text-gray-300">Enable Image Hashtag Filtering</span>
+                            <button
+                                type="button"
+                                onClick={() => auth.setFetchImagesByTagEnabled(!auth.fetchImagesByTagEnabled)}
+                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors ${auth.fetchImagesByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                                aria-label="Toggle Image Hashtag Filtering"
+                            >
+                                {auth.fetchImagesByTagEnabled ? 'ON' : 'OFF'}
+                            </button>
                         </div>
                         <div className="flex items-center justify-between">
-                            <label className="text-sm text-gray-300">Enable Video Hashtag Filtering</label>
-                            <div className="relative inline-block w-12 h-6 rounded-full bg-gray-600">
-                                <input
-                                    type="checkbox"
-                                    checked={auth.fetchVideosByTagEnabled}
-                                    onChange={() => auth.setFetchVideosByTagEnabled(!auth.fetchVideosByTagEnabled)}
-                                    className="sr-only"
-                                />
-                                <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchVideosByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
-                            </div>
+                            <span className="text-sm text-gray-300">Enable Video Hashtag Filtering</span>
+                            <button
+                                type="button"
+                                onClick={() => auth.setFetchVideosByTagEnabled(!auth.fetchVideosByTagEnabled)}
+                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors ${auth.fetchVideosByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                                aria-label="Toggle Video Hashtag Filtering"
+                            >
+                                {auth.fetchVideosByTagEnabled ? 'ON' : 'OFF'}
+                            </button>
                         </div>
                         <div className="flex items-center justify-between">
-                            <label className="text-sm text-gray-300">Enable Music Hashtag Filtering</label>
-                            <div className="relative inline-block w-12 h-6 rounded-full bg-gray-600">
-                                <input
-                                    type="checkbox"
-                                    checked={auth.fetchMusicByTagEnabled}
-                                    onChange={() => auth.setFetchMusicByTagEnabled(!auth.fetchMusicByTagEnabled)}
-                                    className="sr-only"
-                                />
-                                <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchMusicByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
-                            </div>
+                            <span className="text-sm text-gray-300">Enable Music Keyword Filtering</span>
+                            <button
+                                type="button"
+                                onClick={() => auth.setFetchMusicByTagEnabled(!auth.fetchMusicByTagEnabled)}
+                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors ${auth.fetchMusicByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                                aria-label="Toggle Music Keyword Filtering"
+                            >
+                                {auth.fetchMusicByTagEnabled ? 'ON' : 'OFF'}
+                            </button>
                         </div>
                     </div>
                     {auth.isLoggedIn ? (
