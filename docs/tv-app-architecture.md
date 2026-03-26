@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication, hashtag filtering, and Cashu-based tipping.
+This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication and hashtag filtering.
 
 **Key Features:**
 *   Displays images, podcasts (audio), and videos.
@@ -12,9 +12,8 @@ This document describes the architecture of the React-based TV application desig
 *   Older content (images/videos) can be fetched dynamically ("infinite scroll" behavior) by navigating past the end of the current list.
 *   Uses a **split-screen layout**, hiding the bottom panel in fullscreen mode.
 *   Enters **fullscreen mode** automatically after periods of inactivity or no new messages.
-*   Supports user **authentication** via nsec (generation/login) or NIP-46 remote signer.
+*   Supports user **authentication** via nsec (generation/login), NIP-46 remote signer, or browser extension (NIP-07).
 *   Allows users to **follow specific hashtags** (`#t` tags) to filter image/video content.
-*   Includes an internal **Cashu wallet** for receiving deposits via **NIP-59 Gift Wrap DMs** (Kind 1059) and **sending tips** (currently simplified, non-Zap standard) to content creators via encrypted DMs. Tipping is triggered by focusing the author QR code and pressing OK/Select. **NIP-04 DMs (Kind 4) are also supported for backwards compatibility.**
 
 **Operating Modes (`viewMode` state):**
 *   `imagePodcast`: The main/top area displays the `ImageFeed`, while the bottom-right panel displays the `MediaPanel` (podcast controls/list).
@@ -26,8 +25,7 @@ This document describes the architecture of the React-based TV application desig
 *   **Build Tool:** Vite
 *   **State Management & Side Effects:** Custom hooks orchestrated by the root `App` component
 *   **Nostr Integration:** `@nostr-dev-kit/ndk` v2, `nostr-tools`, `nostr-hooks`
-*   **Cashu (Ecash) Integration:** `@cashu/cashu-ts`
-*   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`, `cashuProofs`)
+*   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`)
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
 *   **Icons:** `react-icons`
 *   **Utilities:** `shuffleArray`, `react-qr-code`
@@ -43,7 +41,6 @@ useNDKInit hook → manages connection state, returns ndkInstance
      ↓
 useMediaAuthors → uses ndk for Kind 3 subscription
 useMediaNotes → uses ndk for media note subscriptions
-useWallet → uses ndk for deposit listening and tip sending
 ```
 
 ## 4. Core Component Responsibilities & Layout
@@ -65,10 +62,9 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Refs Created:** `audioRef`, `videoRef`, `imageFeedRef`.
 *   **Hook Usage:**
     *   `useNDKInit`: Gets `ndkInstance`, connection state
-    *   `useMediaAuthors`: Gets `mediaAuthors` using `ndkInstance`
+    *   `useMediaAuthors`: Gets `mediaAuthors` using `ndkInstance` and `currentUserNpub`
     *   `useAuth`: Auth state, login/logout, signing, DM encryption
-    *   `useWallet`: Cashu wallet state and operations
-    *   `useMediaNotes`: Fetches `imageNotes`, `videoNotes` (podcasts use separate hook)
+    *   `useMediaNotes`: Fetches `imageNotes`, `videoNotes`, `audioNotes` (podcasts)
     *   `useMediaState`: Core UI state machine
     *   `useMediaElementPlayback`: Audio/video playback (two instances)
     *   `useFullscreen`: Fullscreen management
@@ -78,15 +74,15 @@ The main layout is defined in `App.tsx` and consists of:
 
 ### **`ImageFeed.tsx`:**
 
-*   **Purpose:** Displays main image feed with author QR code and tipping.
+*   **Purpose:** Displays main image feed with author QR code.
 *   **Rendered In:** Top Media Area when `viewMode === 'imagePodcast'`.
 *   **Key Props:** `isLoading`, `handlePrevious`, `handleNext`, `currentImageIndex`, `imageNotes`, `authorNpub`, `isFullScreen`, `signalInteraction`.
 
 ### **`VideoPlayer.tsx`:**
 
-*   **Purpose:** Displays video player with author QR code and tipping.
+*   **Purpose:** Displays video player with author QR code.
 *   **Rendered In:** Top Media Area when `viewMode === 'videoPlayer'`.
-*   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`, `ndkInstance`, `auth`, `wallet`.
+*   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`, `ndkInstance`, `auth`.
 
 ### **`MediaPanel.tsx`:**
 
@@ -98,11 +94,11 @@ The main layout is defined in `App.tsx` and consists of:
 
 *   **Purpose:** Displays Nostr chat messages for a specific thread.
 *   **Rendered In:** Bottom-Left Panel (B1) - hidden in fullscreen.
-*   **Key Props:** `ndk`, `threadEventId`, `onNewMessage`, `isReady`.
+*   **Key Props:** `ndk`, `threadEventId`, `isReady`.
 
 ### **`SettingsModal.tsx`:**
 
-*   **Purpose:** User identity management, app settings, Cashu wallet configuration.
+*   **Purpose:** User identity management (extension, NIP-46, nsec), app settings (hashtag toggles, tag management).
 
 ### **`RelayStatus.tsx`:** Utility component showing relay connection status and settings button.
 
@@ -114,22 +110,24 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Function:** Manages NDK singleton connection. Only calls `connect()` once.
 
 ### **`useMediaAuthors`:**
-*   **Input:** `ndk` (NDK | undefined).
+*   **Input:** `ndk` (NDK | undefined), `currentUserNpub` (optional - user's pubkey if logged in).
 *   **Output:** `mediaAuthors` (array of pubkeys), `isLoadingAuthors`.
-*   **Function:** Fetches Kind 3 contact list with 15s timeout fallback. Returns TV pubkey + followed pubkeys.
+*   **Function:** Fetches Kind 3 contact list with 15s timeout fallback. Uses user's pubkey if logged in, otherwise falls back to TV pubkey.
 
 ### **`useMediaNotes`:**
-*   **Input:** `authors`, `mediaType` ('image', 'podcast', 'video'), `ndk`, `limit`, `until`, `followedTags`.
+*   **Input:** `authors`, `mediaType` ('image', 'audio', 'video'), `ndk`, `limit`, `until`, `followedTags`, `refreshKey`.
 *   **Output:** `notes` (array of `NostrNote`), `isLoading`.
 *   **Function:** Fetches notes based on authors, kinds, and optional hashtag filters.
 *   **Features:**
     *   Retry mechanism: Retries subscription up to 3 times with 2s delay on failure
     *   Video duration filter: Videos shorter than 2 minutes are filtered out
-    *   Media kinds: Podcasts (1, 1063, 31338), Videos (1, 1063, 34235, 34236), Images (1, 1063)
+    *   Media kinds: Audio (1, 1063, 31338), Videos (1, 1063, 34235, 34236), Images (1, 1063)
+    *   Client-side hashtag filtering when `followedTags` is provided
+    *   **Hashtag Relay Discovery (planned):** Will add separate subscription with `#t` filter for discovery mode
 
 ### **`useMediaState`:**
-*   **Input:** `initialImageNotes` (shuffled), `initialPodcastNotes`, `initialVideoNotes` (deduplicated), `fetchOlderImages`, `fetchOlderVideos`, `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
-*   **Output:** `viewMode`, `imageNotes`, `podcastNotes`, `videoNotes`, indices, `currentItemUrl`, navigation handlers.
+*   **Input:** `initialImageNotes` (shuffled), `initialAudioNotes`, `initialVideoNotes` (deduplicated), `fetchOlderImages`, `fetchOlderVideos`, `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
+*   **Output:** `viewMode`, `imageNotes`, `audioNotes`, `videoNotes`, indices, `currentItemUrl`, navigation handlers.
 *   **Function:** Core UI state machine. Manages view mode and current media indices.
 
 ### **`useMediaElementPlayback`:**
@@ -139,20 +137,19 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Features:**
     *   Videos autoplay back-to-back when in videoPlayer mode with `autoplayEnabled: true`
     *   Videos unmute automatically on play for sound-enabled playback
-    *   Saves playback position to localStorage
+    *   Saves playback position to IndexedDB
 
 ### **`useAuth`:**
 *   **Input:** `ndkInstance` (optional).
-*   **Output:** `currentUserNpub`, `currentUserNsec`, `isLoggedIn`, auth/loading states, NIP-46 functions, nsec functions, signer functions, `followedTags`, `encryptDm`, `decryptDm`, `wrapDirectMessage`, `unwrapGiftWrap`.
-*   **Function:** User authentication, credential persistence, signing capabilities, NIP-59 Gift Wrap encryption/decryption.
-*   **NIP-59 Methods:**
-    *   `wrapDirectMessage(recipientPubkey, content)`: Creates a NIP-59 Gift Wrap DM (Kind 1059)
-    *   `unwrapGiftWrap(giftWrapEvent)`: Decrypts and unwraps a Gift Wrap DM, returns content and sender pubkey
-
-### **`useWallet`:**
-*   **Input:** `ndkInstance`, `isNdkReady`.
-*   **Output:** `proofs`, `balanceSats`, `isListeningForDeposits`, `walletError`, `configuredMintUrl`, wallet functions.
-*   **Function:** Cashu wallet management, deposit listening via NIP-59 Gift Wrap DMs (Kind 1059) with NIP-04 fallback, tip sending via NIP-59 Gift Wrap encrypted DMs.
+*   **Output:** `currentUserNpub`, `currentUserNsec`, `isLoggedIn`, auth/loading states, NIP-46 functions, nsec functions, signer functions, `followedTags`, `encryptDm`, `decryptDm`.
+*   **Function:** User authentication, credential persistence, signing capabilities, NIP-44 encryption/decryption.
+*   **Authentication Methods:**
+    *   **Browser Extension (NIP-07):** Detects `window.nostr`, auto-restores on page load
+    *   **NIP-46 Remote Signer:** QR code flow (Amber Signer) and paste bunker URI flow
+    *   **Local Key (nsec):** Generate new keys or login with existing nsec
+*   **NIP-44 Methods:**
+    *   `encryptDm(recipientPubkey, plaintext)`: Encrypts DM using NIP-44
+    *   `decryptDm(senderPubkey, ciphertext)`: Decrypts DM using NIP-44
 
 ### **`useFullscreen`:**
 *   **Input:** `interactionTimeout`, `messageTimeout`, `checkInterval`.
@@ -184,11 +181,6 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Output:** `[isInactive, resetTimer]`.
 *   **Function:** Tracks user inactivity for UI interactions.
 
-### **`useVideoPlayback`:**
-*   **Input:** None.
-*   **Output:** `appIsPlayingRequest`, `videoIsPlayingActual`, handlers.
-*   **Function:** Syncs app play state with video element state.
-
 ## 6. Additional Components
 
 ### **Removed Components (previously unused):**
@@ -208,9 +200,9 @@ useNDKInit → provides ndkInstance
      ↓
 ┌────────────┼────────────┐
 ↓            ↓            ↓
-useMediaAuthors    useMediaNotes    useWallet
+useMediaAuthors    useMediaNotes    useAuth
      ↓            ↓            ↓
-mediaAuthors   image/video notes   wallet ops
+mediaAuthors   image/video/audio notes   auth ops
      ↓            ↓
 App.tsx combines data:
   - Shuffles imageNotes
@@ -223,7 +215,7 @@ useMediaState → manages viewMode, indices, currentItemUrl
 ↓            ↓            ↓
 ImageFeed   VideoPlayer   MediaPanel
      ↓            ↓            ↓
-  QR/Tipping  QR/Tipping   Lists/Controls
+   QR Code    QR Code    Lists/Controls
 ```
 
 ## 8. Constants
@@ -232,3 +224,47 @@ Key constants in `src/constants.ts`:
 *   `RELAYS`: Array of Nostr relay URLs
 *   `TV_PUBKEY_NPUB`: TV app's Nostr public key
 *   `MAIN_THREAD_NEVENT_URI`: Thread URI for MessageBoard and reply QR code
+
+## 9. Authentication & Session Management
+
+### Login Methods
+
+1. **Browser Extension (NIP-07)**
+   - Detected via `window.nostr` availability
+   - Uses `window.nostr.getPublicKey()` and `window.nostr.signEvent()`
+   - Session auto-restored on page refresh
+   - Best for desktop browsers with Nostr extensions (nos2x, Alby, etc.)
+
+2. **NIP-46 Remote Signer (Amber Signer)**
+   - QR Code Flow: Generate URI, scan with Amber Signer app
+   - Paste Flow: Copy bunker URI and paste into app
+   - Session persisted in IndexedDB
+   - Works on TV without browser extension
+
+3. **Local Key (nsec)**
+   - Generate new keypair or login with existing nsec
+   - Key stored in IndexedDB
+   - Simple but less secure for some use cases
+
+### Session Persistence
+
+- Extension sessions: Automatically detected on page load
+- NIP-46 sessions: Restored from IndexedDB on load
+- Local key sessions: Restored from IndexedDB on load
+- Settings (tags, toggles): Persisted in IndexedDB
+
+## 10. Content Filtering Architecture
+
+### Current Flow
+1. Fetch Kind 3 (follows) from user's pubkey
+2. If no follows, mediaAuthors = [user's pubkey]
+3. Fetch media from authors only
+4. Client-side hashtag filter applied
+
+### Planned Enhancement (v0.4.0)
+When hashtags enabled:
+- **Subscription 1 (Author-based):** `{ kinds: ALL_MEDIA_KINDS, authors: authorsList, limit: 100 }`
+- **Subscription 2 (Hashtag discovery):** `{ kinds: ALL_MEDIA_KINDS, "#t": ["tag1"], limit: 200 }`
+  - NO author restriction - full relay discovery for content diversity
+
+Results merged and deduplicated by note ID.
