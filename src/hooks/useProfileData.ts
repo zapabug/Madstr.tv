@@ -1,22 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNdk } from 'nostr-hooks';
+import NDK from '@nostr-dev-kit/ndk';
 import { 
     ProfileData, 
     getProfileFromCache, 
     saveProfileToCache,
     parseProfileContent 
-} from '../utils/profileCache'; // Import shared profile utilities
+} from '../utils/profileCache';
 
-// Use the generic NostrNote type
 import { NostrNote } from '../types/nostr';
 
 interface UseProfileDataResult {
   profiles: Record<string, ProfileData>;
-  fetchProfile: (pubkey: string) => Promise<void>; // Expose fetch for potential pre-fetching
+  fetchProfile: (pubkey: string) => Promise<void>;
 }
 
-export function useProfileData(notes: NostrNote[]): UseProfileDataResult {
-  const { ndk } = useNdk();
+export function useProfileData(notes: NostrNote[], ndkInstance: NDK | undefined): UseProfileDataResult {
+  const ndk = ndkInstance;
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({});
   const processingPubkeys = useRef<Set<string>>(new Set()); // Track profiles being fetched
 

@@ -14,14 +14,13 @@ import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
 import { useCurrentAuthor } from './hooks/useCurrentAuthor';
-import { useNDKInit } from './hooks/useNDKInit'; // <-- Import the new hook
+import { useNDKInit } from './hooks/useNDKInit';
 import { NostrNote } from './types/nostr';
 import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
 import { useAuth } from './hooks/useAuth';
-import { useWallet } from './hooks/useWallet'; // <<< Import useWallet >>>
-import MessageBoard from './components/MessageBoard'; // <-- Import MessageBoard
+import MessageBoard from './components/MessageBoard';
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -42,9 +41,6 @@ function App() {
   // --- Auth Hook --- 
   const auth = useAuth(ndkInstance);
   const { followedTags, videoTags, musicTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchMusicByTagEnabled, keywordSearch } = auth;
-
-  // --- Wallet Hook --- <<< Initialize useWallet here >>>
-  const wallet = useWallet({ ndkInstance, isNdkReady });
 
   // State for fetch parameters
   const [imageFetchLimit] = useState<number>(500);
@@ -401,19 +397,16 @@ function App() {
                          transition={{ duration: 0.5 }}
                          className="w-full h-full flex items-center justify-center"
                      >
-                         <ImageFeed
-                             ref={imageFeedRef}
-                             isLoading={isLoadingImages}
-                             handlePrevious={handlePrevious}
-                             handleNext={handleNext}
-                             currentImageIndex={currentImageIndex}
-                             imageNotes={shuffledImageNotes}
-                             authorNpub={currentAuthorNpub}
-                             isPlaying={false}
-                             togglePlayPause={() => { console.log('ImageFeed togglePlayPause called (no-op)'); }}
-                             isFullScreen={isFullScreen}
-                             signalInteraction={signalInteraction}
-                         />
+                          <ImageFeed
+                              ref={imageFeedRef}
+                              isLoading={isLoadingImages}
+                              currentImageIndex={currentImageIndex}
+                              imageNotes={shuffledImageNotes}
+                              authorNpub={currentAuthorNpub}
+                              isPlaying={false}
+                              isFullScreen={isFullScreen}
+                              ndkInstance={ndkInstance}
+                          />
                      </motion.div>
                  ) : viewMode === 'videoPlayer' ? (
                      <motion.div
@@ -424,21 +417,14 @@ function App() {
                          transition={{ duration: 0.5 }}
                          className="w-full h-full flex items-center justify-center"
                      >
-                         <VideoPlayer
-                             videoRef={videoRef}
-                             src={currentItemUrl} 
-                             isPlaying={videoPlayback.isPlaying}
-                             togglePlayPause={videoPlayback.togglePlayPause}
-                             authorNpub={currentAuthorNpub}
-                             autoplayFailed={videoPlayback.autoplayFailed}
-                             isMuted={videoPlayback.isMuted}
-                             currentNoteId={stateVideoNotes[currentVideoIndex]?.id}
-                             // Pass necessary context as props
-                             ndkInstance={ndkInstance}
-                             isNdkReady={isNdkReady}
-                             auth={auth}
-                             wallet={wallet}
-                         />
+                          <VideoPlayer
+                              videoRef={videoRef}
+                              src={currentItemUrl} 
+                              isPlaying={videoPlayback.isPlaying}
+                              togglePlayPause={videoPlayback.togglePlayPause}
+                              authorNpub={currentAuthorNpub}
+                              isMuted={videoPlayback.isMuted}
+                          />
                      </motion.div>
                  ) : null }
               </AnimatePresence>
@@ -595,8 +581,7 @@ function App() {
     <SettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
-        ndkInstance={ndkInstance} // <-- Pass singleton
-        wallet={wallet} // <<< Pass wallet instance >>>
+        ndkInstance={ndkInstance}
     />
 
     </>
