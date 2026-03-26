@@ -11,22 +11,6 @@ const savePlaybackTime = (url: string, time: number) => {
   }
 };
 
-const getPlaybackTime = (url: string): number | null => {
-  try {
-    const storedTime = localStorage.getItem(PLAYBACK_POS_PREFIX + url);
-    if (storedTime !== null) {
-      const parsedTime = parseFloat(storedTime);
-      if (!isNaN(parsedTime)) {
-        return parsedTime;
-      }
-    }
-  } catch (e) {
-    console.error("Failed to retrieve playback time from localStorage:", e);
-  }
-  return null;
-};
-// --- End Playback Position Storage ---
-
 // --- Hook Definition ---
 interface UseMediaElementPlaybackProps {
   mediaElementRef: React.RefObject<HTMLMediaElement>;
@@ -92,6 +76,14 @@ export function useMediaElementPlayback({
     try {
       console.log(`useMediaElementPlayback (${elementType}): Attempting play... Current src: ${mediaElement.currentSrc}`);
       hasAttemptedPlayRef.current = true;
+      
+      // For videos with autoplay, unmute on play for back-to-back playback with sound
+      if (elementType === 'video' && mediaElement.muted) {
+        console.log(`useMediaElementPlayback (video): Unmuting for back-to-back playback with sound.`);
+        mediaElement.muted = false;
+        setIsMuted(false);
+      }
+      
       await mediaElement.play();
       console.log(`useMediaElementPlayback (${elementType}): Play command successful.`);
       initialPlaySuccessfulRef.current = true;
@@ -101,7 +93,7 @@ export function useMediaElementPlayback({
       setIsPlaying(false);
       initialPlaySuccessfulRef.current = false;
     }
-  }, [mediaElementRef, isActiveMode, elementType]);
+  }, [isActiveMode, elementType]);
 
   const pause = useCallback(() => {
     const mediaElement = mediaElementRef.current;
@@ -110,24 +102,6 @@ export function useMediaElementPlayback({
       mediaElement.pause();
     }
   }, [mediaElementRef]);
-
-  const updateProgress = useCallback(() => {
-    if (mediaElementRef.current && !isSeeking) {
-      setCurrentTime(mediaElementRef.current.currentTime);
-      setDuration(mediaElementRef.current.duration || 0);
-    }
-  }, [mediaElementRef, isSeeking]);
-
-  // Combined Play/Pause handler
-  const togglePlayPause = useCallback(() => {
-    if (mediaElementRef.current) {
-      if (mediaElementRef.current.paused) {
-        play();
-      } else {
-        pause();
-      }
-    }
-  }, [play, pause, mediaElementRef]);
 
   const handleCanPlay = useCallback(() => {
     const mediaElement = mediaElementRef.current;
@@ -146,51 +120,15 @@ export function useMediaElementPlayback({
     setDuration(currentDuration);
     setCurrentTime(mediaElement.currentTime); // Ensure currentTime is updated
 
-    if (isActiveMode && autoplayEnabled && elementType === 'audio') {
-      console.log(`useMediaElementPlayback (${elementType}): Autoplaying audio on canplay`);
+    if (isActiveMode && autoplayEnabled && (elementType === 'audio' || elementType === 'video')) {
+      console.log(`useMediaElementPlayback (${elementType}): Autoplaying on canplay`);
       play();
     } else if (isActiveMode && elementType === 'video') {
       console.log(`useMediaElementPlayback (${elementType}): Video ready, manual play required.`);
-      // Do nothing, wait for user interaction
     } else {
       console.log(`useMediaElementPlayback (${elementType}): Ready, but not active mode or autoplay disabled.`);
     }
   }, [mediaElementRef, isActiveMode, elementType, autoplayEnabled, play]);
-
-  const handleEnded = useCallback(() => {
-    const mediaElement = mediaElementRef.current;
-    if (!mediaElement) return;
-
-    console.log(`useMediaElementPlayback (${elementType}): Ended event fired.`);
-    setIsPlaying(false);
-    setCurrentTime(mediaElement.duration);
-    initialPlaySuccessfulRef.current = false;
-
-    // If it's a video and part of a sequence (next=true), and still the active mode, call onEnded to advance.
-    if (elementType === 'video' && next && isActiveMode) {
-      console.log(`useMediaElementPlayback (${elementType}): Video ended, calling onEnded to advance sequence.`);
-      onEnded?.();
-    } else if (elementType === 'audio' && isActiveMode) {
-        // If it's audio and ended, just call the provided onEnded (might stop playback or go to next audio)
-        console.log(`useMediaElementPlayback (${elementType}): Audio ended, calling provided onEnded.`);
-        onEnded?.();
-    } else {
-        console.log(`useMediaElementPlayback (${elementType}): Ended, but not advancing (not video/next or not active mode).`);
-    }
-}, [mediaElementRef, isActiveMode, elementType, next, onEnded]);
-
-  const handleRateChange = useCallback(() => {
-    const mediaElement = mediaElementRef.current;
-    if (mediaElement) {
-        console.log(`useMediaElementPlayback: Setting playback rate to ${mediaElement.playbackRate}`);
-        setPlaybackRateState(mediaElement.playbackRate);
-    }
-  }, [mediaElementRef]);
-
-  const handleVolumeChange = () => {
-    console.log("useMediaElementPlayback: VolumeChange event fired. Muted:", mediaElementRef.current?.muted);
-    setIsMuted(mediaElementRef.current?.muted || true);
-  };
 
   useEffect(() => {
     const mediaElement = mediaElementRef.current;
@@ -265,17 +203,6 @@ export function useMediaElementPlayback({
       }
     }
 
-    const handleEnded = () => {
-      console.log("useMediaElementPlayback: Ended event fired.");
-      setIsPlaying(false);
-      setCurrentTime(mediaElement.duration);
-      initialPlaySuccessfulRef.current = false;
-      if (onEnded && isActiveMode) {
-        console.log("useMediaElementPlayback: Calling onEnded callback (isActiveMode=true).");
-        onEnded();
-      }
-    };
-
     mediaElement.addEventListener('loadedmetadata', handleLoadedMetadata);
     mediaElement.addEventListener('timeupdate', handleTimeUpdate);
     mediaElement.addEventListener('play', handlePlay);
@@ -301,10 +228,13 @@ export function useMediaElementPlayback({
       mediaElement.removeEventListener('volumechange', handleVolumeChange);
       mediaElement.removeEventListener('canplay', handleCanPlay);
       
-      if (!mediaElement.paused) {
-         console.log("useMediaElementPlayback: Pausing media during cleanup.");
-         mediaElement.pause();
+      // Save current position before cleanup
+      if (mediaElement.currentTime > 0) {
+        savePlaybackTime(currentItemUrl, mediaElement.currentTime);
       }
+      
+      // Don't pause or reset the element, just remove listeners
+      // This allows the next video to start loading immediately
     };
   }, [currentItemUrl, mediaElementRef, onEnded, isSeeking, initialTime, isActiveMode, elementType, autoplayEnabled, duration, play]);
 
@@ -362,6 +292,51 @@ export function useMediaElementPlayback({
         setPlaybackRateState(rate);
     }
   }, [mediaElementRef]);
+
+  // Combined Play/Pause handler
+  const togglePlayPause = useCallback(() => {
+    if (mediaElementRef.current) {
+      if (mediaElementRef.current.paused) {
+        play();
+      } else {
+        pause();
+      }
+    }
+  }, [play, pause, mediaElementRef]);
+
+  const handleRateChange = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+    console.log(`useMediaElementPlayback (${elementType}): Rate change event fired. Current playback rate: ${mediaElement.playbackRate}`);
+    setPlaybackRateState(mediaElement.playbackRate);
+  }, [mediaElementRef, elementType]);
+
+  const handleVolumeChange = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+    console.log(`useMediaElementPlayback (${elementType}): Volume change event fired. Current volume: ${mediaElement.volume}`);
+    setIsMuted(mediaElement.muted);
+  }, [mediaElementRef, elementType]);
+
+  const handleEnded = useCallback(() => {
+    const mediaElement = mediaElementRef.current;
+    if (!mediaElement) return;
+
+    console.log(`useMediaElementPlayback (${elementType}): Ended event fired.`);
+    setIsPlaying(false);
+    setCurrentTime(mediaElement.duration);
+    initialPlaySuccessfulRef.current = false;
+
+    if (elementType === 'video' && next && isActiveMode) {
+      console.log(`useMediaElementPlayback (${elementType}): Video ended, calling onEnded to advance sequence.`);
+      onEnded?.();
+    } else if (elementType === 'audio' && isActiveMode) {
+        console.log(`useMediaElementPlayback (${elementType}): Audio ended, calling provided onEnded.`);
+        onEnded?.();
+    } else {
+        console.log(`useMediaElementPlayback (${elementType}): Ended, but not advancing (not video/next or not active mode).`);
+    }
+}, [mediaElementRef, isActiveMode, elementType, next, onEnded]);
 
   return {
     isPlaying,

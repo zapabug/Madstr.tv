@@ -1,6 +1,6 @@
 import 'websocket-polyfill'; // Keep polyfill for now, though likely not needed for NDK
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import NDK, { NDKEvent, NDKFilter, NDKKind, NDKSubscription, NDKUserProfile } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent, NDKFilter, NDKKind, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools'; // Import nip19 for decoding
 // Import shared profile cache utilities
 import { 
@@ -8,19 +8,25 @@ import {
     getProfileFromCache, 
     saveProfileToCache,
     getAllProfilesFromCache, // Keep if using initial bulk load
-    deleteExpiredProfilesFromCache, // Keep if using cleanup
     parseProfileContent
 } from '../utils/profileCache';
+import { useAuth } from '../hooks/useAuth'; // Import useAuth
 
 // Define the props for the component
 interface MessageBoardProps {
-  ndk: NDK | null;
+  ndk: NDK | null; // Will be passed to useAuth
   threadEventId: string;
-  onNewMessage?: () => void;
-  isReady: boolean;
+  isReady: boolean; // Readiness of the NDK instance from parent
 }
 
-const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMessage, isReady }) => {
+const MessageBoard: React.FC<MessageBoardProps> = (props) => {
+  const { threadEventId } = props;
+  // Get auth methods and the NDK instance via useAuth, passing the ndk instance from props
+  const auth = useAuth(props.ndk || undefined);
+  const ndk = auth.ndk; // Use the NDK instance from auth
+  // Use isReady from props to gate operations, similar to before
+  const isNdkActuallyReady = props.isReady && !!ndk;
+
   const [messages, setMessages] = useState<NDKEvent[]>([]);
   const [targetEventId, setTargetEventId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Record<string, ProfileData>>({}); // State for profiles (uses imported type)
@@ -79,8 +85,8 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
 
   // Effect to subscribe when NDK is ready and targetEventId are available
   useEffect(() => {
-    if (!isReady || !ndk || !targetEventId) { 
-      console.log('MessageBoard: Waiting for NDK readiness and/or targetEventId.');
+    if (!isNdkActuallyReady || !targetEventId) { 
+      console.log('MessageBoard: Waiting for NDK readiness (from auth and props) and/or targetEventId.');
       setMessages([]); // Clear messages if not ready
       if (subscription.current) {
           subscription.current.stop();
@@ -88,7 +94,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
       }
       return;
     }
-
+    // ndk from auth.ndk is used here
     console.log(`MessageBoard: NDK ready, subscribing to replies for event ${targetEventId}...`);
     subscribeToReplies(ndk, targetEventId);
 
@@ -100,10 +106,11 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
           subscription.current = null;
       }
     };
-  }, [isReady, ndk, targetEventId]);
+  }, [isNdkActuallyReady, ndk, targetEventId]); // ndk is now from auth, isNdkActuallyReady combines prop and auth.ndk
 
   // --- Function to fetch profiles, wrapped in useCallback ---
   const fetchProfile = useCallback(async (pubkey: string) => {
+    // Use ndk from auth.ndk
     if (!ndk || profiles[pubkey]?.name || processingPubkeys.current.has(pubkey)) {
       return;
     }
@@ -157,11 +164,12 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
     } finally {
         processingPubkeys.current.delete(pubkey);
     }
-  }, [ndk]); // Removed profiles dependency
+  }, [ndk, profiles]); // ndk from auth
 
   // --- Effect to trigger profile fetches and subscriptions when messages update ---
   useEffect(() => {
-    if (!ndk || !isProfileCacheLoaded) return; // Wait for cache load
+    // Use ndk from auth.ndk and isNdkActuallyReady
+    if (!ndk || !isProfileCacheLoaded || !isNdkActuallyReady) return; // Wait for cache load & NDK readiness
     const authorsToFetch = new Set<string>();
     const authorsToSubscribe = new Set<string>();
     messages.forEach(msg => {
@@ -218,7 +226,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
     return () => {
         authorsProfileSub?.stop();
       };
-  }, [messages, ndk, fetchProfile, isProfileCacheLoaded]); // Added isProfileCacheLoaded dependency
+  }, [messages, ndk, fetchProfile, isProfileCacheLoaded, isNdkActuallyReady]); // Added isProfileCacheLoaded dependency
 
   const subscribeToReplies = (ndkInstance: NDK, eventId: string) => {
     if (subscription.current) {
@@ -256,7 +264,7 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
 
   // Simplified status rendering
   const renderStatus = () => {
-      if (!ndk) return 'Waiting for NDK...';
+      if (!isNdkActuallyReady) return 'Waiting for NDK...'; // Check combined readiness
       if (!targetEventId) return 'Invalid or missing nevent to follow.';
       if (messages.length === 0) return 'Loading replies or none found...';
       return null;
@@ -265,12 +273,14 @@ const MessageBoard: React.FC<MessageBoardProps> = ({ ndk, threadEventId, onNewMe
   return (
     <div className="h-full overflow-y-auto scroll-smooth p-2">
       {messages.length === 0 && !renderStatus() && (
-          <p className="text-gray-500 text-center mt-6 text-lg lg:text-xl">No replies yet...</p>
+          <p className="text-gray-500 text-center mt-6 text-lg lg:text-xl">
+            {!isNdkActuallyReady ? 'Waiting for NDK...' : 'No replies yet...'}
+          </p>
       )}
 
       {messages.length > 0 && (
         <ul className="w-full space-y-1 pl-32">
-          {messages.map((msg, index) => {
+          {messages.map((msg) => {
               const profile = profiles[msg.pubkey];
               const displayName = profile?.name || profile?.displayName || msg.pubkey.substring(0, 10) + '...';
               const pictureUrl = profile?.picture;

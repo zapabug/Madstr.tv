@@ -1,4 +1,4 @@
-import { openDB, DBSchema, IDBPDatabase, StoreNames } from 'idb';
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { Proof } from '@cashu/cashu-ts'; // Import Proof type
 
 // --- Type Definitions ---
@@ -41,10 +41,35 @@ export interface StoredFollowedTags {
     tags: string[];
 }
 
+export interface StoredVideoTags {
+    id: 'videoTags';
+    tags: string[];
+}
+
 // Add interface for Mint URL setting
 export interface StoredMintUrl {
     id: 'mintUrl'; // Use literal type for the key
     url: string;
+}
+
+export interface StoredImageFiltering {
+    id: 'fetchImagesByTagEnabled';
+    value: boolean;
+}
+
+export interface StoredVideoFiltering {
+    id: 'fetchVideosByTagEnabled';
+    value: boolean;
+}
+
+export interface StoredMusicFiltering {
+    id: 'fetchMusicByTagEnabled';
+    value: boolean;
+}
+
+export interface StoredMusicTags {
+    id: 'musicTags';
+    tags: string[];
 }
 
 // Use basic Proof type and add mintUrl in helpers if needed
@@ -54,14 +79,14 @@ export interface StoredMintUrl {
 // }
 
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredMintUrl;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredMintUrl | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'mintUrl'; // Use literal types for keys
+    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags'; // Use literal types for keys
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'mintUrl' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -88,7 +113,7 @@ const DB_VERSION = 5;
 const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
   if (!dbPromise) {
     dbPromise = openDB<MadstrTvAppDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion, transaction) {
+      upgrade(db, oldVersion, newVersion) {
         console.log(`Upgrading DB from version ${oldVersion} to ${newVersion}`);
         
         // Logic for version 1 creation (settings, media, profile)
@@ -184,6 +209,15 @@ export const idb = {
 
     loadFollowedTagsFromDb: async (): Promise<string[]> => {
         const setting = await idb.getSetting('followedTags');
+        return setting && 'tags' in setting ? setting.tags : [];
+    },
+
+    saveVideoTagsToDb: async (tags: string[]): Promise<void> => {
+        await idb.putSetting({ id: 'videoTags', tags });
+    },
+
+    loadVideoTagsFromDb: async (): Promise<string[]> => {
+        const setting = await idb.getSetting('videoTags');
         return setting && 'tags' in setting ? setting.tags : [];
     },
 

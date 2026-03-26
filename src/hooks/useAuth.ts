@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as nip19 from 'nostr-tools/nip19';
 import * as nip04 from 'nostr-tools/nip04';
-// import * as nip46 from 'nostr-tools/nip46'; // Removed unused import
-// import { Buffer } from 'buffer';
-// Import key generation from the correct submodule
+import { nip59 } from 'nostr-tools';
 import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
 // Removed incorrect import: import { generatePrivateKey } from 'nostr-tools';
 // Removed unused NDKFilter, NDKSubscriptionOptions from import
 import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKFilter, NDKSubscription, NDKUser } from '@nostr-dev-kit/ndk';
 // Corrected import path - removed .ts extension
-import { idb, StoredNsecData } from '../utils/idb';
+import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredMusicTags } from '../utils/idb';
 // Import the new helper
 // import { bytesToHex } from '../utils/misc';
 
@@ -37,9 +35,28 @@ export interface UseAuthReturn {
     // Hashtag state and setter
     followedTags: string[];
     setFollowedTags: (tags: string[]) => void;
-    // NIP-04 Methods
+    // Video hashtag state and setter (separate from image/podcast tags)
+    videoTags: string[];
+    setVideoTags: (tags: string[]) => void;
+    // Music hashtag state and setter
+    musicTags: string[];
+    setMusicTags: (tags: string[]) => void;
+    // NIP-04 Methods (deprecated, for fallback)
     encryptDm: (recipientPubkeyHex: string, plaintext: string) => Promise<string>;
     decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>;
+    // NIP-59 Gift Wrap Methods
+    wrapDirectMessage: (recipientPubkeyHex: string, content: string) => Promise<{ event: any; ciphertext: string }>;
+    unwrapGiftWrap: (giftWrapEvent: any) => Promise<{ content: string; senderPubkey: string } | null>;
+    // Add new properties for hashtag filtering
+    fetchImagesByTagEnabled: boolean;
+    fetchVideosByTagEnabled: boolean;
+    fetchMusicByTagEnabled: boolean;
+    keywordSearch: string;
+    setKeywordSearch: (keyword: string) => void;
+    setFetchImagesByTagEnabled: (enabled: boolean) => void;
+    setFetchVideosByTagEnabled: (enabled: boolean) => void;
+    setFetchMusicByTagEnabled: (enabled: boolean) => void;
+    ndk: NDK | undefined; // Added NDK instance
 }
 
 // Placeholder for the TV App's identity. Generate one if needed on first load?
@@ -67,6 +84,12 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null); // State for the URI
     const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false); // Loading state for URI generation
     const [followedTags, setFollowedTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Initialize with defaults
+    const [videoTags, setVideoTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Video tags default same as images
+    const [musicTags, setMusicTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Music tags default same as images
+    const [fetchImagesByTagEnabled, setFetchImagesByTagEnabledState] = useState<boolean>(false);
+    const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(false);
+    const [fetchMusicByTagEnabled, setFetchMusicByTagEnabledState] = useState<boolean>(false);
+    const [keywordSearch, setKeywordSearchState] = useState<string>(''); // For searching follows content
 
     // Derived state for isLoggedIn based on nsec or nip46 signer pubkey
     const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SignerPubkey));
@@ -90,20 +113,20 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     }, []);
 
      const saveFollowedTags = useCallback(async (tags: string[]) => {
-        try {
-            // Simple validation
-            if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
-            const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
-            if (validTags.length !== tags.length) {
-                console.warn("Some invalid tags were filtered before saving.");
-            }
-            await idb.putSetting({ id: 'followedTags', tags: validTags });
-            console.log("Saved followed tags to DB:", validTags);
-        } catch (error) {
-            console.error("Failed to save followed tags to IndexedDB:", error);
-            // Optionally set an error state? For now, just log.
-        }
-     }, []);
+         try {
+             // Simple validation
+             if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
+             const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
+             if (validTags.length !== tags.length) {
+                 console.warn("Some invalid tags were filtered before saving.");
+             }
+             await idb.putSetting({ id: 'followedTags', tags: validTags });
+             console.log("Saved followed tags to DB:", validTags);
+         } catch (error) {
+             console.error("Failed to save followed tags to IndexedDB:", error);
+             // Optionally set an error state? For now, just log.
+         }
+      }, []);
 
      // Wrap the state setter to also save to DB
      const setFollowedTags = useCallback((tags: string[]) => {
@@ -111,6 +134,122 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
          saveFollowedTags(tags);
      }, [saveFollowedTags]);
 
+     // --- Video Tags Persistence ---
+     const loadVideoTags = useCallback(async () => {
+         try {
+             const storedTags = await idb.getSetting('videoTags') as string[] | undefined;
+             if (storedTags && Array.isArray(storedTags)) {
+                 console.log("Loaded video tags from DB:", storedTags);
+                 return storedTags;
+             }
+         } catch (error) {
+             console.error("Failed to load video tags from IndexedDB:", error);
+         }
+         return DEFAULT_FOLLOWED_TAGS;
+     }, []);
+
+     const saveVideoTags = useCallback(async (tags: string[]) => {
+         try {
+             if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
+             const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
+             await idb.putSetting({ id: 'videoTags', tags: validTags });
+             console.log("Saved video tags to DB:", validTags);
+         } catch (error) {
+             console.error("Failed to save video tags to IndexedDB:", error);
+         }
+     }, []);
+
+     const setVideoTags = useCallback((tags: string[]) => {
+         setVideoTagsState(tags);
+         saveVideoTags(tags);
+     }, [saveVideoTags]);
+
+     // --- Music Tags ---
+     const loadMusicTags = useCallback(async () => {
+         try {
+             const storedTags = await idb.getSetting('musicTags') as string[] | undefined;
+             if (storedTags && Array.isArray(storedTags)) {
+                 console.log("Loaded music tags from DB:", storedTags);
+                 return storedTags;
+             }
+         } catch (error) {
+             console.error("Failed to load music tags from IndexedDB:", error);
+         }
+         return DEFAULT_FOLLOWED_TAGS;
+     }, []);
+
+     const saveMusicTags = useCallback(async (tags: string[]) => {
+         try {
+             if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
+             const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
+             await idb.putSetting({ id: 'musicTags', tags: validTags });
+             console.log("Saved music tags to DB:", validTags);
+         } catch (error) {
+             console.error("Failed to save music tags to IndexedDB:", error);
+         }
+     }, []);
+
+     const setMusicTags = useCallback((tags: string[]) => {
+         setMusicTagsState(tags);
+         saveMusicTags(tags);
+     }, [saveMusicTags]);
+
+    // --- Hashtag Filtering State ---
+    const loadFilteringState = useCallback(async () => {
+        try {
+            const storedImageFiltering = await idb.getSetting('fetchImagesByTagEnabled') as StoredImageFiltering | undefined;
+            const storedVideoFiltering = await idb.getSetting('fetchVideosByTagEnabled') as StoredVideoFiltering | undefined;
+            const storedMusicFiltering = await idb.getSetting('fetchMusicByTagEnabled') as StoredMusicFiltering | undefined;
+            
+            if (storedImageFiltering?.value !== undefined) {
+                setFetchImagesByTagEnabledState(storedImageFiltering.value);
+            }
+            if (storedVideoFiltering?.value !== undefined) {
+                setFetchVideosByTagEnabledState(storedVideoFiltering.value);
+            }
+            if (storedMusicFiltering?.value !== undefined) {
+                setFetchMusicByTagEnabledState(storedMusicFiltering.value);
+            }
+        } catch (error) {
+            console.error("Failed to load hashtag filtering state from IndexedDB:", error);
+        }
+    }, []);
+
+    const saveFilteringState = useCallback(async (type: 'images' | 'videos' | 'music', enabled: boolean) => {
+        try {
+            // const settingId = type === 'images' ? 'fetchImagesByTagEnabled' : 'fetchVideosByTagEnabled'; // Unused
+            const setting = type === 'images' 
+                ? { id: 'fetchImagesByTagEnabled', value: enabled } as StoredImageFiltering
+                : { id: 'fetchVideosByTagEnabled', value: enabled } as StoredVideoFiltering;
+            await idb.putSetting(setting);
+        } catch (error) {
+            console.error(`Failed to save ${type} filtering state to IndexedDB:`, error);
+        }
+    }, []);
+
+    const setFetchImagesByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchImagesByTagEnabledState(enabled);
+        saveFilteringState('images', enabled);
+    }, [saveFilteringState]);
+
+    const setFetchVideosByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchVideosByTagEnabledState(enabled);
+        saveFilteringState('videos', enabled);
+    }, [saveFilteringState]);
+
+    const setFetchMusicByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchMusicByTagEnabledState(enabled);
+        saveFilteringState('music', enabled);
+    }, [saveFilteringState]);
+
+    const setKeywordSearch = useCallback((keyword: string) => {
+        setKeywordSearchState(keyword);
+    }, []);
+
+    // Load filtering state on mount
+    useEffect(() => {
+        loadFilteringState();
+    }, [loadFilteringState]);
 
     // --- Nsec Handling ---
 
@@ -483,49 +622,56 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         // Need to ensure these functions are stable (wrapped in useCallback)
     }, [loadNsecFromDb, loadFollowedTags]);
 
+    // Load followed tags on mount, regardless of login state
+    useEffect(() => {
+        const initializeTags = async () => {
+            const storedTags = await loadFollowedTags();
+            setFollowedTagsState(storedTags);
+        };
+        initializeTags();
+    }, [loadFollowedTags]);
+
+    // Load video tags on mount, regardless of login state
+    useEffect(() => {
+        const initializeVideoTags = async () => {
+            const storedTags = await loadVideoTags();
+            setVideoTagsState(storedTags);
+        };
+        initializeVideoTags();
+    }, [loadVideoTags]);
+
+    // Load music tags on mount, regardless of login state
+    useEffect(() => {
+        const initializeMusicTags = async () => {
+            const storedTags = await loadMusicTags();
+            setMusicTagsState(storedTags);
+        };
+        initializeMusicTags();
+    }, [loadMusicTags]);
+
     // --- Signer Logic ---
 
     const getNdkSigner = useCallback((): NDKPrivateKeySigner | NDKNip46Signer | undefined => {
         if (nip46SignerPubkey && currentUserNpub && ndkInstance) {
-             // If we have a NIP-46 signer pubkey and the user's npub, create the NIP-46 signer instance
-             // The NDKNip46Signer needs the NDK instance, the *signer's* pubkey, and the *user's* pubkey (npub)
              console.log(`Creating NDKNip46Signer for user ${currentUserNpub} with signer ${nip46SignerPubkey}`);
-             // Ensure currentUserNpub is a valid hex pubkey for the signer constructor if needed,
-             // NDKNip46Signer might internally handle npub conversion or require hex.
-             // Let's assume NDKNip46Signer can take the user's npub directly for identification.
-             // We don't need the temporary secret here anymore.
-             let userHexPubkey: string;
              try {
-                // Decode the user's npub to hex public key
-                const decodedUserKey = nip19.decode(currentUserNpub);
-                if (decodedUserKey.type !== 'npub') {
-                     throw new Error("Invalid npub format for current user.");
-                }
-                userHexPubkey = decodedUserKey.data; // This is the hex pubkey
+                // const decodedUserKey = nip19.decode(currentUserNpub); // Not needed here for NDKNip46Signer constructor
+                // if (decodedUserKey.type !== 'npub') {
+                //      throw new Error("Invalid npub format for current user.");
+                // }
+                // userHexPubkey = decodedUserKey.data; // Unused variable
 
-                // Retrieve the temporary local private key used for this session
                 const tempPrivKey = nip46TempPrivKeyRef.current;
                 if (!tempPrivKey) {
                     console.error("NIP-46 Session Error: Temporary local key not found. Cannot create signer.");
-                    // Perhaps try re-initiating connection or prompt user?
                     return undefined;
                 }
 
-                // Create the local signer instance from the temporary key
                 const localSigner = new NDKPrivateKeySigner(tempPrivKey);
-
-
-                // Pass the HEX public key of the user being controlled
-                // Pass the bunker's pubkey (second arg) and the local signer (third arg)
-                // Note: Passing bunker pubkey as second arg might still be incorrect based on strict types (expecting nip05),
-                // but let's fix the immediate type error first. The implementation might handle it.
                 const signer = new NDKNip46Signer(ndkInstance, nip46SignerPubkey, localSigner);
-                // TODO: Test if awaiting signer.blockUntilReady() is needed here or if it's handled internally by NDK.
-                // await signer.blockUntilReady(); // Might be necessary
-                return signer as NDKNip46Signer; // Explicit cast to satisfy linter, though type should match
+                return signer as NDKNip46Signer; 
              } catch (error) {
                   console.error("Failed to create NDKNip46Signer:", error);
-                  // Fallback or error state? For now, return undefined.
                   return undefined;
              }
 
@@ -611,6 +757,65 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
     }, [getNdkSigner, ndkInstance]);
 
+    // --- NIP-59 Gift Wrap Encryption/Decryption ---
+
+    const wrapDirectMessage = useCallback(async (recipientPubkeyHex: string, content: string): Promise<{ event: any; ciphertext: string }> => {
+        const signer = getNdkSigner();
+        if (!signer) throw new Error("Cannot wrap DM: No user signer available.");
+        
+        if (signer instanceof NDKPrivateKeySigner) {
+            const sk = signer.privateKey;
+            if (!sk) throw new Error("Nsec signer has no private key.");
+            
+            // Ensure sk is Uint8Array
+            const privateKey = typeof sk === 'string' 
+                ? new Uint8Array(Buffer.from(sk, 'hex'))
+                : sk;
+            
+            const rumor = {
+                kind: 14, // Private DM
+                content: content,
+                tags: [['p', recipientPubkeyHex]],
+                created_at: Math.floor(Date.now() / 1000),
+            };
+            
+            const giftWrap = nip59.wrapEvent(rumor, privateKey, recipientPubkeyHex);
+            return { event: giftWrap, ciphertext: giftWrap.content };
+        } else {
+            throw new Error("NIP-46 signer does not support NIP-59 Gift Wrap yet.");
+        }
+    }, [getNdkSigner]);
+
+    const unwrapGiftWrap = useCallback(async (giftWrapEvent: any): Promise<{ content: string; senderPubkey: string } | null> => {
+        const signer = getNdkSigner();
+        if (!signer) throw new Error("Cannot unwrap gift: No user signer available.");
+        
+        if (signer instanceof NDKPrivateKeySigner) {
+            const sk = signer.privateKey;
+            if (!sk) throw new Error("Nsec signer has no private key.");
+            
+            // Ensure sk is Uint8Array
+            const privateKey = typeof sk === 'string' 
+                ? new Uint8Array(Buffer.from(sk, 'hex'))
+                : sk;
+            
+            try {
+                const unwrapped = nip59.unwrapEvent(giftWrapEvent, privateKey);
+                if (unwrapped) {
+                    return {
+                        content: unwrapped.content || '',
+                        senderPubkey: unwrapped.pubkey
+                    };
+                }
+            } catch (error) {
+                console.error("Failed to unwrap gift:", error);
+            }
+            return null;
+        } else {
+            throw new Error("NIP-46 signer does not support NIP-59 Gift Wrap yet.");
+        }
+    }, [getNdkSigner]);
+
     // Return the hook's state and functions
     return {
         currentUserNpub,
@@ -621,17 +826,32 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         nip46ConnectUri,
         isGeneratingUri,
         initiateNip46Connection,
-        cancelNip46Connection, // Added cancel function
+        cancelNip46Connection,
         generateNewKeys,
         loginWithNsec,
         logout,
-        saveNsecToDb, // Expose explicit save if needed elsewhere
+        saveNsecToDb,
         getNdkSigner,
         signEvent,
-        // Hashtag state
         followedTags,
         setFollowedTags,
-        encryptDm, // Add new method
-        decryptDm, // Add new method
+        videoTags,
+        setVideoTags,
+        musicTags,
+        setMusicTags,
+        encryptDm,
+        decryptDm,
+        wrapDirectMessage,
+        unwrapGiftWrap,
+        // Add new properties for hashtag filtering
+        fetchImagesByTagEnabled,
+        fetchVideosByTagEnabled,
+        fetchMusicByTagEnabled,
+        keywordSearch,
+        setKeywordSearch,
+        setFetchImagesByTagEnabled,
+        setFetchVideosByTagEnabled,
+        setFetchMusicByTagEnabled,
+        ndk: ndkInstance, // Added NDK instance
     };
 }; 

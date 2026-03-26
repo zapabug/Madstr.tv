@@ -24,7 +24,7 @@ interface SettingsModalProps {
 // Function to truncate npub for display
 const truncateNpub = (npub: string | null): string => {
     if (!npub) return '';
-    if (npub.length <= 15) return npub; // npub1 + 6 chars + ... + 6 chars
+    if (npub.length <= 15) return npub;
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
@@ -328,6 +328,78 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         }
      };
 
+     // --- Video Tag Management ---
+     const [videoTagInput, setVideoTagInput] = useState('');
+     const videoTagInputRef = useRef<HTMLInputElement>(null);
+     const [focusedVideoTagIndex, setFocusedVideoTagIndex] = useState<number | null>(null);
+     const videoTagListRef = useRef<HTMLUListElement>(null);
+     const addVideoTagButtonRef = useRef<HTMLButtonElement>(null);
+
+     const handleAddVideoTag = () => {
+        const tagToAdd = videoTagInput.trim().toLowerCase().replace(/^#+/, '');
+        if (tagToAdd && auth.videoTags && !auth.videoTags.includes(tagToAdd) && auth.setVideoTags) {
+            const newTags = [...auth.videoTags, tagToAdd];
+            auth.setVideoTags(newTags);
+            setVideoTagInput('');
+            setTimeout(() => videoTagInputRef.current?.focus(), 50);
+        } else if (!tagToAdd) {
+             setDisplayError("Please enter a tag to add.");
+        } else {
+             setDisplayError(`Tag "${tagToAdd}" is already followed.`);
+        }
+     };
+
+     const handleRemoveVideoTag = (tagToRemove: string) => {
+        if (auth.videoTags && auth.setVideoTags) {
+            const newTags = auth.videoTags.filter(tag => tag !== tagToRemove);
+            auth.setVideoTags(newTags);
+            setFocusedVideoTagIndex(null);
+            setTimeout(() => addVideoTagButtonRef.current?.focus(), 50);
+        }
+     };
+
+     const handleVideoTagListKeyDown = (event: React.KeyboardEvent<HTMLLIElement>, index: number, tag: string) => {
+        if (!auth.videoTags) return;
+
+        switch (event.key) {
+            case 'ArrowUp':
+                event.preventDefault();
+                if (index > 0) {
+                    setFocusedVideoTagIndex(index - 1);
+                     (videoTagListRef.current?.children[index - 1] as HTMLLIElement)?.focus();
+                } else {
+                     addVideoTagButtonRef.current?.focus();
+                     setFocusedVideoTagIndex(null);
+                }
+                break;
+            case 'ArrowDown':
+                event.preventDefault();
+                if (index < auth.videoTags.length - 1) {
+                    setFocusedVideoTagIndex(index + 1);
+                     (videoTagListRef.current?.children[index + 1] as HTMLLIElement)?.focus();
+                } else {
+                    setFocusedVideoTagIndex(index);
+                }
+                break;
+            case 'Enter':
+            case ' ':
+                event.preventDefault();
+                handleRemoveVideoTag(tag);
+                break;
+            case 'ArrowLeft':
+                event.preventDefault();
+                addVideoTagButtonRef.current?.focus();
+                setFocusedVideoTagIndex(null);
+                break;
+        }
+    };
+
+     useEffect(() => {
+         if (focusedVideoTagIndex !== null && videoTagListRef.current?.children[focusedVideoTagIndex]) {
+             (videoTagListRef.current.children[focusedVideoTagIndex] as HTMLLIElement).focus();
+         }
+     }, [focusedVideoTagIndex]);
+
      // Handle D-pad navigation and deletion in the tag list
     const handleTagListKeyDown = (event: React.KeyboardEvent<HTMLLIElement>, index: number, tag: string) => {
         if (!auth.followedTags) return;
@@ -440,7 +512,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                 {auth.isLoadingAuth && <p className="text-center text-purple-400 mb-4">Loading...</p>}
                 {displayError && <p className="text-center text-red-500 bg-red-900/30 border border-red-600 rounded p-2 mb-4">{displayError}</p>}
                 {auth.authError && <p className="text-center text-red-500 bg-red-900/30 border border-red-600 rounded p-2 mb-4">Auth Error: {auth.authError}</p>}
-
 
                 {/* --- Authentication Section --- */}
                  <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
@@ -648,7 +719,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             </div>
 
                             <p className="text-xs text-gray-500 pt-2 border-t border-gray-700/50">
-                                Deposit Instructions: Send a Cashu token (e.g., <code>cashuA...</code>) in an encrypted Nostr DM (Kind 4) to your TV's npub. The balance updates automatically when this settings panel is open.
+                                Deposit Instructions: Send a Cashu token (e.g., <code>cashuA...</code>) in a NIP-59 Gift Wrap DM (Kind 1059) to your TV's npub. The balance updates automatically when this settings panel is open. Kind 4 DMs are also supported as fallback.
                             </p>
                             <p className="text-xs font-bold text-red-500/80 mt-1">
                                 SECURITY WARNING: Storing Cashu tokens in a browser is risky. Do not store large amounts. Use at your own risk.
@@ -660,6 +731,64 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                 {/* --- Hashtag Following Section --- */}
                 <div className="mb-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
                     <h3 className="text-lg font-semibold mb-3 text-purple-300 border-b border-gray-600 pb-1">Follow Hashtags</h3>
+                    <div className="space-y-3 mb-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm text-gray-300">Enable Image Hashtag Filtering</label>
+                            <div className="relative inline-block w-12 h-6 rounded-full bg-gray-600">
+                                <input
+                                    type="checkbox"
+                                    checked={auth.fetchImagesByTagEnabled}
+                                    onChange={() => auth.setFetchImagesByTagEnabled(!auth.fetchImagesByTagEnabled)}
+                                    className="sr-only"
+                                />
+                                <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchImagesByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm text-gray-300">Enable Video Hashtag Filtering</label>
+                            <div className="relative inline-block w-12 h-6 rounded-full bg-gray-600">
+                                <input
+                                    type="checkbox"
+                                    checked={auth.fetchVideosByTagEnabled}
+                                    onChange={() => auth.setFetchVideosByTagEnabled(!auth.fetchVideosByTagEnabled)}
+                                    className="sr-only"
+                                />
+                                <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchVideosByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm text-gray-300">Enable Music Hashtag Filtering</label>
+                            <div className="relative inline-block w-12 h-6 rounded-full bg-gray-600">
+                                <input
+                                    type="checkbox"
+                                    checked={auth.fetchMusicByTagEnabled}
+                                    onChange={() => auth.setFetchMusicByTagEnabled(!auth.fetchMusicByTagEnabled)}
+                                    className="sr-only"
+                                />
+                                <div className={`w-6 h-6 rounded-full transition-transform duration-200 ease-in-out transform ${auth.fetchMusicByTagEnabled ? 'translate-x-6 bg-purple-500' : 'translate-x-0 bg-gray-400'}`} />
+                            </div>
+                        </div>
+                        {/* Keyword Search for Follows */}
+                        <div className="mt-3 pt-3 border-t border-gray-600">
+                            <label className="text-xs text-gray-400 mb-1 block">Search Follows by Keyword</label>
+                            <input
+                                type="text"
+                                value={auth.keywordSearch}
+                                onChange={(e) => auth.setKeywordSearch(e.target.value)}
+                                placeholder="keyword"
+                                className="w-full px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                                aria-label="Search follows content by keyword"
+                            />
+                            {auth.keywordSearch && (
+                                <button
+                                    onClick={() => auth.setKeywordSearch('')}
+                                    className="mt-1 text-xs text-purple-400 hover:text-purple-300"
+                                >
+                                    Clear keyword
+                                </button>
+                            )}
+                        </div>
+                    </div>
                     {auth.isLoggedIn ? (
                         <>
                              <div className="flex items-center gap-2 mb-3">
@@ -707,6 +836,58 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                         </>
                     ) : (
                         <p className="text-sm text-gray-500 italic">Login to manage followed hashtags.</p>
+                    )}
+                </div>
+
+                {/* Video Hashtags Section */}
+                <div className="mb-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+                    <h3 className="text-lg font-semibold mb-3 text-blue-300 border-b border-gray-600 pb-1">Video Tags</h3>
+                    {auth.isLoggedIn ? (
+                        <>
+                             <div className="flex items-center gap-2 mb-3">
+                                 <span className="text-gray-400">#</span>
+                                 <input
+                                     ref={videoTagInputRef}
+                                     type="text"
+                                     value={videoTagInput}
+                                     onChange={(e) => setVideoTagInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                                     placeholder="podcast"
+                                     className="flex-grow px-3 py-1.5 bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                     aria-label="Enter video tag to follow (without #)"
+                                     onKeyDown={(e) => { if (e.key === 'Enter') handleAddVideoTag(); }}
+                                 />
+                                 <button
+                                     ref={addVideoTagButtonRef}
+                                     onClick={handleAddVideoTag}
+                                     disabled={!videoTagInput.trim()}
+                                     className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 text-sm font-semibold"
+                                 >
+                                     Add
+                                 </button>
+                             </div>
+                            <p className="text-xs text-gray-500 mb-2">Video Tags (Press OK on tag to remove):</p>
+                            {auth.videoTags && auth.videoTags.length > 0 ? (
+                                <ul ref={videoTagListRef} className="max-h-32 overflow-y-auto space-y-1 bg-gray-800/50 p-2 rounded border border-gray-700">
+                                    {auth.videoTags.map((tag, index) => (
+                                        <li
+                                            key={tag}
+                                            tabIndex={0}
+                                            className={`px-2 py-1 rounded text-sm cursor-pointer flex justify-between items-center ${focusedVideoTagIndex === index ? 'bg-blue-700 text-white ring-2 ring-blue-400' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'} focus:outline-none focus:bg-blue-700 focus:text-white focus:ring-2 focus:ring-blue-400`}
+                                            onFocus={() => setFocusedVideoTagIndex(index)}
+                                            onKeyDown={(e) => handleVideoTagListKeyDown(e, index, tag)}
+                                            aria-label={`Tag ${tag}. Press OK to remove.`}
+                                        >
+                                            <span>#{tag}</span>
+                                            <span className="text-xs text-gray-500 ml-2">(OK to Del)</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-gray-500 italic">No video tags followed yet.</p>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-sm text-gray-500 italic">Login to manage video hashtags.</p>
                     )}
                 </div>
 

@@ -3,40 +3,40 @@ import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { NostrNote } from '../types/nostr';
 import { cacheMediaNotes, getCachedNotesByAuthors } from '../utils/mediaNoteCache';
 
-// Define media types
+// Media type for filtering
 export type MediaType = 'podcast' | 'video' | 'image';
+
+// Minimum video duration in seconds (2 minutes)
+export const MIN_VIDEO_DURATION_SECONDS = 120;
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
 
 // Define hook props
 interface UseMediaNotesProps {
     authors: string[];
     mediaType: MediaType;
     ndk: NDK | null;
-    limit?: number; // <<< Renamed from initialLimit, now dynamic
-    until?: number; // <<< Added until timestamp (seconds)
-    followedTags?: string[]; // <<< Add optional followedTags
+    limit?: number;
+    until?: number;
+    followedTags?: string[];
 }
 
 // Define hook return value
 interface UseMediaNotesReturn {
     notes: NostrNote[];
     isLoading: boolean;
-    fetchOlderNotes?: () => void; // <<< Optional: Expose a direct fetch function? No, let App control via props.
+    fetchOlderNotes?: () => void;
 }
 
-// Regexes (consider moving to constants or utils)
+// Regexes for all media types
 const imageRegex = /https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
 const videoRegex = /https?:\/\/\S+\.(?:mp4|mov|webm|m3u8)/i;
 const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
 
-// Helper to get Kinds based on MediaType
-function getKindsForMediaType(mediaType: MediaType): number[] {
-    switch (mediaType) {
-        case 'podcast': return [30402, 1, 31234]; // NIP-101 + Kind 1 fallback + User's Kind
-        case 'video': return [1]; // Primarily Kind 1 for simple links
-        case 'image': return [1]; // Primarily Kind 1 for simple links
-        default: return [1];
-    }
-}
+// Unified kinds - fetch all media types in one subscription
+const ALL_MEDIA_KINDS = [1, 1063, 31338, 34235, 34236];
 
 // Helper to get URL Regex based on MediaType
 function getUrlRegexForMediaType(mediaType: MediaType): RegExp {
@@ -44,8 +44,15 @@ function getUrlRegexForMediaType(mediaType: MediaType): RegExp {
         case 'podcast': return audioRegex;
         case 'video': return videoRegex;
         case 'image': return imageRegex;
-        default: return /https?:\/\/\S+/i; // Generic fallback
+        default: return imageRegex;
     }
+}
+
+// Define hook return value
+interface UseMediaNotesReturn {
+    notes: NostrNote[];
+    isLoading: boolean;
+    fetchOlderNotes?: () => void;
 }
 
 export function useMediaNotes({
@@ -147,16 +154,34 @@ export function useMediaNotes({
                  }
             }
         } else if (type === 'podcast') {
-            // Podcast logic (prioritizing enclosure, then url/media)
-            const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
-            if (enclosureTag && enclosureTag[1]?.match(urlRegex)) { mediaUrl = enclosureTag[1]; foundVia = 'enclosure tag'; }
-            if (!mediaUrl) {
+            // Podcast logic - prioritize NIP-94 m tag with audio/*, then enclosure, url, media
+            const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('audio/'));
+            if (mimeTag) {
+                 foundVia = 'm tag (audio)';
                  const urlTag = event.tags.find((t) => t[0] === 'url');
-                 if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia = 'url tag + audio regex'; }
-            }
-            if (!mediaUrl) {
-                 const mediaTag = event.tags.find((t) => t[0] === 'media');
-                 if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + audio regex'; }
+                 if (urlTag && urlTag[1]) { mediaUrl = urlTag[1]; foundVia += ' + url tag'; }
+                 if (!mediaUrl) {
+                     const mediaTag = event.tags.find((t) => t[0] === 'media');
+                     if (mediaTag && mediaTag[1]) { mediaUrl = mediaTag[1]; foundVia += ' + media tag'; }
+                 }
+                 // Fallback to content regex if mime type found but no URL tag
+                 if (!mediaUrl) {
+                     const genericUrlRegex = /https?:\/\/\S+/i;
+                     const contentMatch = event.content.match(genericUrlRegex);
+                     if (contentMatch) { mediaUrl = contentMatch[0]; foundVia += ' + content regex fallback'; }
+                 }
+            } else {
+                 // Fallback: check enclosure, url, media tags with audio regex
+                 const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
+                 if (enclosureTag && enclosureTag[1]?.match(urlRegex)) { mediaUrl = enclosureTag[1]; foundVia = 'enclosure tag'; }
+                 if (!mediaUrl) {
+                      const urlTag = event.tags.find((t) => t[0] === 'url');
+                      if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia = 'url tag + audio regex'; }
+                 }
+                 if (!mediaUrl) {
+                      const mediaTag = event.tags.find((t) => t[0] === 'media');
+                      if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + audio regex'; }
+                 }
             }
         }
 
@@ -176,10 +201,16 @@ export function useMediaNotes({
             if (type === 'image') {
                 console.log(`processEvent (image): Skipping event ${event.id} - No valid URL found in tags or content.`);
             }
+            if (type === 'podcast') {
+                console.log(`processEvent (podcast): Skipping event ${event.id} - No valid audio URL found. Content preview: ${event.content.substring(0, 100)}`);
+            }
             return null;
         } else {
             if (type === 'image') {
                  console.log(`processEvent (image): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
+            }
+            if (type === 'podcast') {
+                 console.log(`processEvent (podcast): Found URL for event ${event.id} via ${foundVia}. URL: ${mediaUrl}`);
             }
         }
 
@@ -260,7 +291,7 @@ export function useMediaNotes({
         // For simplicity, let's keep existing notes displayed while loading more.
 
         const authorsList = authors;
-        const kindsToFetch = getKindsForMediaType(mediaType);
+        const kindsToFetch = ALL_MEDIA_KINDS; // Fetch all media kinds in one subscription
         const urlRegex = getUrlRegexForMediaType(mediaType);
 
         const fetchAndSubscribe = async () => {
@@ -325,46 +356,116 @@ export function useMediaNotes({
                  console.log(`useMediaNotes (image): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Until: ${until ? new Date(until * 1000).toISOString() : 'N/A'})...`);
                  if (filter['#t']) console.log(`useMediaNotes (image): Filtering by tags:`, filter['#t']);
             }
+            if (mediaType === 'podcast') {
+                 console.log(`useMediaNotes (podcast): Subscribing (Kinds: ${kindsToFetch}, Limit: ${limit}, Authors: ${authorsList.length})...`);
+                 if (filter['#t']) console.log(`useMediaNotes (podcast): Filtering by tags:`, filter['#t']);
+                 console.log(`useMediaNotes (podcast): Author hex values (first 5):`, authorsList.slice(0, 5));
+            }
             
+            // Helper to parse duration string to seconds
+            const parseDuration = (duration: string): number => {
+                const parts = duration.split(':').map(Number);
+                if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+                if (parts.length === 2) return parts[0] * 60 + parts[1];
+                return parseInt(duration) || 0;
+            };
+
             // Stop previous subscription if it exists
             if (currentSubscription.current) {
                 currentSubscription.current.stop();
             }
             
-            currentSubscription.current = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
+            // Retry state
+            let retryCount = 0;
+            let eoseReceived = false;
 
-            currentSubscription.current.on('event', (event: NDKEvent) => {
-                const note = processEvent(event, urlRegex, mediaType);
-                if (note && !notesById.current.has(note.id)) {
-                    // <<< Log note add >>>
-                    if (mediaType === 'image') {
-                         console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
-                    }
-                    notesById.current.set(note.id, note);
+            const subscribe = () => {
+                // Stop previous subscription if it exists
+                if (currentSubscription.current) {
+                    currentSubscription.current.stop();
                 }
-            });
+                
+                console.log(`useMediaNotes (${mediaType}): Subscription attempt ${retryCount + 1}/${MAX_RETRIES}`);
+                
+                currentSubscription.current = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
 
-            currentSubscription.current.on('eose', () => {
-                if (mediaType === 'image') {
-                    console.log(`useMediaNotes (image): EOSE received. Total notes in map: ${notesById.current.size}`);
-                }
-                const finalNotes = Array.from(notesById.current.values());
-                const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
-                if (isMounted) {
-                    // <<< Log final state update >>>
-                    if (mediaType === 'image') {
-                        console.log(`useMediaNotes (image): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                currentSubscription.current.on('event', (event: NDKEvent) => {
+                    if (mediaType === 'podcast') {
+                        console.log(`useMediaNotes (podcast): Received event ${event.id} from pubkey ${event.pubkey}, kind ${event.kind}`);
                     }
-                    setNotes(sortedFinalNotes);
-                    setIsLoading(false);
-                    isFetching.current = false;
-                }
-                // Cache the final accumulated notes
-                console.log(`useMediaNotes (${mediaType}): Caching ${finalNotes.length} notes after EOSE.`);
-                cacheMediaNotes(finalNotes).catch(error => {
-                     console.error(`useMediaNotes (${mediaType}): Error caching notes after EOSE:`, error);
+                    const note = processEvent(event, urlRegex, mediaType);
+                    if (note && !notesById.current.has(note.id)) {
+                        // Apply minimum video duration filter
+                        if (mediaType === 'video' && note.duration) {
+                            const durationSeconds = parseDuration(note.duration);
+                            if (durationSeconds < MIN_VIDEO_DURATION_SECONDS) {
+                                console.log(`useMediaNotes (video): Skipping video ${note.id} - duration ${durationSeconds}s < ${MIN_VIDEO_DURATION_SECONDS}s minimum`);
+                                return;
+                            }
+                        }
+                        if (mediaType === 'image') {
+                             console.log(`useMediaNotes (image): Adding new note ${note.id} from WS to internal map.`);
+                        }
+                        if (mediaType === 'podcast') {
+                             console.log(`useMediaNotes (podcast): Adding new note ${note.id} to internal map. URL: ${note.url}`);
+                        }
+                        notesById.current.set(note.id, note);
+                    } else if (!note && mediaType === 'podcast') {
+                        console.log(`useMediaNotes (podcast): Event ${event.id} processed but no valid audio URL found`);
+                    }
                 });
-            });
+
+                currentSubscription.current.on('eose', () => {
+                    eoseReceived = true;
+                    retryCount = 0;
+                    console.log(`useMediaNotes (${mediaType}): EOSE received. Total notes: ${notesById.current.size}`);
+                    if (mediaType === 'podcast') {
+                        console.log(`useMediaNotes (podcast): EOSE - Total notes collected: ${notesById.current.size}`);
+                    }
+                    let finalNotes = Array.from(notesById.current.values());
+                    
+                    // Apply minimum duration filter for videos
+                    if (mediaType === 'video') {
+                        finalNotes = finalNotes.filter(note => {
+                            if (!note.duration) return true;
+                            return parseDuration(note.duration) >= MIN_VIDEO_DURATION_SECONDS;
+                        });
+                    }
+                    
+                    const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
+                    if (isMounted) {
+                        if (mediaType === 'image') {
+                            console.log(`useMediaNotes (${mediaType}): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                        }
+                        setNotes(sortedFinalNotes);
+                        setIsLoading(false);
+                        isFetching.current = false;
+                    }
+                    console.log(`useMediaNotes (${mediaType}): Caching ${finalNotes.length} notes after EOSE.`);
+                    cacheMediaNotes(finalNotes).catch(error => {
+                         console.error(`useMediaNotes (${mediaType}): Error caching notes after EOSE:`, error);
+                    });
+                });
+
+                currentSubscription.current.on('close', () => {
+                    console.log(`useMediaNotes (${mediaType}): Subscription closed.`);
+                    if (!eoseReceived && retryCount < MAX_RETRIES) {
+                        retryCount++;
+                        console.log(`useMediaNotes (${mediaType}): Retrying in ${RETRY_DELAY_MS}ms (${retryCount}/${MAX_RETRIES})`);
+                        setTimeout(() => {
+                            if (isMounted && !eoseReceived) subscribe();
+                        }, RETRY_DELAY_MS);
+                    } else if (!eoseReceived) {
+                        console.warn(`useMediaNotes (${mediaType}): Max retries reached.`);
+                        if (isMounted) {
+                            setIsLoading(false);
+                            isFetching.current = false;
+                        }
+                    }
+                });
+            };
+
+            subscribe();
         };
 
         fetchAndSubscribe().catch(err => {

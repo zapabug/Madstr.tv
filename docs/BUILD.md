@@ -124,4 +124,63 @@ Once the prerequisites are met, you can start the development server using Bun:
 bun run dev
 ```
 
-**Note:** Recent updates to the project have resolved issues with profile image loading in the `MessageBoard` component. The application now successfully displays profile data and images for all authors, leveraging the streaming nature of Nostr data through subscriptions for Kind 0 (Metadata) events. Ensure your environment is up to date with the latest code changes to benefit from these improvements. 
+**Note:** Recent updates to the project have resolved issues with profile image loading in the `MessageBoard` component. The application now successfully displays profile data and images for all authors, leveraging the streaming nature of Nostr data through subscriptions for Kind 0 (Metadata) events. Ensure your environment is up to date with the latest code changes to benefit from these improvements.
+
+## Recent Changes and Updates
+
+### Loading State Management (2024-03-XX) - COMPLETED
+
+The application's loading states have been consolidated and improved:
+
+1. **Centralized Loading State:**
+   - [x] Loading state is now managed centrally in `App.tsx`
+   - [x] Combined loading states: `isNdkConnecting`, `isLoadingAuthors`, `isLoadingPodcastNotes`, `isLoadingVideoNotes`, `isLoadingImages`
+   - [x] Single `isLoading` boolean controls the main loading UI
+
+2. **Loading UI Components:**
+   - [x] `ImageFeed.tsx`: Displays loading messages during media content loading
+   - [x] `App.tsx`: Shows "Loading Nostr Data..." during initial data fetch
+   - [x] Loading states are properly propagated through component hierarchy
+
+3. **Loading Message System:**
+   - [x] Dynamic loading messages that cycle every 2.5 seconds
+   - [x] Messages provide context about current loading operation
+   - [x] Messages are displayed in the main media content area
+
+4. **Error Handling:**
+   - [x] Clear error states for NDK connection issues
+   - [x] User-friendly error messages
+   - [x] Proper fallback UI when loading fails
+
+### NDK Singleton Architecture (2025)
+
+NDK is now initialized as a singleton in `src/ndk.ts` and managed via the `useNDKInit` hook, providing cleaner separation of concerns.
+
+### Implementation Details
+
+The loading state is implemented using the following pattern:
+
+```typescript
+// In App.tsx
+const isLoading = isNdkConnecting || isLoadingAuthors || 
+                 isLoadingPodcastNotes || isLoadingVideoNotes || 
+                 isLoadingImages;
+
+// Loading UI in components
+{isLoading ? (
+  <motion.div
+    key="loading-nostr-data"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.3 }}
+    className="text-gray-400"
+  >
+    Loading Nostr Data...
+  </motion.div>
+) : (
+  // Main content
+)}
+```
+
+This implementation ensures a consistent loading experience across the application while maintaining the decentralized nature of Nostr data fetching. 

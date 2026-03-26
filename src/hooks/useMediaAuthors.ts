@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { nip19 } from 'nostr-tools';
 import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
-import { RELAYS } from '../constants'; // Adjust path as needed
 import { TV_PUBKEY_NPUB } from '../constants'; // Import separately if needed or combine if exported
 
 // Function to safely decode npub (moved from App.tsx)

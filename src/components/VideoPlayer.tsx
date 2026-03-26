@@ -21,7 +21,7 @@ const CustomLoggedInIcon = () => (
 );
 
 export interface VideoPlayerProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   src: string | null;
   isPlaying: boolean;
   togglePlayPause: () => void;

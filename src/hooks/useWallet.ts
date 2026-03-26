@@ -3,7 +3,7 @@ import { Proof } from '@cashu/cashu-ts';
 import { idb } from '../utils/idb'; // Use the consolidated idb export
 import { cashuHelper } from '../utils/cashu';
 import { UseAuthReturn } from './useAuth';
-import NDK, { NDKEvent, NDKFilter, NDKSubscription, NDKUser, NostrEvent } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
 
 // <<< Define props for the hook >>>
@@ -143,7 +143,7 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
         }
     }, []);
 
-    // <<< Update startDepositListener signature and logic >>>
+    // <<< Update startDepositListener to use NIP-59 Gift Wrap >>>
     const startDepositListener = useCallback((auth: UseAuthReturn) => {
         // <<< Check isNdkReady and ndkInstance from props >>>
         if (!isNdkReady || !ndkInstance) {
@@ -161,59 +161,81 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             return;
         }
 
-        console.log('useWallet: Starting deposit listener for pubkey:', auth.currentUserNpub);
+        console.log('useWallet: Starting NIP-59 Gift Wrap deposit listener for pubkey:', auth.currentUserNpub);
         if (isMountedRef.current) {
             setIsListeningForDeposits(true);
             setWalletError(null);
         }
 
         const userHexPubkey = nip19.decode(auth.currentUserNpub).data as string;
-        const filter: NDKFilter = { kinds: [4], '#p': [userHexPubkey], since: Math.floor(Date.now() / 1000) - 60 * 60 }; // Check last hour
+        // Subscribe to BOTH Kind 1059 (NIP-59 Gift Wrap) AND Kind 4 (NIP-04 fallback)
+        const filter: NDKFilter = { kinds: [1059, 4], '#p': [userHexPubkey], since: Math.floor(Date.now() / 1000) - 60 * 60 }; // Check last hour
+
+        const processCashuToken = async (plaintext: string) => {
+            if (!configuredMintUrl) return;
+            
+            const tokenMatch = plaintext.match(/(cashuA[A-Za-z0-9_-]+)/);
+            if (tokenMatch && tokenMatch[1]) {
+                const token = tokenMatch[1];
+                console.log('Found Cashu token in DM:', token);
+                setWalletError('Processing incoming deposit...');
+
+                try {
+                    const { proofs: redeemedProofs } = await cashuHelper.redeemToken(token);
+                    
+                    if (redeemedProofs && redeemedProofs.length > 0) {
+                        console.log(`Successfully redeemed ${redeemedProofs.length} proofs from token.`);
+                        await idb.addProofs(redeemedProofs, configuredMintUrl);
+                        await loadWalletState();
+                        setWalletError(null);
+                    } else {
+                        console.warn('Token redeemed but resulted in 0 proofs.');
+                    }
+                } catch (redeemError) {
+                    console.error('Error redeeming Cashu token:', redeemError);
+                    const message = redeemError instanceof Error ? redeemError.message : String(redeemError);
+                    if (isMountedRef.current) {
+                        setWalletError(`Failed to redeem deposit: ${message}`);
+                    }
+                }
+            }
+        };
 
         const handleIncomingDm = async (event: NDKEvent) => {
-            if (!auth.decryptDm || !configuredMintUrl) {
-                console.warn('Decryption function or mint URL not available.');
+            if (!configuredMintUrl) {
+                console.warn('Mint URL not configured.');
                 return; 
             }
-            console.log('Received potential deposit DM:', event.id);
+            
+            console.log('Received potential deposit DM:', event.id, 'Kind:', event.kind);
 
             try {
-                const plaintext = await auth.decryptDm(event.content, event.pubkey);
-
-                if (plaintext) {
-                    console.log('Decrypted DM content:', plaintext); // Careful logging plaintext
-                    const tokenMatch = plaintext.match(/(cashuA[A-Za-z0-9_-]+)/);
-                    if (tokenMatch && tokenMatch[1]) {
-                        const token = tokenMatch[1];
-                        console.log('Found Cashu token in DM:', token);
-                        setWalletError('Processing incoming deposit...'); // Indicate activity
-
-                        try {
-                            const { proofs: redeemedProofs } = 
-                                await cashuHelper.redeemToken(token);
-                            
-                            if (redeemedProofs && redeemedProofs.length > 0) {
-                                console.log(`Successfully redeemed ${redeemedProofs.length} proofs from token.`);
-                                await idb.addProofs(redeemedProofs, configuredMintUrl);
-                                await loadWalletState(); // Reload state
-                                setWalletError(null);
-                            } else {
-                                console.warn('Token redeemed but resulted in 0 proofs.');
-                            }
-                        } catch (redeemError) {
-                            console.error('Error redeeming Cashu token:', redeemError);
-                            const message = redeemError instanceof Error ? redeemError.message : String(redeemError);
-                             if (isMountedRef.current) {
-                                 setWalletError(`Failed to redeem deposit: ${message}`);
-                             }
+                let plaintext: string | null = null;
+                
+                if (event.kind === 1059) {
+                    // NIP-59 Gift Wrap - use unwrapGiftWrap
+                    if (auth.unwrapGiftWrap) {
+                        const unwrapped = await auth.unwrapGiftWrap(event.rawEvent());
+                        if (unwrapped) {
+                            plaintext = unwrapped.content;
+                            console.log('Unwrapped Gift DM from:', unwrapped.senderPubkey);
                         }
                     }
+                } else if (event.kind === 4) {
+                    // NIP-04 Fallback (deprecated)
+                    if (auth.decryptDm) {
+                        plaintext = await auth.decryptDm(event.pubkey, event.content);
+                        console.log('Decrypted NIP-04 DM (deprecated):', event.pubkey);
+                    }
+                }
+
+                if (plaintext) {
+                    await processCashuToken(plaintext);
                 } else {
-                    console.log('Failed to decrypt DM or plaintext was empty.');
+                    console.log('Could not decrypt message.');
                 }
             } catch (decryptError) {
-                console.error('Error decrypting DM:', decryptError);
-                // Don't show decryption errors usually, could be spam or unrelated DMs
+                console.error('Error processing DM:', decryptError);
             }
         };
 
@@ -223,11 +245,9 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
         depositSubRef.current.on('eose', () => console.log('useWallet: Deposit listener initial EOSE received.'));
         depositSubRef.current.on('close', (reason) => {
             console.log('useWallet: Deposit listener subscription closed:', reason);
-            if (depositSubRef.current && isMountedRef.current) { // Avoid race conditions on unmount
+            if (depositSubRef.current && isMountedRef.current) {
                 depositSubRef.current = null;
                 setIsListeningForDeposits(false);
-                // Optionally try to restart? Or indicate disconnected state?
-                // setWalletError('Deposit listener disconnected.');
             }
         });
 
@@ -236,9 +256,9 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
 
     // --- Tipping / Sending --- 
 
-    // <<< Update sendCashuTipWithSplits to use ndkInstance from props >>>
+    // <<< Update sendCashuTipWithSplits to use NIP-59 Gift Wrap >>>
     const sendCashuTipWithSplits = useCallback(async (params: SendTipParams): Promise<boolean> => {
-        const { primaryRecipientNpub, amountSats, auth, comment, eventIdToZap } = params;
+        const { primaryRecipientNpub, amountSats, auth, comment, eventIdToZap: _eventIdToZap } = params;
 
         if (!isNdkReady || !ndkInstance) {
             console.error('sendCashuTipWithSplits: NDK not ready.');
@@ -250,124 +270,84 @@ export const useWallet = ({ ndkInstance, isNdkReady }: UseWalletProps): UseWalle
             setWalletError('Cannot send tip: Mint URL not set.');
             return false;
         }
-        if (!auth.isLoggedIn || !auth.currentUserNpub || !auth.encryptDm || !auth.signEvent) { // <<< Added signEvent check >>>
-            console.error('sendCashuTipWithSplits: User not logged in or auth methods missing.');
+        if (!auth.isLoggedIn || !auth.currentUserNpub) {
+            console.error('sendCashuTipWithSplits: User not logged in.');
             setWalletError('Login required to send tips.');
             return false;
         }
 
         console.log(`useWallet: Attempting to send ${amountSats} sats tip to ${primaryRecipientNpub}...`);
         setWalletError("Preparing tip...");
-        let success = false;
-        let proofsSpentInOp: Proof[] = []; // Track spent proofs
 
         try {
-            // <<< Revert to createTokenForAmount logic >>>
             const proofsForMint = await idb.getProofsByMint(configuredMintUrl);
             if (cashuHelper.getProofsBalance(proofsForMint) < amountSats) {
                  throw new Error(`Insufficient balance at mint ${configuredMintUrl}. Need ${amountSats} sats.`);
             }
 
-            // Use helper to get token and remaining proofs for THIS operation
-            const { token: generatedToken, remainingProofs: remainingProofsAfterToken } = 
-                await cashuHelper.createTokenForAmount(amountSats, proofsForMint, configuredMintUrl);
-            
-            // Determine which proofs were actually used for the token
-            proofsSpentInOp = proofsForMint.filter(p => !remainingProofsAfterToken.some(rp => rp.secret === p.secret));
-            console.log(`useWallet: Using ${proofsSpentInOp.length} proofs for token: ${generatedToken}`);
+            // Create Cashu token for the tip amount
+            const { token: cashuToken } = await cashuHelper.createTokenForAmount(amountSats, proofsForMint, configuredMintUrl);
+            if (!cashuToken) {
+                throw new Error('Failed to create Cashu token for tip.');
+            }
 
-            // <<< Fix DM Event construction >>>
+            // Compose DM content
+            let dmContent = cashuToken;
+            if (comment) {
+                dmContent = `${cashuToken}\n\n${comment}`;
+            }
+
+            // Get recipient hex pubkey
             const recipientHex = nip19.decode(primaryRecipientNpub).data as string;
-            const dmContent = comment ? `${comment}\n\n${generatedToken}` : generatedToken;
-            
-            // 1. Encrypt the content first
-            const encryptedDmContent = await auth.encryptDm(dmContent, recipientHex);
-            if (!encryptedDmContent) { throw new Error('Failed to encrypt DM content'); }
 
-            // 2. Create the NDKEvent structure
-            const dmNdkEvent = new NDKEvent(ndkInstance); // Use NDK instance from props
-            dmNdkEvent.kind = 4;
-            dmNdkEvent.created_at = Math.floor(Date.now() / 1000);
-            dmNdkEvent.tags = [['p', recipientHex]];
-            dmNdkEvent.content = encryptedDmContent;
+            // Use NIP-59 Gift Wrap (preferred) or NIP-04 (fallback)
+            let giftWrapEvent: any;
             
-            // 3. Sign the event object (using auth hook's signer)
-            // NDK's sign method uses the signer attached to the NDK instance
-            // Ensure useAuth attaches the signer correctly to the ndkInstance
-            await dmNdkEvent.sign(); // NDK handles getting signer
-            
-            // 4. Publish the signed event
-            console.log('useWallet: Publishing encrypted & signed DM event...');
-            await ndkInstance.publish(dmNdkEvent);
-            console.log('useWallet: DM published successfully.');
-            
-            // TODO: Optional Zap Receipt (if eventIdToZap is provided)
-            if (eventIdToZap) {
-                console.warn("Zap receipt creation not yet implemented.");
+            if (auth.wrapDirectMessage) {
+                // NIP-59 Gift Wrap
+                console.log('useWallet: Sending tip via NIP-59 Gift Wrap...');
+                const { event } = await auth.wrapDirectMessage(recipientHex, dmContent);
+                giftWrapEvent = event;
+            } else if (auth.encryptDm && auth.signEvent) {
+                // NIP-04 Fallback (deprecated)
+                console.log('useWallet: NIP-59 not available, falling back to NIP-04...');
+                const encryptedContent = await auth.encryptDm(recipientHex, dmContent);
+                
+                const dmEvent = new NDKEvent(ndkInstance);
+                dmEvent.kind = 4;
+                dmEvent.content = encryptedContent;
+                dmEvent.tags = [['p', recipientHex]];
+                
+                const signedEvent = await auth.signEvent(dmEvent.rawEvent());
+                if (!signedEvent) {
+                    throw new Error('Failed to sign DM event.');
+                }
+                dmEvent.sig = signedEvent.sig;
+                giftWrapEvent = dmEvent;
+            } else {
+                throw new Error('No suitable encryption method available.');
             }
 
-            // 5. Update local state: Remove spent proofs, add change proofs (if any - createToken handles change internally now)
-            // We just need to save the *remaining* proofs from the operation
-            const otherProofs = proofs.filter(p => !proofsForMint.some(pm => pm.secret === p.secret));
-            const finalProofsSet = [...otherProofs, ...remainingProofsAfterToken];
-            
-            await idb.clearProofs(); // Clear old proofs
-            // <<< Fix: Add mintUrl based on configuredMintUrl when mapping >>>
-            const finalProofsWithMint = finalProofsSet.map((p: Proof) => ({ ...p, mintUrl: configuredMintUrl }));
-            // <<< Revert: Pass configuredMintUrl to addProofs >>>
-            await idb.addProofs(finalProofsWithMint, configuredMintUrl);
+            // Publish the gift wrapped message
+            await giftWrapEvent.publish();
+            console.log('useWallet: Tip sent successfully via Gift Wrap DM!');
 
-            if (isMountedRef.current) {
-                setProofs(finalProofsWithMint); // Update state with final set
-                setBalanceSats(cashuHelper.getProofsBalance(finalProofsWithMint));
-                setWalletError(null); // Clear 'Preparing' message
-                console.log('useWallet: Tip sent and wallet state updated.');
-                success = true;
-            }
-
+            setWalletError(null);
+            return true;
         } catch (error) {
-            console.error("useWallet: Error sending Cashu tip:", error);
-            if (isMountedRef.current) {
-                const message = error instanceof Error ? error.message : String(error);
-                setWalletError(`Tip failed: ${message}`);
-            }
-            // Attempt to re-add spent proofs if send failed? Risky.
-            success = false;
-        } finally {
-             if (isMountedRef.current) {
-                 // Clear loading/error state appropriately
-             }
+            console.error('Error sending tip:', error);
+            setWalletError(`Failed to send tip: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
         }
-        return success;
-
-    // <<< Fix dependencies: remove auth as it's passed in params >>>
-    }, [proofs, configuredMintUrl, isNdkReady, ndkInstance, loadWalletState]);
-
-    // --- Lifecycle --- 
+    }, [isNdkReady, ndkInstance, configuredMintUrl, loadWalletState]);
 
     useEffect(() => {
-        // Set mounted ref to true on mount
         isMountedRef.current = true;
-        // Cleanup function runs on unmount
         return () => {
             isMountedRef.current = false;
-            console.log('useWallet: Unmounting, stopping deposit listener.');
             stopDepositListener();
         };
     }, [stopDepositListener]);
 
-    // Return the state and functions
-    return {
-        proofs,
-        balanceSats,
-        isListeningForDeposits,
-        walletError,
-        isLoadingWallet,
-        configuredMintUrl,
-        // loadWalletState, // Not exposed externally anymore
-        startDepositListener,
-        stopDepositListener,
-        sendCashuTipWithSplits,
-        setConfiguredMintUrl,
-    };
+    return { proofs, balanceSats, isListeningForDeposits, walletError, isLoadingWallet, configuredMintUrl, startDepositListener, stopDepositListener, sendCashuTipWithSplits, setConfiguredMintUrl };
 };

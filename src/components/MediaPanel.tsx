@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
-// Removed: import { usePodcastNotes } from '../hooks/usePodcastNotes'; // Data will come via props
-import { useProfileData } from '../hooks/useProfileData'; // Keep for profiles
-import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback'; // Keep for playback
+import { useProfileData } from '../hooks/useProfileData';
 
 // Define types for props - This will expand significantly
 import { NostrNote } from '../types/nostr'; // Fixed import path
@@ -30,26 +28,16 @@ const SkeletonItem: React.FC = () => (
     </div>
 );
 
-// --- Export Props for the Unified Panel (Reverted) ---
+// --- Export Props for the Unified Panel ---
 export interface MediaPanelProps {
-  // <<< Remove displayContext prop >>>
-  // displayContext: 'main' | 'panel'; 
-
-  // Refs passed from App 
-  audioRef: React.RefObject<HTMLAudioElement | null>; 
-  videoRef: React.RefObject<HTMLVideoElement | null>; 
+  viewMode: 'imagePodcast' | 'videoPlayer';
+  setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
   
-  // Mode (Updated)
-  viewMode: 'imagePodcast' | 'videoPlayer'; // <<< Use correct types
-  setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void; // <<< Use correct types
-  
-  // Data
   podcastNotes: NostrNote[];
   videoNotes: NostrNote[];
   isLoadingPodcastNotes: boolean;
   isLoadingVideoNotes: boolean;
   
-  // Playback State & Handlers (Passed down from App)
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -57,34 +45,17 @@ export interface MediaPanelProps {
   setPlaybackRate: (rate: number) => void;
   togglePlayPause: () => void;
   handleSeek: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  currentItemUrl: string | null; // <<< Added missing prop
 
-  // Selection State & Handlers
   currentPodcastIndex: number;
   setCurrentPodcastIndex: (index: number) => void;
   currentVideoIndex: number;
   onVideoSelect: (note: NostrNote, index: number) => void; 
-
-  // Profile Data
-  authors: string[]; // <<< Added missing prop
-
-  // Optional: For edge navigation (Potentially remove?)
-  // handleLeft?: () => void; 
-  // handleRight?: () => void;
-  // onFocusRightEdge?: () => void; 
-
-  // <<< Add signalInteraction prop >>>
-  signalInteraction: () => void;
 }
 
 // --- The Unified MediaPanel Component (Reverted) ---
 const MediaPanel: React.FC<MediaPanelProps> = ({ 
-    // <<< Remove displayContext from destructuring >>>
-    // displayContext,
-    audioRef,
-    videoRef,
-    viewMode, // <<< Prop type updated in interface
-    setViewMode, // <<< Prop type updated in interface
+    viewMode,
+    setViewMode,
     podcastNotes, 
     videoNotes,
     isLoadingPodcastNotes,
@@ -96,13 +67,10 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     setPlaybackRate,
     togglePlayPause,
     handleSeek,
-    currentItemUrl, // <<< Use added prop
     currentPodcastIndex,
     setCurrentPodcastIndex,
     currentVideoIndex,
     onVideoSelect,
-    authors, // <<< Use added prop
-    signalInteraction,
 }) => {
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
@@ -351,65 +319,80 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
         ) : notes.length === 0 ? (
              <div className='w-full h-full flex items-center justify-center'>
                 <p className='text-gray-400 text-lg font-medium'>{listEmptyText}</p>
-            </div>
+             </div>
         ) : (
-            // Render actual list items based on derived 'notes'
-            notes.map((note, index) => {
-                const isImageMode = viewMode === 'imagePodcast'; // Was isPodcastMode
-                const isSelected = index === currentItemIndex;
-
-                // Styling based on selection - Use consistent purple bg
-                let itemBg = 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
-                if (isSelected) {
-                    itemBg = 'bg-purple-700 bg-opacity-70'; // Always use purple when selected
-                }
-                
-                // Profile Data lookup
-                const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
-                const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.substring(0, 10) || 'Anon';
-                const itemPictureUrl = profile?.picture;
-
-                return (
-                    <div
-                        key={note.id}
-                        id={`media-item-${note.id}`}
-                        ref={(el) => { listItemRefs.current[index] = el; }}
-                        role="option"
-                        aria-selected={isSelected}
-                        tabIndex={0}
-                        className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-yellow-400`}
-                        onClick={() => {
-                           console.log(`MediaPanel Item Click: index ${index} in mode ${viewMode}`);
-                           if (isImageMode) {
-                               setCurrentPodcastIndex(index);
-                           } else {
-                               onVideoSelect(note, index);
-                           }
-                        }}
-                        onKeyDown={(e) => handleItemKeyDown(e, note, index)}
-                        title={note.content || note.url} // Basic title
-                    >
-                        {/* Item Content (No change needed) */}
-                        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
-                            <span className="text-xs font-semibold text-white">{notes.length - index}</span> 
-                        </div>
-                        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
-                             {itemPictureUrl ? (
-                                <img src={itemPictureUrl} alt={itemDisplayName} className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">{itemDisplayName.substring(0, 1)}</span>
-                            )}
-                        </div>
-                        <div className="flex-grow flex flex-col">
-                            <p className="text-sm text-white truncate" title={itemDisplayName}>
-                               {itemDisplayName} 
-                            </p>
-                        </div>
+            <>
+                {/* Video Author Header - only in videoPlayer mode */}
+                {viewMode === 'videoPlayer' && currentItemIndex < notes.length && notes[currentItemIndex] && (
+                    <div className='px-2 py-1.5 bg-gray-800 border-b border-gray-700 text-xs text-purple-400 font-semibold truncate'>
+                        {(() => {
+                            const currentNote = notes[currentItemIndex];
+                            const profile = currentNote.posterPubkey ? profiles[currentNote.posterPubkey] : undefined;
+                            return profile?.name || profile?.displayName || currentNote.posterPubkey?.substring(0, 10) || 'Unknown Author';
+                        })()}
                     </div>
-                );
-            })
+                )}
+                {/* Render actual list items based on derived 'notes' */}
+                {notes.map((note, index) => {
+                    const isImageMode = viewMode === 'imagePodcast';
+                    const isSelected = index === currentItemIndex;
+
+                    // Styling based on selection - Use consistent purple bg
+                    let itemBg = 'bg-blue-800 bg-opacity-60 hover:bg-blue-700 hover:bg-opacity-80';
+                    if (isSelected) {
+                        itemBg = 'bg-purple-700 bg-opacity-70';
+                    }
+                    
+                    // Profile Data lookup
+                    const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
+                    const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.substring(0, 10) || 'Anon';
+                    const itemPictureUrl = profile?.picture;
+
+                    return (
+                        <div
+                            key={note.id}
+                            id={`media-item-${note.id}`}
+                            ref={(el) => { listItemRefs.current[index] = el; }}
+                            role="option"
+                            aria-selected={isSelected}
+                            tabIndex={0}
+                            className={`flex items-center p-2 mb-1 rounded-md cursor-pointer transition-colors ${itemBg} focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+                            onClick={() => {
+                               console.log(`MediaPanel Item Click: index ${index} in mode ${viewMode}`);
+                               if (isImageMode) {
+                                   setCurrentPodcastIndex(index);
+                               } else {
+                                   onVideoSelect(note, index);
+                               }
+                            }}
+                            onKeyDown={(e) => handleItemKeyDown(e, note, index)}
+                            title={note.content || note.url}
+                        >
+                            {/* Item Content */}
+                            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
+                                <span className="text-xs font-semibold text-white">{notes.length - index}</span> 
+                            </div>
+                            {/* Only show avatar in imagePodcast mode */}
+                            {isImageMode && (
+                                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 overflow-hidden mr-2">
+                                     {itemPictureUrl ? (
+                                        <img src={itemPictureUrl} alt={itemDisplayName} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">{itemDisplayName.substring(0, 1)}</span>
+                                    )}
+                                </div>
+                            )}
+                            <div className="flex-grow flex flex-col">
+                                <p className="text-sm text-white truncate" title={itemDisplayName}>
+                                   {itemDisplayName} 
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </>
         )}
-      </div> 
+      </div>
 
       {/* REMOVED Media Elements Rendering - Keep Audio commented */}
       {/* {viewMode === 'image' && <audio ref={audioRef} />} */}

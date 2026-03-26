@@ -1,7 +1,7 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
-import ndkInstance from './ndk'; // <-- Import the singleton NDK instance
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
+import AuthorSelector from './components/AuthorSelector';
 import MediaPanel from './components/MediaPanel';
 import RelayStatus from './components/RelayStatus';
 import VideoPlayer from './components/VideoPlayer';
@@ -41,7 +41,7 @@ function App() {
 
   // --- Auth Hook --- 
   const auth = useAuth(ndkInstance);
-  const { followedTags } = auth;
+  const { followedTags, videoTags, musicTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchMusicByTagEnabled, keywordSearch } = auth;
 
   // --- Wallet Hook --- <<< Initialize useWallet here >>>
   const wallet = useWallet({ ndkInstance, isNdkReady });
@@ -53,11 +53,12 @@ function App() {
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
 
   // Fetch notes using dynamic parameters
-  const { notes: podcastNotes, isLoading: isLoadingPodcastNotes } = useMediaNotes({ 
+  const { notes: audioNotes, isLoading: isLoadingAudioNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'podcast', 
     ndk: ndkInstance, 
-    limit: 25
+    limit: 25,
+    followedTags: fetchMusicByTagEnabled ? musicTags : undefined
   });
   const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
     authors: mediaAuthors, 
@@ -65,7 +66,7 @@ function App() {
     ndk: ndkInstance, 
     limit: videoFetchLimit,
     until: videoFetchUntil,
-    followedTags: followedTags
+    followedTags: fetchVideosByTagEnabled ? videoTags : undefined
   });
   const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
     authors: mediaAuthors, 
@@ -73,7 +74,7 @@ function App() {
     ndk: ndkInstance, 
     limit: imageFetchLimit,
     until: imageFetchUntil,
-    followedTags: followedTags
+    followedTags: fetchImagesByTagEnabled ? followedTags : undefined
   });
   
   // State for shuffled notes for display
@@ -85,6 +86,14 @@ function App() {
 
   // State for preload URL
   const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
+
+  // State for video author filter
+  const [selectedVideoAuthor, setSelectedVideoAuthor] = useState<string | null>(null);
+
+  // Filtered video notes by selected author (computed from uniqueVideoNotes)
+  const filteredVideoNotes = selectedVideoAuthor
+    ? uniqueVideoNotes.filter(note => note.posterPubkey === selectedVideoAuthor)
+    : uniqueVideoNotes;
 
   // Fetcher functions
   const fetchOlderImages = useCallback(() => {
@@ -101,6 +110,18 @@ function App() {
     }
   }, [videoNotes]); 
 
+  // Keyword filter for follows content
+  const filterByKeyword = (notes: NostrNote[], keyword: string): NostrNote[] => {
+    if (!keyword || keyword.trim() === '') return notes;
+    const lowerKeyword = keyword.toLowerCase();
+    return notes.filter(note => 
+      note.content?.toLowerCase().includes(lowerKeyword)
+    );
+  };
+
+  // Apply keyword filter to audio notes
+  const keywordFilteredAudioNotes = filterByKeyword(audioNotes, keywordSearch);
+
   // Media state hook
   const {
     viewMode, 
@@ -112,18 +133,17 @@ function App() {
     handleNext, 
     setViewMode, 
     setCurrentPodcastIndex,
-    imageNotes: stateImageNotes, 
     podcastNotes: statePodcastNotes, 
     videoNotes: stateVideoNotes,
     currentItemUrl,
   } = useMediaState({ 
-      initialImageNotes: shuffledImageNotes, 
-      initialPodcastNotes: podcastNotes,
-      initialVideoNotes: uniqueVideoNotes,
+      initialImageNotes: keywordSearch ? filterByKeyword(shuffledImageNotes, keywordSearch) : shuffledImageNotes, 
+      initialPodcastNotes: keywordFilteredAudioNotes,
+      initialVideoNotes: keywordSearch ? filterByKeyword(filteredVideoNotes, keywordSearch) : filteredVideoNotes,
       fetchOlderImages: fetchOlderImages, 
       fetchOlderVideos: fetchOlderVideos,
-      shuffledImageNotesLength: shuffledImageNotes.length,
-      shuffledVideoNotesLength: uniqueVideoNotes.length,
+      shuffledImageNotesLength: keywordSearch ? filterByKeyword(shuffledImageNotes, keywordSearch).length : shuffledImageNotes.length,
+      shuffledVideoNotesLength: keywordSearch ? filterByKeyword(filteredVideoNotes, keywordSearch).length : filteredVideoNotes.length,
   });
 
   // Effects for shuffling notes
@@ -157,6 +177,11 @@ function App() {
 
   }, [videoNotes]);
 
+  // Get current video author for AuthorSelector highlight
+  const currentVideoAuthor = stateVideoNotes && stateVideoNotes.length > 0 && currentVideoIndex < stateVideoNotes.length 
+    ? stateVideoNotes[currentVideoIndex]?.posterPubkey || null 
+    : null;
+
   // Fullscreen hook
   const { isFullScreen, signalInteraction, signalMessage } = useFullscreen({
     interactionTimeout: INTERACTION_TIMEOUT,
@@ -168,17 +193,13 @@ function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Determine active media ref and initial time based on viewMode
-  const activeMediaRef = viewMode === 'videoPlayer' ? videoRef : audioRef;
-  const playbackInitialTime = viewMode === 'imagePodcast' ? initialPodcastTime : 0;
-
   // --- Determine URLs and Active States for Playback Hooks ---
   const isAudioMode = viewMode === 'imagePodcast';
   const isVideoMode = viewMode === 'videoPlayer';
 
   // --- Instantiate Playback Hooks (One for each element) ---
   const audioPlayback = useMediaElementPlayback({
-    mediaElementRef: audioRef,
+    mediaElementRef: audioRef as React.RefObject<HTMLMediaElement>,
     currentItemUrl: isAudioMode ? currentItemUrl : null,
     isActiveMode: isAudioMode,
     elementType: 'audio',
@@ -189,13 +210,13 @@ function App() {
   });
 
   const videoPlayback = useMediaElementPlayback({
-    mediaElementRef: videoRef,
+    mediaElementRef: videoRef as React.RefObject<HTMLMediaElement>,
     currentItemUrl: isVideoMode ? currentItemUrl : null,
     isActiveMode: isVideoMode,
     elementType: 'video',
     onEnded: isVideoMode ? handleNext : undefined, 
     initialTime: 0, 
-    autoplayEnabled: false,
+    autoplayEnabled: true, // Enable autoplay for back-to-back video playback
     next: true,
   });
 
@@ -284,7 +305,7 @@ function App() {
   }, [signalInteraction]);
 
   // Global Loading/Error States
-  const isLoading = isNdkConnecting || isLoadingAuthors || isLoadingPodcastNotes || isLoadingVideoNotes || isLoadingImages;
+  const isLoading = isNdkConnecting || isLoadingAuthors || isLoadingAudioNotes || isLoadingVideoNotes || isLoadingImages;
 
   if (isNdkConnecting) {
     return (
@@ -346,7 +367,18 @@ function App() {
         {/* MediaFeed Area (Top Section) */}
          <div className="relative w-full flex-grow min-h-0 bg-black flex items-center justify-center overflow-hidden">
               <AnimatePresence mode='wait'>
-                 {isLoadingAuthors ? (
+                 {isLoading ? (
+                     <motion.div
+                         key="loading-nostr-data"
+                         initial={{ opacity: 0 }}
+                         animate={{ opacity: 1 }}
+                         exit={{ opacity: 0 }}
+                         transition={{ duration: 0.3 }}
+                         className="text-gray-400"
+                      >
+                         Loading Nostr Data...
+                     </motion.div>
+                 ) : isLoadingAuthors ? (
                      <motion.div
                          key="loading-authors"
                          initial={{ opacity: 0 }}
@@ -496,32 +528,39 @@ function App() {
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: '100%', opacity: 0 }}
                     transition={{ duration: 0.5, ease: "easeInOut" }}
-                 >
-                    {/* Left Side: Message Board */}
-                    <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden"> 
-                        <MessageBoard 
-                            ndk={ndkInstance}
-                            threadEventId={MAIN_THREAD_NEVENT_URI}
-                            onNewMessage={signalMessage}
-                            isReady={isNdkReady}
-                        />
-                    </div>
+                  >
+                     {/* Left Side: Message Board or Author Selector */}
+                     <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden"> 
+                         {viewMode === 'videoPlayer' ? (
+                             <AuthorSelector
+                                 videoNotes={uniqueVideoNotes}
+                                 selectedAuthor={selectedVideoAuthor}
+                                 onSelectAuthor={setSelectedVideoAuthor}
+                                 currentVideoAuthor={currentVideoAuthor}
+                                 isInactive={false}
+                             />
+                         ) : (
+                             <MessageBoard 
+                                 ndk={ndkInstance}
+                                 threadEventId={MAIN_THREAD_NEVENT_URI}
+                                 onNewMessage={signalMessage}
+                                 isReady={isNdkReady}
+                             />
+                         )}
+                     </div>
                     {/* Right Side: Media Panel - Adjust width */}
                     <div className="w-1/3 h-full pl-1 flex flex-col"> 
                         <MediaPanel
                             viewMode={viewMode}
-                            audioRef={audioRef}
-                            videoRef={videoRef}
                             podcastNotes={statePodcastNotes}
                             videoNotes={stateVideoNotes}
-                            isLoadingPodcastNotes={isLoadingPodcastNotes}
+                            isLoadingPodcastNotes={isLoadingAudioNotes}
                             isLoadingVideoNotes={isLoadingVideoNotes}
                             currentPodcastIndex={currentPodcastIndex}
                             currentVideoIndex={currentVideoIndex}
                             setCurrentPodcastIndex={setCurrentPodcastIndex}
                             onVideoSelect={handleVideoSelect}
                             setViewMode={setViewMode}
-                            // Playback State & Handlers
                             isPlaying={activePlayback.isPlaying}
                             currentTime={activePlayback.currentTime}
                             duration={activePlayback.duration}
@@ -529,10 +568,6 @@ function App() {
                             setPlaybackRate={activePlayback.setPlaybackRate}
                             togglePlayPause={activePlayback.togglePlayPause}
                             handleSeek={activePlayback.handleSeek}
-                            currentItemUrl={currentItemUrl}
-                            // Re-add missing props
-                            authors={mediaAuthors}
-                            signalInteraction={signalInteraction}
                         />
                     </div>
                  </motion.div>

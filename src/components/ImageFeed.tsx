@@ -14,7 +14,6 @@ import { useAuth, UseAuthReturn } from '../hooks/useAuth'; // Import auth hook f
 import { FiZap } from 'react-icons/fi'; // Import Zap icon
 // NDK type is needed for useMediaAuthors return type
 import NDK from '@nostr-dev-kit/ndk'; 
-import { useNDKInit } from '../hooks/useNDKInit'; // <<< Use NDKInit to get instance >>>
 
 // Remove internal MediaNote interface if NostrNote is sufficient
 /*
@@ -28,11 +27,10 @@ interface MediaNote {
 }
 */
 
-// Update props: remove authors, onNotesLoaded, add isLoading, authorNpub
+// Update props: remove authors, onNotesLoaded, add isLoading, authorNpub, ndkInstance, isNdkReady
 export interface MediaFeedProps {
   // authors: string[]; // Removed
   isLoading: boolean; // Added
-  handlePrevious: () => void;
   handleNext: () => void;
   currentImageIndex: number;
   imageNotes: NostrNote[]; 
@@ -42,6 +40,8 @@ export interface MediaFeedProps {
   togglePlayPause: () => void;
   isFullScreen: boolean;
   signalInteraction: (interaction: string) => void;
+  ndkInstance: NDK | undefined; // ADDED
+  isNdkReady: boolean; // ADDED
 }
 
 export interface ImageFeedRef {
@@ -78,44 +78,38 @@ const CustomLoggedInIcon = () => (
 );
 
 const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
-  { 
-    // authors, // Removed
-    isLoading, // Added
-    handlePrevious,
+  props, // All props are in this object
+  ref 
+) => {
+  const { 
+    isLoading,
+    // handlePrevious, // Removed as it's declared but not used within this component's JSX
     handleNext,
     currentImageIndex,
     imageNotes, 
-    authorNpub, // Added
-    // onNotesLoaded, // Removed
+    authorNpub,
     isPlaying,
     togglePlayPause,
     isFullScreen,
     signalInteraction,
-  },
-  ref 
-) => {
-  // Remove NDK and internal fetching state
-  // const { ndk } = useNdk();
-  // const notesById = useRef<Map<string, NostrNote>>(new Map()); 
-  // const [isLoading, setIsLoading] = useState(true); // Use prop instead
+    ndkInstance, // Use directly from destructured props
+    isNdkReady // Use directly from destructured props
+  } = props;
+
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
-  const { profiles } = useProfileData(imageNotes); // Keep profile fetching based on notes prop
+  const { profiles } = useProfileData(imageNotes);
 
   // --- Hooks ---
-  // <<< Get NDK instance and readiness >>>
-  const { ndkInstance, isConnecting: isNdkConnecting, connectionError: ndkConnectionError } = useNDKInit();
-  // <<< Derive isNdkReady correctly >>>
-  const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
+  // NDK instance and readiness now come from props
   
-  // <<< Pass NDK props to useWallet >>>
   const wallet: UseWalletReturn = useWallet({ ndkInstance, isNdkReady }); 
-  // <<< Pass NDK instance to useAuth >>>
   const auth: UseAuthReturn = useAuth(ndkInstance);
+  // const ndkFromAuth = auth.ndk; // NDK instance from auth, if needed for other operations
   
   const [isTipping, setIsTipping] = useState(false);
   const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
-  const authorContainerRef = useRef<HTMLDivElement>(null); // Ref for the author info container
+  const authorContainerRef = useRef<HTMLDivElement>(null); 
 
   // --- Loading Message Cycling (Keep) --- 
    useEffect(() => {
@@ -133,9 +127,6 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
     }
   }, [currentImageIndex, imageNotes]);
 
-  // --- REMOVED Effect to Fetch Notes --- 
-  // useEffect(() => { ... fetching logic removed ... }, [ndk, authors, onNotesLoaded]);
-
   // --- Expose focusToggleButton via useImperativeHandle (Keep) ---
   React.useImperativeHandle(ref, () => ({
     focusToggleButton: () => {
@@ -149,18 +140,16 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
     }
   }));
 
-  // Find the current image note
   const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length
     ? imageNotes[currentImageIndex]
     : null;
   const imageUrl = currentImageNote?.url;
-  // <<< Get profile data needed for display >>>
   const profile = currentImageNote?.posterPubkey ? profiles[currentImageNote.posterPubkey] : undefined;
   const displayName = profile?.name || profile?.displayName || currentImageNote?.posterPubkey?.substring(0, 10) || 'Anon';
   const timestamp = currentImageNote?.created_at ? new Date(currentImageNote.created_at * 1000).toLocaleString() : 'Date unknown';
 
   const currentNoteId = currentImageNote?.id;
-  // Ensure ndkInstance is checked for canTip
+  // Use isNdkReady from props directly
   const canTip = !wallet.isLoadingWallet && !isTipping && wallet.balanceSats >= DEFAULT_TIP_AMOUNT && authorNpub && auth.isLoggedIn && !!ndkInstance && isNdkReady;
 
   // <<< Log received props and derived values >>>
@@ -177,7 +166,6 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((
 
   // --- Tipping Handler ---
   const handleTip = useCallback(async () => {
-    // Check ndkInstance readiness here too
     if (!canTip || !authorNpub || !ndkInstance || !auth || !isNdkReady) {
         console.warn('Cannot tip: Conditions not met', { canTip, authorNpub, ndkInstance: !!ndkInstance, auth: !!auth, isNdkReady });
         return;
