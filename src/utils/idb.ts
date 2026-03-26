@@ -1,5 +1,4 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { Proof } from '@cashu/cashu-ts'; // Import Proof type
 
 // --- Type Definitions ---
 // Define more specific types if possible
@@ -46,12 +45,6 @@ export interface StoredVideoTags {
     tags: string[];
 }
 
-// Add interface for Mint URL setting
-export interface StoredMintUrl {
-    id: 'mintUrl'; // Use literal type for the key
-    url: string;
-}
-
 export interface StoredImageFiltering {
     id: 'fetchImagesByTagEnabled';
     value: boolean;
@@ -84,14 +77,14 @@ export interface StoredNip46Session {
 // }
 
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredMintUrl | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags | StoredNip46Session;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags | StoredNip46Session;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session';
+    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session';
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -103,16 +96,11 @@ interface MadstrTvAppDB extends DBSchema {
     value: ProfileData;
     indexes: { 'name': string };
   };
-  cashuProofs: {
-    key: string; // Proof 'secret'
-    value: Proof & { mintUrl: string }; // Store basic Proof plus mintUrl
-    indexes: { 'mintUrl': string; 'amount': number }; // Index by mint and amount for easier lookup/selection
-  };
 }
 
 let dbPromise: Promise<IDBPDatabase<MadstrTvAppDB>> | null = null;
 const DB_NAME = 'MadstrTvAppDB';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 // --- DB Initialization ---
 const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
@@ -141,28 +129,8 @@ const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
             console.log("Created 'profileCache' object store.");
           }
         }
-
-        // Logic for version 2 creation (cashuProofs)
-        if (oldVersion < 2) {
-          // Add cashuProofs store if it doesn't already exist
-          if (!db.objectStoreNames.contains('cashuProofs')) {
-            const store = db.createObjectStore('cashuProofs', { keyPath: 'secret' }); // Use 'secret' as the primary key
-            store.createIndex('mintUrl', 'mintUrl'); // Index by mint URL
-            store.createIndex('amount', 'amount'); // Index by amount
-            console.log("Created 'cashuProofs' object store (v2 upgrade).");
-          } else {
-            console.log("'cashuProofs' object store already exists (v2 check).");
-            // If the store exists but needs index changes, do it here using the transaction
-            // Example: 
-            // const proofStore = transaction.objectStore('cashuProofs');
-            // if (!proofStore.indexNames.contains('newIndex')) {
-            //   proofStore.createIndex('newIndex', 'someProperty');
-            //   console.log("Added 'newIndex' to 'cashuProofs'.");
-            // }
-          }
-        }
         
-        // Add blocks for future versions here (e.g., if (oldVersion < 3) { ... })
+        // Add blocks for future versions here
 
       },
       blocked: () => console.error("IndexedDB access blocked."),
@@ -226,29 +194,6 @@ export const idb = {
         return setting && 'tags' in setting ? setting.tags : [];
     },
 
-    saveMintUrlToDb: async (mintUrl: string): Promise<void> => {
-        if (!mintUrl) {
-            console.warn("Attempted to save an empty mint URL. Deleting setting instead.");
-            await idb.deleteSetting('mintUrl');
-            return;
-        }
-        try {
-            new URL(mintUrl);
-        } catch (e) {
-            console.error("Invalid Mint URL provided:", mintUrl, e);
-            throw new Error("Invalid Mint URL format.");
-        }
-        await idb.putSetting({ id: 'mintUrl', url: mintUrl });
-    },
-
-    loadMintUrlFromDb: async (): Promise<string | null> => {
-        const setting = await idb.getSetting('mintUrl');
-        if (setting && typeof setting === 'object' && 'id' in setting && setting.id === 'mintUrl' && 'url' in setting) {
-            return setting.url;
-        }
-        return null;
-    },
-
     // --- Media Note Cache Helpers ---
     getMediaNote: async (key: string): Promise<NostrNote | undefined> => {
         const db = await getDb();
@@ -291,47 +236,6 @@ export const idb = {
     clearProfiles: async (): Promise<void> => {
         const db = await getDb();
         return db.clear('profileCache');
-    },
-
-    // --- Cashu Proofs Store Helpers ---
-    addProofs: async (proofs: Proof[], mintUrl: string): Promise<void> => {
-        const db = await getDb();
-        const tx = db.transaction('cashuProofs', 'readwrite');
-        const store = tx.objectStore('cashuProofs');
-        const promises = proofs.map(proof => {
-            const storedProof = { ...proof, mintUrl: mintUrl }; // Add mintUrl here
-            return store.put(storedProof);
-        });
-        await Promise.all(promises);
-        await tx.done;
-        console.log(`Added ${proofs.length} proofs for mint ${mintUrl} to IndexedDB.`);
-    },
-
-    getProofsByMint: async (mintUrl: string): Promise<(Proof & { mintUrl: string })[]> => {
-        const db = await getDb();
-        return db.getAllFromIndex('cashuProofs', 'mintUrl', mintUrl);
-    },
-
-    getAllProofs: async (): Promise<(Proof & { mintUrl: string })[]> => {
-        const db = await getDb();
-        return db.getAll('cashuProofs');
-    },
-
-    removeProofs: async (proofsToRemove: Proof[]): Promise<void> => {
-        if (!proofsToRemove || proofsToRemove.length === 0) return;
-        const db = await getDb();
-        const tx = db.transaction('cashuProofs', 'readwrite');
-        const store = tx.objectStore('cashuProofs');
-        const secretsToRemove = proofsToRemove.map(p => p.secret);
-        const promises = secretsToRemove.map(secret => store.delete(secret));
-        await Promise.all(promises);
-        await tx.done;
-        console.log(`Removed ${proofsToRemove.length} proofs from IndexedDB.`);
-    },
-
-    clearProofs: async (): Promise<void> => {
-        const db = await getDb();
-        return db.clear('cashuProofs');
     },
 };
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as nip19 from 'nostr-tools/nip19';
 import { encrypt, decrypt, getConversationKey } from 'nostr-tools/nip44';
-import { nip59 } from 'nostr-tools';
 import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
 import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKUser } from '@nostr-dev-kit/ndk';
 import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredNip46Session } from '../utils/idb';
@@ -65,9 +64,6 @@ export interface UseAuthReturn {
     // NIP-04 Methods (deprecated, for fallback)
     encryptDm: (recipientPubkeyHex: string, plaintext: string) => Promise<string>;
     decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>;
-    // NIP-59 Gift Wrap Methods
-    wrapDirectMessage: (recipientPubkeyHex: string, content: string) => Promise<{ event: any; ciphertext: string }>;
-    unwrapGiftWrap: (giftWrapEvent: any) => Promise<{ content: string; senderPubkey: string } | null>;
     // Tag filtering flags
     fetchImagesByTagEnabled: boolean;
     fetchVideosByTagEnabled: boolean;
@@ -793,12 +789,33 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                 setFollowedTagsState(mergedTags);
                 console.log("Auth initialized with stored nsec.");
             } else {
+                // Check for NIP-46 session first
                 const sessionRestored = await restoreNip46Session();
                 if (sessionRestored) {
                     console.log("Auth initialized with restored NIP-46 session.");
                 } else {
-                    setFollowedTagsState(loadedTags);
-                    console.log("Auth initialized, no stored credentials.");
+                    // Check for extension session
+                    if (typeof window !== 'undefined' && window.nostr) {
+                        try {
+                            console.log("[extension] Checking for extension session on init...");
+                            const pubkey = await window.nostr.getPublicKey();
+                            const npub = nip19.npubEncode(pubkey);
+                            setCurrentUserNpub(npub);
+                            setCurrentUserNsec(null);
+                            setNip46SessionPayload(null);
+                            setIsExtensionSession(true);
+                            const userTags = await loadFollowedTags();
+                            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+                            setFollowedTagsState(mergedTags);
+                            console.log("[extension] Auth initialized with extension session:", npub);
+                        } catch (error) {
+                            console.log("[extension] No extension session available, using defaults.");
+                            setFollowedTagsState(loadedTags);
+                        }
+                    } else {
+                        setFollowedTagsState(loadedTags);
+                        console.log("Auth initialized, no stored credentials.");
+                    }
                 }
             }
 
@@ -958,63 +975,6 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
     }, [getNdkSigner, ndkInstance]);
 
-    // --- NIP-59 Gift Wrap Encryption/Decryption ---
-
-    const wrapDirectMessage = useCallback(async (recipientPubkeyHex: string, content: string): Promise<{ event: any; ciphertext: string }> => {
-        const signer = await getNdkSigner();
-        if (!signer) throw new Error("Cannot wrap DM: No user signer available.");
-        
-        if (signer instanceof NDKPrivateKeySigner) {
-            const sk = signer.privateKey;
-            if (!sk) throw new Error("Nsec signer has no private key.");
-            
-            const privateKey = typeof sk === 'string' 
-                ? new Uint8Array(Buffer.from(sk, 'hex'))
-                : sk;
-            
-            const rumor = {
-                kind: 14,
-                content: content,
-                tags: [['p', recipientPubkeyHex]],
-                created_at: Math.floor(Date.now() / 1000),
-            };
-            
-            const giftWrap = nip59.wrapEvent(rumor, privateKey, recipientPubkeyHex);
-            return { event: giftWrap, ciphertext: giftWrap.content };
-        } else {
-            throw new Error("NIP-46 signer does not support NIP-59 Gift Wrap yet.");
-        }
-    }, [getNdkSigner]);
-
-    const unwrapGiftWrap = useCallback(async (giftWrapEvent: any): Promise<{ content: string; senderPubkey: string } | null> => {
-        const signer = await getNdkSigner();
-        if (!signer) throw new Error("Cannot unwrap gift: No user signer available.");
-        
-        if (signer instanceof NDKPrivateKeySigner) {
-            const sk = signer.privateKey;
-            if (!sk) throw new Error("Nsec signer has no private key.");
-            
-            const privateKey = typeof sk === 'string' 
-                ? new Uint8Array(Buffer.from(sk, 'hex'))
-                : sk;
-            
-            try {
-                const unwrapped = nip59.unwrapEvent(giftWrapEvent, privateKey);
-                if (unwrapped) {
-                    return {
-                        content: unwrapped.content || '',
-                        senderPubkey: unwrapped.pubkey
-                    };
-                }
-            } catch (error) {
-                console.error("Failed to unwrap gift:", error);
-            }
-            return null;
-        } else {
-            throw new Error("NIP-46 signer does not support NIP-59 Gift Wrap yet.");
-        }
-    }, [getNdkSigner]);
-
     // Return the hook's state and functions
     return {
         currentUserNpub,
@@ -1043,8 +1003,6 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         setMusicTags,
         encryptDm,
         decryptDm,
-        wrapDirectMessage,
-        unwrapGiftWrap,
         // Add new properties for hashtag filtering
         fetchImagesByTagEnabled,
         fetchVideosByTagEnabled,
