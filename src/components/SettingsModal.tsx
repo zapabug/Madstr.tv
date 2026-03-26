@@ -183,6 +183,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         }
     };
 
+    const handlePasteBunkerUri = async () => {
+        setDisplayError(null);
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text) {
+                setDisplayError("Clipboard is empty");
+                return;
+            }
+            if (!text.startsWith('bunker://') && !text.startsWith('nostrconnect://')) {
+                setDisplayError("Invalid bunker URI. Should start with bunker:// or nostrconnect://");
+                return;
+            }
+            await auth.connectWithBunkerUri(text);
+        } catch (error) {
+            console.error("Paste bunker URI Error:", error);
+            setDisplayError(`Error reading clipboard: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    };
+
     const handleLoginWithNsec = async () => {
         if (!nsecInput.trim()) {
             setDisplayError("Please enter an nsec value.");
@@ -460,29 +479,36 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                      ) : (
                          <div className="space-y-4">
 
-                            <div className='text-center'>
-                                <button
-                                    ref={connectSignerButtonRef}
-                                    onClick={handleInitiateNip46}
-                                    disabled={auth.isGeneratingUri || !!auth.nip46ConnectUri}
-                                    className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
-                                >
-                                    {auth.isGeneratingUri ? 'Generating Code...' : 'Connect Remote Signer (NIP-46)'}
-                                </button>
-                                {auth.nip46ConnectUri && !auth.isLoggedIn && (
-                                     <div className="mt-3 p-3 bg-white rounded shadow flex flex-col items-center">
-                                         <p className="text-black text-sm mb-2">Scan with NIP-46 compatible signer:</p>
-                                         <QRCode value={auth.nip46ConnectUri} size={160} level="L" />
-                                          <button
-                                              onClick={() => auth.cancelNip46Connection?.()}
-                                              className="mt-3 text-xs text-gray-600 hover:text-black focus:outline-none focus:ring-1 focus:ring-gray-500 rounded px-1"
-                                              aria-label="Cancel NIP-46 Connection"
-                                          >
-                                              Cancel
-                                          </button>
-                                 </div>
-                             )}
-                             </div>
+                             <div className='text-center space-y-3'>
+                                 <button
+                                     ref={connectSignerButtonRef}
+                                     onClick={handleInitiateNip46}
+                                     disabled={auth.isGeneratingUri || !!auth.nip46ConnectUri || auth.isLoadingAuth}
+                                     className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
+                                 >
+                                     {auth.isGeneratingUri ? 'Generating Code...' : 'Show QR Code'}
+                                 </button>
+                                 {auth.nip46ConnectUri && !auth.isLoggedIn && (
+                                      <div className="p-3 bg-white rounded shadow flex flex-col items-center">
+                                          <p className="text-black text-sm mb-2">Scan with Amber Signer:</p>
+                                          <QRCode value={auth.nip46ConnectUri} size={160} level="L" />
+                                           <button
+                                               onClick={() => auth.cancelNip46Connection?.()}
+                                               className="mt-3 text-xs text-gray-600 hover:text-black focus:outline-none focus:ring-1 focus:ring-gray-500 rounded px-1"
+                                               aria-label="Cancel NIP-46 Connection"
+                                           >
+                                               Cancel
+                                           </button>
+                                  </div>
+                              )}
+                                 <button
+                                     onClick={handlePasteBunkerUri}
+                                     disabled={auth.isLoadingAuth || !!auth.nip46ConnectUri}
+                                     className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold"
+                                 >
+                                     Paste bunker:// URI
+                                 </button>
+                              </div>
 
                              <p className="text-center text-xs text-gray-500">- OR -</p>
 

@@ -5,6 +5,7 @@ export const RELAYS = [
   'wss://nostr.wine',
   'wss://purplepag.es',
   'wss://relay.nostr.band',
+  'wss://nsec.app',
 ];
 
 // !!! IMPORTANT !!!

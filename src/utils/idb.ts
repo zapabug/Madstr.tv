@@ -72,6 +72,11 @@ export interface StoredMusicTags {
     tags: string[];
 }
 
+export interface StoredNip46Session {
+    id: 'nip46Session';
+    payload: string;
+}
+
 // Use basic Proof type and add mintUrl in helpers if needed
 // export interface StoredProof extends Proof {
 //     id: string; // Concatenation of secret + C ? Or just use 'secret'? 'secret' should be unique per mint.
@@ -79,14 +84,14 @@ export interface StoredMusicTags {
 // }
 
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredMintUrl | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredMintUrl | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags | StoredNip46Session;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags'; // Use literal types for keys
+    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session';
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'mintUrl' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -107,7 +112,7 @@ interface MadstrTvAppDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<MadstrTvAppDB>> | null = null;
 const DB_NAME = 'MadstrTvAppDB';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 // --- DB Initialization ---
 const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {

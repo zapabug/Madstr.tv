@@ -5,8 +5,6 @@ console.log("ndk.ts: Creating NDK singleton instance...");
 
 const ndkInstance = new NDK({
     explicitRelayUrls: RELAYS,
-    // Enable debugging if needed during development
-    // debug: true, 
 });
 
 // Attempt to connect immediately - NDK handles reconnect logic internally

@@ -1,15 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as nip19 from 'nostr-tools/nip19';
-import * as nip04 from 'nostr-tools/nip04';
+import { encrypt, decrypt, getConversationKey } from 'nostr-tools/nip44';
 import { nip59 } from 'nostr-tools';
 import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
-// Removed incorrect import: import { generatePrivateKey } from 'nostr-tools';
-// Removed unused NDKFilter, NDKSubscriptionOptions from import
-import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKFilter, NDKSubscription, NDKUser } from '@nostr-dev-kit/ndk';
-// Corrected import path - removed .ts extension
-import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredMusicTags } from '../utils/idb';
-// Import the new helper
-// import { bytesToHex } from '../utils/misc';
+import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKUser } from '@nostr-dev-kit/ndk';
+import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredNip46Session } from '../utils/idb';
+
+// NIP-44 helper functions
+const nip44Encrypt = (sk: Uint8Array, pk: string, data: string): string => {
+    const key = getConversationKey(sk, pk);
+    return encrypt(data, key);
+};
+
+const nip44Decrypt = (sk: Uint8Array, pk: string, ciphertext: string): string => {
+    const key = getConversationKey(sk, pk);
+    return decrypt(ciphertext, key);
+};
 
 // Define default tags (can be customized)
 const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast', 'nosolutions'];
@@ -24,13 +30,14 @@ export interface UseAuthReturn {
     authError: string | null;
     nip46ConnectUri: string | null; // Expose the generated URI
     isGeneratingUri: boolean; // Loading state for URI generation
-    initiateNip46Connection: () => Promise<void>; // Renamed function
+    initiateNip46Connection: () => Promise<void>; // QR code flow - generate URI and wait
+    connectWithBunkerUri: (bunkerUri: string) => Promise<void>; // Paste flow - parse URI and connect
     cancelNip46Connection: () => void; // Function to cancel NIP-46 attempt
     generateNewKeys: () => Promise<{ npub: string; nsec: string } | null>;
     loginWithNsec: (nsec: string) => Promise<boolean>;
     logout: () => Promise<void>;
     saveNsecToDb: (nsec: string) => Promise<void>; // Explicit save function
-    getNdkSigner: () => NDKPrivateKeySigner | NDKNip46Signer | undefined; // To get the current signer for NDK
+    getNdkSigner: () => Promise<NDKPrivateKeySigner | NDKNip46Signer | undefined>; // To get the current signer for NDK
     signEvent: (event: NostrEvent) => Promise<NostrEvent | null>; // Unified signing method
     // Hashtag state and setter
     followedTags: string[];
@@ -47,7 +54,7 @@ export interface UseAuthReturn {
     // NIP-59 Gift Wrap Methods
     wrapDirectMessage: (recipientPubkeyHex: string, content: string) => Promise<{ event: any; ciphertext: string }>;
     unwrapGiftWrap: (giftWrapEvent: any) => Promise<{ content: string; senderPubkey: string } | null>;
-    // Add new properties for hashtag filtering
+    // Tag filtering flags
     fetchImagesByTagEnabled: boolean;
     fetchVideosByTagEnabled: boolean;
     fetchMusicByTagEnabled: boolean;
@@ -56,7 +63,7 @@ export interface UseAuthReturn {
     setFetchImagesByTagEnabled: (enabled: boolean) => void;
     setFetchVideosByTagEnabled: (enabled: boolean) => void;
     setFetchMusicByTagEnabled: (enabled: boolean) => void;
-    ndk: NDK | undefined; // Added NDK instance
+    ndk: NDK | undefined;
 }
 
 // Placeholder for the TV App's identity. Generate one if needed on first load?
@@ -65,34 +72,26 @@ export interface UseAuthReturn {
 // const APP_IDENTITY_NSEC = "nsec1..."; // TODO: Ideally load from secure config, not hardcoded (Commented out as unused)
 
 const NIP46_RELAYS = ['wss://nsec.app', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-const NIP46_CONNECT_TIMEOUT = 75000; // 75 seconds
 
 // Accept NDK | undefined (aligning with useMediaAuthors)
 export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     const [currentUserNpub, setCurrentUserNpub] = useState<string | null>(null);
     const [currentUserNsec, setCurrentUserNsec] = useState<string | null>(null);
-    // Store the pubkey of the remote NIP-46 signer, not the signer instance itself directly initially
-    const [nip46SignerPubkey, setNip46SignerPubkey] = useState<string | null>(null);
-    // Removed nip46Signer state, will be created on demand in getNdkSigner
+    const [nip46SessionPayload, setNip46SessionPayload] = useState<string | null>(null);
     const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
     const [authError, setAuthError] = useState<string | null>(null);
-    // Use refs for temporary connection state to avoid re-renders triggering effects unnecessarily
-    const nip46TempPrivKeyRef = useRef<Uint8Array | null>(null);
-    const nip46SubscriptionRef = useRef<NDKSubscription | null>(null);
-    const nip46TimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    // Removed nip46LocalSecret state, use ref instead
-    const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null); // State for the URI
-    const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false); // Loading state for URI generation
-    const [followedTags, setFollowedTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Initialize with defaults
-    const [videoTags, setVideoTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Video tags default same as images
-    const [musicTags, setMusicTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Music tags default same as images
+    const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null);
+    const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false);
+    const [followedTags, setFollowedTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
+    const [videoTags, setVideoTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
+    const [musicTags, setMusicTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
     const [fetchImagesByTagEnabled, setFetchImagesByTagEnabledState] = useState<boolean>(false);
     const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(false);
     const [fetchMusicByTagEnabled, setFetchMusicByTagEnabledState] = useState<boolean>(false);
-    const [keywordSearch, setKeywordSearchState] = useState<string>(''); // For searching follows content
+    const [keywordSearch, setKeywordSearchState] = useState<string>('');
 
-    // Derived state for isLoggedIn based on nsec or nip46 signer pubkey
-    const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SignerPubkey));
+    // Derived state for isLoggedIn based on nsec or nip46 session
+    const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SessionPayload));
 
     // --- Hashtag Persistence ---
     const loadFollowedTags = useCallback(async () => {
@@ -296,7 +295,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             const npub = nip19.npubEncode(pkHex);
             setCurrentUserNsec(nsec);
             setCurrentUserNpub(npub);
-            setNip46SignerPubkey(null);
+            setNip46SessionPayload(null);
             setAuthError(null);
 
              // On successful nsec login/save, load user's tags, merging with defaults
@@ -366,8 +365,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             setAuthError(error.message || "Invalid nsec provided.");
             setCurrentUserNsec(null);
             setCurrentUserNpub(null);
-            setNip46SignerPubkey(null);
-             setFollowedTagsState(DEFAULT_FOLLOWED_TAGS); // Reset tags to default on failed login
+            setNip46SessionPayload(null);
+            setFollowedTagsState(DEFAULT_FOLLOWED_TAGS); // Reset tags to default on failed login
             setIsLoadingAuth(false);
             return false;
         }
@@ -375,118 +374,55 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
 
     // --- NIP-46 Handling ---
 
-    // Function to cleanup NIP-46 connection attempt artifacts
-    const cleanupNip46Attempt = useCallback(() => {
-        console.log("Cleaning up NIP-46 attempt...");
-        if (nip46SubscriptionRef.current) {
-            nip46SubscriptionRef.current.stop();
-            nip46SubscriptionRef.current = null;
-            console.log("Stopped NIP-46 subscription.");
-        }
-        if (nip46TimeoutRef.current) {
-            clearTimeout(nip46TimeoutRef.current);
-            nip46TimeoutRef.current = null;
-            console.log("Cleared NIP-46 timeout.");
-        }
-        nip46TempPrivKeyRef.current = null; // Clear temporary key
-        setNip46ConnectUri(null);
-        setIsGeneratingUri(false);
-        setIsLoadingAuth(false); // Ensure loading state is reset
-        console.log("NIP-46 cleanup complete.");
-    }, []); // No dependencies needed for cleanup logic itself
-
-
-    // Handler for responses from the NIP-46 signer during connection
-    const handleNip46Response = useCallback(async (event: NDKEvent) => {
-        console.log("Received NIP-46 response event:", event.id);
-
-        if (!nip46TempPrivKeyRef.current) {
-            console.error("Cannot handle NIP-46 response: temporary private key missing.");
-            return;
-        }
-
+    const saveNip46SessionToDb = useCallback(async (payload: string) => {
         try {
-            const decryptedContent = await nip04.decrypt(nip46TempPrivKeyRef.current, event.pubkey, event.content);
-            console.log("Decrypted NIP-46 response content:", decryptedContent);
-            const response = JSON.parse(decryptedContent);
-
-            // Basic validation: Check if it's the connect confirmation
-            // NIP-46 spec: Response to 'connect' is 'ack' or 'error'
-            // NIP-46 spec: Response to 'get_public_key' is the pubkey or 'error'
-            // We should ideally track the request ID, but for simplicity, let's check 'result'
-            if (response.result === "ack") {
-                // This acknowledges the 'connect' request. Now request the public key.
-                console.log("NIP-46 connect acknowledged by signer:", event.pubkey);
-                // Store signer pubkey immediately
-                setNip46SignerPubkey(event.pubkey);
-
-                // Prepare get_public_key request
-                 const requestId = crypto.randomUUID(); // Generate a unique ID for the request
-                 const requestPayload = JSON.stringify({
-                     id: requestId,
-                     method: "get_public_key",
-                     params: [],
-                 });
-                 const encryptedRequest = await nip04.encrypt(nip46TempPrivKeyRef.current, event.pubkey, requestPayload);
-
-                 const requestEvent = new NDKEvent(ndkInstance);
-                 requestEvent.kind = 24133; // NIP-46 request
-                 requestEvent.created_at = Math.floor(Date.now() / 1000);
-                 requestEvent.content = encryptedRequest;
-                 requestEvent.tags = [['p', event.pubkey]]; // Target the signer
-
-                 // Sign with temporary key
-                 const tempPrivKey = nip46TempPrivKeyRef.current;
-                 if (!tempPrivKey) {
-                      console.error("Temporary private key missing, cannot sign get_public_key request");
-                      throw new Error("NIP46 Internal Error: Missing temp key for signing");
-                 }
-                 const tempSigner = new NDKPrivateKeySigner(tempPrivKey);
-                 await requestEvent.sign(tempSigner);
-                 console.log("Publishing get_public_key request to signer...");
-                 await requestEvent.publish();
-                 // Keep listening for the get_public_key response...
-
-
-            } else if (response.method === "get_public_key" && response.result) {
-                 // Received the public key response
-                 const userPubkeyHex = response.result;
-                 const userNpub = nip19.npubEncode(userPubkeyHex);
-                 console.log("Received user public key via NIP-46:", userNpub);
-
-                 setCurrentUserNpub(userNpub);
-                 setCurrentUserNsec(null); // Ensure nsec is cleared
-                 setIsLoadingAuth(false); // Auth process complete
-                 setAuthError(null);
-
-                 // Login successful - load user tags and merge
-                 const userTags = await loadFollowedTags();
-                 const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
-                 setFollowedTagsState(mergedTags);
-                 console.log("Merged tags on NIP-46 login:", mergedTags);
-
-                 // Final cleanup
-                 cleanupNip46Attempt();
-
-
-            } else if (response.error) {
-                console.error("NIP-46 Error Response:", response.error);
-                setAuthError(`Wallet Connection Error: ${response.error.message || 'Unknown error'}`);
-                cleanupNip46Attempt();
-            } else {
-                console.warn("Received unexpected NIP-46 response structure:", response);
-            }
-
+            await idb.putSetting({ id: 'nip46Session', payload });
+            console.log("Saved NIP-46 session to DB");
         } catch (error) {
-            console.error("Failed to decrypt or handle NIP-46 response:", error);
-            setAuthError(`Wallet Connection Failed: ${error instanceof Error ? error.message : 'Decryption/Parsing Error'}`);
-            cleanupNip46Attempt();
+            console.error("Failed to save NIP-46 session:", error);
         }
+    }, []);
 
-    }, [ndkInstance, cleanupNip46Attempt, loadFollowedTags]); // Added dependencies
+    const loadNip46SessionFromDb = useCallback(async (): Promise<string | null> => {
+        try {
+            const stored = await idb.getSetting('nip46Session') as StoredNip46Session | undefined;
+            if (stored?.payload) {
+                console.log("Loaded NIP-46 session from DB");
+                return stored.payload;
+            }
+        } catch (error) {
+            console.error("Failed to load NIP-46 session:", error);
+        }
+        return null;
+    }, []);
 
+    const clearNip46SessionFromDb = useCallback(async () => {
+        try {
+            await idb.deleteSetting('nip46Session');
+            console.log("Cleared NIP-46 session from DB");
+        } catch (error) {
+            console.error("Failed to clear NIP-46 session:", error);
+        }
+    }, []);
 
-    // Renamed function to be more explicit
+    const convertNostrconnectToBunker = (nostrconnectUri: string): string => {
+        try {
+            const url = new URL(nostrconnectUri);
+            const pubkey = url.hostname;
+            const relays = url.searchParams.getAll('relay');
+            const secret = url.searchParams.get('secret');
+            
+            const bunkerUrl = new URL('bunker://' + pubkey);
+            relays.forEach(relay => bunkerUrl.searchParams.append('relay', relay));
+            if (secret) bunkerUrl.searchParams.set('secret', secret);
+            
+            return bunkerUrl.toString();
+        } catch (error) {
+            console.error("Failed to convert nostrconnect to bunker URI:", error);
+            throw new Error("Invalid NIP-46 connection URI");
+        }
+    };
+
     const initiateNip46Connection = useCallback(async (): Promise<void> => {
         if (!ndkInstance) {
             setAuthError("NDK not initialized.");
@@ -494,83 +430,284 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             return;
         }
 
-        // Clean up any previous attempt first
-        cleanupNip46Attempt();
-
-        console.log("Initiating NIP-46 connection...");
-        setIsGeneratingUri(true); // Indicate URI generation starts
-        setIsLoadingAuth(true); // Indicate auth process starts
+        console.log("[bunker] Initiating NIP-46 connection (QR flow)...");
+        setIsLoadingAuth(true);
+        setIsGeneratingUri(true);
         setAuthError(null);
 
-        let tempPrivKeyBytes: Uint8Array;
-        let tempPubKeyHex: string;
+        let subscription: any = null;
+        let timeoutId: NodeJS.Timeout | null = null;
+
+        const cleanup = () => {
+            if (subscription) {
+                subscription.stop();
+                subscription = null;
+            }
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
 
         try {
-            // 1. Generate temporary keys for this connection attempt
-            if (typeof generateSecretKey !== 'function') {
-                throw new Error("Key generation unavailable (generateSecretKey not found).");
-            }
-            tempPrivKeyBytes = generateSecretKey();
-            tempPubKeyHex = getPublicKey(tempPrivKeyBytes); // Use nostr-tools pure function
-            nip46TempPrivKeyRef.current = tempPrivKeyBytes; // Store private key in ref
+            const tempPrivKeyBytes = generateSecretKey();
+            const tempPubKeyHex = getPublicKey(tempPrivKeyBytes);
+            const localSigner = new NDKPrivateKeySigner(tempPrivKeyBytes);
 
-            // 2. Construct the nostrconnect URI
             const uriParams = new URLSearchParams();
-            // Add relays
             NIP46_RELAYS.forEach(relay => uriParams.append('relay', relay));
-            // Add metadata
-            uriParams.append('metadata', JSON.stringify({
-                name: "Madstr.tv",
-                // url: "optional url to your app",
-                // description: "optional description",
-                // icons: ["optional icon url"]
-            }));
-
+            uriParams.append('metadata', JSON.stringify({ name: "Madstr.tv" }));
             const connectUri = `nostrconnect://${tempPubKeyHex}?${uriParams.toString()}`;
             setNip46ConnectUri(connectUri);
-            console.log("Generated NIP-46 Connect URI:", connectUri);
-            setIsGeneratingUri(false); // URI generation complete
+            setIsGeneratingUri(false);
 
-            // 3. Start listening for the response on specified relays
-            const filter: NDKFilter = {
-                kinds: [24133], // NIP-46 responses
-                '#p': [tempPubKeyHex], // Tagged to our temporary public key
-                since: Math.floor(Date.now() / 1000) - 10, // Look back slightly just in case
+            const bunkerUri = convertNostrconnectToBunker(connectUri);
+            const { pubkey: bunkerPubkey } = parseBunkerUri(bunkerUri);
+            console.log("[bunker] Generated bunker URI for QR code");
+            console.log("[bunker] Bunker pubkey:", bunkerPubkey);
+
+            const connectRequestId = Math.random().toString(36).substring(7);
+            let getPkRequestId: string | null = null;
+            const connectParams = [tempPubKeyHex];
+
+            const filter = {
+                kinds: [24133],
+                '#p': [tempPubKeyHex],
+                since: Math.floor(Date.now() / 1000) - 10,
             };
-            console.log("Starting NIP-46 subscription with filter:", filter, "Relays:", NIP46_RELAYS);
 
-            const subscription = ndkInstance.subscribe(
-                filter,
-                { closeOnEose: false } // Keep listening until explicitly stopped, rely on ndkInstance relays
-            );
+            console.log("[bunker] Subscribing to NIP-46 events...");
+            subscription = ndkInstance.subscribe(filter, { 
+                closeOnEose: false,
+            });
 
-            subscription.on('event', handleNip46Response);
-            subscription.on('eose', () => console.log('NIP-46 subscription EOSE received. Still listening...'));
-            subscription.on('closed', () => console.log('NIP-46 subscription closed.'));
+            const user = await new Promise<any>((resolve, reject) => {
+                timeoutId = setTimeout(() => {
+                    cleanup();
+                    reject(new Error("[bunker] Connection timed out"));
+                }, 60000);
 
-            nip46SubscriptionRef.current = subscription; // Store subscription to allow stopping it
+                subscription.on('event', async (event: NDKEvent) => {
+                    try {
+                        const decryptedContent = nip44Decrypt(tempPrivKeyBytes, event.pubkey, event.content);
+                        const response = JSON.parse(decryptedContent);
+                        console.log("[bunker] Received response:", JSON.stringify(response));
 
-            // 4. Set timeout for the connection attempt
-            nip46TimeoutRef.current = setTimeout(() => {
-                console.warn(`NIP-46 connection timed out after ${NIP46_CONNECT_TIMEOUT / 1000}s.`);
-                setAuthError("Wallet connection timed out. Please try again.");
-                cleanupNip46Attempt();
-            }, NIP46_CONNECT_TIMEOUT);
+                        if (response.result === "ack") {
+                            console.log("[bunker] Got ACK! Connection established.");
+                            
+                            getPkRequestId = Math.random().toString(36).substring(7);
+                            const getPkRequest = { id: getPkRequestId, method: "get_public_key", params: [] };
+                            const encryptedRequest = await nip44Encrypt(tempPrivKeyBytes, event.pubkey, JSON.stringify(getPkRequest));
+                            
+                            const requestEvent = new NDKEvent(ndkInstance);
+                            requestEvent.kind = 24133;
+                            requestEvent.created_at = Math.floor(Date.now() / 1000);
+                            requestEvent.content = encryptedRequest;
+                            requestEvent.tags = [['p', event.pubkey]];
+                            requestEvent.pubkey = tempPubKeyHex;
+                            
+                            const requestSig = await localSigner.sign(requestEvent.rawEvent());
+                            requestEvent.sig = requestSig;
+                            requestEvent.id = requestEvent.getEventHash();
+                            
+                            console.log("[bunker] Sending get_public_key request (no secret)...");
+                            console.log("[bunker] get_pk request id:", getPkRequestId);
+                            await requestEvent.publish();
+                        } else if (response.id === getPkRequestId && response.result) {
+                            const pubkeyHex = response.result;
+                            console.log("[bunker] Got public key:", pubkeyHex);
+                            
+                            if (pubkeyHex && pubkeyHex.length === 64 && /^[a-fA-F0-9]+$/.test(pubkeyHex)) {
+                                cleanup();
+                                const user = ndkInstance.getUser({ hexpubkey: pubkeyHex });
+                                resolve(user);
+                            } else {
+                                console.error("[bunker] Invalid pubkey format:", pubkeyHex);
+                            }
+                        } else if (response.error) {
+                            console.error("[bunker] Error:", JSON.stringify(response.error));
+                            cleanup();
+                            reject(new Error(response.error.message || response.error || 'Connection failed'));
+                        }
+                    } catch (error) {
+                        console.error("[bunker] Failed to process event:", error);
+                    }
+                });
 
-        } catch (error) {
-            console.error("Failed to initiate NIP-46 connection or generate URI:", error);
-            setAuthError(`Failed to prepare wallet connection: ${error instanceof Error ? error.message : String(error)}`);
-            cleanupNip46Attempt(); // Ensure cleanup on error
+                subscription.start();
+
+                setTimeout(async () => {
+                    console.log("[bunker] Sending connect request...");
+                    try {
+                        const connectRequest = { id: connectRequestId, method: "connect", params: connectParams };
+                        console.log("[bunker] Connect request ID:", connectRequestId);
+                        const encryptedConnect = await nip44Encrypt(tempPrivKeyBytes, bunkerPubkey, JSON.stringify(connectRequest));
+                        
+                        const event = new NDKEvent(ndkInstance);
+                        event.kind = 24133;
+                        event.created_at = Math.floor(Date.now() / 1000);
+                        event.content = encryptedConnect;
+                        event.tags = [['p', bunkerPubkey]];
+                        event.pubkey = tempPubKeyHex;
+                        
+                        const sig = await localSigner.sign(event.rawEvent());
+                        event.sig = sig;
+                        event.id = event.getEventHash();
+                        
+                        console.log("[bunker] Publishing connect event...");
+                        await event.publish();
+                    } catch (error) {
+                        console.error("[bunker] Failed to send connect request:", error);
+                        cleanup();
+                        reject(error);
+                    }
+                }, 1000);
+            });
+
+            console.log("[bunker] Connection established! User:", user.npub);
+            
+            const localSignerPayload = (localSigner as any).privateKey;
+            const payloadObj = {
+                type: "nip46",
+                payload: {
+                    bunkerPubkey: bunkerPubkey,
+                    userPubkey: user.pubkey,
+                    relayUrls: NIP46_RELAYS,
+                    secret: null,
+                    localSignerPayload: localSignerPayload,
+                    nip05: null,
+                },
+            };
+            const payload = JSON.stringify(payloadObj);
+            setNip46SessionPayload(payload);
+            await saveNip46SessionToDb(payload);
+            
+            setCurrentUserNpub(user.npub);
+            setCurrentUserNsec(null);
+            setNip46ConnectUri(null);
+            setAuthError(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            setIsLoadingAuth(false);
+            console.log("[bunker] NIP-46 login successful!");
+
+        } catch (error: unknown) {
+            console.error("[bunker] NIP-46 connection failed:", error);
+            cleanup();
+            const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+            setAuthError(`Bunker Connection Failed: ${errorMessage}`);
+            setNip46ConnectUri(null);
+            setIsLoadingAuth(false);
         }
-        // Note: We leave isLoadingAuth=true until handleNip46Response completes or timeout occurs
-    }, [ndkInstance, handleNip46Response, cleanupNip46Attempt]);
+    }, [ndkInstance, loadFollowedTags, saveNip46SessionToDb]);
 
-     // Function to cancel the NIP-46 connection attempt
-     const cancelNip46Connection = useCallback(() => {
-         console.log("User cancelled NIP-46 connection attempt.");
-         setAuthError("Connection cancelled."); // Set a specific message
-         cleanupNip46Attempt(); // Use the cleanup helper
-     }, [cleanupNip46Attempt]);
+    const parseBunkerUri = (uri: string): { pubkey: string; relays: string[]; secret?: string } => {
+        try {
+            const url = new URL(uri);
+            const pubkey = url.hostname || url.pathname.replace(/^\/\//, "");
+            const relays = url.searchParams.getAll('relay');
+            const secret = url.searchParams.get('secret') || undefined;
+            return { pubkey, relays, secret };
+        } catch (error) {
+            console.error("Failed to parse bunker URI:", error);
+            throw new Error("Invalid bunker URI");
+        }
+    };
+
+    const connectWithBunkerUri = useCallback(async (bunkerUri: string): Promise<void> => {
+        if (!ndkInstance) {
+            setAuthError("NDK not initialized.");
+            console.error("Cannot connect with bunker: NDK instance is missing.");
+            return;
+        }
+
+        console.log("[bunker] Connecting with bunker URI:", bunkerUri);
+        setIsLoadingAuth(true);
+        setAuthError(null);
+
+        try {
+            const signer = new NDKNip46Signer(ndkInstance, bunkerUri);
+            
+            signer.on('authUrl', (url: string) => {
+                console.log("[bunker] Auth URL event:", url);
+            });
+
+            console.log("[bunker] Waiting for connection (blockUntilReady)...");
+            const user = await signer.blockUntilReady();
+            
+            console.log("[bunker] NIP-46 connection established for user:", user.npub);
+            
+            const payload = signer.toPayload();
+            setNip46SessionPayload(payload);
+            await saveNip46SessionToDb(payload);
+            
+            setCurrentUserNpub(user.npub);
+            setCurrentUserNsec(null);
+            setNip46ConnectUri(null);
+            setAuthError(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            setIsLoadingAuth(false);
+            console.log("[bunker] NIP-46 login successful!");
+
+        } catch (error: unknown) {
+            console.error("[bunker] NIP-46 connection failed:", error);
+            const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+            setAuthError(`Bunker Connection Failed: ${errorMessage}`);
+            setNip46ConnectUri(null);
+            setIsLoadingAuth(false);
+        }
+    }, [ndkInstance, loadFollowedTags, saveNip46SessionToDb]);
+
+    const restoreNip46Session = useCallback(async (): Promise<boolean> => {
+        if (!ndkInstance) return false;
+        
+        try {
+            const payload = await loadNip46SessionFromDb();
+            if (!payload) return false;
+
+            console.log("Restoring NIP-46 session...");
+            const signer = await NDKNip46Signer.fromPayload(payload, ndkInstance);
+            
+            signer.on('authUrl', (url: string) => {
+                console.log("NIP-46 auth URL received during restore:", url);
+                if (url) {
+                    window.open(url, 'auth', 'width=600,height=600');
+                }
+            });
+
+            const user = await signer.blockUntilReady();
+            
+            setNip46SessionPayload(payload);
+            setCurrentUserNpub(user.npub);
+            setCurrentUserNsec(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            console.log("NIP-46 session restored for user:", user.npub);
+            return true;
+        } catch (error) {
+            console.error("Failed to restore NIP-46 session:", error);
+            await clearNip46SessionFromDb();
+            return false;
+        }
+    }, [ndkInstance, loadNip46SessionFromDb, loadFollowedTags, clearNip46SessionFromDb]);
+
+    const cancelNip46Connection = useCallback(() => {
+        console.log("User cancelled NIP-46 connection attempt.");
+        setAuthError("Connection cancelled.");
+        setNip46ConnectUri(null);
+        setIsLoadingAuth(false);
+    }, []);
 
     // --- General Auth Logic ---
 
@@ -580,16 +717,14 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         setAuthError(null);
         setCurrentUserNpub(null);
         setCurrentUserNsec(null);
-        setNip46SignerPubkey(null);
+        setNip46SessionPayload(null);
         setNip46ConnectUri(null);
         await clearNsecFromDb();
-        // Reset tags to default on logout
+        await clearNip46SessionFromDb();
         setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
-        // Optionally clear saved tags from DB on logout? Or keep them for next login?
-        // await idb.deleteSetting('followedTags'); // Uncomment to clear tags on logout
         setIsLoadingAuth(false);
         console.log("Logout complete.");
-    }, [clearNsecFromDb]);
+    }, [clearNsecFromDb, clearNip46SessionFromDb]);
 
     // --- Initialization Effect ---
     useEffect(() => {
@@ -597,30 +732,29 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             console.log("Initializing auth...");
             setIsLoadingAuth(true);
             setAuthError(null);
+
             const loadedNsec = await loadNsecFromDb();
             const loadedTags = await loadFollowedTags();
 
             if (loadedNsec) {
-                 // Nsec loaded, merge tags
-                 const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...loadedTags]));
-                 setFollowedTagsState(mergedTags);
-                console.log("Auth initialized with stored nsec and merged tags.");
+                const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...loadedTags]));
+                setFollowedTagsState(mergedTags);
+                console.log("Auth initialized with stored nsec.");
             } else {
-                // Check if NIP-46 signer pubkey is stored (add persistence if needed)
-                // For now, assume no NIP-46 persistence, just use loaded/default tags
-                 setFollowedTagsState(loadedTags); // Use whatever loadFollowedTags returned (defaults or stored)
-                console.log("Auth initialized, no stored nsec. Using tags:", loadedTags);
+                const sessionRestored = await restoreNip46Session();
+                if (sessionRestored) {
+                    console.log("Auth initialized with restored NIP-46 session.");
+                } else {
+                    setFollowedTagsState(loadedTags);
+                    console.log("Auth initialized, no stored credentials.");
+                }
             }
-             // TODO: Add logic to check for existing NIP-46 connection state if possible?
-             // This might involve storing the remoteSignerPubkey securely.
 
             setIsLoadingAuth(false);
         };
 
         initializeAuth();
-        // Dependencies: loadNsecFromDb, loadFollowedTags
-        // Need to ensure these functions are stable (wrapped in useCallback)
-    }, [loadNsecFromDb, loadFollowedTags]);
+    }, [loadNsecFromDb, loadFollowedTags, restoreNip46Session]);
 
     // Load followed tags on mount, regardless of login state
     useEffect(() => {
@@ -650,48 +784,48 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     }, [loadMusicTags]);
 
     // --- Signer Logic ---
+    const cachedSignerRef = useRef<NDKPrivateKeySigner | NDKNip46Signer | undefined>(undefined);
+    const cachedNsecRef = useRef<string | null>(null);
+    const cachedNip46PayloadRef = useRef<string | null>(null);
 
-    const getNdkSigner = useCallback((): NDKPrivateKeySigner | NDKNip46Signer | undefined => {
-        if (nip46SignerPubkey && currentUserNpub && ndkInstance) {
-             console.log(`Creating NDKNip46Signer for user ${currentUserNpub} with signer ${nip46SignerPubkey}`);
-             try {
-                // const decodedUserKey = nip19.decode(currentUserNpub); // Not needed here for NDKNip46Signer constructor
-                // if (decodedUserKey.type !== 'npub') {
-                //      throw new Error("Invalid npub format for current user.");
-                // }
-                // userHexPubkey = decodedUserKey.data; // Unused variable
-
-                const tempPrivKey = nip46TempPrivKeyRef.current;
-                if (!tempPrivKey) {
-                    console.error("NIP-46 Session Error: Temporary local key not found. Cannot create signer.");
-                    return undefined;
-                }
-
-                const localSigner = new NDKPrivateKeySigner(tempPrivKey);
-                const signer = new NDKNip46Signer(ndkInstance, nip46SignerPubkey, localSigner);
-                return signer as NDKNip46Signer; 
-             } catch (error) {
-                  console.error("Failed to create NDKNip46Signer:", error);
-                  return undefined;
-             }
-
-        } else if (currentUserNsec) {
-            // If logged in with nsec, create a private key signer
+    const getNdkSigner = useCallback(async (): Promise<NDKPrivateKeySigner | NDKNip46Signer | undefined> => {
+        if (nip46SessionPayload && ndkInstance) {
+            if (cachedNip46PayloadRef.current === nip46SessionPayload && cachedSignerRef.current) {
+                return cachedSignerRef.current;
+            }
+            console.log("Restoring NIP-46 signer from session...");
+            try {
+                const signer = await NDKNip46Signer.fromPayload(nip46SessionPayload, ndkInstance);
+                cachedSignerRef.current = signer;
+                cachedNip46PayloadRef.current = nip46SessionPayload;
+                cachedNsecRef.current = null;
+                return signer;
+            } catch (error) {
+                console.error("Failed to restore NIP-46 signer:", error);
+                return undefined;
+            }
+        } else if (currentUserNsec && ndkInstance) {
+            if (cachedNsecRef.current === currentUserNsec && cachedSignerRef.current) {
+                return cachedSignerRef.current;
+            }
             try {
                 const decoded = nip19.decode(currentUserNsec);
                 if (decoded.type === 'nsec') {
-                    return new NDKPrivateKeySigner(decoded.data as Uint8Array);
+                    const signer = new NDKPrivateKeySigner(decoded.data as Uint8Array);
+                    cachedSignerRef.current = signer;
+                    cachedNsecRef.current = currentUserNsec;
+                    cachedNip46PayloadRef.current = null;
+                    return signer;
                 }
             } catch (error) {
                 console.error("Failed to create NDKPrivateKeySigner from nsec:", error);
             }
         }
-        // If neither NIP-46 nor nsec is available, return undefined
         return undefined;
-    }, [currentUserNsec, nip46SignerPubkey, currentUserNpub, ndkInstance]); // Added dependencies
+    }, [currentUserNsec, nip46SessionPayload, ndkInstance]);
 
-     const signEvent = useCallback(async (event: NostrEvent): Promise<NostrEvent | null> => {
-        const signer = getNdkSigner();
+      const signEvent = useCallback(async (event: NostrEvent): Promise<NostrEvent | null> => {
+        const signer = await getNdkSigner();
         if (!signer) {
             setAuthError("Cannot sign event: No active signer (not logged in?).");
             console.error("signEvent called without an active signer.");
@@ -699,13 +833,10 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
 
         try {
-            // Ensure the event object is compatible with NDKEvent structure if needed
-            // NDK signers typically expect properties like pubkey, created_at, kind, tags, content
-             const ndkEvent = new NDKEvent(ndkInstance ?? undefined); // Pass undefined if ndkInstance is null
-             ndkEvent.kind = event.kind as number; // Assert kind as number, handle potential undefined if necessary
+             const ndkEvent = new NDKEvent(ndkInstance ?? undefined);
+             ndkEvent.kind = event.kind as number;
              ndkEvent.content = event.content;
              ndkEvent.tags = event.tags || [];
-             // Signer will add pubkey, id, sig, and potentially created_at
 
              await ndkEvent.sign(signer);
              console.log("Signed event:", ndkEvent.rawEvent());
@@ -717,21 +848,26 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         }
      }, [getNdkSigner, ndkInstance]);
 
-    // --- NIP-04 Encryption/Decryption Helpers ---
+    // --- NIP-44 Encryption/Decryption Helpers ---
+
+    const getPrivateKeyBytes = (sk: string | Uint8Array): Uint8Array => {
+        if (sk instanceof Uint8Array) return sk;
+        return new Uint8Array(Buffer.from(sk, 'hex'));
+    };
 
     const encryptDm = useCallback(async (recipientPubkeyHex: string, plaintext: string): Promise<string> => {
-        const signer = getNdkSigner();
+        const signer = await getNdkSigner();
         if (!signer) throw new Error("Cannot encrypt DM: No user signer available.");
         if (!ndkInstance) throw new Error("NDK instance not available for creating NDKUser.");
 
         if (signer instanceof NDKPrivateKeySigner) {
             const sk = signer.privateKey;
             if (!sk) throw new Error("Nsec signer has no private key.");
-            return nip04.encrypt(sk, recipientPubkeyHex, plaintext);
+            const skBytes = getPrivateKeyBytes(sk);
+            return nip44Encrypt(skBytes, recipientPubkeyHex, plaintext);
         } else if (signer instanceof NDKNip46Signer) {
-            // Create NDKUser object for the recipient
             const recipientUser = new NDKUser({ pubkey: recipientPubkeyHex });
-            recipientUser.ndk = ndkInstance; // Assign NDK instance if needed by encrypt
+            recipientUser.ndk = ndkInstance;
             return signer.encrypt(recipientUser, plaintext);
         } else {
             throw new Error("Unsupported signer type for DM encryption.");
@@ -739,18 +875,18 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     }, [getNdkSigner, ndkInstance]);
 
     const decryptDm = useCallback(async (senderPubkeyHex: string, ciphertext: string): Promise<string> => {
-        const signer = getNdkSigner();
+        const signer = await getNdkSigner();
         if (!signer) throw new Error("Cannot decrypt DM: No user signer available.");
         if (!ndkInstance) throw new Error("NDK instance not available for creating NDKUser.");
 
         if (signer instanceof NDKPrivateKeySigner) {
             const sk = signer.privateKey;
             if (!sk) throw new Error("Nsec signer has no private key.");
-            return nip04.decrypt(sk, senderPubkeyHex, ciphertext);
+            const skBytes = getPrivateKeyBytes(sk);
+            return nip44Decrypt(skBytes, senderPubkeyHex, ciphertext);
         } else if (signer instanceof NDKNip46Signer) {
-            // Create NDKUser object for the sender
             const senderUser = new NDKUser({ pubkey: senderPubkeyHex });
-            senderUser.ndk = ndkInstance; // Assign NDK instance if needed by decrypt
+            senderUser.ndk = ndkInstance;
             return signer.decrypt(senderUser, ciphertext);
         } else {
             throw new Error("Unsupported signer type for DM decryption.");
@@ -760,20 +896,19 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     // --- NIP-59 Gift Wrap Encryption/Decryption ---
 
     const wrapDirectMessage = useCallback(async (recipientPubkeyHex: string, content: string): Promise<{ event: any; ciphertext: string }> => {
-        const signer = getNdkSigner();
+        const signer = await getNdkSigner();
         if (!signer) throw new Error("Cannot wrap DM: No user signer available.");
         
         if (signer instanceof NDKPrivateKeySigner) {
             const sk = signer.privateKey;
             if (!sk) throw new Error("Nsec signer has no private key.");
             
-            // Ensure sk is Uint8Array
             const privateKey = typeof sk === 'string' 
                 ? new Uint8Array(Buffer.from(sk, 'hex'))
                 : sk;
             
             const rumor = {
-                kind: 14, // Private DM
+                kind: 14,
                 content: content,
                 tags: [['p', recipientPubkeyHex]],
                 created_at: Math.floor(Date.now() / 1000),
@@ -787,14 +922,13 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     }, [getNdkSigner]);
 
     const unwrapGiftWrap = useCallback(async (giftWrapEvent: any): Promise<{ content: string; senderPubkey: string } | null> => {
-        const signer = getNdkSigner();
+        const signer = await getNdkSigner();
         if (!signer) throw new Error("Cannot unwrap gift: No user signer available.");
         
         if (signer instanceof NDKPrivateKeySigner) {
             const sk = signer.privateKey;
             if (!sk) throw new Error("Nsec signer has no private key.");
             
-            // Ensure sk is Uint8Array
             const privateKey = typeof sk === 'string' 
                 ? new Uint8Array(Buffer.from(sk, 'hex'))
                 : sk;
@@ -826,6 +960,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         nip46ConnectUri,
         isGeneratingUri,
         initiateNip46Connection,
+        connectWithBunkerUri,
         cancelNip46Connection,
         generateNewKeys,
         loginWithNsec,
