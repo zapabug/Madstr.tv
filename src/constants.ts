@@ -13,6 +13,13 @@ export const HASHTAG_QUERY_RELAYS = [
   'wss://relay.primal.net',
   'wss://nostr.wine',
   'wss://relay.bitcoiner.social',
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://purplepag.es',
+  'wss://relay.nostr.band',
+  'wss://relay.snort.social',
+  'wss://e.nu.zone',
+  'wss://relay.olas.app',
 ];
 
 // !!! IMPORTANT !!!

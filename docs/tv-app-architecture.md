@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication and hashtag filtering.
+This document describes the architecture of the React-based TV application designed for displaying media content (images, podcasts, videos) shared via the Nostr protocol. It is optimized for TV viewing with remote control navigation and includes features for user authentication, hashtag filtering, and mute list filtering.
 
 **Key Features:**
 *   Displays images, podcasts (audio), and videos.
@@ -14,6 +14,7 @@ This document describes the architecture of the React-based TV application desig
 *   Enters **fullscreen mode** automatically after periods of inactivity or no new messages.
 *   Supports user **authentication** via nsec (generation/login), NIP-46 remote signer, or browser extension (NIP-07).
 *   Allows users to **follow specific hashtags** (`#t` tags) to filter image/video content.
+*   **Mute list filtering** - Reads Kind 10000 events to filter out muted users.
 
 **Operating Modes (`viewMode` state):**
 *   `imagePodcast`: The main/top area displays the `ImageFeed`, while the bottom-right panel displays the `MediaPanel` (podcast controls/list).
@@ -63,7 +64,7 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Hook Usage:**
     *   `useNDKInit`: Gets `ndkInstance`, connection state
     *   `useMediaAuthors`: Gets `mediaAuthors` using `ndkInstance` and `currentUserNpub`
-    *   `useAuth`: Auth state, login/logout, signing, DM encryption
+    *   `useAuth`: Auth state, login/logout, signing, DM encryption, mute list
     *   `useMediaNotes`: Fetches `imageNotes`, `videoNotes`, `audioNotes` (podcasts)
     *   `useMediaState`: Core UI state machine
     *   `useMediaElementPlayback`: Audio/video playback (two instances)
@@ -115,7 +116,7 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Function:** Fetches Kind 3 contact list with 15s timeout fallback. Uses user's pubkey if logged in, otherwise falls back to TV pubkey.
 
 ### **`useMediaNotes`:**
-*   **Input:** `authors`, `mediaType` ('image', 'audio', 'video'), `ndk`, `limit`, `until`, `followedTags`, `refreshKey`.
+*   **Input:** `authors`, `mediaType` ('image', 'audio', 'video'), `ndk`, `limit`, `until`, `followedTags`, `refreshKey`, `mutedPubkeys`.
 *   **Output:** `notes` (array of `NostrNote`), `isLoading`.
 *   **Function:** Fetches notes based on authors, kinds, and optional hashtag filters.
 *   **Features:**
@@ -123,7 +124,9 @@ The main layout is defined in `App.tsx` and consists of:
     *   Video duration filter: Videos shorter than 2 minutes are filtered out
     *   Media kinds: Audio (1, 1063, 31338), Videos (1, 1063, 34235, 34236), Images (1, 1063)
     *   Client-side hashtag filtering when `followedTags` is provided
-    *   **Hashtag Relay Discovery (planned):** Will add separate subscription with `#t` filter for discovery mode
+    *   **Hashtag Relay Discovery:** Separate subscription with `#t` filter for discovery mode
+    *   **Mute List Filtering:** Filters out events from muted pubkeys
+    *   **Blossom-Only Filter:** For hashtag discovery, only accepts content from allowed Blossom hosts
 
 ### **`useMediaState`:**
 *   **Input:** `initialImageNotes` (shuffled), `initialAudioNotes`, `initialVideoNotes` (deduplicated), `fetchOlderImages`, `fetchOlderVideos`, `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
@@ -141,15 +144,16 @@ The main layout is defined in `App.tsx` and consists of:
 
 ### **`useAuth`:**
 *   **Input:** `ndkInstance` (optional).
-*   **Output:** `currentUserNpub`, `currentUserNsec`, `isLoggedIn`, auth/loading states, NIP-46 functions, nsec functions, signer functions, `followedTags`, `encryptDm`, `decryptDm`.
-*   **Function:** User authentication, credential persistence, signing capabilities, NIP-44 encryption/decryption.
+*   **Output:** `currentUserNpub`, `currentUserNsec`, `isLoggedIn`, auth/loading states, NIP-46 functions, nsec functions, signer functions, `followedTags`, `mutedPubkeys`, `encryptDm`, `decryptDm`.
+*   **Function:** User authentication, credential persistence, signing capabilities, NIP-44 encryption/decryption, mute list fetching.
 *   **Authentication Methods:**
     *   **Browser Extension (NIP-07):** Detects `window.nostr`, auto-restores on page load
     *   **NIP-46 Remote Signer:** QR code flow (Amber Signer) and paste bunker URI flow
     *   **Local Key (nsec):** Generate new keys or login with existing nsec
-*   **NIP-44 Methods:**
-    *   `encryptDm(recipientPubkey, plaintext)`: Encrypts DM using NIP-44
-    *   `decryptDm(senderPubkey, ciphertext)`: Decrypts DM using NIP-44
+*   **Mute List:**
+    *   Fetches Kind 10000 events from user's pubkey on login
+    *   Returns `mutedPubkeys` array for filtering
+    *   Auto-refreshes feeds when mute list changes
 
 ### **`useFullscreen`:**
 *   **Input:** `interactionTimeout`, `messageTimeout`, `checkInterval`.
@@ -202,11 +206,12 @@ useNDKInit → provides ndkInstance
 ↓            ↓            ↓
 useMediaAuthors    useMediaNotes    useAuth
      ↓            ↓            ↓
-mediaAuthors   image/video/audio notes   auth ops
+mediaAuthors   image/video/audio notes   auth ops + mutedPubkeys
      ↓            ↓
 App.tsx combines data:
   - Shuffles imageNotes
   - Deduplicates videoNotes by URL
+  - Filters by mutedPubkeys
   - Passes to useMediaState
      ↓
 useMediaState → manages viewMode, indices, currentItemUrl
@@ -222,6 +227,8 @@ ImageFeed   VideoPlayer   MediaPanel
 
 Key constants in `src/constants.ts`:
 *   `RELAYS`: Array of Nostr relay URLs
+*   `HASHTAG_QUERY_RELAYS`: Relays for hashtag discovery (primal, nostr.wine, bitcoiner.social)
+*   `ALLOWED_BLOSSOM_HOSTS`: Nostr-native Blossom servers for content filtering
 *   `TV_PUBKEY_NPUB`: TV app's Nostr public key
 *   `MAIN_THREAD_NEVENT_URI`: Thread URI for MessageBoard and reply QR code
 
@@ -255,16 +262,84 @@ Key constants in `src/constants.ts`:
 
 ## 10. Content Filtering Architecture
 
-### Current Flow
-1. Fetch Kind 3 (follows) from user's pubkey
-2. If no follows, mediaAuthors = [user's pubkey]
-3. Fetch media from authors only
-4. Client-side hashtag filter applied
+### Content Sources
+| Source | Method | Content Filter |
+|--------|--------|---------------|
+| **Follows** | Kind 3 authors | Shows all content from followed users |
+| **Hashtag Discovery** | Relay `#t` queries | Blossom-hosted content ONLY |
 
-### Planned Enhancement (v0.4.0)
-When hashtags enabled:
-- **Subscription 1 (Author-based):** `{ kinds: ALL_MEDIA_KINDS, authors: authorsList, limit: 100 }`
-- **Subscription 2 (Hashtag discovery):** `{ kinds: ALL_MEDIA_KINDS, "#t": ["tag1"], limit: 200 }`
-  - NO author restriction - full relay discovery for content diversity
+### Hashtag Discovery Flow
+```
+User enables hashtag toggle
+     ↓
+useMediaNotes creates TWO subscriptions:
+     ↓
+┌─────────────────────────────────────┐
+│ Subscription 1: Author-based        │
+│ { kinds, authors: authorsList }      │
+│ ↓                                   │
+│ Subscription 2: Hashtag discovery    │
+│ { kinds, "#t": ["tag"] }           │
+│ ↓                                   │
+│ Only accept Blossom URLs             │
+│ (filter out Twitter, etc.)           │
+└─────────────────────────────────────┘
+     ↓
+Merge results, dedupe by ID
+     ↓
+Filter by mutedPubkeys
+```
 
-Results merged and deduplicated by note ID.
+### Mute List Flow
+```
+User logs in (extension/bunker/nsec)
+     ↓
+useAuth fetches Kind 10000 from relays
+     ↓
+Extracts ["p", "<pubkey>"] tags
+     ↓
+Stores in mutedPubkeys state
+     ↓
+useMediaNotes filters:
+- Cached content on load
+- New events from subscriptions
+- Hashtag discovery results
+     ↓
+Feed auto-refreshes when mute list updates
+```
+
+## 11. Relay Configuration
+
+### Main Relays
+```typescript
+const RELAYS = [
+  'wss://relay.damus.io',
+  'wss://relay.primal.net',
+  'wss://nos.lol',
+  'wss://nostr.wine',
+  'wss://purplepag.es',
+  'wss://relay.nostr.band',
+  'wss://nsec.app',
+];
+```
+
+### Hashtag Query Relays (Discovery)
+```typescript
+const HASHTAG_QUERY_RELAYS = [
+  'wss://relay.primal.net',
+  'wss://nostr.wine',
+  'wss://relay.bitcoiner.social',
+];
+```
+
+### Allowed Blossom Hosts (Content Filter)
+```typescript
+const ALLOWED_BLOSSOM_HOSTS = [
+  'blossom.primal.net',
+  'blossom.nostrich.io',
+  'blossom.nevent.ninja',
+  'blossom.ditto.pub',
+  'blossom.fiatjaf.com',
+  'blossom.obsidian.vip',
+];
+```

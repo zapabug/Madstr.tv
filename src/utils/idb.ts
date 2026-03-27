@@ -70,6 +70,12 @@ export interface StoredNip46Session {
     payload: string;
 }
 
+export interface StoredSeenNotes {
+    id: 'seenNotes';
+    noteIds: string[];
+    lastUpdated: number;
+}
+
 // Use basic Proof type and add mintUrl in helpers if needed
 // export interface StoredProof extends Proof {
 //     id: string; // Concatenation of secret + C ? Or just use 'secret'? 'secret' should be unique per mint.
@@ -77,14 +83,14 @@ export interface StoredNip46Session {
 // }
 
 // Combine settings types
-type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags | StoredNip46Session;
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags | StoredNip46Session | StoredSeenNotes;
 
 // --- Database Schema ---
 interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session';
+    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' | 'seenNotes';
     value: SettingsValue;
-    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' };
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' | 'seenNotes' };
   };
   mediaNoteCache: {
     key: string; // note ID (hex)
@@ -236,6 +242,39 @@ export const idb = {
     clearProfiles: async (): Promise<void> => {
         const db = await getDb();
         return db.clear('profileCache');
+    },
+
+    // --- Seen Notes Helpers ---
+    getSeenNotes: async (): Promise<Set<string>> => {
+        const setting = await idb.getSetting('seenNotes');
+        if (setting && 'noteIds' in setting) {
+            return new Set(setting.noteIds);
+        }
+        return new Set();
+    },
+
+    markNoteAsSeen: async (noteId: string): Promise<void> => {
+        const current = await idb.getSeenNotes();
+        current.add(noteId);
+        // Keep max 1000 seen notes
+        const noteIds = Array.from(current);
+        if (noteIds.length > 1000) {
+            noteIds.splice(0, noteIds.length - 1000);
+        }
+        await idb.putSetting({
+            id: 'seenNotes',
+            noteIds,
+            lastUpdated: Date.now(),
+        });
+    },
+
+    isNoteSeen: async (noteId: string): Promise<boolean> => {
+        const seenNotes = await idb.getSeenNotes();
+        return seenNotes.has(noteId);
+    },
+
+    clearSeenNotes: async (): Promise<void> => {
+        await idb.deleteSetting('seenNotes');
     },
 };
 

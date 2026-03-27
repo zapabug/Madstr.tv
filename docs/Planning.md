@@ -34,7 +34,15 @@
 - [x] Extension detection (window.nostr)
 - [x] Extension session auto-restore on page load
 - [x] Add support for NIP-71 video events (kind 34235, 34236)
-- [ ] Improve relay selection and fallback
+- [x] Expanded hashtag query relays (10 relays for better discovery)
+
+### Content Discovery & Responsiveness
+- [x] 10 relays for hashtag queries (was 3)
+- [x] Show cache immediately on load (no loading spinner if cache exists)
+- [x] Debounced UI updates (500ms) for smooth content merging
+- [x] Seen notes tracking in IndexedDB
+- [x] Unseen content prioritized in display (unseen first, then by recency)
+- [x] Mark notes as seen on playback start
 
 ### NIP-46 Session Management
 - [x] Generate connect URI for QR code flow
@@ -45,21 +53,7 @@
 
 ### Content Filtering Architecture
 
-#### Current Behavior (v0.3.x - WORKING)
-```
-1. Fetch Kind 3 (follows) from user's pubkey
-2. mediaAuthors = [user's pubkey] (if no follows)
-3. Fetch media from authors only
-4. Client-side hashtag filter applied
-
-INTENDED BEHAVIOR:
-- No follows + Hashtags OFF → Nothing (correct)
-- No follows + Hashtags ON → Nothing (BUG - should get relay content)
-- Has follows + Hashtags OFF → User's follows content
-- Has follows + Hashtags ON → User's follows + hashtag filtered content
-```
-
-#### Implementation (v0.3.x)
+#### Hashtag Discovery (WORKING v0.3.x)
 ```
 When hashtags enabled:
 - Subscription 1 (Author-based): { kinds: ALL_MEDIA_KINDS, authors: authorsList, limit: 100 }
@@ -69,12 +63,19 @@ When hashtags enabled:
 Results merged and deduplicated by note ID.
 ```
 
-#### Hashtag Query Relays
+#### Hashtag Query Relays (10 relays for better coverage)
 ```typescript
 const HASHTAG_QUERY_RELAYS = [
   'wss://relay.primal.net',
   'wss://nostr.wine',
   'wss://relay.bitcoiner.social',
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://purplepag.es',
+  'wss://relay.nostr.band',
+  'wss://relay.snort.social',
+  'wss://e.nu.zone',
+  'wss://relay.olas.app',
 ];
 ```
 
@@ -86,12 +87,12 @@ For hashtag discovery, we **only accept content from Nostr-native Blossom server
 
 ```typescript
 const ALLOWED_BLOSSOM_HOSTS = [
-  'blossom.primal.net',
-  'blossom.nostrich.io',
-  'blossom.nevent.ninja',
-  'blossom.ditto.pub',
-  'blossom.fiatjaf.com',
-  'blossom.obsidian.vip',
+  'blossom.primal.net', 'blossom.band', 'cdn.nostrcheck.me',
+  'cdn.satellite.earth', '24242.io', 'blossom.azzamo.media',
+  'blossom.yakihonne.com', 'cdn.sovbit.host', 'blossom.sector01.com',
+  'blossom.poster.place', 'blossom.uid.ovh', 'blossom.nostr.hu',
+  'blossom.nogood.studio', 'files.v0l.io', 'nosto.re', 'nostr.download',
+  // plus: nostrich.io, nevent.ninja, ditto.pub, fiatjaf.com, obsidian.vip
 ];
 ```
 
@@ -109,8 +110,8 @@ Follows are NOT filtered - shows all content from followed users.
 ### Media Classification
 | Media Type | Source Filter | Duration Filter | Display Mode |
 |------------|---------------|-----------------|--------------|
-| **Images** | Followed authors + hashtags | N/A | Random carousel (intended) |
-| **Videos** | Followed authors + hashtags | ≥ 2 minutes | Sequential, NOT random |
+| **Images** | Followed authors + hashtags (Blossom only) | N/A | Random carousel (intended) |
+| **Videos** | Followed authors + hashtags (Blossom only) | ≥ 2 minutes | Sequential, NOT random |
 | **Audio** | Followed authors + hashtags | ≥ 6 minutes | Resume from position |
 | **Music** | Followed authors + hashtags | < 6 minutes | Resume from position |
 
@@ -119,16 +120,6 @@ Follows are NOT filtered - shows all content from followed users.
 - **Videos**: Sequential order, user-controlled navigation - good and intended
 - **Audio**: Resumes from last position - working, needs improvement
 - **Music**: Resumes from last position - working, needs improvement
-
-### Duration Classification Approach
-**Dynamic classification on preload (NOT persisted to DB)**
-- Fetch all audio from follows
-- On preload: estimate duration from file headers/size
-- If < 6min → add to "music" bucket
-- If ≥ 6min → add to "audio" bucket
-- If can't estimate → default to music (can filter out if too long on playback)
-- Pros: No DB schema changes, always current
-- Cons: Re-estimates each session (acceptable for TV use case)
 
 ## Settings UI
 - [x] Image hashtag toggle (ON/OFF buttons)
@@ -143,7 +134,7 @@ Follows are NOT filtered - shows all content from followed users.
 - [x] Video position saved to IndexedDB (`MadstrTvAppDB`)
 - [x] Audio position saved to localStorage
 - [x] Resume from position on next session
-- [ ] Add "Clear seen videos" button in Settings
+- [x] Add "Clear seen videos" button in Settings
 - [ ] Persist podcast/music position to IndexedDB (for consistency)
 
 ## User Session Management
@@ -152,6 +143,13 @@ Follows are NOT filtered - shows all content from followed users.
 - [x] Extension session (window.nostr - NIP-07)
 - [x] Auto-restore extension session on page refresh
 - [ ] Auto-restore NIP-46 bunker session on page refresh
+
+### Mute List (Kind 10000)
+- [x] Fetch mute list from user's Kind 10000 events on login
+- [x] Filter cached and new content by muted pubkeys
+- [x] Auto-refresh feeds when mute list changes
+- **Flow**: TV reads Kind 10000 from relays to get muted pubkeys
+- **Usage**: User mutes people on phone (via Amber or any Nostr app), TV picks up the mute list automatically
 
 ## Technical Debt / Cleanup
 
@@ -172,7 +170,7 @@ Follows are NOT filtered - shows all content from followed users.
 ### Cache Management
 - [x] Cache version bumped to clear old data on migration
 - [x] Extension session clears old TV notes from cache
-- [ ] Add cache clear button in Settings for debugging
+- [x] Add cache clear button in Settings for debugging
 
 ## Future Improvements
 
@@ -183,8 +181,8 @@ Follows are NOT filtered - shows all content from followed users.
    - [ ] Add gesture controls for touch interfaces
 
 2. **Content Discovery**
-   - [x] Hashtag-based filtering UI (needs relay-level implementation)
-   - [ ] **Add hashtag-only relay subscription for discovery**
+   - [x] Hashtag-based filtering UI (relay-level implementation working)
+   - [x] Hashtag-only relay subscription for discovery
    - [ ] Add content recommendations
    - [ ] Create curated content lists
 
@@ -217,6 +215,8 @@ Follows are NOT filtered - shows all content from followed users.
 - Maintain compatibility with Nostr protocol updates
 - Duration classification is dynamic (not persisted) to reduce complexity
 - Display modes are intentional: images = random, videos = sequential
+- Hashtag discovery ONLY accepts Blossom-hosted content (Nostr-native)
+- Mute list synced automatically from user's Kind 10000 events
 
 ## Version Planning
 
@@ -226,7 +226,7 @@ Follows are NOT filtered - shows all content from followed users.
 - Initial Nostr integration
 - NIP-94 File Metadata support
 
-### v0.3.0 (Current - IN PROGRESS)
+### v0.3.0 (Current - COMPLETED)
 - [x] Retry mechanisms for failed data fetches
 - [x] Minimum video length filter (2 min)
 - [x] Back-to-back video playback with sound
@@ -237,12 +237,13 @@ Follows are NOT filtered - shows all content from followed users.
 - [x] Extension session auto-restore on page load
 - [x] Video position persistence
 - [x] Settings modal auto-refresh on close
-- [x] **Hashtag-only relay subscription for discovery mode**
-- [ ] Duration classification (music <6min, podcast ≥6min)
-- [ ] **Add "Clear seen videos" button**
+- [x] Hashtag-only relay subscription for discovery mode
+- [x] Blossom-only content filter for hashtag discovery
+- [x] Mute list filtering (Kind 10000)
+- [x] Duration classification (music <6min, podcast ≥6min)
+- [x] Add "Clear seen videos" button
 
 ### v0.4.0 (PLANNED)
-- [ ] Add cache clear button in Settings
 - [ ] Podcast position persistence to IndexedDB
 - [ ] Advanced content discovery
 - [ ] Social features

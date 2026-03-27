@@ -3,6 +3,7 @@ import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { NostrNote } from '../types/nostr';
 import { cacheMediaNotes, getCachedNotesByAuthors } from '../utils/mediaNoteCache';
 import { HASHTAG_QUERY_RELAYS } from '../constants';
+import { idb } from '../utils/idb';
 
 // Media type for filtering
 export type MediaType = 'audio' | 'video' | 'image';
@@ -23,6 +24,7 @@ interface UseMediaNotesProps {
     until?: number;
     followedTags?: string[];
     refreshKey?: number;
+    mutedPubkeys?: string[];
 }
 
 // Define hook return value
@@ -45,6 +47,26 @@ const ALLOWED_BLOSSOM_HOSTS = [
   'blossom.ditto.pub',
   'blossom.fiatjaf.com',
   'blossom.obsidian.vip',
+  'blossom.band',
+  'blossom.nostr.build',
+  'cdn.nostrcheck.me',
+  'nostrcheck.me',
+  'cdn.satellite.earth',
+  '24242.io',
+  'blossom.azzamo.media',
+  'blossom.yakihonne.com',
+  'cdn.sovbit.host',
+  'blossom.sector01.com',
+  'loratu.bitcointxoko.com',
+  'cdn.hzrd149.com',
+  'blossom.poster.place',
+  'blossom.uid.ovh',
+  'blossom.nostr.hu',
+  'blossom.nogood.studio',
+  'files.v0l.io',
+  'blossom.f7z.io',
+  'nosto.re',
+  'nostr.download',
 ];
 
 // Check if URL is from allowed Blossom host
@@ -75,6 +97,7 @@ interface UseMediaNotesReturn {
     notes: NostrNote[];
     isLoading: boolean;
     fetchOlderNotes?: () => void;
+    markAsSeen?: (noteId: string) => void;
 }
 
 export function useMediaNotes({
@@ -85,6 +108,7 @@ export function useMediaNotes({
     until,       // Use provided until timestamp
     followedTags, // <<< Destructure followedTags prop
     refreshKey = 0, // Key to trigger refresh
+    mutedPubkeys = [], // Muted pubkeys to filter out
 }: UseMediaNotesProps): UseMediaNotesReturn {
     const [notes, setNotes] = useState<NostrNote[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -101,11 +125,51 @@ export function useMediaNotes({
     const prevLimitRef = useRef<number>(limit);
     const prevUntilRef = useRef<number | undefined>(until);
     const prevFollowedTagsRef = useRef<string[] | undefined>(followedTags);
+    // Seen notes tracking
+    const seenNoteIds = useRef<Set<string>>(new Set());
+    const seenNotesLoaded = useRef<boolean>(false);
+    // Debounce timer for UI updates
+    const updateUiTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // <<< Add logging for image type specifically >>>
     if (mediaType === 'image') {
         console.log("useMediaNotes (image): Hook rendering/re-rendering.", { authors, limit, until, followedTags });
     }
+
+    // Load seen notes from IndexedDB on mount
+    useEffect(() => {
+        if (seenNotesLoaded.current) return;
+        idb.getSeenNotes().then(seenSet => {
+            seenNoteIds.current = seenSet;
+            seenNotesLoaded.current = true;
+            console.log(`useMediaNotes (${mediaType}): Loaded ${seenSet.size} seen notes`);
+        }).catch(err => {
+            console.error(`useMediaNotes (${mediaType}): Failed to load seen notes:`, err);
+        });
+    }, []);
+
+    // Helper to sort notes with unseen first, then by recency
+    const sortNotesWithUnseenFirst = useCallback((notesToSort: NostrNote[]): NostrNote[] => {
+        return notesToSort.sort((a, b) => {
+            const aSeen = seenNoteIds.current.has(a.id);
+            const bSeen = seenNoteIds.current.has(b.id);
+            if (aSeen !== bSeen) return aSeen ? 1 : -1;
+            return b.created_at - a.created_at;
+        });
+    }, []);
+
+    // Debounced UI update
+    const scheduleUiUpdate = useCallback(() => {
+        if (updateUiTimeout.current) {
+            clearTimeout(updateUiTimeout.current);
+        }
+        updateUiTimeout.current = setTimeout(() => {
+            const allNotes = Array.from(notesById.current.values());
+            const sorted = sortNotesWithUnseenFirst(allNotes);
+            setNotes(sorted);
+            setIsLoading(false);
+        }, 500);
+    }, [sortNotesWithUnseenFirst]);
 
     const processEvent = useCallback((event: NDKEvent, _urlRegex: RegExp, type: MediaType): NostrNote | null => {
         const urlRegex = getUrlRegexForMediaType(type);
@@ -300,13 +364,26 @@ export function useMediaNotes({
         prevFollowedTagsRef.current = followedTags;
         // ---------------------------------
 
-        // Check if authors changed significantly (different users, not just order)
+            // Check if authors changed significantly (different users, not just order)
         const authorsChanged = JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors);
         if (authorsChanged) {
             console.log(`useMediaNotes (${mediaType}): Authors changed - clearing notes and resetting.`);
             notesById.current.clear();
             setNotes([]);
             isFetching.current = false; // Reset to allow new subscription
+        }
+        
+        // Filter cached content by muted pubkeys
+        if (mutedPubkeys && mutedPubkeys.length > 0) {
+            console.log(`useMediaNotes (${mediaType}): Filtering by muted pubkeys:`, mutedPubkeys);
+            // Filter already-fetched notes
+            const filteredNotes = Array.from(notesById.current.values())
+                .filter(note => !mutedPubkeys.includes(note.pubkey));
+            if (filteredNotes.length !== notesById.current.size) {
+                console.log(`useMediaNotes (${mediaType}): Filtered out ${notesById.current.size - filteredNotes.length} muted notes from cache`);
+                notesById.current.clear();
+                filteredNotes.forEach(note => notesById.current.set(note.id, note));
+            }
         }
 
         // Debounce or prevent fetch if already fetching or no NDK/authors
@@ -322,11 +399,7 @@ export function useMediaNotes({
 
         let isMounted = true;
         // Do NOT clear notesById.current here - we want to accumulate
-        setIsLoading(true);
         isFetching.current = true; // Mark as fetching
-        // Don't clear displayed notes immediately unless authors/type changed significantly?
-        // Maybe only clear if until is undefined (meaning a fresh load)?
-        // For simplicity, let's keep existing notes displayed while loading more.
 
         const authorsList = authors;
         const kindsToFetch = ALL_MEDIA_KINDS; // Fetch all media kinds in one subscription
@@ -336,21 +409,18 @@ export function useMediaNotes({
             // ... cache check ...
             if (mediaType === 'image') {
                 console.log(`useMediaNotes (image): Checking cache for ${authorsList.length} authors.`);
-                // Add more detail on cache results if needed
             }
             
-            // --- Cache Check (Always read and merge) ---
-            console.log(`useMediaNotes (${mediaType}): Checking cache for ${authorsList.length} authors. Current authors:`, authorsList);
-            // <<< Always try to load from cache >>>
+            // --- IMMEDIATE: Load cache and display right away ---
+            console.log(`useMediaNotes (${mediaType}): Loading cache...`);
             const cachedNotes = await getCachedNotesByAuthors(authorsList);
             console.log(`useMediaNotes (${mediaType}): Raw cached notes found: ${cachedNotes.length}`); 
-            const relevantCachedNotes: NostrNote[] = [];
-            let newNotesAddedFromCache = false;
+            
             if (cachedNotes.length > 0) {
+                const relevantCachedNotes: NostrNote[] = [];
                 cachedNotes.forEach(note => {
                     // Double-check this note is from a current author (handles author switch)
                     if (!authorsList.includes(note.pubkey)) {
-                        console.log(`useMediaNotes (${mediaType}): Skipping cached note from non-current-author: ${note.pubkey.substring(0, 16)}...`);
                         return;
                     }
                     // Filter for relevance (kind, matching URL regex for the *current* mediaType)
@@ -358,20 +428,17 @@ export function useMediaNotes({
                         if (!notesById.current.has(note.id)) {
                             notesById.current.set(note.id, note);
                             relevantCachedNotes.push(note);
-                            newNotesAddedFromCache = true;
                         }    
                     } 
                 });
-                if (newNotesAddedFromCache) {
-                    console.log(`useMediaNotes (${mediaType}): Added ${relevantCachedNotes.length} relevant notes from cache to map.`); 
-                    // <<< Update UI immediately with combined notes from map >>>
-                    const allNotesFromMap = Array.from(notesById.current.values());
-                    
-                    // Apply hashtag filtering to cached notes display
-                    let filteredNotes = allNotesFromMap;
+                
+                if (relevantCachedNotes.length > 0) {
+                    console.log(`useMediaNotes (${mediaType}): Displaying ${relevantCachedNotes.length} cached notes immediately.`);
+                    // Apply hashtag filtering
+                    let filteredNotes = Array.from(notesById.current.values());
                     if (followedTags && followedTags.length > 0) {
                         const lowerFollowedTags = followedTags.map(t => t.toLowerCase());
-                        filteredNotes = allNotesFromMap.filter(note => {
+                        filteredNotes = filteredNotes.filter(note => {
                             const noteTags = note.tags
                                 .filter(tag => tag[0] === 't')
                                 .map(tag => tag[1]?.toLowerCase())
@@ -386,19 +453,15 @@ export function useMediaNotes({
                             return allNoteTags.some(tag => lowerFollowedTags.includes(tag));
                         });
                     }
-                    
-                    const sortedNotes = filteredNotes.sort((a, b) => b.created_at - a.created_at);
-                    if (isMounted) {
-                        console.log(`useMediaNotes (${mediaType}): Updating state immediately with ${sortedNotes.length} notes from cache/map.`);
-                        setNotes(sortedNotes); 
-                    }
-                } else {
-                    console.log(`useMediaNotes (${mediaType}): No *new* relevant notes found in cache after filtering.`);
+                    // Sort with unseen first
+                    const sortedNotes = sortNotesWithUnseenFirst(filteredNotes);
+                    // Display immediately - don't wait for relay
+                    setNotes(sortedNotes);
+                    setIsLoading(false);
                 }
-            } else {
-                 console.log(`useMediaNotes (${mediaType}): Cache was empty for these authors.`);
             }
-            // <<< End of modified cache handling >>>
+            
+            // --- Start relay subscription in background --- 
             
             // --- Subscription --- 
             const filter: NDKFilter = {
@@ -455,6 +518,12 @@ export function useMediaNotes({
                         return;
                     }
                     
+                    // Filter out muted pubkeys
+                    if (mutedPubkeys.includes(event.pubkey)) {
+                        console.log(`useMediaNotes (${mediaType}): Ignoring event from muted pubkey: ${event.pubkey.substring(0, 16)}...`);
+                        return;
+                    }
+                    
                     if (mediaType === 'audio' || mediaType === 'image') {
                         console.log(`useMediaNotes (${mediaType}): Received event ${event.id} from pubkey ${event.pubkey.substring(0, 16)}..., kind ${event.kind}`);
                     }
@@ -475,6 +544,8 @@ export function useMediaNotes({
                              console.log(`useMediaNotes (audio): Adding new note ${note.id} to internal map. URL: ${note.url}`);
                         }
                         notesById.current.set(note.id, note);
+                        // Trigger debounced UI update for new content
+                        scheduleUiUpdate();
                     } else if (!note && mediaType === 'audio') {
                         console.log(`useMediaNotes (audio): Event ${event.id} processed but no valid audio URL found`);
                     }
@@ -530,10 +601,16 @@ export function useMediaNotes({
                         console.log(`useMediaNotes (${mediaType}): After hashtag filtering: ${finalNotes.length} notes`);
                     }
                     
-                    const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
+                    // Sort with unseen first
+                    const sortedFinalNotes = sortNotesWithUnseenFirst(finalNotes);
                     if (isMounted) {
                         if (mediaType === 'image') {
                             console.log(`useMediaNotes (${mediaType}): Updating state with ${sortedFinalNotes.length} notes after EOSE.`);
+                        }
+                        // Clear any pending debounced update and set immediately
+                        if (updateUiTimeout.current) {
+                            clearTimeout(updateUiTimeout.current);
+                            updateUiTimeout.current = null;
                         }
                         setNotes(sortedFinalNotes);
                         setIsLoading(false);
@@ -596,6 +673,12 @@ export function useMediaNotes({
                 hashtagSubscription.current.on('event', (event: NDKEvent) => {
                     console.log(`useMediaNotes (${mediaType}): [HASHTAG] EVENT - kind: ${event.kind}, id: ${event.id.substring(0,16)}`);
                     
+                    // Filter out muted pubkeys
+                    if (mutedPubkeys.includes(event.pubkey)) {
+                        console.log(`useMediaNotes (${mediaType}): [HASHTAG] Ignoring event from muted pubkey: ${event.pubkey.substring(0, 16)}...`);
+                        return;
+                    }
+                    
                     if (mediaType === 'image' || mediaType === 'video') {
                         // Check all possible URL sources
                         const imageTag = event.tags.find(t => t[0] === 'image');
@@ -652,6 +735,8 @@ export function useMediaNotes({
                         if (mediaType === 'image') {
                             console.log(`useMediaNotes (${mediaType}): [HASHTAG] Added note ${note.id} to map. Total: ${notesById.current.size}`);
                         }
+                        // Trigger debounced UI update for new content
+                        scheduleUiUpdate();
                     }
                 });
 
@@ -669,8 +754,14 @@ export function useMediaNotes({
                         });
                     }
                     
-                    const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
+                    // Sort with unseen first
+                    const sortedFinalNotes = sortNotesWithUnseenFirst(finalNotes);
                     if (isMounted) {
+                        // Clear any pending debounced update and set immediately
+                        if (updateUiTimeout.current) {
+                            clearTimeout(updateUiTimeout.current);
+                            updateUiTimeout.current = null;
+                        }
                         setNotes(sortedFinalNotes);
                         setIsLoading(false);
                         isFetching.current = false;
@@ -700,6 +791,11 @@ export function useMediaNotes({
         // Cleanup
         return () => {
             isMounted = false;
+            // Clear any pending UI update
+            if (updateUiTimeout.current) {
+                clearTimeout(updateUiTimeout.current);
+                updateUiTimeout.current = null;
+            }
             if (currentSubscription.current) {
                 console.log(`useMediaNotes (${mediaType}): Cleaning up subscription.`);
                 currentSubscription.current.stop();
@@ -713,14 +809,30 @@ export function useMediaNotes({
             isFetching.current = false; // Ensure fetching flag is reset if component unmounts during fetch
         };
     // Re-run effect if ndk, authors, mediaType, limit, until, followedTags, or refreshKey changes
-    }, [ndk, authors, mediaType, limit, until, followedTags, refreshKey, processEvent]);
+    }, [ndk, authors, mediaType, limit, until, followedTags, refreshKey, processEvent, sortNotesWithUnseenFirst, scheduleUiUpdate]);
 
     // <<< Log return value >>>
     if (mediaType === 'image') {
         console.log(`useMediaNotes (image): Returning state`, { notesLength: notes.length, isLoading });
     }
+    
+    // Mark a note as seen
+    const markAsSeen = useCallback((noteId: string) => {
+        if (!seenNoteIds.current.has(noteId)) {
+            seenNoteIds.current.add(noteId);
+            idb.markNoteAsSeen(noteId).catch(err => {
+                console.error(`useMediaNotes (${mediaType}): Failed to persist seen status:`, err);
+            });
+            // Re-sort notes to put newly seen note at the bottom
+            const currentNotes = Array.from(notesById.current.values());
+            const sorted = sortNotesWithUnseenFirst(currentNotes);
+            setNotes(sorted);
+        }
+    }, [sortNotesWithUnseenFirst]);
+    
     return {
         notes,
         isLoading,
+        markAsSeen,
     };
 } 

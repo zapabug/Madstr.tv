@@ -37,7 +37,7 @@ function App() {
 
   // --- Auth Hook (must be before useMediaAuthors) --- 
   const auth = useAuth(ndkInstance);
-  const { followedTags, videoTags, musicTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchMusicByTagEnabled, keywordSearch, currentUserNpub } = auth;
+  const { followedTags, videoTags, musicTags, fetchImagesByTagEnabled, fetchVideosByTagEnabled, fetchMusicByTagEnabled, keywordSearch, currentUserNpub, mutedPubkeys } = auth;
 
   // Use the authors hook - uses logged-in user's follows if available, otherwise TV's follows
   const { mediaAuthors, isLoadingAuthors } = useMediaAuthors({ ndk: ndkInstance, currentUserNpub });
@@ -50,15 +50,16 @@ function App() {
   const [notesRefreshKey, setNotesRefreshKey] = useState<number>(0);
 
   // Fetch notes using dynamic parameters
-  const { notes: audioNotes, isLoading: isLoadingAudioNotes } = useMediaNotes({ 
+  const { notes: audioNotes, isLoading: isLoadingAudioNotes, markAsSeen: markAudioSeen } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'audio', 
     ndk: ndkInstance, 
     limit: 25,
     followedTags: fetchMusicByTagEnabled ? musicTags : undefined,
     refreshKey: notesRefreshKey,
+    mutedPubkeys,
   });
-  const { notes: videoNotes, isLoading: isLoadingVideoNotes } = useMediaNotes({ 
+  const { notes: videoNotes, isLoading: isLoadingVideoNotes, markAsSeen: markVideoSeen } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'video', 
     ndk: ndkInstance, 
@@ -66,8 +67,9 @@ function App() {
     until: videoFetchUntil,
     followedTags: fetchVideosByTagEnabled ? videoTags : undefined,
     refreshKey: notesRefreshKey,
+    mutedPubkeys,
   });
-  const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
+  const { notes: imageNotes, isLoading: isLoadingImages, markAsSeen: markImageSeen } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'image', 
     ndk: ndkInstance, 
@@ -75,6 +77,7 @@ function App() {
     until: imageFetchUntil,
     followedTags: fetchImagesByTagEnabled ? followedTags : undefined,
     refreshKey: notesRefreshKey,
+    mutedPubkeys,
   });
   
   // State for shuffled notes for display
@@ -179,6 +182,14 @@ function App() {
     setUniqueVideoNotes(deduplicatedNotes); // <-- No shuffleArray() call
 
   }, [videoNotes]);
+
+  // Refresh notes when mute list changes
+  useEffect(() => {
+    if (mutedPubkeys && mutedPubkeys.length > 0) {
+      console.log('App.tsx: Mute list updated, refreshing feeds:', mutedPubkeys.length, 'muted');
+      setNotesRefreshKey(k => k + 1);
+    }
+  }, [mutedPubkeys]);
 
   // Get current video author for AuthorSelector highlight
   const currentVideoAuthor = stateVideoNotes && stateVideoNotes.length > 0 && currentVideoIndex < stateVideoNotes.length 
@@ -294,6 +305,21 @@ function App() {
        setPreloadVideoUrl(urlToPreloadCalc);
     }
   }, [viewMode, currentVideoIndex, uniqueVideoNotes, preloadVideoUrl]);
+
+  // --- Effect to mark notes as seen on playback ---
+  useEffect(() => {
+    if (viewMode === 'videoPlayer' && videoNotes.length > 0 && currentVideoIndex < videoNotes.length) {
+      const currentNote = videoNotes[currentVideoIndex];
+      if (currentNote && markVideoSeen) {
+        markVideoSeen(currentNote.id);
+      }
+    } else if (viewMode === 'imagePodcast' && audioNotes.length > 0 && currentAudioIndex < audioNotes.length) {
+      const currentNote = audioNotes[currentAudioIndex];
+      if (currentNote && markAudioSeen) {
+        markAudioSeen(currentNote.id);
+      }
+    }
+  }, [viewMode, currentVideoIndex, currentAudioIndex, videoNotes, audioNotes, markVideoSeen, markAudioSeen]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -576,7 +602,7 @@ function App() {
     <div className="absolute bottom-0 left-0 p-2 z-20">
       <RelayStatus
         isReceivingData={!!ndkInstance?.pool?.connectedRelays?.().length} // <-- Call function and check length
-        relayCount={RELAYS.length}
+        relayCount={ndkInstance?.pool?.connectedRelays?.().length || 0}
         onSettingsClick={toggleSettingsModal} // Pass the toggle function
       />
     </div>

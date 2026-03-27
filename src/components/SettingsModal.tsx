@@ -35,6 +35,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
     const [displayError, setDisplayError] = useState<string | null>(null);
     const [npubPressCount, setNpubPressCount] = useState(0);
     const [hashtagInput, setHashtagInput] = useState<string>('');
+    const [cacheCleared, setCacheCleared] = useState(false);
+    const [videoPositionsCleared, setVideoPositionsCleared] = useState(false);
     const [focusedTagIndex, setFocusedTagIndex] = useState<number | null>(null);
 
     const modalRef = useRef<HTMLDivElement>(null);
@@ -326,6 +328,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
             auth.setVideoTags(newTags);
             setFocusedVideoTagIndex(null);
             setTimeout(() => addVideoTagButtonRef.current?.focus(), 50);
+        }
+     };
+
+     const handleClearVideoPositions = () => {
+        const confirmClear = window.confirm(
+            "Clear video playback positions?\n\n" +
+            "This will reset all video progress - videos will start from the beginning next time you watch them."
+        );
+        if (!confirmClear) return;
+        
+        const prefix = 'audioPlaybackPos_';
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(prefix)) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log(`Cleared ${keysToRemove.length} video playback positions from localStorage.`);
+        setVideoPositionsCleared(true);
+        setTimeout(() => setVideoPositionsCleared(false), 3000);
+     };
+
+     const handleClearMediaCache = async () => {
+        const confirmClear = window.confirm(
+            "Clear media note cache?\n\n" +
+            "This will clear all cached media notes. The app will re-fetch content from relays on next load."
+        );
+        if (!confirmClear) return;
+        
+        try {
+            const { idb } = await import('../utils/idb');
+            await idb.clearMediaNotes();
+            console.log("Media note cache cleared.");
+            setCacheCleared(true);
+            setTimeout(() => setCacheCleared(false), 3000);
+        } catch (error) {
+            console.error("Failed to clear media cache:", error);
+            setDisplayError("Failed to clear cache. Check console.");
         }
      };
 
@@ -751,6 +793,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                     ) : (
                         <p className="text-sm text-gray-500 italic">Login to manage video hashtags.</p>
                     )}
+                </div>
+
+                <div className="mb-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+                    <h3 className="text-lg font-semibold mb-3 text-gray-300 border-b border-gray-600 pb-1">Cache Management</h3>
+                    <div className="space-y-3">
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={handleClearVideoPositions}
+                                className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold text-sm"
+                            >
+                                Clear Seen Videos
+                            </button>
+                            {videoPositionsCleared && (
+                                <p className="text-green-400 text-xs text-center">Video positions cleared!</p>
+                            )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={handleClearMediaCache}
+                                className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-gray-800 font-semibold text-sm"
+                            >
+                                Clear Media Cache
+                            </button>
+                            {cacheCleared && (
+                                <p className="text-green-400 text-xs text-center">Media cache cleared!</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
         </motion.div>
         </motion.div>

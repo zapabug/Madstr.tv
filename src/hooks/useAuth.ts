@@ -73,6 +73,8 @@ export interface UseAuthReturn {
     setFetchImagesByTagEnabled: (enabled: boolean) => void;
     setFetchVideosByTagEnabled: (enabled: boolean) => void;
     setFetchMusicByTagEnabled: (enabled: boolean) => void;
+    // Mute list (Kind 10000)
+    mutedPubkeys: string[];
     ndk: NDK | undefined;
 }
 
@@ -101,6 +103,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
     const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(false);
     const [fetchMusicByTagEnabled, setFetchMusicByTagEnabledState] = useState<boolean>(false);
     const [keywordSearch, setKeywordSearchState] = useState<string>('');
+    const [mutedPubkeys, setMutedPubkeys] = useState<string[]>([]);
 
     // Derived state for isLoggedIn based on nsec, nip46 session, or extension session
     const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SessionPayload || isExtensionSession));
@@ -852,6 +855,60 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         initializeMusicTags();
     }, [loadMusicTags]);
 
+    // --- Mute List (Kind 10000) ---
+    const fetchMuteList = useCallback(async () => {
+        if (!ndkInstance || !currentUserNpub) {
+            return [];
+        }
+
+        try {
+            const decoded = nip19.decode(currentUserNpub);
+            if (decoded.type !== 'npub') return [];
+            const pubkeyHex = decoded.data as string;
+
+            console.log("[mute] Fetching mute list for pubkey:", pubkeyHex.substring(0, 16) + "...");
+
+            const filter = { kinds: [10000], authors: [pubkeyHex], limit: 1 };
+            const subscription = ndkInstance.subscribe(filter, { closeOnEose: true });
+
+            return new Promise<string[]>((resolve) => {
+                let foundEvent = false;
+                subscription.on('event', (event) => {
+                    foundEvent = true;
+                    const muted = event.tags
+                        .filter(tag => tag[0] === 'p' && tag[1])
+                        .map(tag => tag[1]);
+                    console.log("[mute] Found mute list with", muted.length, "entries");
+                    setMutedPubkeys(muted);
+                    resolve(muted);
+                });
+                subscription.on('eose', () => {
+                    if (!foundEvent) {
+                        console.log("[mute] No mute list found, using empty list");
+                        setMutedPubkeys([]);
+                        resolve([]);
+                    }
+                });
+                setTimeout(() => {
+                    if (!foundEvent) {
+                        resolve([]);
+                    }
+                    subscription.stop();
+                }, 10000); // 10 second timeout
+            });
+        } catch (error) {
+            console.error("[mute] Error fetching mute list:", error);
+            return [];
+        }
+    }, [ndkInstance, currentUserNpub]);
+
+    // Fetch mute list when user logs in
+    useEffect(() => {
+        if (currentUserNpub && isLoggedIn) {
+            fetchMuteList();
+        }
+    }, [currentUserNpub, isLoggedIn, fetchMuteList]);
+
     // --- Signer Logic ---
     const cachedSignerRef = useRef<NDKPrivateKeySigner | NDKNip46Signer | undefined>(undefined);
     const cachedNsecRef = useRef<string | null>(null);
@@ -1012,6 +1069,8 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         setFetchImagesByTagEnabled,
         setFetchVideosByTagEnabled,
         setFetchMusicByTagEnabled,
+        // Mute list
+        mutedPubkeys,
         ndk: ndkInstance, // Added NDK instance
     };
 }; 

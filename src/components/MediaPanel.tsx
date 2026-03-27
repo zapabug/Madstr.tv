@@ -89,10 +89,13 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   
+  // Duration threshold for music vs podcast (6 minutes)
+  const MUSIC_DURATION_THRESHOLD = 360;
+
   // Determine current notes and loading state based on viewMode
   // In audio mode, filter by music if showMusicOnly is true
   const filteredAudioNotes = showMusicOnly 
-    ? audioNotes.filter(note => !note.duration || parseDuration(note.duration) < 420) // < 7 min
+    ? audioNotes.filter(note => !note.duration || parseDuration(note.duration) < MUSIC_DURATION_THRESHOLD)
     : audioNotes;
   const notes = viewMode === 'imagePodcast' ? filteredAudioNotes : videoNotes;
   const isLoadingNotes = viewMode === 'imagePodcast' ? isLoadingAudioNotes : isLoadingVideoNotes;
