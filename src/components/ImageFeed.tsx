@@ -1,10 +1,10 @@
-import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { NostrNote } from '../types/nostr'; 
 import { useProfileData } from '../hooks/useProfileData';
 import { motion, AnimatePresence } from 'framer-motion';
-import QRCode from 'react-qr-code';
-import { nip19 } from 'nostr-tools';
 import NDK from '@nostr-dev-kit/ndk';
+import QRCode from 'react-qr-code';
+import * as nip19 from 'nostr-tools/nip19';
 
 export interface MediaFeedProps {
   isLoading: boolean;
@@ -36,29 +36,15 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     isLoading,
     currentImageIndex,
     imageNotes, 
+    authorNpub,
+    isPlaying,
     isFullScreen,
     ndkInstance,
   } = props;
 
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
-
-  const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length
-    ? imageNotes[currentImageIndex]
-    : null;
-
   const { profiles } = useProfileData(imageNotes, ndkInstance);
-
-  const posterPubkey = currentImageNote?.posterPubkey;
-  const profile = posterPubkey ? profiles[posterPubkey] : undefined;
-  const profilePicture = profile?.picture;
-  const currentNoteId = currentImageNote?.id;
-
-  const neventUri = currentNoteId 
-    ? `nostr:${nip19.neventEncode({ id: currentNoteId })}`
-    : null;
-
-  const fallbackText = posterPubkey?.slice(-3).toUpperCase() || '???';
 
   useImperativeHandle(ref, () => ({
     focusToggleButton: () => {
@@ -81,15 +67,29 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     }
   }, [currentImageIndex, imageNotes]);
 
-  console.log("ImageFeed Render:", {
-      isLoading,
-      currentImageIndex,
-      notesCount: imageNotes.length,
-      currentNoteId,
-      isPlaying: false
-  });
+  const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length
+    ? imageNotes[currentImageIndex]
+    : null;
+  const imageUrl = currentImageNote?.url;
+  const posterPubkey = currentImageNote?.posterPubkey || null;
+  const profile = posterPubkey ? profiles[posterPubkey] : undefined;
+  const profilePicture = profile?.picture;
 
-  if (isLoading && imageNotes.length === 0) {
+  // Generate nevent URI from noteId
+  const neventUri = useMemo(() => {
+    if (!currentImageNote?.id) return null;
+    try {
+      return `nostr:${nip19.neventEncode({ id: currentImageNote.id })}`;
+    } catch (e) {
+      console.error('ImageFeed: Failed to encode nevent:', e);
+      return null;
+    }
+  }, [currentImageNote?.id]);
+
+  // Generate fallback text from posterPubkey (last 3 chars)
+  const fallbackText = posterPubkey ? posterPubkey.slice(-3).toUpperCase() : '???';
+
+  if (isLoading && !imageUrl) {
     return (
          <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
            <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-purple-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -111,11 +111,9 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     );
   }
 
-  const imageUrl = currentImageNote?.url;
-
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
-      {isLoading && imageNotes.length === 0 && (
+      {isLoading && !imageUrl && (
         <p className="text-gray-400">Loading images...</p>
       )}
 
@@ -144,37 +142,45 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
             className="w-full h-full flex items-center justify-center text-gray-500"
           >
             {!isLoading && imageNotes.length > 0 && (
-                <span>Image URL missing for note {currentNoteId}</span>
+                <span>Image URL missing for note {currentImageNote?.id}</span>
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Profile image - top-left */}
-      {currentImageNote && (
+      {/* Top-left: Profile image */}
+      {(profilePicture || posterPubkey) && (
         <div className="absolute top-2 left-2 z-20">
-          <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden">
+          <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden border-2 border-black">
             {profilePicture ? (
-              <img src={profilePicture} alt="profile" className="w-full h-full object-cover" />
+              <img 
+                src={profilePicture} 
+                alt="Profile" 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
             ) : (
-              <span className="text-sm font-bold text-gray-300 flex items-center justify-center h-full">
-                {fallbackText}
-              </span>
+              <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                <span className="text-white text-sm font-bold">{fallbackText}</span>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* nevent QR - bottom-right, minimal styling */}
+      {/* Bottom-right: nevent QR */}
       {neventUri && (
-        <div className="absolute bottom-2 right-2 z-20 w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
+        <div className="absolute bottom-2 right-2 z-20">
           <QRCode
             value={neventUri}
-            size={0}
-            style={{ width: "100%", height: "100%" }}
+            size={64}
+            style={{ height: 'auto', width: '100%' }}
+            viewBox={`0 0 256 256`}
+            level="M"
             bgColor="transparent"
             fgColor="#FFFFFF"
-            level="M"
           />
         </div>
       )}

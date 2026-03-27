@@ -1,10 +1,10 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
+import InfoPanel from './components/InfoPanel';
 import MediaPanel from './components/MediaPanel';
 import RelayStatus from './components/RelayStatus';
 import VideoPlayer from './components/VideoPlayer';
-import MessageBoard from './components/MessageBoard';
-import { MAIN_THREAD_NEVENT_URI } from './constants';
+import { } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
 import { useMediaState } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
@@ -246,6 +246,8 @@ function App() {
     }
   }, []);
 
+
+
   // Keyboard Controls Hook
   useKeyboardControls({
     isFullScreen,
@@ -274,6 +276,14 @@ function App() {
       imageNotes: shuffledImageNotes,
       videoNotes: uniqueVideoNotes,
   });
+
+  // Current video/image note info for QR codes
+  const currentVideoNote = viewMode === 'videoPlayer' && uniqueVideoNotes.length > 0 && currentVideoIndex < uniqueVideoNotes.length
+    ? uniqueVideoNotes[currentVideoIndex]
+    : null;
+  const currentImageNote = viewMode === 'imagePodcast' && shuffledImageNotes.length > 0 && currentImageIndex < shuffledImageNotes.length
+    ? shuffledImageNotes[currentImageIndex]
+    : null;
 
   // --- Effect for Preload URL Calculation ---
   useEffect(() => {
@@ -420,16 +430,16 @@ function App() {
                          transition={{ duration: 0.5 }}
                          className="w-full h-full flex items-center justify-center"
                      >
-                          <VideoPlayer
-                              videoRef={videoRef}
-                              src={currentItemUrl} 
-                              isPlaying={videoPlayback.isPlaying}
-                              togglePlayPause={videoPlayback.togglePlayPause}
-                              authorNpub={currentAuthorNpub}
-                              isMuted={videoPlayback.isMuted}
-                              noteId={uniqueVideoNotes[currentVideoIndex]?.id || null}
-                              posterPubkey={uniqueVideoNotes[currentVideoIndex]?.posterPubkey || null}
-                          />
+                           <VideoPlayer
+                               videoRef={videoRef}
+                               src={currentItemUrl} 
+                               isPlaying={videoPlayback.isPlaying}
+                               togglePlayPause={videoPlayback.togglePlayPause}
+                               authorNpub={currentAuthorNpub}
+                               isMuted={videoPlayback.isMuted}
+                               noteId={currentVideoNote?.id || null}
+                               posterPubkey={currentVideoNote?.posterPubkey || null}
+                           />
                      </motion.div>
                  ) : null }
               </AnimatePresence>
@@ -517,19 +527,24 @@ function App() {
             {!isFullScreen && (
                  <motion.div
                     key="bottomPanel"
-                    className="relative w-full h-1/4 flex-shrink-0 flex flex-row overflow-hidden mt-2"
+                     className="relative w-full h-1/4 flex-shrink-0 flex flex-row overflow-hidden mt-2"
                     initial={{ y: '100%', opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: '100%', opacity: 0 }}
                     transition={{ duration: 0.5, ease: "easeInOut" }}
                   >
-                     {/* Left: MessageBoard (info) */}
-                     <div className="w-1/3 h-full pr-1">
-                         <MessageBoard />
+                     {/* Left Side: Info Panel */}
+                     <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden"> 
+                         <InfoPanel
+                             note={viewMode === 'videoPlayer' ? currentVideoNote : currentImageNote}
+                             viewMode={viewMode}
+                             isLoggedIn={auth.isLoggedIn}
+                             profileName={currentAuthorNpub ? currentAuthorNpub : 'Unknown'}
+                         />
                      </div>
-                     {/* Right: MediaPanel */}
-                     <div className="w-2/3 h-full pl-1">
-                         <MediaPanel
+                    {/* Right Side: Media Panel - Adjust width */}
+                    <div className="w-1/3 h-full pl-1 flex flex-col"> 
+                        <MediaPanel
                             viewMode={viewMode}
                             audioNotes={stateAudioNotes}
                             videoNotes={stateVideoNotes}
@@ -550,7 +565,7 @@ function App() {
                             showMusicOnly={showMusicOnly}
                             setShowMusicOnly={setShowMusicOnly}
                         />
-                     </div>
+                    </div>
                  </motion.div>
             )}
         </AnimatePresence>

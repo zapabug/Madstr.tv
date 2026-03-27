@@ -366,8 +366,9 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                     
                     // Profile Data lookup
                     const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
-                    const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.slice(-4).toUpperCase() || 'Anon';
+                    const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.slice(-4) || 'Anon';
                     const itemPictureUrl = profile?.picture;
+                    const fallbackText = note.posterPubkey ? note.posterPubkey.slice(-3).toUpperCase() : '???';
 
                     return (
                         <div
@@ -383,24 +384,31 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                                if (isImageMode) {
                                     setCurrentAudioIndex(index);
                                } else {
-                                    onVideoSelect(note, index);
+                                   onVideoSelect(note, index);
                                }
                             }}
                             onKeyDown={(e) => handleItemKeyDown(e, note, index)}
                             title={note.content || note.url}
                         >
-                            {/* Profile Image or Fallback */}
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-700 overflow-hidden mr-2">
+                            {/* Profile Image */}
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-700 overflow-hidden mr-3">
                                 {itemPictureUrl ? (
-                                    <img src={itemPictureUrl} alt="" className="w-full h-full object-cover" />
+                                    <img 
+                                        src={itemPictureUrl} 
+                                        alt={itemDisplayName} 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                    />
                                 ) : (
-                                    <span className="text-xs font-bold text-gray-300 flex items-center justify-center h-full">
-                                        {note.posterPubkey?.slice(-3).toUpperCase() || '???'}
-                                    </span>
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        <span className="text-xs font-bold text-gray-300">{fallbackText}</span>
+                                    </div>
                                 )}
                             </div>
-                            <div className="flex-grow flex flex-col">
-                                <p className="text-sm text-white truncate" title={itemDisplayName}>
+                            <div className="flex-grow flex flex-col min-w-0">
+                                <p className="text-sm text-white truncate font-medium" title={itemDisplayName}>
                                    {itemDisplayName} 
                                 </p>
                             </div>

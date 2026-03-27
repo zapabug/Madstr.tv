@@ -1,9 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import QRCode from 'react-qr-code';
-import { nip19 } from 'nostr-tools';
-import { useProfileData } from '../hooks/useProfileData';
-import { NostrNote } from '../types/nostr';
-import NDK from '@nostr-dev-kit/ndk';
+import * as nip19 from 'nostr-tools/nip19';
 
 export interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -14,7 +11,7 @@ export interface VideoPlayerProps {
   isMuted: boolean;
   noteId: string | null;
   posterPubkey: string | null;
-  ndkInstance?: NDK;
+  profilePicture?: string | null;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
@@ -22,33 +19,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   src,
   isPlaying,
   togglePlayPause,
+  authorNpub,
   isMuted,
   noteId,
   posterPubkey,
-  ndkInstance,
+  profilePicture,
 }) => {
   const playButtonRef = useRef<HTMLButtonElement>(null);
-
-  const dummyNote: NostrNote | null = noteId && posterPubkey ? {
-    id: noteId,
-    pubkey: posterPubkey,
-    created_at: 0,
-    kind: 1,
-    tags: [],
-    content: '',
-    sig: ''
-  } : null;
-  
-  const { profiles } = useProfileData(dummyNote ? [dummyNote] : [], ndkInstance);
-
-  const profile = posterPubkey ? profiles[posterPubkey] : undefined;
-  const profilePicture = profile?.picture;
-
-  const neventUri = noteId 
-    ? `nostr:${nip19.neventEncode({ id: noteId })}`
-    : null;
-
-  const fallbackText = posterPubkey?.slice(-3).toUpperCase() || '???';
 
   useEffect(() => {
     if (videoRef.current && src) {
@@ -70,6 +47,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
          playButtonRef.current?.focus();
      }
   };
+
+  // Generate nevent URI from noteId
+  const neventUri = useMemo(() => {
+    if (!noteId) return null;
+    try {
+      return `nostr:${nip19.neventEncode({ id: noteId })}`;
+    } catch (e) {
+      console.error('VideoPlayer: Failed to encode nevent:', e);
+      return null;
+    }
+  }, [noteId]);
+
+  // Generate fallback text from posterPubkey (last 3 chars)
+  const fallbackText = posterPubkey ? posterPubkey.slice(-3).toUpperCase() : '???';
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
@@ -97,29 +88,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </button>
       )}
 
-      {/* Profile image - top-left */}
-      <div className="absolute top-2 left-2 z-20">
-        <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden">
-          {profilePicture ? (
-            <img src={profilePicture} alt="profile" className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-sm font-bold text-gray-300 flex items-center justify-center h-full">
-              {fallbackText}
-            </span>
-          )}
+      {/* Top-left: Profile image */}
+      {(profilePicture || posterPubkey) && (
+        <div className="absolute top-2 left-2 z-20">
+          <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden border-2 border-black">
+            {profilePicture ? (
+              <img 
+                src={profilePicture} 
+                alt="Profile" 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                <span className="text-white text-sm font-bold">{fallbackText}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* nevent QR - bottom-right, minimal styling */}
+      {/* Bottom-right: nevent QR */}
       {neventUri && (
-        <div className="absolute bottom-2 right-2 z-20 w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
+        <div className="absolute bottom-2 right-2 z-20">
           <QRCode
             value={neventUri}
-            size={0}
-            style={{ width: "100%", height: "100%" }}
+            size={64}
+            style={{ height: 'auto', width: '100%' }}
+            viewBox={`0 0 256 256`}
+            level="M"
             bgColor="transparent"
             fgColor="#FFFFFF"
-            level="M"
           />
         </div>
       )}
@@ -127,4 +128,4 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   );
 };
 
-export default VideoPlayer;
+export default VideoPlayer; 
