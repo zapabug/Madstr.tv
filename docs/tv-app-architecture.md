@@ -50,7 +50,7 @@ The main layout is defined in `App.tsx` and consists of:
 
 *   **A. Top Media Area (`flex-grow`):** Displays `ImageFeed` or `VideoPlayer` based on `viewMode`.
 *   **B. Bottom Split Panel (`h-1/4`, hidden in fullscreen):**
-    *   **B1. Left Panel (`w-2/3`):** `MessageBoard` component.
+    *   **B1. Left Panel (`w-2/3`):** `InfoPanel` component.
     *   **B2. Right Panel (`w-1/3`):** `MediaPanel` component.
 
 ---
@@ -75,27 +75,32 @@ The main layout is defined in `App.tsx` and consists of:
 
 ### **`ImageFeed.tsx`:**
 
-*   **Purpose:** Displays main image feed with author QR code.
+*   **Purpose:** Displays main image feed with nevent QR code and profile image.
 *   **Rendered In:** Top Media Area when `viewMode === 'imagePodcast'`.
-*   **Key Props:** `isLoading`, `handlePrevious`, `handleNext`, `currentImageIndex`, `imageNotes`, `authorNpub`, `isFullScreen`, `signalInteraction`.
+*   **Key Props:** `isLoading`, `currentImageIndex`, `imageNotes`, `authorNpub`, `isFullScreen`, `ndkInstance`.
+*   **Features:** nevent QR code (bottom-right), profile image (top-left), minimal styling.
 
 ### **`VideoPlayer.tsx`:**
 
-*   **Purpose:** Displays video player with author QR code.
+*   **Purpose:** Displays video player with nevent QR code and profile image.
 *   **Rendered In:** Top Media Area when `viewMode === 'videoPlayer'`.
-*   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `authorNpub`, `autoplayFailed`, `isMuted`, `ndkInstance`, `auth`.
+*   **Key Props:** `videoRef`, `src`, `isPlaying`, `togglePlayPause`, `authorNpub`, `isMuted`, `noteId`, `posterPubkey`, `profilePicture`.
+*   **Features:** nevent QR code (bottom-right), profile image (top-left), minimal styling, visible in fullscreen.
 
 ### **`MediaPanel.tsx`:**
 
 *   **Purpose:** Displays podcast/video list and playback controls.
 *   **Rendered In:** Bottom-Right Panel (B2) - hidden in fullscreen.
-*   **Key Props:** `viewMode`, `audioRef`, `videoRef`, `podcastNotes`, `videoNotes`, indices, playback state/handlers, `setViewMode`.
+*   **Key Props:** `viewMode`, `audioNotes`, `videoNotes`, indices, playback state/handlers, `setViewMode`.
 
-### **`MessageBoard.tsx`:**
+### **`InfoPanel.tsx`:**
 
-*   **Purpose:** Displays Nostr chat messages for a specific thread.
+*   **Purpose:** Displays note info (logged in) or login instructions (logged out).
 *   **Rendered In:** Bottom-Left Panel (B1) - hidden in fullscreen.
-*   **Key Props:** `ndk`, `threadEventId`, `isReady`.
+*   **Key Props:** `note`, `viewMode`, `isLoggedIn`, `profileName`.
+*   **Features:** 
+    - Logged out: Shows "press # to access settings ← bottom left"
+    - Logged in: Shows author (5 chars/npub) + note content preview (2-3 lines, links stripped)
 
 ### **`SettingsModal.tsx`:**
 
@@ -187,8 +192,10 @@ The main layout is defined in `App.tsx` and consists of:
 
 ## 6. Additional Components
 
-### **Removed Components (previously unused):**
-The following components have been removed from the codebase as they were not used:
+### **Removed Components:**
+The following components have been removed:
+- `MessageBoard.tsx` - replaced by InfoPanel (functionality merged)
+- `AuthorSelector.tsx` - replaced by InfoPanel (functionality merged)
 - `InteractivePanel.tsx` - was a wrapper for Podcastr/VideoList
 - `Podcastr.tsx` - was a self-contained podcast player
 - `VideoList.tsx` - was a self-contained video list
@@ -219,8 +226,13 @@ useMediaState → manages viewMode, indices, currentItemUrl
 ┌────────────┬────────────┐
 ↓            ↓            ↓
 ImageFeed   VideoPlayer   MediaPanel
-     ↓            ↓            ↓
-   QR Code    QR Code    Lists/Controls
+   ↓            ↓            ↓
+nevent QR     nevent QR    Lists/Controls
+profile img   profile img
+     ↓
+InfoPanel (bottom-left)
+  - Note info (logged in)
+  - Login instructions (logged out)
 ```
 
 ## 8. Constants
@@ -323,23 +335,31 @@ const RELAYS = [
 ];
 ```
 
-### Hashtag Query Relays (Discovery)
+### Hashtag Query Relays (10 relays for better coverage)
 ```typescript
 const HASHTAG_QUERY_RELAYS = [
   'wss://relay.primal.net',
   'wss://nostr.wine',
   'wss://relay.bitcoiner.social',
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://purplepag.es',
+  'wss://relay.nostr.band',
+  'wss://relay.snort.social',
+  'wss://e.nu.zone',
+  'wss://relay.olas.app',
 ];
 ```
 
 ### Allowed Blossom Hosts (Content Filter)
 ```typescript
 const ALLOWED_BLOSSOM_HOSTS = [
-  'blossom.primal.net',
-  'blossom.nostrich.io',
-  'blossom.nevent.ninja',
-  'blossom.ditto.pub',
-  'blossom.fiatjaf.com',
-  'blossom.obsidian.vip',
+  'blossom.primal.net', 'blossom.band', 'cdn.nostrcheck.me',
+  'cdn.satellite.earth', '24242.io', 'blossom.azzamo.media',
+  'blossom.yakihonne.com', 'cdn.sovbit.host', 'blossom.sector01.com',
+  'blossom.poster.place', 'blossom.uid.ovh', 'blossom.nostr.hu',
+  'blossom.nogood.studio', 'files.v0l.io', 'nosto.re', 'nostr.download',
+  'blossom.nostrich.io', 'blossom.nevent.ninja', 'blossom.ditto.pub',
+  'blossom.fiatjaf.com', 'blossom.obsidian.vip',
 ];
 ```

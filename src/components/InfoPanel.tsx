@@ -22,20 +22,33 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
       .trim();
   };
 
-  // Get display name (profile name or 5 chars of npub)
+  // Get display name - profile name, or last 5 chars of npub, or npub1 fallback
   const displayName = useMemo(() => {
-    if (profileName && profileName.length > 5) {
-      return profileName.slice(0, 5);
+    if (profileName) {
+      // If it looks like an npub, get last 5 chars
+      if (profileName.startsWith('npub1')) {
+        return profileName.slice(-5);
+      }
+      // Otherwise just return as-is (truncated profile name)
+      return profileName.slice(0, 10);
     }
-    return profileName || '';
+    return '???'; // Fallback
   }, [profileName]);
 
-  // Get content preview (on one line with author)
+  // Get content preview (2-3 sentences worth, ~250 chars)
   const displayText = useMemo(() => {
     if (!note?.content) return '';
     const stripped = stripLinks(note.content);
-    const maxLength = 80;
-    return stripped.slice(0, maxLength) + (stripped.length > maxLength ? '...' : '');
+    const maxLength = 250;
+    
+    if (stripped.length <= maxLength) {
+      return stripped;
+    }
+    
+    // Truncate at word boundary near maxLength
+    const truncated = stripped.slice(0, maxLength);
+    const lastSpace = truncated.lastIndexOf(' ');
+    return truncated.slice(0, lastSpace) + '...';
   }, [note?.content]);
 
   // Show logged out message
@@ -58,11 +71,11 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
     );
   }
 
-  // Show note info on ONE line
+  // Show note info (2-3 lines, fill available space)
   return (
     <div className="h-full w-full flex flex-col justify-end bg-gray-900/80 backdrop-blur-sm rounded-lg overflow-hidden p-3">
-      <p className="text-gray-200 text-sm truncate">
-        <span className="text-purple-400">by {displayName || '???'}</span>
+      <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap break-words">
+        <span className="text-purple-400 font-medium">{displayName}</span>
         {displayText && <span> {displayText}</span>}
       </p>
     </div>

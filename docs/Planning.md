@@ -44,6 +44,15 @@
 - [x] Unseen content prioritized in display (unseen first, then by recency)
 - [x] Mark notes as seen on playback start
 
+### UI Components
+- [x] InfoPanel (replaces MessageBoard + AuthorSelector)
+  - Logged out: Shows "press # to access settings ← bottom left"
+  - Logged in: Author (5 chars/npub) + note content preview (2-3 lines)
+- [x] nevent QR codes on ImageFeed and VideoPlayer (opens note in external app)
+- [x] Profile images on ImageFeed and VideoPlayer (top-left)
+- [x] Relay status shows actual connected count (not static)
+- [x] Removed reply QR code from main UI
+
 ### NIP-46 Session Management
 - [x] Generate connect URI for QR code flow
 - [x] Parse bunker URIs (bunker:// and nostrconnect://)
@@ -159,13 +168,12 @@ Follows are NOT filtered - shows all content from followed users.
 - [x] `src/components/InteractivePanel.tsx` - **REMOVED**
 - [x] `src/components/Podcastr.tsx` - **REMOVED**
 - [x] `src/components/VideoList.tsx` - **REMOVED**
+- [x] `src/components/MessageBoard.tsx` - **REMOVED** (replaced by InfoPanel)
+- [x] `src/components/AuthorSelector.tsx` - **REMOVED** (replaced by InfoPanel)
 
 ### Dead Code
 - [ ] Remove unused regex declarations in `useMediaState.ts` (imageRegex, videoRegex, audioRegex)
 - [ ] Remove `docs/podcastr.md` (outdated documentation)
-
-### Type Errors
-- [ ] Fix MessageBoard prop mismatch (`onNewMessage` not in MessageBoardProps)
 
 ### Cache Management
 - [x] Cache version bumped to clear old data on migration
