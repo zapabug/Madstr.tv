@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 interface KeyboardControlsProps {
   isFullScreen: boolean;
   signalInteraction: () => void;
-  onSetViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
+  onSetViewMode: (_mode: 'imagePodcast' | 'videoPlayer') => void;
   onTogglePlayPause: () => void;
   onNext: () => void;
   onPrevious: () => void;

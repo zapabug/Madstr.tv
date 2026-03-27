@@ -10,9 +10,6 @@ export interface MediaFeedProps {
   isLoading: boolean;
   currentImageIndex: number;
   imageNotes: NostrNote[]; 
-  authorNpub: string | null;
-  isPlaying: boolean;
-  isFullScreen: boolean;
   ndkInstance: NDK | undefined;
 }
 
@@ -36,9 +33,6 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     isLoading,
     currentImageIndex,
     imageNotes, 
-    authorNpub,
-    isPlaying,
-    isFullScreen,
     ndkInstance,
   } = props;
 

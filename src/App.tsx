@@ -31,7 +31,6 @@ const IMAGE_CAROUSEL_INTERVAL = 45000; // 45 seconds
 function App() {
   // --- NDK Initialization (Using Hook) ---
   const { isConnecting: isNdkConnecting, connectionError: ndkConnectionError, ndkInstance } = useNDKInit();
-  const isNdkReady = !!ndkInstance && !isNdkConnecting && !ndkConnectionError;
 
   // --- Auth Hook (must be before useMediaAuthors) --- 
   const auth = useAuth(ndkInstance);
@@ -67,7 +66,7 @@ function App() {
     refreshKey: notesRefreshKey,
     mutedPubkeys,
   });
-  const { notes: imageNotes, isLoading: isLoadingImages, markAsSeen: markImageSeen } = useMediaNotes({ 
+  const { notes: imageNotes, isLoading: isLoadingImages } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'image', 
     ndk: ndkInstance, 
@@ -89,7 +88,7 @@ function App() {
   const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
 
   // State for video author filter
-  const [selectedVideoAuthor, setSelectedVideoAuthor] = useState<string | null>(null);
+  const [selectedVideoAuthor] = useState<string | null>(null);
 
   // State for music filter
   const [showMusicOnly, setShowMusicOnly] = useState<boolean>(false);
@@ -189,13 +188,8 @@ function App() {
     }
   }, [mutedPubkeys]);
 
-  // Get current video author for AuthorSelector highlight
-  const currentVideoAuthor = stateVideoNotes && stateVideoNotes.length > 0 && currentVideoIndex < stateVideoNotes.length 
-    ? stateVideoNotes[currentVideoIndex]?.posterPubkey || null 
-    : null;
-
   // Fullscreen hook
-  const { isFullScreen, signalInteraction, signalMessage } = useFullscreen({
+  const { isFullScreen, signalInteraction } = useFullscreen({
     interactionTimeout: INTERACTION_TIMEOUT,
     messageTimeout: MESSAGE_TIMEOUT,
     checkInterval: CHECK_INTERVAL,
@@ -415,9 +409,6 @@ function App() {
                               isLoading={isLoadingImages}
                               currentImageIndex={currentImageIndex}
                               imageNotes={shuffledImageNotes}
-                              authorNpub={currentAuthorNpub}
-                              isPlaying={false}
-                              isFullScreen={isFullScreen}
                               ndkInstance={ndkInstance}
                           />
                      </motion.div>
@@ -564,6 +555,7 @@ function App() {
                             handleSeek={activePlayback.handleSeek}
                             showMusicOnly={showMusicOnly}
                             setShowMusicOnly={setShowMusicOnly}
+                            ndkInstance={ndkInstance}
                         />
                     </div>
                  </motion.div>

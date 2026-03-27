@@ -6,12 +6,6 @@ import NDK from '@nostr-dev-kit/ndk';
 
 type NDKInstance = NDK;
 
-const truncateKey = (key: string | null, length = 16): string => {
-    if (!key) return 'N/A';
-    if (key.length <= length) return key;
-    return `${key.substring(0, length / 2)}...${key.substring(key.length - length / 2)}`;
-};
-
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -498,12 +492,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                     {auth.isLoggedIn ? (
                         <div className="space-y-3">
                              <p className="text-sm text-gray-400">Logged in as:</p>
-                             <div
-                                 ref={loggedInNpubRef}
-                                 tabIndex={0}
-                                 className="text-md font-mono p-2 bg-gray-800 rounded border border-transparent focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 cursor-pointer transition-transform duration-100"
-                                 onClick={() => handleNpubKeyDown({ key: 'Enter', preventDefault: () => {}, stopPropagation: () => {} } as any)}
-                                 onKeyDown={handleNpubKeyDown}
+                              <div
+                                  ref={loggedInNpubRef}
+                                  tabIndex={0}
+                                  className="text-md font-mono p-2 bg-gray-800 rounded border border-transparent focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 cursor-pointer transition-transform duration-100"
+                                  onClick={() => handleNpubKeyDown({ key: 'Enter', preventDefault: () => {}, stopPropagation: () => {} } as React.KeyboardEvent<HTMLDivElement>)}
+                                  onKeyDown={handleNpubKeyDown}
                                  aria-label={`Logged in as ${truncateNpub(auth.currentUserNpub)}. Press OK 3 times to show backup QR.`}
                              >
                                  {truncateNpub(auth.currentUserNpub)}

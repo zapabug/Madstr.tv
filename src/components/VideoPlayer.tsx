@@ -19,7 +19,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   src,
   isPlaying,
   togglePlayPause,
-  authorNpub,
   isMuted,
   noteId,
   posterPubkey,

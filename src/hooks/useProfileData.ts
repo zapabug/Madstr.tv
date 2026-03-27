@@ -11,7 +11,7 @@ import { NostrNote } from '../types/nostr';
 
 interface UseProfileDataResult {
   profiles: Record<string, ProfileData>;
-  fetchProfile: (pubkey: string) => Promise<void>;
+  fetchProfile: (_pubkey: string) => Promise<void>;
 }
 
 export function useProfileData(notes: NostrNote[], ndkInstance: NDK | undefined): UseProfileDataResult {

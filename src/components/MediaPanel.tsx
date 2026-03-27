@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { useProfileData } from '../hooks/useProfileData';
+import NDK from '@nostr-dev-kit/ndk';
 
 // Define types for props - This will expand significantly
 import { NostrNote } from '../types/nostr'; // Fixed import path
@@ -39,7 +40,7 @@ const SkeletonItem: React.FC = () => (
 // --- Export Props for the Unified Panel ---
 export interface MediaPanelProps {
   viewMode: 'imagePodcast' | 'videoPlayer';
-  setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
+  setViewMode: (_mode: 'imagePodcast' | 'videoPlayer') => void;
   
   audioNotes: NostrNote[];
   videoNotes: NostrNote[];
@@ -50,18 +51,21 @@ export interface MediaPanelProps {
   currentTime: number;
   duration: number;
   playbackRate: number; 
-  setPlaybackRate: (rate: number) => void;
+  setPlaybackRate: (_rate: number) => void;
   togglePlayPause: () => void;
-  handleSeek: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  handleSeek: (_event: React.ChangeEvent<HTMLInputElement>) => void;
 
   currentAudioIndex: number;
-  setCurrentAudioIndex: (index: number) => void;
+  setCurrentAudioIndex: (_index: number) => void;
   currentVideoIndex: number;
-  onVideoSelect: (note: NostrNote, index: number) => void; 
+  onVideoSelect: (_note: NostrNote, _index: number) => void; 
 
   // Music filter state
   showMusicOnly: boolean;
-  setShowMusicOnly: (show: boolean) => void;
+  setShowMusicOnly: (_show: boolean) => void;
+
+  // NDK instance for profile fetching
+  ndkInstance?: NDK;
 }
 
 // --- The Unified MediaPanel Component (Reverted) ---
@@ -85,6 +89,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
     onVideoSelect,
     showMusicOnly,
     setShowMusicOnly,
+    ndkInstance,
 }) => {
 
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
@@ -102,7 +107,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
   const currentItemIndex = viewMode === 'imagePodcast' ? currentAudioIndex : currentVideoIndex;
 
   // Combine notes for profile fetching (using derived 'notes')
-  const { profiles } = useProfileData(notes);
+  const { profiles } = useProfileData(notes, ndkInstance);
 
   // --- Refs --- 
   const scrollableListRef = useRef<HTMLDivElement>(null);
@@ -300,8 +305,6 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
 
   // --- Render Logic ---
 
-  // Decide button text based on viewMode
-  const toggleButtonText = viewMode === 'imagePodcast' ? 'Videos' : 'Images'; // Updated text
   const listAriaLabel = viewMode === 'imagePodcast' ? 'Podcast List' : 'Video List'; // Updated label
   const listEmptyText = viewMode === 'imagePodcast' ? 'No audio found.' : 'No videos found.';
 

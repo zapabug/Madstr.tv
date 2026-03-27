@@ -31,10 +31,10 @@ interface UseMediaPlaybackResult {
   isSeeking: boolean;
   isMuted: boolean;
   autoplayFailed: boolean;
-  setPlaybackRate: (rate: number) => void;
+  setPlaybackRate: (_rate: number) => void;
   togglePlayPause: () => void;
   toggleMute: () => void;
-  handleSeek: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  handleSeek: (_event: React.ChangeEvent<HTMLInputElement>) => void;
   play: () => void;
   pause: () => void;
   setIsSeeking: React.Dispatch<React.SetStateAction<boolean>>;

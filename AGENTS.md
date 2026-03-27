@@ -182,7 +182,7 @@ cursor-tools github issue 456
 - Bundle size warning: JS chunks >500kB (code splitting recommended)
 - No test suite currently configured
 - Some LSP errors in node_modules (NDK debug namespace) - ignore
-- `truncateKey` unused in SettingsModal.tsx (flagged by lint)
+- 9 React hooks exhaustive-deps warnings (intentional - to avoid unnecessary re-renders)
 
 ## Development Notes
 

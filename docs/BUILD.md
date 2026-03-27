@@ -128,6 +128,45 @@ bun run dev
 
 ## Recent Changes and Updates
 
+### Content URL Regex Fix (2025-03-27) - COMPLETED
+
+Fixed audio/podcast content not being detected due to regex limitations:
+
+1. **Problem:** URLs in Kind 1 notes often appear on newlines (after text content). Previous regex expected format immediately after domain, failing to match.
+
+2. **Solution:** Two-step URL extraction:
+   - First: Extract ANY URL from content (including newlines)
+   - Second: Check if extracted URL contains audio/video format
+
+3. **Code Changes in `useMediaNotes.ts`:**
+   ```typescript
+   // Before: Expected format immediately after domain
+   const contentMatch = event.content.match(urlRegex);
+   
+   // After: Extract URL, then check format
+   const anyUrlRegex = /https?:\/\/[^\s<>"\]]+/gi;
+   const allUrls = event.content.match(anyUrlRegex);
+   for (const foundUrl of allUrls) {
+       if (urlRegex.test(foundUrl)) {
+           mediaUrl = foundUrl;
+       }
+   }
+   ```
+
+4. **Video Hashtag Mode Restriction:**
+   - Videos in hashtag discovery mode now ONLY accept tag-based URLs (url/media/enclosure tags)
+   - Content regex fallback is disabled for hashtag mode
+   - Follows mode: Full regex support enabled
+
+5. **Media Format Regexes:**
+   ```typescript
+   const imageRegex = /https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
+   const videoRegex = /https?:\/\/[^\s]*(?:mp4|mov|webm|m3u8)(?:\?[^\s]*)?/i;
+   const audioRegex = /https?:\/\/[^\s]*(?:mp3|m4a|ogg|aac|wav)(?:\?[^\s]*)?/i;
+   ```
+
+6. **Result:** Audio/podcasts from Kind 1 notes with URLs on newlines now properly detected.
+
 ### Loading State Management (2024-03-XX) - COMPLETED
 
 The application's loading states have been consolidated and improved:

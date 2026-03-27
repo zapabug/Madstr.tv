@@ -172,8 +172,31 @@ Follows are NOT filtered - shows all content from followed users.
 - [x] `src/components/AuthorSelector.tsx` - **REMOVED** (replaced by InfoPanel)
 
 ### Dead Code
-- [ ] Remove unused regex declarations in `useMediaState.ts` (imageRegex, videoRegex, audioRegex)
+- [x] Remove unused regex declarations in `useMediaState.ts` (imageRegex, videoRegex, audioRegex)
 - [ ] Remove `docs/podcastr.md` (outdated documentation)
+
+### Lint Cleanup (Completed v0.3.x)
+- [x] Fix all unused variable warnings in App.tsx
+- [x] Fix all unused variable warnings in ImageFeed.tsx
+- [x] Fix all unused variable warnings in MediaPanel.tsx
+- [x] Fix all unused variable warnings in SettingsModal.tsx
+- [x] Fix all unused variable warnings in VideoPlayer.tsx
+- [x] Fix all unused variable warnings in useAuth.ts
+- [x] Fix all unused variable warnings in useKeyboardControls.ts
+- [x] Fix all unused variable warnings in useMediaState.ts
+- [x] Fix all unused variable warnings in useProfileData.ts
+- [x] Fix all unused variable warnings in useMediaElementPlayback.ts
+- [x] Fix all unused variable warnings in useMediaNotes.ts
+- [x] Fix nostr.ts parsing error (emoji in property name)
+- [x] Remove unused RELAYS import from main.tsx
+- [x] Configure eslint to allow underscore-prefixed unused parameters
+
+### Kind 1 URL Extraction Fix (v0.3.x)
+- [x] Audio URLs now detected from Kind 1 content (including newlines)
+- [x] Two-step extraction: find URL, then check format
+- [x] Video hashtag mode: only tag-based URLs (no content regex fallback)
+- [x] Audio: full content URL extraction enabled
+- [x] Added debug logging for URL extraction troubleshooting
 
 ### Cache Management
 - [x] Cache version bumped to clear old data on migration

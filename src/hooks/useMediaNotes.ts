@@ -35,9 +35,10 @@ interface UseMediaNotesReturn {
 }
 
 // Regexes for all media types
+// Audio/video regexes allow format anywhere in URL - handles query params, fragments, etc.
 const imageRegex = /https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
-const videoRegex = /https?:\/\/\S+\.(?:mp4|mov|webm|m3u8)/i;
-const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
+const videoRegex = /https?:\/\/[^\s]*(?:mp4|mov|webm|m3u8)(?:\?[^\s]*)?/i;
+const audioRegex = /https?:\/\/[^\s]*(?:mp3|m4a|ogg|aac|wav)(?:\?[^\s]*)?/i;
 
 // Allowed hosts for hashtag discovery (Nostr-native Blossom servers)
 const ALLOWED_BLOSSOM_HOSTS = [
@@ -97,7 +98,7 @@ interface UseMediaNotesReturn {
     notes: NostrNote[];
     isLoading: boolean;
     fetchOlderNotes?: () => void;
-    markAsSeen?: (noteId: string) => void;
+    markAsSeen?: (_noteId: string) => void;
 }
 
 export function useMediaNotes({
@@ -275,12 +276,39 @@ export function useMediaNotes({
         }
 
         // --- Fallback to content regex LAST for all types --- 
+        // Note: URL might be on a new line, so we first extract any URL, then check if it matches our format
         if (!mediaUrl) {
-            const contentMatch = event.content.match(urlRegex);
-            if (contentMatch) {
-                mediaUrl = contentMatch[0];
-                foundVia = 'content regex fallback';
-                console.log(`processEvent (${type}): URL found via CONTENT REGEX fallback for event ${event.id}`);
+            // Generic URL regex that matches URLs anywhere in content (including newlines)
+            // Allows http/https URLs followed by non-whitespace chars
+            const anyUrlRegex = /https?:\/\/[^\s<>"\]]+/gi;
+            const allUrls = event.content.match(anyUrlRegex);
+            
+            if (type === 'audio' && allUrls === null) {
+                console.log(`processEvent (audio): DEBUG - content has no URLs matched by regex. Content: "${event.content.substring(0, 150)}..."`);
+            }
+            
+            if (allUrls) {
+                for (const foundUrl of allUrls) {
+                    // Check if this URL contains our media format
+                    if (urlRegex.test(foundUrl)) {
+                        mediaUrl = foundUrl;
+                        foundVia = 'content URL + format check';
+                        console.log(`processEvent (${type}): URL found via content fallback for event ${event.id}. URL: ${mediaUrl.substring(0, 80)}...`);
+                        break;
+                    }
+                }
+            }
+            
+            // Debug: show why we skipped if no URL found
+            if (!mediaUrl && (type === 'image' || type === 'audio')) {
+                console.log(`processEvent (${type}): No matching URL in content. Checked ${allUrls?.length || 0} URLs from content.`);
+                if (allUrls && allUrls.length > 0) {
+                    console.log(`  URLs found:`, allUrls.map(u => u.substring(0, 60)).join(', '));
+                } else {
+                    // Show actual content to debug why regex failed
+                    console.log(`  Content: "${event.content.substring(0, 200)}..."`);
+                    console.log(`  Raw content length: ${event.content.length}`);
+                }
             }
         }
 
@@ -294,6 +322,11 @@ export function useMediaNotes({
             }
             if (type === 'audio') {
                 console.log(`processEvent (audio): Skipping event ${event.id} - No valid audio URL found.`);
+                console.log(`  Content: "${event.content.substring(0, 150)}..."`);
+                console.log(`  Tags (${event.tags.length}):`, event.tags.map(t => `[${t[0]}]${t[1]?.substring(0, 50) || ''}`).join(', '));
+            }
+            if (type === 'video') {
+                console.log(`processEvent (video): Skipping event ${event.id} - No valid video URL found.`);
                 console.log(`  Content: "${event.content.substring(0, 150)}..."`);
                 console.log(`  Tags (${event.tags.length}):`, event.tags.map(t => `[${t[0]}]${t[1]?.substring(0, 50) || ''}`).join(', '));
             }
@@ -335,7 +368,7 @@ export function useMediaNotes({
 
     useEffect(() => {
         // --- Dependency Change Logging --- 
-        let changedDeps: string[] = [];
+        const changedDeps: string[] = [];
         if (prevNdkRef.current !== ndk) changedDeps.push('ndk');
         // Shallow compare arrays for changes
         if (JSON.stringify(prevAuthorsRef.current) !== JSON.stringify(authors)) {
@@ -722,6 +755,20 @@ export function useMediaNotes({
                         if (mediaType === 'image' || mediaType === 'video') {
                             if (!note.url || !isAllowedBlossomUrl(note.url)) {
                                 console.log(`useMediaNotes (${mediaType}): [HASHTAG] Skipping - URL not from Blossom: ${note.url?.substring(0, 50)}`);
+                                return;
+                            }
+                        }
+                        // For videos in hashtag mode: only accept if URL was found via tags, NOT content regex fallback
+                        if (mediaType === 'video') {
+                            // Check if URL was found via content regex (not via tags)
+                            // If it was found via content regex, skip it for hashtag mode
+                            const urlTag = event.tags.find(t => t[0] === 'url');
+                            const mediaTag = event.tags.find(t => t[0] === 'media');
+                            const enclosureTag = event.tags.find(t => t[0] === 'enclosure');
+                            const hasVideoTag = urlTag?.[1] || mediaTag?.[1] || enclosureTag?.[1];
+                            
+                            if (!hasVideoTag) {
+                                console.log(`useMediaNotes (${mediaType}): [HASHTAG] Skipping video - no tag URL found (content regex not allowed for hashtag mode)`);
                                 return;
                             }
                         }

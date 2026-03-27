@@ -2,18 +2,24 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import * as nip19 from 'nostr-tools/nip19';
 import { encrypt, decrypt, getConversationKey } from 'nostr-tools/nip44';
 import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
-import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKUser } from '@nostr-dev-kit/ndk';
+import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKUser, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredNip46Session } from '../utils/idb';
 
 interface NostrWindow {
     nostr?: {
         getPublicKey(): Promise<string>;
-        signEvent(event: any): Promise<any>;
+        signEvent(_event: unknown): Promise<unknown>;
         getRelays?(): Promise<Record<string, { read: boolean; write: boolean }>>;
     };
 }
 
+interface Nip46User {
+    npub: string;
+    pubkey: string;
+}
+
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface Window extends NostrWindow {}
 }
 
@@ -43,36 +49,36 @@ export interface UseAuthReturn {
     isGeneratingUri: boolean; // Loading state for URI generation
     hasExtension: boolean; // NIP-07 extension detected
     initiateNip46Connection: () => Promise<void>; // QR code flow - generate URI and wait
-    connectWithBunkerUri: (bunkerUri: string) => Promise<void>; // Paste flow - parse URI and connect
+    connectWithBunkerUri: (_bunkerUri: string) => Promise<void>; // Paste flow - parse URI and connect
     connectWithExtension: () => Promise<void>; // NIP-07 extension flow
     cancelNip46Connection: () => void; // Function to cancel NIP-46 attempt
     generateNewKeys: () => Promise<{ npub: string; nsec: string } | null>;
-    loginWithNsec: (nsec: string) => Promise<boolean>;
+    loginWithNsec: (_nsec: string) => Promise<boolean>;
     logout: () => Promise<void>;
-    saveNsecToDb: (nsec: string) => Promise<void>; // Explicit save function
+    saveNsecToDb: (_nsec: string) => Promise<void>; // Explicit save function
     getNdkSigner: () => Promise<NDKPrivateKeySigner | NDKNip46Signer | undefined>; // To get the current signer for NDK
-    signEvent: (event: NostrEvent) => Promise<NostrEvent | null>; // Unified signing method
+    signEvent: (_event: NostrEvent) => Promise<NostrEvent | null>; // Unified signing method
     // Hashtag state and setter
     followedTags: string[];
-    setFollowedTags: (tags: string[]) => void;
+    setFollowedTags: (_tags: string[]) => void;
     // Video hashtag state and setter (separate from image/audio tags)
     videoTags: string[];
-    setVideoTags: (tags: string[]) => void;
+    setVideoTags: (_tags: string[]) => void;
     // Music hashtag state and setter
     musicTags: string[];
-    setMusicTags: (tags: string[]) => void;
+    setMusicTags: (_tags: string[]) => void;
     // NIP-04 Methods (deprecated, for fallback)
-    encryptDm: (recipientPubkeyHex: string, plaintext: string) => Promise<string>;
-    decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>;
+    encryptDm: (_recipientPubkeyHex: string, _plaintext: string) => Promise<string>;
+    decryptDm: (_senderPubkeyHex: string, _ciphertext: string) => Promise<string>;
     // Tag filtering flags
     fetchImagesByTagEnabled: boolean;
     fetchVideosByTagEnabled: boolean;
     fetchMusicByTagEnabled: boolean;
     keywordSearch: string;
-    setKeywordSearch: (keyword: string) => void;
-    setFetchImagesByTagEnabled: (enabled: boolean) => void;
-    setFetchVideosByTagEnabled: (enabled: boolean) => void;
-    setFetchMusicByTagEnabled: (enabled: boolean) => void;
+    setKeywordSearch: (_keyword: string) => void;
+    setFetchImagesByTagEnabled: (_enabled: boolean) => void;
+    setFetchVideosByTagEnabled: (_enabled: boolean) => void;
+    setFetchMusicByTagEnabled: (_enabled: boolean) => void;
     // Mute list (Kind 10000)
     mutedPubkeys: string[];
     ndk: NDK | undefined;
@@ -375,9 +381,9 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
             } else {
                 throw new Error("Invalid nsec format provided.");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Login with nsec failed:", error);
-            setAuthError(error.message || "Invalid nsec provided.");
+            setAuthError(error instanceof Error ? error.message : "Invalid nsec provided.");
             setCurrentUserNsec(null);
             setCurrentUserNpub(null);
             setNip46SessionPayload(null);
@@ -450,7 +456,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
         setIsGeneratingUri(true);
         setAuthError(null);
 
-        let subscription: any = null;
+        let subscription: NDKSubscription | null = null;
         let timeoutId: NodeJS.Timeout | null = null;
 
         const cleanup = () => {
@@ -496,7 +502,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                 closeOnEose: false,
             });
 
-            const user = await new Promise<any>((resolve, reject) => {
+            const user = await new Promise<Nip46User>((resolve, reject) => {
                 timeoutId = setTimeout(() => {
                     cleanup();
                     reject(new Error("[bunker] Connection timed out"));
@@ -582,7 +588,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
 
             console.log("[bunker] Connection established! User:", user.npub);
             
-            const localSignerPayload = (localSigner as any).privateKey;
+            const localSignerPayload = (localSigner as NDKPrivateKeySigner & { privateKey: string }).privateKey;
             const payloadObj = {
                 type: "nip46",
                 payload: {
@@ -811,7 +817,7 @@ export const useAuth = (ndkInstance: NDK | undefined): UseAuthReturn => {
                             const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
                             setFollowedTagsState(mergedTags);
                             console.log("[extension] Auth initialized with extension session:", npub);
-                        } catch (error) {
+                        } catch {
                             console.log("[extension] No extension session available, using defaults.");
                             setFollowedTagsState(loadedTags);
                         }

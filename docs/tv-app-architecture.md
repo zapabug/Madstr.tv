@@ -132,6 +132,7 @@ The main layout is defined in `App.tsx` and consists of:
     *   **Hashtag Relay Discovery:** Separate subscription with `#t` filter for discovery mode
     *   **Mute List Filtering:** Filters out events from muted pubkeys
     *   **Blossom-Only Filter:** For hashtag discovery, only accepts content from allowed Blossom hosts
+    *   **Kind 1 URL Extraction:** Supports URLs anywhere in content (including newlines)
 
 ### **`useMediaState`:**
 *   **Input:** `initialImageNotes` (shuffled), `initialAudioNotes`, `initialVideoNotes` (deduplicated), `fetchOlderImages`, `fetchOlderVideos`, `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
@@ -359,7 +360,11 @@ const ALLOWED_BLOSSOM_HOSTS = [
   'blossom.yakihonne.com', 'cdn.sovbit.host', 'blossom.sector01.com',
   'blossom.poster.place', 'blossom.uid.ovh', 'blossom.nostr.hu',
   'blossom.nogood.studio', 'files.v0l.io', 'nosto.re', 'nostr.download',
-  'blossom.nostrich.io', 'blossom.nevent.ninja', 'blossom.ditto.pub',
-  'blossom.fiatjaf.com', 'blossom.obsidian.vip',
+   'blossom.nostrich.io', 'blossom.nevent.ninja', 'blossom.ditto.pub',
+   'blossom.fiatjaf.com', 'blossom.obsidian.vip',
 ];
 ```
+
+## 12. Related Documentation
+
+See [`media-url-extraction.md`](./media-url-extraction.md) for detailed documentation on how Kind 1 content URLs are extracted for images, videos, and audio.

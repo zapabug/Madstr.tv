@@ -39,22 +39,17 @@ interface UseMediaStateReturn {
   // handlePodcastNotesLoaded: (notes: NostrNote[]) => void;
   // handleVideoNotesLoaded: (notes: NostrNote[]) => void;
   // Keep other handlers
-  handleVideoSelect: (note: NostrNote, index: number) => void; 
+  handleVideoSelect: (_note: NostrNote, _index: number) => void; 
   handlePrevious: () => void;
   handleNext: () => void;
-  setViewMode: (mode: 'imagePodcast' | 'videoPlayer') => void;
-  setCurrentAudioIndex: (index: number) => void;
+  setViewMode: (_mode: 'imagePodcast' | 'videoPlayer') => void;
+  setCurrentAudioIndex: (_index: number) => void;
   // Keep setters for loading state?
   // Or manage loading state internally based on prop changes?
   // Let's manage internally for now.
   // setIsLoadingPodcastNotes: React.Dispatch<React.SetStateAction<boolean>>;
   // setIsLoadingVideoNotes: React.Dispatch<React.SetStateAction<boolean>>;
 }
-
-// <<< Define Regex for media URLs >>>
-const imageRegex = /https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
-const videoRegex = /https?:\/\/\S+\.(?:mp4|mov|webm|m3u8)/i;
-const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
 
 export function useMediaState({ 
     // Destructure new props
@@ -224,7 +219,7 @@ export function useMediaState({
             const newSelectedVideo = videoNotes[prevIndex];
             if (newSelectedVideo) {
                 let newNpub: string | null = null;
-                if (newSelectedVideo.posterPubkey) { try { newNpub = nip19.npubEncode(newSelectedVideo.posterPubkey); } catch(e){} }
+                if (newSelectedVideo.posterPubkey) { try { newNpub = nip19.npubEncode(newSelectedVideo.posterPubkey); } catch { /* ignore encoding errors */ } }
                 setSelectedVideoNpub(newNpub);
                 setCurrentVideoIndex(prevIndex);
                 console.log(`useMediaState: Previous Video - Index: ${prevIndex}`);
