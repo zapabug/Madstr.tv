@@ -2,6 +2,21 @@
 
 ## Current Development Focus
 
+### Audio Discovery Issues (OPEN)
+- [ ] **Images being detected as audio** - URL extraction returning image URLs (.jpg, .png, .webp) for audio notes
+- [ ] **Few audio events from follows** - Most followed users post images/videos, not audio files
+- [ ] **Audio URL regex issues** - Need to verify regex correctly filters non-audio URLs
+- [ ] **Audio playback was muted by default** - Fixed: audio now unmutes on play
+- [ ] **Limited audio discovery** - Relays not returning many audio files from followed users
+
+**Root Cause**: Most Nostr content is images/videos. Audio files on Nostr are rare - most podcasters don't cross-post to Nostr kind:1 events.
+
+**Potential Solutions**:
+1. Query relays directly for kind:1 events with audio extensions (no author filter)
+2. Use known podcast hosts as fallback (fountain.fm, anchor.fm, etc.)
+3. Filter by NIP-94 events (kind 1063) which are structured audio metadata
+4. Accept that Nostr audio is rare and focus on hashtag discovery
+
 ### Loading State Improvements
 - [x] Centralize loading states in App.tsx
 - [x] Implement consistent loading UI across components
@@ -127,8 +142,8 @@ Follows are NOT filtered - shows all content from followed users.
 ### Display Behavior (INTENDED)
 - **Images**: Random shuffle, auto-advance carousel - good and intended
 - **Videos**: Sequential order, user-controlled navigation - good and intended
-- **Audio**: Resumes from last position - working, needs improvement
-- **Music**: Resumes from last position - working, needs improvement
+- **Audio**: Resumes from last position - FIXED: unmutes on play, needs more audio content
+- **Music**: Resumes from last position - FIXED: unmutes on play, needs more audio content
 
 ## Settings UI
 - [x] Image hashtag toggle (ON/OFF buttons)
@@ -208,7 +223,7 @@ Follows are NOT filtered - shows all content from followed users.
 ### User Experience
 1. **Navigation**
    - [ ] Add keyboard shortcuts for common actions
-   - [ ] Improve remote control navigation
+   - [x] **Fullscreen exit issue** - Fixed stale closure by using ref for isFullScreen check
    - [ ] Add gesture controls for touch interfaces
 
 2. **Content Discovery**
@@ -276,6 +291,6 @@ Follows are NOT filtered - shows all content from followed users.
 
 ### v0.4.0 (PLANNED)
 - [ ] Podcast position persistence to IndexedDB
-- [ ] Advanced content discovery
+- [ ] **Audio content discovery improvements** - query relays directly for audio files
 - [ ] Social features
 - [ ] Performance optimizations

@@ -133,6 +133,7 @@ The main layout is defined in `App.tsx` and consists of:
     *   **Mute List Filtering:** Filters out events from muted pubkeys
     *   **Blossom-Only Filter:** For hashtag discovery, only accepts content from allowed Blossom hosts
     *   **Kind 1 URL Extraction:** Supports URLs anywhere in content (including newlines)
+*   **Audio Issues:** Audio URL extraction can return image URLs instead of audio. Most Nostr content is images/videos, audio files are rare.
 
 ### **`useMediaState`:**
 *   **Input:** `initialImageNotes` (shuffled), `initialAudioNotes`, `initialVideoNotes` (deduplicated), `fetchOlderImages`, `fetchOlderVideos`, `shuffledImageNotesLength`, `shuffledVideoNotesLength`.
@@ -145,7 +146,8 @@ The main layout is defined in `App.tsx` and consists of:
 *   **Function:** Manages HTML media element playback state.
 *   **Features:**
     *   Videos autoplay back-to-back when in videoPlayer mode with `autoplayEnabled: true`
-    *   Videos unmute automatically on play for sound-enabled playback
+    *   Videos start muted, unmute automatically on play for sound-enabled playback
+    *   Audio elements NOT muted by default, unmute on play
     *   Saves playback position to IndexedDB
 
 ### **`useAuth`:**
