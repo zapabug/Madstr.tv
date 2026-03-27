@@ -1,11 +1,10 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
-import QRCode from 'react-qr-code';
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import AuthorSelector from './components/AuthorSelector';
 import MediaPanel from './components/MediaPanel';
 import RelayStatus from './components/RelayStatus';
 import VideoPlayer from './components/VideoPlayer';
-import { MAIN_THREAD_NEVENT_URI, RELAYS } from './constants';
+import { MAIN_THREAD_NEVENT_URI } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
 import { useMediaState } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
@@ -248,12 +247,6 @@ function App() {
     }
   }, []);
 
-  // Use the nevent URI directly for the QR code value
-  const qrValue = MAIN_THREAD_NEVENT_URI || '';
-  if (!qrValue) {
-      console.warn("App.tsx: MAIN_THREAD_NEVENT_URI is not set in constants.ts. QR code will be empty.");
-  }
-
   // Keyboard Controls Hook
   useKeyboardControls({
     isFullScreen,
@@ -371,25 +364,6 @@ function App() {
         Mad⚡tr.tv
       </h2>
 
-      {/* Bottom Left Area (QR Code) */}
-       <div className="absolute bottom-4 left-4 z-10 flex flex-col items-center">
-           {/* Reply QR Code Container */}
-           <div className="bg-white p-1.5 rounded-md shadow-lg w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 mb-1">
-               {qrValue ? (
-                 <QRCode
-                   value={qrValue}
-                   size={256}
-                   style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                   viewBox={`0 0 256 256`}
-                   level="L"
-                 />
-               ) : (
-                 <div className="w-full h-full flex items-center justify-center text-black text-xs text-center">No Thread ID</div>
-               )}
-           </div>
-           <p className="text-xs text-gray-400 font-semibold">Reply here</p>
-       </div>
-
       {/* Inner wrapper */}
       <div className="relative flex flex-col flex-grow min-h-0 overflow-hidden">
 
@@ -454,6 +428,8 @@ function App() {
                               togglePlayPause={videoPlayback.togglePlayPause}
                               authorNpub={currentAuthorNpub}
                               isMuted={videoPlayback.isMuted}
+                              noteId={uniqueVideoNotes[currentVideoIndex]?.id || null}
+                              posterPubkey={uniqueVideoNotes[currentVideoIndex]?.posterPubkey || null}
                           />
                      </motion.div>
                  ) : null }

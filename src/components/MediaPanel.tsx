@@ -366,7 +366,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                     
                     // Profile Data lookup
                     const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
-                    const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.substring(0, 10) || 'Anon';
+                    const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.slice(-4).toUpperCase() || 'Anon';
                     const itemPictureUrl = profile?.picture;
 
                     return (
@@ -383,15 +383,21 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                                if (isImageMode) {
                                     setCurrentAudioIndex(index);
                                } else {
-                                   onVideoSelect(note, index);
+                                    onVideoSelect(note, index);
                                }
                             }}
                             onKeyDown={(e) => handleItemKeyDown(e, note, index)}
                             title={note.content || note.url}
                         >
-                            {/* Item Content - Shared styling for both modes */}
-                            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center mr-2">
-                                <span className="text-xs font-semibold text-white">{notes.length - index}</span> 
+                            {/* Profile Image or Fallback */}
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-700 overflow-hidden mr-2">
+                                {itemPictureUrl ? (
+                                    <img src={itemPictureUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-xs font-bold text-gray-300 flex items-center justify-center h-full">
+                                        {note.posterPubkey?.slice(-3).toUpperCase() || '???'}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex-grow flex flex-col">
                                 <p className="text-sm text-white truncate" title={itemDisplayName}>

@@ -1,19 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import QRCode from 'react-qr-code';
-import { useAuth, UseAuthReturn } from '../hooks/useAuth';
-
-const CustomLoggedInIcon = () => (
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-    <path 
-      d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" 
-      fill="#8B5CF6" 
-      stroke="#F7931A" 
-      strokeWidth="1.5"
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+import { nip19 } from 'nostr-tools';
+import { useProfileData } from '../hooks/useProfileData';
+import { NostrNote } from '../types/nostr';
+import NDK from '@nostr-dev-kit/ndk';
 
 export interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -22,6 +12,9 @@ export interface VideoPlayerProps {
   togglePlayPause: () => void;
   authorNpub: string | null;
   isMuted: boolean;
+  noteId: string | null;
+  posterPubkey: string | null;
+  ndkInstance?: NDK;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
@@ -29,11 +22,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   src,
   isPlaying,
   togglePlayPause,
-  authorNpub,
   isMuted,
+  noteId,
+  posterPubkey,
+  ndkInstance,
 }) => {
-  const auth = useAuth();
   const playButtonRef = useRef<HTMLButtonElement>(null);
+
+  const dummyNote: NostrNote | null = noteId && posterPubkey ? {
+    id: noteId,
+    pubkey: posterPubkey,
+    created_at: 0,
+    kind: 1,
+    tags: [],
+    content: '',
+    sig: ''
+  } : null;
+  
+  const { profiles } = useProfileData(dummyNote ? [dummyNote] : [], ndkInstance);
+
+  const profile = posterPubkey ? profiles[posterPubkey] : undefined;
+  const profilePicture = profile?.picture;
+
+  const neventUri = noteId 
+    ? `nostr:${nip19.neventEncode({ id: noteId })}`
+    : null;
+
+  const fallbackText = posterPubkey?.slice(-3).toUpperCase() || '???';
 
   useEffect(() => {
     if (videoRef.current && src) {
@@ -82,31 +97,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </button>
       )}
 
-      {authorNpub && (
-        <div className="absolute bottom-2 right-2 z-20 flex flex-col items-center space-y-0.5 p-1 bg-black/40 rounded">
-          <div className="relative bg-white p-1 rounded-sm shadow-md w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
-              <QRCode
-                  value={authorNpub}
-                  size={256}
-                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                  viewBox={`0 0 256 256`}
-                  level="H"
-                  bgColor="#FFFFFF"
-                  fgColor="#000000"
-              />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  {auth.isLoggedIn && (
-                      <div className="absolute w-1/3 h-1/3 opacity-80">
-                         <CustomLoggedInIcon />
-                      </div>
-                  )}
-              </div>
-          </div>
+      {/* Profile image - top-left */}
+      <div className="absolute top-2 left-2 z-20">
+        <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden">
+          {profilePicture ? (
+            <img src={profilePicture} alt="profile" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-sm font-bold text-gray-300 flex items-center justify-center h-full">
+              {fallbackText}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* nevent QR - bottom-right, minimal styling */}
+      {neventUri && (
+        <div className="absolute bottom-2 right-2 z-20 w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
+          <QRCode
+            value={neventUri}
+            size={0}
+            style={{ width: "100%", height: "100%" }}
+            bgColor="transparent"
+            fgColor="#FFFFFF"
+            level="M"
+          />
         </div>
       )}
-
     </div>
   );
 };
 
-export default VideoPlayer; 
+export default VideoPlayer;

@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } f
 import { NostrNote } from '../types/nostr'; 
 import { useProfileData } from '../hooks/useProfileData';
 import { motion, AnimatePresence } from 'framer-motion';
+import QRCode from 'react-qr-code';
+import { nip19 } from 'nostr-tools';
 import NDK from '@nostr-dev-kit/ndk';
 
 export interface MediaFeedProps {
@@ -34,15 +36,29 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     isLoading,
     currentImageIndex,
     imageNotes, 
-    authorNpub,
-    isPlaying,
     isFullScreen,
     ndkInstance,
   } = props;
 
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
+
+  const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length
+    ? imageNotes[currentImageIndex]
+    : null;
+
   const { profiles } = useProfileData(imageNotes, ndkInstance);
+
+  const posterPubkey = currentImageNote?.posterPubkey;
+  const profile = posterPubkey ? profiles[posterPubkey] : undefined;
+  const profilePicture = profile?.picture;
+  const currentNoteId = currentImageNote?.id;
+
+  const neventUri = currentNoteId 
+    ? `nostr:${nip19.neventEncode({ id: currentNoteId })}`
+    : null;
+
+  const fallbackText = posterPubkey?.slice(-3).toUpperCase() || '???';
 
   useImperativeHandle(ref, () => ({
     focusToggleButton: () => {
@@ -65,27 +81,15 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     }
   }, [currentImageIndex, imageNotes]);
 
-  const currentImageNote = imageNotes && imageNotes.length > 0 && currentImageIndex >= 0 && currentImageIndex < imageNotes.length
-    ? imageNotes[currentImageIndex]
-    : null;
-  const imageUrl = currentImageNote?.url;
-  const profile = currentImageNote?.posterPubkey ? profiles[currentImageNote.posterPubkey] : undefined;
-  const displayName = profile?.name || profile?.displayName || currentImageNote?.posterPubkey?.substring(0, 10) || 'Anon';
-  const timestamp = currentImageNote?.created_at ? new Date(currentImageNote.created_at * 1000).toLocaleString() : 'Date unknown';
-  const currentNoteId = currentImageNote?.id;
-
   console.log("ImageFeed Render:", {
       isLoading,
       currentImageIndex,
       notesCount: imageNotes.length,
       currentNoteId,
-      imageUrl,
-      authorNpub,
-      displayName,
-      isPlaying
+      isPlaying: false
   });
 
-  if (isLoading && !imageUrl) {
+  if (isLoading && imageNotes.length === 0) {
     return (
          <div className="relative w-full h-full bg-black flex flex-col items-center justify-center overflow-hidden text-center">
            <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-purple-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -107,9 +111,11 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
     );
   }
 
+  const imageUrl = currentImageNote?.url;
+
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
-      {isLoading && !imageUrl && (
+      {isLoading && imageNotes.length === 0 && (
         <p className="text-gray-400">Loading images...</p>
       )}
 
@@ -144,31 +150,34 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
         )}
       </AnimatePresence>
 
-      {currentImageNote && !isFullScreen && (
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                transition={{ duration: 0.2 }}
-                className="absolute bottom-4 left-4 z-20 p-2 max-w-[calc(100%-150px)] bg-black/70 rounded-lg backdrop-blur-sm"
-            >
-                <div className="flex items-center">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 overflow-hidden mr-2">
-                        {profile?.picture ? (
-                            <img src={profile.picture} alt={displayName} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-gray-300 text-xs font-semibold flex items-center justify-center h-full uppercase">
-                                {displayName?.substring(0, 2) || '??'}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                        <p className="text-sm font-semibold text-white truncate" title={displayName}>{displayName}</p>
-                        <p className="text-xs text-gray-400 truncate" title={timestamp}>{timestamp}</p>
-                    </div>
-                </div>
-             </motion.div>
-       )}
+      {/* Profile image - top-left */}
+      {currentImageNote && (
+        <div className="absolute top-2 left-2 z-20">
+          <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden">
+            {profilePicture ? (
+              <img src={profilePicture} alt="profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-sm font-bold text-gray-300 flex items-center justify-center h-full">
+                {fallbackText}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* nevent QR - bottom-right, minimal styling */}
+      {neventUri && (
+        <div className="absolute bottom-2 right-2 z-20 w-12 h-12 md:w-16 md:h-16 lg:w-18 lg:h-18">
+          <QRCode
+            value={neventUri}
+            size={0}
+            style={{ width: "100%", height: "100%" }}
+            bgColor="transparent"
+            fgColor="#FFFFFF"
+            level="M"
+          />
+        </div>
+      )}
 
       <button
         ref={toggleButtonRef}
