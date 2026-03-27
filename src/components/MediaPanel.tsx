@@ -501,7 +501,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                   <button
                     key={rate}
                     onClick={() => handleSpeedChange(rate)}
-                    className={`w-full text-left px-3 py-1 text-white hover:bg-blue-700 text-sm font-medium ${playbackRate === rate ? 'bg-purple-700' : ''}`}
+                    className={`w-full text-left px-3 py-1 text-white hover:bg-blue-700 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-yellow-400 ${playbackRate === rate ? 'bg-purple-700' : ''}`}
                     role="menuitem" tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { handleSpeedChange(rate); e.preventDefault(); } }}
                   >

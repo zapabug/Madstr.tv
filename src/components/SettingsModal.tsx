@@ -660,7 +660,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             <button
                                 type="button"
                                 onClick={() => auth.setFetchImagesByTagEnabled(!auth.fetchImagesByTagEnabled)}
-                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors ${auth.fetchImagesByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-800 ${auth.fetchImagesByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
                                 aria-label="Toggle Image Hashtag Filtering"
                             >
                                 {auth.fetchImagesByTagEnabled ? 'ON' : 'OFF'}
@@ -671,7 +671,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             <button
                                 type="button"
                                 onClick={() => auth.setFetchVideosByTagEnabled(!auth.fetchVideosByTagEnabled)}
-                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors ${auth.fetchVideosByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-800 ${auth.fetchVideosByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
                                 aria-label="Toggle Video Hashtag Filtering"
                             >
                                 {auth.fetchVideosByTagEnabled ? 'ON' : 'OFF'}
@@ -682,7 +682,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                             <button
                                 type="button"
                                 onClick={() => auth.setFetchMusicByTagEnabled(!auth.fetchMusicByTagEnabled)}
-                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors ${auth.fetchMusicByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
+                                className={`px-4 py-1 rounded text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-800 ${auth.fetchMusicByTagEnabled ? 'bg-purple-600 text-white' : 'bg-gray-600 text-gray-300'}`}
                                 aria-label="Toggle Music Keyword Filtering"
                             >
                                 {auth.fetchMusicByTagEnabled ? 'ON' : 'OFF'}
