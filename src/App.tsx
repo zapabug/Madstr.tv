@@ -1,9 +1,9 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
-import AuthorSelector from './components/AuthorSelector';
 import MediaPanel from './components/MediaPanel';
 import RelayStatus from './components/RelayStatus';
 import VideoPlayer from './components/VideoPlayer';
+import MessageBoard from './components/MessageBoard';
 import { MAIN_THREAD_NEVENT_URI } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
 import { useMediaState } from './hooks/useMediaState';
@@ -19,7 +19,6 @@ import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
 import { useAuth } from './hooks/useAuth';
-import MessageBoard from './components/MessageBoard';
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -524,28 +523,13 @@ function App() {
                     exit={{ y: '100%', opacity: 0 }}
                     transition={{ duration: 0.5, ease: "easeInOut" }}
                   >
-                     {/* Left Side: Message Board or Author Selector */}
-                     <div className="w-2/3 h-full pr-1 flex flex-col overflow-hidden"> 
-                         {viewMode === 'videoPlayer' ? (
-                             <AuthorSelector
-                                 videoNotes={uniqueVideoNotes}
-                                 selectedAuthor={selectedVideoAuthor}
-                                 onSelectAuthor={setSelectedVideoAuthor}
-                                 currentVideoAuthor={currentVideoAuthor}
-                                 isInactive={false}
-                             />
-                         ) : (
-                             <MessageBoard 
-                                 ndk={ndkInstance}
-                                 threadEventId={MAIN_THREAD_NEVENT_URI}
-                                 onNewMessage={signalMessage}
-                                 isReady={isNdkReady}
-                             />
-                         )}
+                     {/* Left: MessageBoard (info) */}
+                     <div className="w-1/3 h-full pr-1">
+                         <MessageBoard />
                      </div>
-                    {/* Right Side: Media Panel - Adjust width */}
-                    <div className="w-1/3 h-full pl-1 flex flex-col"> 
-                        <MediaPanel
+                     {/* Right: MediaPanel */}
+                     <div className="w-2/3 h-full pl-1">
+                         <MediaPanel
                             viewMode={viewMode}
                             audioNotes={stateAudioNotes}
                             videoNotes={stateVideoNotes}
@@ -566,7 +550,7 @@ function App() {
                             showMusicOnly={showMusicOnly}
                             setShowMusicOnly={setShowMusicOnly}
                         />
-                    </div>
+                     </div>
                  </motion.div>
             )}
         </AnimatePresence>
