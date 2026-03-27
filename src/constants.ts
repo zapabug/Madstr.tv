@@ -8,6 +8,13 @@ export const RELAYS = [
   'wss://nsec.app',
 ];
 
+// Relays for hashtag queries (no regex, pure NIP-50/NIP-45 hashtag search)
+export const HASHTAG_QUERY_RELAYS = [
+  'wss://relay.primal.net',
+  'wss://nostr.wine',
+  'wss://relay.bitcoiner.social',
+];
+
 // !!! IMPORTANT !!!
 // Replace this placeholder with the ACTUAL HEX EVENT ID of the main post
 // that you manually published using the TV's nsec.

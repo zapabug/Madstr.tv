@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import NDK, { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
 import { NostrNote } from '../types/nostr';
 import { cacheMediaNotes, getCachedNotesByAuthors } from '../utils/mediaNoteCache';
+import { HASHTAG_QUERY_RELAYS } from '../constants';
 
 // Media type for filtering
 export type MediaType = 'audio' | 'video' | 'image';
@@ -35,6 +36,26 @@ interface UseMediaNotesReturn {
 const imageRegex = /https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)/i;
 const videoRegex = /https?:\/\/\S+\.(?:mp4|mov|webm|m3u8)/i;
 const audioRegex = /https?:\/\/\S+\.(?:mp3|m4a|ogg|aac|wav)/i;
+
+// Allowed hosts for hashtag discovery (Nostr-native Blossom servers)
+const ALLOWED_BLOSSOM_HOSTS = [
+  'blossom.primal.net',
+  'blossom.nostrich.io',
+  'blossom.nevent.ninja',
+  'blossom.ditto.pub',
+  'blossom.fiatjaf.com',
+  'blossom.obsidian.vip',
+];
+
+// Check if URL is from allowed Blossom host
+function isAllowedBlossomUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return ALLOWED_BLOSSOM_HOSTS.some(host => hostname === host || hostname.endsWith('.' + host));
+  } catch {
+    return false;
+  }
+}
 
 // Unified kinds - fetch all media types in one subscription
 const ALL_MEDIA_KINDS = [1, 1063, 31338, 34235, 34236];
@@ -70,7 +91,9 @@ export function useMediaNotes({
     // notesById now accumulates across fetches triggered by prop changes
     const notesById = useRef<Map<string, NostrNote>>(new Map());
     const currentSubscription = useRef<NDKSubscription | null>(null);
+    const hashtagSubscription = useRef<NDKSubscription | null>(null);
     const isFetching = useRef<boolean>(false); // Prevent concurrent fetches
+    const hashtagEoseReceived = useRef<boolean>(false);
     // Add refs to track previous dependency values
     const prevNdkRef = useRef<NDK | null>(ndk);
     const prevAuthorsRef = useRef<string[]>(authors);
@@ -541,6 +564,129 @@ export function useMediaNotes({
             };
 
             subscribe();
+
+            // --- Hashtag Discovery Subscription ---
+            // Create separate subscription for hashtag-based discovery (no author restriction)
+            console.log(`useMediaNotes (${mediaType}): Hashtag check - tags:`, followedTags, 'current sub:', hashtagSubscription.current ? 'exists' : 'null');
+            
+            // Stop existing subscription if hashtags are disabled
+            if ((!followedTags || followedTags.length === 0) && hashtagSubscription.current) {
+                console.log(`useMediaNotes (${mediaType}): Stopping hashtag subscription (hashtags disabled)`);
+                hashtagSubscription.current.stop();
+                hashtagSubscription.current = null;
+            }
+            
+            if (followedTags && followedTags.length > 0 && hashtagSubscription.current === null) {
+                console.log(`useMediaNotes (${mediaType}): Creating hashtag discovery subscription for relays:`, HASHTAG_QUERY_RELAYS, 'tags:', followedTags);
+                
+                hashtagEoseReceived.current = false;
+                
+                const hashtagFilter: NDKFilter = {
+                    kinds: kindsToFetch,
+                    '#t': followedTags,
+                    limit: 200,
+                };
+                
+                hashtagSubscription.current = ndk.subscribe(hashtagFilter, { 
+                    closeOnEose: false, 
+                    groupable: false,
+                    relayUrls: HASHTAG_QUERY_RELAYS 
+                });
+
+                hashtagSubscription.current.on('event', (event: NDKEvent) => {
+                    console.log(`useMediaNotes (${mediaType}): [HASHTAG] EVENT - kind: ${event.kind}, id: ${event.id.substring(0,16)}`);
+                    
+                    if (mediaType === 'image' || mediaType === 'video') {
+                        // Check all possible URL sources
+                        const imageTag = event.tags.find(t => t[0] === 'image');
+                        const urlTag = event.tags.find(t => t[0] === 'url');
+                        const mediaTag = event.tags.find(t => t[0] === 'media');
+                        const enclosureTag = event.tags.find(t => t[0] === 'enclosure');
+                        
+                        let foundBlossomUrl: string | null = null;
+                        
+                        // Check proper media tags first
+                        const tagUrls = [imageTag?.[1], urlTag?.[1], mediaTag?.[1], enclosureTag?.[1]].filter(Boolean);
+                        for (const url of tagUrls) {
+                            if (url && isAllowedBlossomUrl(url)) {
+                                foundBlossomUrl = url;
+                                break;
+                            }
+                        }
+                        
+                        // For kind 1 text notes, try regex on content
+                        if (!foundBlossomUrl && event.kind === 1 && event.content) {
+                            const contentUrl = event.content.match(/https?:\/\/[^\s<>"\]]+/i)?.[0];
+                            if (contentUrl && isAllowedBlossomUrl(contentUrl)) {
+                                foundBlossomUrl = contentUrl;
+                                console.log(`useMediaNotes (${mediaType}): [HASHTAG] Found Blossom URL in content: ${contentUrl.substring(0, 50)}`);
+                            }
+                        }
+                        
+                        if (!foundBlossomUrl) {
+                            console.log(`useMediaNotes (${mediaType}): [HASHTAG] Skipping - no Blossom URL (tags had: ${tagUrls.join(', ') || 'none'})`);
+                            return;
+                        }
+                        console.log(`useMediaNotes (${mediaType}): [HASHTAG] ✓ Blossom URL: ${foundBlossomUrl.substring(0, 50)}`);
+                    }
+                    
+                    if (mediaType === 'image') {
+                        console.log(`useMediaNotes (${mediaType}): [HASHTAG] Received event ${event.id} (kind ${event.kind}) from pubkey ${event.pubkey.substring(0, 16)}...`);
+                    }
+                    const note = processEvent(event, urlRegex, mediaType);
+                    if (note && !notesById.current.has(note.id)) {
+                        // Verify the found URL is from Blossom (not from regex fallback)
+                        if (mediaType === 'image' || mediaType === 'video') {
+                            if (!note.url || !isAllowedBlossomUrl(note.url)) {
+                                console.log(`useMediaNotes (${mediaType}): [HASHTAG] Skipping - URL not from Blossom: ${note.url?.substring(0, 50)}`);
+                                return;
+                            }
+                        }
+                        if (mediaType === 'video' && note.duration) {
+                            const durationSeconds = parseDuration(note.duration);
+                            if (durationSeconds < MIN_VIDEO_DURATION_SECONDS) {
+                                return;
+                            }
+                        }
+                        notesById.current.set(note.id, note);
+                        if (mediaType === 'image') {
+                            console.log(`useMediaNotes (${mediaType}): [HASHTAG] Added note ${note.id} to map. Total: ${notesById.current.size}`);
+                        }
+                    }
+                });
+
+                hashtagSubscription.current.on('eose', () => {
+                    console.log(`useMediaNotes (${mediaType}): [HASHTAG] EOSE received from hashtag subscription. Total notes: ${notesById.current.size}`);
+                    hashtagEoseReceived.current = true;
+                    
+                    // Final update with all collected notes
+                    let finalNotes = Array.from(notesById.current.values());
+                    
+                    if (mediaType === 'video') {
+                        finalNotes = finalNotes.filter(note => {
+                            if (!note.duration) return true;
+                            return parseDuration(note.duration) >= MIN_VIDEO_DURATION_SECONDS;
+                        });
+                    }
+                    
+                    const sortedFinalNotes = finalNotes.sort((a, b) => b.created_at - a.created_at);
+                    if (isMounted) {
+                        setNotes(sortedFinalNotes);
+                        setIsLoading(false);
+                        isFetching.current = false;
+                    }
+                    cacheMediaNotes(finalNotes).catch(error => {
+                        console.error(`useMediaNotes (${mediaType}): Error caching notes from hashtag subscription:`, error);
+                    });
+                });
+
+                hashtagSubscription.current.on('close', () => {
+                    console.log(`useMediaNotes (${mediaType}): [HASHTAG] Subscription closed.`);
+                    if (!hashtagEoseReceived.current) {
+                        hashtagSubscription.current = null; // Allow retry
+                    }
+                });
+            }
         };
 
         fetchAndSubscribe().catch(err => {
@@ -558,6 +704,11 @@ export function useMediaNotes({
                 console.log(`useMediaNotes (${mediaType}): Cleaning up subscription.`);
                 currentSubscription.current.stop();
                 currentSubscription.current = null;
+            }
+            if (hashtagSubscription.current) {
+                console.log(`useMediaNotes (${mediaType}): Cleaning up hashtag subscription.`);
+                hashtagSubscription.current.stop();
+                hashtagSubscription.current = null;
             }
             isFetching.current = false; // Ensure fetching flag is reset if component unmounts during fetch
         };

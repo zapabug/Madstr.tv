@@ -59,10 +59,7 @@ INTENDED BEHAVIOR:
 - Has follows + Hashtags ON → User's follows + hashtag filtered content
 ```
 
-#### The Problem
-When hashtags are enabled but user has NO follows, we're still only fetching from the user's pubkey. We need a **SEPARATE hashtag-only subscription** that queries relays WITHOUT author restriction.
-
-#### Proposed Fix (v0.4.0)
+#### Implementation (v0.3.x)
 ```
 When hashtags enabled:
 - Subscription 1 (Author-based): { kinds: ALL_MEDIA_KINDS, authors: authorsList, limit: 100 }
@@ -71,6 +68,34 @@ When hashtags enabled:
 
 Results merged and deduplicated by note ID.
 ```
+
+#### Hashtag Query Relays
+```typescript
+const HASHTAG_QUERY_RELAYS = [
+  'wss://relay.primal.net',
+  'wss://nostr.wine',
+  'wss://relay.bitcoiner.social',
+];
+```
+
+#### Hashtag Discovery Content Filter
+For hashtag discovery, we **only accept content from Nostr-native Blossom servers** to:
+- Avoid Twitter/centralized CDN tracking
+- Force Nostr-native media hosting
+- Clean content for TV display
+
+```typescript
+const ALLOWED_BLOSSOM_HOSTS = [
+  'blossom.primal.net',
+  'blossom.nostrich.io',
+  'blossom.nevent.ninja',
+  'blossom.ditto.pub',
+  'blossom.fiatjaf.com',
+  'blossom.obsidian.vip',
+];
+```
+
+Follows are NOT filtered - shows all content from followed users.
 
 ## Nostr Media Center Features (v0.3.x)
 
@@ -212,12 +237,11 @@ Results merged and deduplicated by note ID.
 - [x] Extension session auto-restore on page load
 - [x] Video position persistence
 - [x] Settings modal auto-refresh on close
+- [x] **Hashtag-only relay subscription for discovery mode**
 - [ ] Duration classification (music <6min, podcast ≥6min)
 - [ ] **Add "Clear seen videos" button**
 
 ### v0.4.0 (PLANNED)
-- [ ] **Hashtag-only relay subscription for discovery mode**
-- [ ] **Separate queries: Author-based + Hashtag discovery**
 - [ ] Add cache clear button in Settings
 - [ ] Podcast position persistence to IndexedDB
 - [ ] Advanced content discovery
