@@ -39,6 +39,9 @@ export const useFullscreen = ({
     setLastInteractionTimestamp(now);
 
     if (isFullScreen) {
+      // Reset both timestamps so the immediate checkFullScreen() call in the effect
+      // doesn't re-enter fullscreen due to a stale message timeout
+      setLastMessageTimestamp(now);
       setIsFullScreen(false);
     }
   }, [isFullScreen]);
