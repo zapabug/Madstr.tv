@@ -1,31 +1,112 @@
-import { openDB, DBSchema, IDBPDatabase, StoreNames } from 'idb';
-import { Proof } from '@cashu/cashu-ts';
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
-// --- Database Schema Definition ---
-interface AppDbSchema extends DBSchema {
+// --- Type Definitions ---
+// Define more specific types if possible
+export type NostrNote = {
+    id: string;
+    pubkey: string;
+    created_at: number;
+    kind: number;
+    tags: string[][];
+    content: string;
+    sig: string;
+    // Add other relevant fields from your actual NostrNote structure
+    imageUrl?: string;
+    videoUrl?: string;
+    podcastUrl?: string;
+    podcastTitle?: string;
+};
+
+export type ProfileData = {
+    pubkey: string; // Ensure pubkey is part of the object for keyPath
+    name?: string;
+    display_name?: string;
+    picture?: string;
+    banner?: string;
+    about?: string;
+    website?: string;
+    lud16?: string; // Lightning address NIP-05
+    nip05?: string; // NIP-05 identifier
+    // Add other Kind 0 fields as needed
+};
+
+export interface StoredNsecData {
+    id: 'currentUserNsec'; // Use literal type for the key
+    nsec: string;
+}
+
+export interface StoredFollowedTags {
+    id: 'followedTags'; // Use literal type for the key
+    tags: string[];
+}
+
+export interface StoredVideoTags {
+    id: 'videoTags';
+    tags: string[];
+}
+
+export interface StoredImageFiltering {
+    id: 'fetchImagesByTagEnabled';
+    value: boolean;
+}
+
+export interface StoredVideoFiltering {
+    id: 'fetchVideosByTagEnabled';
+    value: boolean;
+}
+
+export interface StoredMusicFiltering {
+    id: 'fetchMusicByTagEnabled';
+    value: boolean;
+}
+
+export interface StoredMusicTags {
+    id: 'musicTags';
+    tags: string[];
+}
+
+export interface StoredNip46Session {
+    id: 'nip46Session';
+    payload: string;
+}
+
+export interface StoredSeenNotes {
+    id: 'seenNotes';
+    noteIds: string[];
+    lastUpdated: number;
+}
+
+// Use basic Proof type and add mintUrl in helpers if needed
+// export interface StoredProof extends Proof {
+//     id: string; // Concatenation of secret + C ? Or just use 'secret'? 'secret' should be unique per mint.
+//     mintUrl: string; // To group proofs by mint
+// }
+
+// Combine settings types
+type SettingsValue = StoredNsecData | StoredFollowedTags | StoredVideoTags | StoredImageFiltering | StoredVideoFiltering | StoredMusicFiltering | StoredMusicTags | StoredNip46Session | StoredSeenNotes;
+
+// --- Database Schema ---
+interface MadstrTvAppDB extends DBSchema {
   settings: {
-    key: string; // e.g., 'userTheme', 'lastSyncTime', 'configuredMintUrl'
-    value: any; // Store various settings types
+    key: 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' | 'seenNotes';
+    value: SettingsValue;
+    indexes: { 'id': 'currentUserNsec' | 'followedTags' | 'videoTags' | 'fetchImagesByTagEnabled' | 'fetchVideosByTagEnabled' | 'fetchMusicByTagEnabled' | 'musicTags' | 'nip46Session' | 'seenNotes' };
   };
-  cashuProofs: {
-    key: string; // Mint URL
-    value: Proof[]; // Store an array of proofs associated with the mint URL
+  mediaNoteCache: {
+    key: string; // note ID (hex)
+    value: NostrNote;
+    indexes: { 'created_at': number; 'pubkey': string; 'kind': number };
   };
-  nsec: {
-    key: string; // Use a fixed key like 'currentUserNsec'
-    value: string; // The encrypted or plain nsec string
-  };
-  nip46Session: {
-    key: string; // e.g., 'currentNip46Session'
-    value: StoredNip46Data;
-  };
-  followedTags: {
-    key: string; // e.g., 'userFollowedTags'
-    value: string[]; // Array of followed tags
+  profileCache: {
+    key: string; // pubkey hex
+    value: ProfileData;
+    indexes: { 'name': string };
   };
 }
 
-// --- Stored Data Type Definitions ---
+let dbPromise: Promise<IDBPDatabase<MadstrTvAppDB>> | null = null;
+const DB_NAME = 'MadstrTvAppDB';
+const DB_VERSION = 7;
 
 // Export StoredProof type
 export type StoredProof = Proof & { mintUrl: string };
@@ -45,9 +126,8 @@ let dbPromise: Promise<IDBPDatabase<AppDbSchema>> | null = null;
 
 const getDb = (): Promise<IDBPDatabase<AppDbSchema>> => {
   if (!dbPromise) {
-    console.log(`Initializing IndexedDB: ${DB_NAME}, Version: ${DB_VERSION}`);
-    dbPromise = openDB<AppDbSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion, transaction) {
+    dbPromise = openDB<MadstrTvAppDB>(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion, newVersion) {
         console.log(`Upgrading DB from version ${oldVersion} to ${newVersion}`);
 
         // Settings Store (Simple key-value)
@@ -55,12 +135,8 @@ const getDb = (): Promise<IDBPDatabase<AppDbSchema>> => {
           console.log("Creating 'settings' object store.");
           db.createObjectStore('settings');
         }
-
-        // Cashu Proofs Store
-        if (oldVersion < 2) {
-          console.log("Creating 'cashuProofs' object store.");
-          db.createObjectStore('cashuProofs'); // Key is mint URL
-        }
+        
+        // Add blocks for future versions here
 
         // Nsec, NIP46, Tags stores
         if (oldVersion < 3) {
@@ -190,40 +266,14 @@ const putSetting = (key: string, value: any) => put('settings', value, key);
 // Cashu Proofs
 const getProofs = (mintUrl: string): Promise<Proof[] | undefined> => get('cashuProofs', mintUrl);
 
-const saveProofs = async (proofsToSave: StoredProof[]): Promise<void> => {
-    if (!proofsToSave || proofsToSave.length === 0) {
-        console.log("saveProofs: No proofs provided to save.");
-        return;
-    }
-    const db = await getDb();
-    const tx = db.transaction('cashuProofs', 'readwrite');
-    const store = tx.objectStore('cashuProofs');
+    saveVideoTagsToDb: async (tags: string[]): Promise<void> => {
+        await idb.putSetting({ id: 'videoTags', tags });
+    },
 
-    // Group proofs by mintUrl
-    const proofsByMint: Record<string, Proof[]> = {};
-    proofsToSave.forEach(storedProof => {
-        const { mintUrl, ...proof } = storedProof; // Separate mintUrl from Proof fields
-        if (!mintUrl) {
-            console.warn("saveProofs: Skipping proof with missing mintUrl:", proof);
-            return;
-        }
-        if (!proofsByMint[mintUrl]) {
-            proofsByMint[mintUrl] = [];
-        }
-        proofsByMint[mintUrl].push(proof); // Store only the original Proof structure
-    });
-
-    // Fetch existing proofs for the affected mints and merge/overwrite
-    const putPromises: Promise<IDBValidKey>[] = [];
-    for (const mintUrl in proofsByMint) {
-        if (!mintUrl) continue; // Should not happen due to check above, but belt-and-suspenders
-        const existingProofs = (await store.get(mintUrl)) || [];
-        const newProofsForMint = proofsByMint[mintUrl];
-        // Simple merge: Add new proofs to existing ones. Consider deduplication if needed.
-        const combinedProofs = [...existingProofs, ...newProofsForMint];
-        console.log(`saveProofs: Saving ${newProofsForMint.length} new proofs (total ${combinedProofs.length}) for mint ${mintUrl}`);
-        putPromises.push(store.put(combinedProofs, mintUrl));
-    }
+    loadVideoTagsFromDb: async (): Promise<string[]> => {
+        const setting = await idb.getSetting('videoTags');
+        return setting && 'tags' in setting ? setting.tags : [];
+    },
 
     await Promise.all(putPromises); // Wait for all puts in the transaction
     await tx.done; // Commit transaction
@@ -238,136 +288,70 @@ const getAllProofs = async (): Promise<StoredProof[]> => {
   let cursor = await store.openCursor();
   const results: StoredProof[] = [];
 
-  while (cursor) {
-    const mintUrl = cursor.key as string;
-    const proofsFromMint: Proof[] = cursor.value; // Value is Proof[]
-    if (proofsFromMint && Array.isArray(proofsFromMint)) {
-        proofsFromMint.forEach(proof => {
-             // Add the mintUrl to each proof before adding to results
-             results.push({ ...proof, mintUrl });
-        });
-    }
-    cursor = await cursor.continue();
-  }
+    getAllMediaNotes: async (): Promise<NostrNote[]> => {
+        const db = await getDb();
+        return db.getAll('mediaNoteCache');
+    },
 
-  await tx.done; // Ensure transaction completes
-  console.log(`getAllProofs: Returning ${results.length} proofs across all mints.`);
-  return results;
-};
+    clearMediaNotes: async (): Promise<void> => {
+        const db = await getDb();
+        return db.clear('mediaNoteCache');
+    },
 
-// Delete proofs by their secret across all mints
-const deleteProofsBySecret = async (secretsToDelete: string[]): Promise<void> => {
-    if (!secretsToDelete || secretsToDelete.length === 0) {
-        console.log("deleteProofsBySecret: No secrets provided for deletion.");
-        return;
-    }
-    const db = await getDb();
-    const tx = db.transaction('cashuProofs', 'readwrite');
-    const store = tx.objectStore('cashuProofs');
-    let cursor = await store.openCursor();
-    const deletePromises: Promise<void>[] = []; // For potential entry deletions
-    const putPromises: Promise<IDBValidKey>[] = []; // For updates
+    // --- Profile Cache Helpers ---
+    getProfile: async (key: string): Promise<ProfileData | undefined> => {
+        const db = await getDb();
+        return db.get('profileCache', key);
+    },
 
-    const secretsSet = new Set(secretsToDelete); // For efficient lookup
+    putProfile: async (value: ProfileData): Promise<string> => {
+        const db = await getDb();
+        if (!value.pubkey) throw new Error("ProfileData must have a 'pubkey' property for IndexedDB keyPath.");
+        return db.put('profileCache', value);
+    },
 
-    while (cursor) {
-        const mintUrl = cursor.key as string;
-        let proofsFromMint: Proof[] = cursor.value;
-        const originalLength = proofsFromMint.length;
+    getAllProfiles: async (): Promise<ProfileData[]> => {
+        const db = await getDb();
+        return db.getAll('profileCache');
+    },
 
-        if (proofsFromMint && Array.isArray(proofsFromMint)) {
-            proofsFromMint = proofsFromMint.filter(proof => !secretsSet.has(proof.secret));
-            const removedCount = originalLength - proofsFromMint.length;
+    clearProfiles: async (): Promise<void> => {
+        const db = await getDb();
+        return db.clear('profileCache');
+    },
 
-            if (removedCount > 0) {
-                 console.log(`deleteProofsBySecret: Removed ${removedCount} proofs from mint ${mintUrl}`);
-                 if (proofsFromMint.length === 0) {
-                     // If no proofs left for this mint, delete the entry
-                     console.log(`deleteProofsBySecret: Deleting entry for mint ${mintUrl} as it's now empty.`);
-                     deletePromises.push(store.delete(mintUrl));
-                 } else {
-                     // Otherwise, update the entry with the filtered proofs
-                     putPromises.push(store.put(proofsFromMint, mintUrl));
-                 }
-            }
+    // --- Seen Notes Helpers ---
+    getSeenNotes: async (): Promise<Set<string>> => {
+        const setting = await idb.getSetting('seenNotes');
+        if (setting && 'noteIds' in setting) {
+            return new Set(setting.noteIds);
         }
-        cursor = await cursor.continue();
-    }
+        return new Set();
+    },
 
-     // Wait for all potential updates/deletions
-    await Promise.all([...putPromises, ...deletePromises]);
-    await tx.done; // Commit transaction
-    console.log(`deleteProofsBySecret: Finished processing ${secretsToDelete.length} secrets.`);
-};
+    markNoteAsSeen: async (noteId: string): Promise<void> => {
+        const current = await idb.getSeenNotes();
+        current.add(noteId);
+        // Keep max 1000 seen notes
+        const noteIds = Array.from(current);
+        if (noteIds.length > 1000) {
+            noteIds.splice(0, noteIds.length - 1000);
+        }
+        await idb.putSetting({
+            id: 'seenNotes',
+            noteIds,
+            lastUpdated: Date.now(),
+        });
+    },
 
-const deleteProofs = (mintUrl: string) => deleteDbEntry('cashuProofs', mintUrl);
+    isNoteSeen: async (noteId: string): Promise<boolean> => {
+        const seenNotes = await idb.getSeenNotes();
+        return seenNotes.has(noteId);
+    },
 
-// Nsec Storage
-const NSEC_KEY = 'currentUserNsec';
-const loadNsecFromDb = async (): Promise<string | null> => {
-    const result = await get('nsec', NSEC_KEY);
-    return typeof result === 'string' ? result : null;
-};
-const saveNsecToDb = (nsec: string) => put('nsec', nsec, NSEC_KEY);
-const clearNsecFromDb = () => deleteDbEntry('nsec', NSEC_KEY);
-
-// NIP-46 Session Storage
-const NIP46_KEY = 'currentNip46Session';
-const loadNip46DataFromDb = async (): Promise<StoredNip46Data | null> => {
-    const result = await get('nip46Session', NIP46_KEY);
-    // Basic type check
-    if (result && typeof result.remoteNpub === 'string' && typeof result.token === 'string') {
-        return result as StoredNip46Data;
-    }
-    return null;
-};
-const saveNip46DataToDb = (data: Omit<StoredNip46Data, 'id'>) => {
-    const storedData: StoredNip46Data = { ...data, id: NIP46_KEY };
-    return put('nip46Session', storedData);
-};
-const clearNip46DataFromDb = () => deleteDbEntry('nip46Session', NIP46_KEY);
-
-// Followed Tags Storage
-const FOLLOWED_TAGS_KEY = 'userFollowedTags';
-const loadFollowedTagsFromDb = async (): Promise<string[] | null> => {
-    const result = await get('followedTags', FOLLOWED_TAGS_KEY);
-    return Array.isArray(result) ? result : null;
-};
-const saveFollowedTagsToDb = (tags: string[]) => put('followedTags', tags, FOLLOWED_TAGS_KEY);
-const clearFollowedTagsFromDb = () => deleteDbEntry('followedTags', FOLLOWED_TAGS_KEY);
-
-// --- Specific Mint URL Helpers ---
-const MINT_URL_KEY = 'configuredMintUrl';
-const loadMintUrlFromDb = async (): Promise<string | null> => {
-    const result = await getSetting(MINT_URL_KEY);
-    return typeof result === 'string' ? result : null; // Return null if not set or not a string
-};
-const saveMintUrlToDb = (url: string | null) => putSetting(MINT_URL_KEY, url);
-
-// Export the specific helpers
-export const idb = {
-    getSetting,
-    putSetting,
-    // Cashu specific
-    getProofs,         // Get proofs for a specific mint
-    saveProofs,        // Saves StoredProof[] by grouping
-    getAllProofs,      // Gets all proofs across mints as StoredProof[]
-    deleteProofs,      // Deletes all proofs for a specific mint
-    deleteProofsBySecret, // Deletes specific proofs by secret across all mints
-    // Mint URL specific
-    loadMintUrlFromDb,
-    saveMintUrlToDb,
-    // Auth specific
-    loadNsecFromDb,
-    saveNsecToDb,
-    clearNsecFromDb,
-    loadNip46DataFromDb,
-    saveNip46DataToDb,
-    clearNip46DataFromDb,
-    // Tags specific
-    loadFollowedTagsFromDb,
-    saveFollowedTagsToDb,
-    clearFollowedTagsFromDb,
+    clearSeenNotes: async (): Promise<void> => {
+        await idb.deleteSetting('seenNotes');
+    },
 };
 
 // --- Initialize ---

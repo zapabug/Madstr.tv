@@ -1,110 +1,53 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-// import QRCode from 'react-qr-code'; // Removed QRCode import
-import { motion, AnimatePresence } from 'framer-motion';
-import { NDKEvent } from '@nostr-dev-kit/ndk';
-import { useNdk, useProfile } from '@nostr-dev-kit/ndk-hooks'; // Use NDK hooks
-import { useMediaElementPlayback } from '../hooks/useMediaElementPlayback';
-import { VideoNote } from '../types/nostr';
-import { useInactivityTimer } from '../hooks/useInactivityTimer';
-import { useFocusManager } from '../hooks/useFocusManager';
-import { NostrNote } from '../types/nostr';
-import { formatTime } from '../utils/timeUtils';
-import FullscreenButton from './shared/FullscreenButton';
-import Slider from './shared/Slider';
-// Remove unused wallet/auth/tipping related imports if tipping is removed
-// import { useWallet, SendTipParams } from '../hooks/useWallet';
-// import { useAuth } from '../hooks/useAuth';
-// import { FiZap } from 'react-icons/fi';
-// import NDK from '@nostr-dev-kit/ndk';
-
-// Remove CustomLoggedInIcon if not used elsewhere after removing tipping section
-/*
-const CustomLoggedInIcon = () => (
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-    <path 
-      d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" 
-      fill="#8B5CF6" 
-      stroke="#F7931A" 
-      strokeWidth="1.5"
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-*/
+import React, { useEffect, useRef, useMemo } from 'react';
+import QRCode from 'react-qr-code';
+import * as nip19 from 'nostr-tools/nip19';
 
 export interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   src: string | null;
   isPlaying: boolean;
   togglePlayPause: () => void;
-  // authorNpub: string | null; // Removed prop
-  autoplayFailed: boolean;
+  onPlay: () => void;
+  authorNpub: string | null;
   isMuted: boolean;
-  // currentNoteId?: string; // Removed prop (was only used for tipping)
+  noteId: string | null;
+  posterPubkey: string | null;
+  profilePicture?: string | null;
 }
 
-// Remove DEFAULT_TIP_AMOUNT
-// const DEFAULT_TIP_AMOUNT = 121; // Sats
-
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
-  videoRef, 
+const VideoPlayer: React.FC<VideoPlayerProps> = ({
+  videoRef,
   src,
   isPlaying,
   togglePlayPause,
-  // authorNpub, // Removed from destructuring
-  autoplayFailed,
+  onPlay,
   isMuted,
-  // currentNoteId // Removed from destructuring
+  noteId,
+  posterPubkey,
+  profilePicture,
 }) => {
-  // Remove unused hooks and state related to tipping/author
-  // const wallet = useWallet();
-  // const auth = useAuth(undefined);
-  // const { ndk } = useMediaAuthors();
-  // const ndkInstance = ndk;
-  // const [isTipping, setIsTipping] = useState(false);
-  // const [tipStatus, setTipStatus] = useState<'success' | 'error' | null>(null);
-  // const authorContainerRef = useRef<HTMLDivElement>(null);
   const playButtonRef = useRef<HTMLButtonElement>(null);
-  const [isHoveringControls, setIsHoveringControls] = useState(false);
-  const lastInteractionTime = useRef(Date.now());
-  const { ndk, profile } = useNdkProfile(activeNote?.posterPubkey); // <<< Refactored NDK/Profile logic
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // --- Load video source when src changes ---
-  useEffect(() => {
-    if (videoRef.current && src) {
-      console.log('VideoPlayer: Setting src to', src);
-      videoRef.current.src = src;
-      videoRef.current.load();
-    } else if (videoRef.current) {
-       console.log('VideoPlayer: Clearing src');
-       videoRef.current.removeAttribute('src');
-       videoRef.current.load();
-    }
-  }, [src, videoRef]);
-
-  // --- Handle Play/Pause based on isPlaying prop ---
-  useEffect(() => {
-     if (videoRef.current) {
-         if (isPlaying && videoRef.current.paused) {
-             videoRef.current.play().catch(error => {
-                 console.error("Video play failed:", error);
-             });
-         } else if (!isPlaying && !videoRef.current.paused) {
-             videoRef.current.pause();
-         }
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowUp' && !isPlaying) {
+         event.preventDefault();
+         playButtonRef.current?.focus();
      }
-  }, [isPlaying, videoRef]);
+  };
 
-  // --- Remove canTip calculation --- 
-  // const canTip = ...;
+  // Generate nevent URI from noteId
+  const neventUri = useMemo(() => {
+    if (!noteId) return null;
+    try {
+      return `nostr:${nip19.neventEncode({ id: noteId })}`;
+    } catch (e) {
+      console.error('VideoPlayer: Failed to encode nevent:', e);
+      return null;
+    }
+  }, [noteId]);
 
-  // --- Remove handleTip handler --- 
-  // const handleTip = useCallback(async () => { ... });
-
-  // --- Remove handleAuthorKeyDown handler --- 
-  // const handleAuthorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => { ... };
+  // Generate fallback text from posterPubkey (last 3 chars)
+  const fallbackText = posterPubkey ? posterPubkey.slice(-3).toUpperCase() : '???';
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
@@ -117,12 +60,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay Play/Pause Button - Show only if autoplay failed */}
-      { autoplayFailed && !isPlaying && (
-        <button 
+      { !isPlaying && (
+        <button
           ref={playButtonRef}
-          onClick={togglePlayPause}
-          tabIndex={0} 
+          onClick={onPlay}
+          onKeyDown={handleKeyDown}
+          tabIndex={0}
           className="absolute p-3 z-10 bg-black bg-opacity-50 text-purple-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-opacity duration-200 opacity-80 hover:opacity-100"
           aria-label="Play Video"
         >
@@ -132,9 +75,42 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </button>
       )}
 
-      {/* --- REMOVED Author Info / QR Code / Tipping Container --- */}
-      {/* {authorNpub && ( ... )} */}
+      {/* Top-left: Profile image */}
+      {(profilePicture || posterPubkey) && (
+        <div className="absolute top-2 left-2 z-20">
+          <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden border-2 border-black">
+            {profilePicture ? (
+              <img 
+                src={profilePicture} 
+                alt="Profile" 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                <span className="text-white text-sm font-bold">{fallbackText}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
+      {/* Bottom-right: nevent QR */}
+      {neventUri && (
+        <div className="absolute bottom-2 right-2 z-20">
+          <QRCode
+            value={neventUri}
+            size={64}
+            style={{ height: 'auto', width: '100%' }}
+            viewBox={`0 0 256 256`}
+            level="M"
+            bgColor="transparent"
+            fgColor="#FFFFFF"
+          />
+        </div>
+      )}
     </div>
   );
 };

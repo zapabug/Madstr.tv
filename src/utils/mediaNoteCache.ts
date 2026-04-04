@@ -3,7 +3,7 @@ import { openDB, IDBPDatabase, DBSchema } from 'idb';
 import { NostrNote } from '../types/nostr';
 
 const DB_NAME = 'MediaNotesCache';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'mediaNotes';
 
 // Define the database schema

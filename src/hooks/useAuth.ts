@@ -1,25 +1,41 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as nip19 from 'nostr-tools/nip19';
-// NIP-04 is now handled by NDK signer
-// import * as nip04 from 'nostr-tools/nip04';
-// import * as nip46 from 'nostr-tools/nip46'; // Removed unused import
-import { Buffer } from 'buffer'; // Import Buffer for hex conversion
-// Import key generation from the correct submodule
+import { encrypt, decrypt, getConversationKey } from 'nostr-tools/nip44';
 import { getPublicKey, generateSecretKey } from 'nostr-tools/pure';
-// Removed incorrect import: import { generatePrivateKey } from 'nostr-tools';
-// Removed unused NDKFilter, NDKSubscriptionOptions from import
-// Remove unused imports: NDK, NostrEvent, NDKUser, NDKSigner
-import { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
-// Corrected import path - removed .ts extension
-// Use specific helpers from idb export
-import { idb, StoredNip46Data } from '../utils/idb';
-// Import useNDK hook
-import { useNDK } from '@nostr-dev-kit/ndk-hooks';
-// Import the new helper
-// import { bytesToHex } from '../utils/misc';
+import NDK, { NDKPrivateKeySigner, NDKNip46Signer, NDKEvent, NostrEvent, NDKUser, NDKSubscription } from '@nostr-dev-kit/ndk';
+import { idb, StoredNsecData, StoredImageFiltering, StoredVideoFiltering, StoredMusicFiltering, StoredNip46Session } from '../utils/idb';
+
+interface NostrWindow {
+    nostr?: {
+        getPublicKey(): Promise<string>;
+        signEvent(_event: unknown): Promise<unknown>;
+        getRelays?(): Promise<Record<string, { read: boolean; write: boolean }>>;
+    };
+}
+
+interface Nip46User {
+    npub: string;
+    pubkey: string;
+}
+
+declare global {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    interface Window extends NostrWindow {}
+}
+
+// NIP-44 helper functions
+const nip44Encrypt = (sk: Uint8Array, pk: string, data: string): string => {
+    const key = getConversationKey(sk, pk);
+    return encrypt(data, key);
+};
+
+const nip44Decrypt = (sk: Uint8Array, pk: string, ciphertext: string): string => {
+    const key = getConversationKey(sk, pk);
+    return decrypt(ciphertext, key);
+};
 
 // Define default tags (can be customized)
-const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast'];
+const DEFAULT_FOLLOWED_TAGS = ['memes', 'landscape', 'photography', 'art', 'music', 'podcast', 'nosolutions'];
 
 // Define the shape of the hook's return value
 // Export the interface so it can be used externally
@@ -34,20 +50,41 @@ export interface UseAuthReturn {
     authError: string | null;
     nip46ConnectUri: string | null; // Expose the generated URI
     isGeneratingUri: boolean; // Loading state for URI generation
-    initiateNip46Connection: () => Promise<void>; // Renamed function
+    hasExtension: boolean; // NIP-07 extension detected
+    initiateNip46Connection: () => Promise<void>; // QR code flow - generate URI and wait
+    connectWithBunkerUri: (_bunkerUri: string) => Promise<void>; // Paste flow - parse URI and connect
+    connectWithExtension: () => Promise<void>; // NIP-07 extension flow
     cancelNip46Connection: () => void; // Function to cancel NIP-46 attempt
     generateNewKeys: () => Promise<{ npub: string; nsec: string } | null>;
-    loginWithNsec: (nsec: string) => Promise<boolean>;
+    loginWithNsec: (_nsec: string) => Promise<boolean>;
     logout: () => Promise<void>;
-    // Removed saveNsecToDb, handled internally by loginWithNsec
-    // Removed getNdkSigner, NDK instance holds the signer directly
-    // Removed signEvent, use ndk.signer.sign directly
+    saveNsecToDb: (_nsec: string) => Promise<void>; // Explicit save function
+    getNdkSigner: () => Promise<NDKPrivateKeySigner | NDKNip46Signer | undefined>; // To get the current signer for NDK
+    signEvent: (_event: NostrEvent) => Promise<NostrEvent | null>; // Unified signing method
     // Hashtag state and setter
     followedTags: string[];
-    setFollowedTags: (tags: string[]) => void;
-    // NIP-04 Methods using ndk.signer
-    encryptDm: (recipientPubkeyHex: string, plaintext: string) => Promise<string>;
-    decryptDm: (senderPubkeyHex: string, ciphertext: string) => Promise<string>;
+    setFollowedTags: (_tags: string[]) => void;
+    // Video hashtag state and setter (separate from image/audio tags)
+    videoTags: string[];
+    setVideoTags: (_tags: string[]) => void;
+    // Music hashtag state and setter
+    musicTags: string[];
+    setMusicTags: (_tags: string[]) => void;
+    // NIP-04 Methods (deprecated, for fallback)
+    encryptDm: (_recipientPubkeyHex: string, _plaintext: string) => Promise<string>;
+    decryptDm: (_senderPubkeyHex: string, _ciphertext: string) => Promise<string>;
+    // Tag filtering flags
+    fetchImagesByTagEnabled: boolean;
+    fetchVideosByTagEnabled: boolean;
+    fetchMusicByTagEnabled: boolean;
+    keywordSearch: string;
+    setKeywordSearch: (_keyword: string) => void;
+    setFetchImagesByTagEnabled: (_enabled: boolean) => void;
+    setFetchVideosByTagEnabled: (_enabled: boolean) => void;
+    setFetchMusicByTagEnabled: (_enabled: boolean) => void;
+    // Mute list (Kind 10000)
+    mutedPubkeys: string[];
+    ndk: NDK | undefined;
 }
 
 
@@ -55,7 +92,6 @@ export interface UseAuthReturn {
 // const APP_IDENTITY_NSEC = "nsec1..."; // TODO: Ideally load from secure config, not hardcoded (Commented out as unused)
 
 const NIP46_RELAYS = ['wss://nsec.app', 'wss://relay.damus.io', 'wss://relay.primal.net'];
-const NIP46_CONNECT_TIMEOUT = 75000; // 75 seconds
 
 // Remove NDK instance argument from the hook definition
 export const useAuth = (): UseAuthReturn => {
@@ -64,26 +100,25 @@ export const useAuth = (): UseAuthReturn => {
 
     // --- State ---
     const [currentUserNpub, setCurrentUserNpub] = useState<string | null>(null);
-    const [currentUserNsecForBackup, setCurrentUserNsecForBackup] = useState<string | null>(null); // Keep for backup/display
-    const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true); // Start as true
+    const [currentUserNsec, setCurrentUserNsec] = useState<string | null>(null);
+    const [nip46SessionPayload, setNip46SessionPayload] = useState<string | null>(null);
+    const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
     const [authError, setAuthError] = useState<string | null>(null);
-    // NIP-46 connection state
-    const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null); // State for the URI
-    const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false); // Loading state for URI generation
-    // Refs for NIP-46 connection process
-    const nip46TempPrivKeyRef = useRef<Uint8Array | null>(null);
-    const nip46SubscriptionRef = useRef<NDKSubscription | null>(null);
-    const nip46TimeoutRef = useRef<number | null>(null); // Use number for window.setTimeout ID
-    const nip46SignerInstanceRef = useRef<NDKNip46Signer | null>(null); // Ref to hold the NIP-46 signer instance during connection
-    // Followed tags state
-    const [followedTags, setFollowedTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS); // Initialize with defaults
+    const [nip46ConnectUri, setNip46ConnectUri] = useState<string | null>(null);
+    const [isGeneratingUri, setIsGeneratingUri] = useState<boolean>(false);
+    const hasExtension = !!(typeof window !== 'undefined' && window.nostr);
+    const [isExtensionSession, setIsExtensionSession] = useState<boolean>(false);
+    const [followedTags, setFollowedTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
+    const [videoTags, setVideoTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
+    const [musicTags, setMusicTagsState] = useState<string[]>(DEFAULT_FOLLOWED_TAGS);
+    const [fetchImagesByTagEnabled, setFetchImagesByTagEnabledState] = useState<boolean>(false);
+    const [fetchVideosByTagEnabled, setFetchVideosByTagEnabledState] = useState<boolean>(false);
+    const [fetchMusicByTagEnabled, setFetchMusicByTagEnabledState] = useState<boolean>(false);
+    const [keywordSearch, setKeywordSearchState] = useState<string>('');
+    const [mutedPubkeys, setMutedPubkeys] = useState<string[]>([]);
 
-    // --- Derived State ---
-    // Directly check ndk?.signer for login status
-    // Add a check for ndk itself, though it should always be available
-    // if useNDK is used correctly within a provider context.
-    const isLoggedIn = !!ndk?.signer;
-    // console.log(`useAuth: DIAGNOSTIC - isLoggedIn check (ndk?.signer exists?): ${isLoggedIn}`); // <-- DIAGNOSTIC LOG
+    // Derived state for isLoggedIn based on nsec, nip46 session, or extension session
+    const isLoggedIn = !!(currentUserNpub && (currentUserNsec || nip46SessionPayload || isExtensionSession));
 
     // --- Update npub state when signer changes ---
     useEffect(() => {
@@ -128,25 +163,142 @@ export const useAuth = (): UseAuthReturn => {
     }, []);
 
      const saveFollowedTags = useCallback(async (tags: string[]) => {
-        try {
-            if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
-            const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
-            if (validTags.length !== tags.length) {
-                console.warn("Some invalid tags were filtered before saving.");
-            }
-            // Use specific helper
-            await idb.saveFollowedTagsToDb(validTags);
-            // console.log("Saved followed tags to DB:", validTags);
-        } catch (error) {
-            console.error("Failed to save followed tags to IndexedDB:", error);
-        }
-     }, []);
+         try {
+             // Simple validation
+             if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
+             const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
+             if (validTags.length !== tags.length) {
+                 console.warn("Some invalid tags were filtered before saving.");
+             }
+             await idb.putSetting({ id: 'followedTags', tags: validTags });
+             console.log("Saved followed tags to DB:", validTags);
+         } catch (error) {
+             console.error("Failed to save followed tags to IndexedDB:", error);
+             // Optionally set an error state? For now, just log.
+         }
+      }, []);
 
      const setFollowedTags = useCallback((tags: string[]) => {
          setFollowedTagsState(tags);
          saveFollowedTags(tags);
      }, [saveFollowedTags]);
 
+     // --- Video Tags Persistence ---
+     const loadVideoTags = useCallback(async () => {
+         try {
+             const storedTags = await idb.getSetting('videoTags') as string[] | undefined;
+             if (storedTags && Array.isArray(storedTags)) {
+                 console.log("Loaded video tags from DB:", storedTags);
+                 return storedTags;
+             }
+         } catch (error) {
+             console.error("Failed to load video tags from IndexedDB:", error);
+         }
+         return DEFAULT_FOLLOWED_TAGS;
+     }, []);
+
+     const saveVideoTags = useCallback(async (tags: string[]) => {
+         try {
+             if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
+             const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
+             await idb.putSetting({ id: 'videoTags', tags: validTags });
+             console.log("Saved video tags to DB:", validTags);
+         } catch (error) {
+             console.error("Failed to save video tags to IndexedDB:", error);
+         }
+     }, []);
+
+     const setVideoTags = useCallback((tags: string[]) => {
+         setVideoTagsState(tags);
+         saveVideoTags(tags);
+     }, [saveVideoTags]);
+
+     // --- Music Tags ---
+     const loadMusicTags = useCallback(async () => {
+         try {
+             const storedTags = await idb.getSetting('musicTags') as string[] | undefined;
+             if (storedTags && Array.isArray(storedTags)) {
+                 console.log("Loaded music tags from DB:", storedTags);
+                 return storedTags;
+             }
+         } catch (error) {
+             console.error("Failed to load music tags from IndexedDB:", error);
+         }
+         return DEFAULT_FOLLOWED_TAGS;
+     }, []);
+
+     const saveMusicTags = useCallback(async (tags: string[]) => {
+         try {
+             if (!Array.isArray(tags)) throw new Error("Invalid tags format: not an array.");
+             const validTags = tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.length < 50);
+             await idb.putSetting({ id: 'musicTags', tags: validTags });
+             console.log("Saved music tags to DB:", validTags);
+         } catch (error) {
+             console.error("Failed to save music tags to IndexedDB:", error);
+         }
+     }, []);
+
+     const setMusicTags = useCallback((tags: string[]) => {
+         setMusicTagsState(tags);
+         saveMusicTags(tags);
+     }, [saveMusicTags]);
+
+    // --- Hashtag Filtering State ---
+    const loadFilteringState = useCallback(async () => {
+        try {
+            const storedImageFiltering = await idb.getSetting('fetchImagesByTagEnabled') as StoredImageFiltering | undefined;
+            const storedVideoFiltering = await idb.getSetting('fetchVideosByTagEnabled') as StoredVideoFiltering | undefined;
+            const storedMusicFiltering = await idb.getSetting('fetchMusicByTagEnabled') as StoredMusicFiltering | undefined;
+            
+            if (storedImageFiltering?.value !== undefined) {
+                setFetchImagesByTagEnabledState(storedImageFiltering.value);
+            }
+            if (storedVideoFiltering?.value !== undefined) {
+                setFetchVideosByTagEnabledState(storedVideoFiltering.value);
+            }
+            if (storedMusicFiltering?.value !== undefined) {
+                setFetchMusicByTagEnabledState(storedMusicFiltering.value);
+            }
+        } catch (error) {
+            console.error("Failed to load hashtag filtering state from IndexedDB:", error);
+        }
+    }, []);
+
+    const saveFilteringState = useCallback(async (type: 'images' | 'videos' | 'music', enabled: boolean) => {
+        try {
+            // const settingId = type === 'images' ? 'fetchImagesByTagEnabled' : 'fetchVideosByTagEnabled'; // Unused
+            const setting = type === 'images' 
+                ? { id: 'fetchImagesByTagEnabled', value: enabled } as StoredImageFiltering
+                : { id: 'fetchVideosByTagEnabled', value: enabled } as StoredVideoFiltering;
+            await idb.putSetting(setting);
+        } catch (error) {
+            console.error(`Failed to save ${type} filtering state to IndexedDB:`, error);
+        }
+    }, []);
+
+    const setFetchImagesByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchImagesByTagEnabledState(enabled);
+        saveFilteringState('images', enabled);
+    }, [saveFilteringState]);
+
+    const setFetchVideosByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchVideosByTagEnabledState(enabled);
+        saveFilteringState('videos', enabled);
+    }, [saveFilteringState]);
+
+    const setFetchMusicByTagEnabled = useCallback((enabled: boolean) => {
+        setFetchMusicByTagEnabledState(enabled);
+        saveFilteringState('music', enabled);
+    }, [saveFilteringState]);
+
+    const setKeywordSearch = useCallback((keyword: string) => {
+        setKeywordSearchState(keyword);
+    }, []);
+
+    // Load filtering state on mount
+    useEffect(() => {
+        loadFilteringState();
+    }, [loadFilteringState]);
 
     // --- Nsec Persistence (Modified, uses specific idb helpers) ---
 
@@ -184,6 +336,23 @@ export const useAuth = (): UseAuthReturn => {
             await idb.saveNsecToDb(nsec);
             setCurrentUserNsecForBackup(nsec); // Update backup state
             console.log("Saved nsec to DB.");
+
+            const skBytes = decoded.data as Uint8Array;
+            // Pass Uint8Array to getPublicKey
+            const pkHex = getPublicKey(skBytes);
+            const npub = nip19.npubEncode(pkHex);
+            setCurrentUserNsec(nsec);
+            setCurrentUserNpub(npub);
+            setNip46SessionPayload(null);
+            setAuthError(null);
+
+             // On successful nsec login/save, load user's tags, merging with defaults
+             const userTags = await loadFollowedTags();
+             // Merge: Create a Set from both arrays to get unique values, then convert back to array
+             const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+             setFollowedTagsState(mergedTags); // Set state directly, save happens automatically if needed via setFollowedTags
+             console.log("Merged tags on nsec login:", mergedTags);
+
         } catch (error) {
             console.error("Failed to save nsec to IndexedDB:", error);
             setAuthError("Failed to save login credentials.");
@@ -233,28 +402,459 @@ export const useAuth = (): UseAuthReturn => {
 
     const clearNip46DataFromDb = useCallback(async () => {
         try {
-            // Use specific helper
-            await idb.clearNip46DataFromDb();
-            console.log("Cleared NIP-46 connection data from DB.");
+            const decoded = nip19.decode(nsecInput);
+            if (decoded.type === 'nsec') {
+                 await saveNsecToDb(nsecInput); // This now handles setting tags
+                 setIsLoadingAuth(false);
+                return true;
+            } else {
+                throw new Error("Invalid nsec format provided.");
+            }
+        } catch (error: unknown) {
+            console.error("Login with nsec failed:", error);
+            setAuthError(error instanceof Error ? error.message : "Invalid nsec provided.");
+            setCurrentUserNsec(null);
+            setCurrentUserNpub(null);
+            setNip46SessionPayload(null);
+            setFollowedTagsState(DEFAULT_FOLLOWED_TAGS); // Reset tags to default on failed login
+            setIsLoadingAuth(false);
+            return false;
+        }
+    }, [saveNsecToDb]);
+
+    // --- NIP-46 Handling ---
+
+    const saveNip46SessionToDb = useCallback(async (payload: string) => {
+        try {
+            await idb.putSetting({ id: 'nip46Session', payload });
+            console.log("Saved NIP-46 session to DB");
         } catch (error) {
-            console.error("Failed to clear NIP-46 data from IndexedDB:", error);
+            console.error("Failed to save NIP-46 session:", error);
         }
     }, []);
 
+    const loadNip46SessionFromDb = useCallback(async (): Promise<string | null> => {
+        try {
+            const stored = await idb.getSetting('nip46Session') as StoredNip46Session | undefined;
+            if (stored?.payload) {
+                console.log("Loaded NIP-46 session from DB");
+                return stored.payload;
+            }
+        } catch (error) {
+            console.error("Failed to load NIP-46 session:", error);
+        }
+        return null;
+    }, []);
+
+    const clearNip46SessionFromDb = useCallback(async () => {
+        try {
+            await idb.deleteSetting('nip46Session');
+            console.log("Cleared NIP-46 session from DB");
+        } catch (error) {
+            console.error("Failed to clear NIP-46 session:", error);
+        }
+    }, []);
+
+    const convertNostrconnectToBunker = (nostrconnectUri: string): string => {
+        try {
+            const url = new URL(nostrconnectUri);
+            const pubkey = url.hostname;
+            const relays = url.searchParams.getAll('relay');
+            const secret = url.searchParams.get('secret');
+            
+            const bunkerUrl = new URL('bunker://' + pubkey);
+            relays.forEach(relay => bunkerUrl.searchParams.append('relay', relay));
+            if (secret) bunkerUrl.searchParams.set('secret', secret);
+            
+            return bunkerUrl.toString();
+        } catch (error) {
+            console.error("Failed to convert nostrconnect to bunker URI:", error);
+            throw new Error("Invalid NIP-46 connection URI");
+        }
+    };
+
+    const initiateNip46Connection = useCallback(async (): Promise<void> => {
+        if (!ndkInstance) {
+            setAuthError("NDK not initialized.");
+            console.error("Cannot initiate NIP-46: NDK instance is missing.");
+            return;
+        }
+
+        console.log("[bunker] Initiating NIP-46 connection (QR flow)...");
+        setIsLoadingAuth(true);
+        setIsGeneratingUri(true);
+        setAuthError(null);
+
+        let subscription: NDKSubscription | null = null;
+        let timeoutId: NodeJS.Timeout | null = null;
+
+        const cleanup = () => {
+            if (subscription) {
+                subscription.stop();
+                subscription = null;
+            }
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
+
+        try {
+            const tempPrivKeyBytes = generateSecretKey();
+            const tempPubKeyHex = getPublicKey(tempPrivKeyBytes);
+            const localSigner = new NDKPrivateKeySigner(tempPrivKeyBytes);
+
+            const uriParams = new URLSearchParams();
+            NIP46_RELAYS.forEach(relay => uriParams.append('relay', relay));
+            uriParams.append('metadata', JSON.stringify({ name: "Madstr.tv" }));
+            const connectUri = `nostrconnect://${tempPubKeyHex}?${uriParams.toString()}`;
+            setNip46ConnectUri(connectUri);
+            setIsGeneratingUri(false);
+
+            const bunkerUri = convertNostrconnectToBunker(connectUri);
+            const { pubkey: bunkerPubkey } = parseBunkerUri(bunkerUri);
+            console.log("[bunker] Generated bunker URI for QR code");
+            console.log("[bunker] Bunker pubkey:", bunkerPubkey);
+
+            const connectRequestId = Math.random().toString(36).substring(7);
+            let getPkRequestId: string | null = null;
+            const connectParams = [tempPubKeyHex];
+
+            const filter = {
+                kinds: [24133],
+                '#p': [tempPubKeyHex],
+                since: Math.floor(Date.now() / 1000) - 10,
+            };
+
+            console.log("[bunker] Subscribing to NIP-46 events...");
+            subscription = ndkInstance.subscribe(filter, { 
+                closeOnEose: false,
+            });
+
+            const user = await new Promise<Nip46User>((resolve, reject) => {
+                timeoutId = setTimeout(() => {
+                    cleanup();
+                    reject(new Error("[bunker] Connection timed out"));
+                }, 60000);
+
+                subscription.on('event', async (event: NDKEvent) => {
+                    try {
+                        const decryptedContent = nip44Decrypt(tempPrivKeyBytes, event.pubkey, event.content);
+                        const response = JSON.parse(decryptedContent);
+                        console.log("[bunker] Received response:", JSON.stringify(response));
+
+                        if (response.result === "ack") {
+                            console.log("[bunker] Got ACK! Connection established.");
+                            
+                            getPkRequestId = Math.random().toString(36).substring(7);
+                            const getPkRequest = { id: getPkRequestId, method: "get_public_key", params: [] };
+                            const encryptedRequest = await nip44Encrypt(tempPrivKeyBytes, event.pubkey, JSON.stringify(getPkRequest));
+                            
+                            const requestEvent = new NDKEvent(ndkInstance);
+                            requestEvent.kind = 24133;
+                            requestEvent.created_at = Math.floor(Date.now() / 1000);
+                            requestEvent.content = encryptedRequest;
+                            requestEvent.tags = [['p', event.pubkey]];
+                            requestEvent.pubkey = tempPubKeyHex;
+                            
+                            const requestSig = await localSigner.sign(requestEvent.rawEvent());
+                            requestEvent.sig = requestSig;
+                            requestEvent.id = requestEvent.getEventHash();
+                            
+                            console.log("[bunker] Sending get_public_key request (no secret)...");
+                            console.log("[bunker] get_pk request id:", getPkRequestId);
+                            await requestEvent.publish();
+                        } else if (response.id === getPkRequestId && response.result) {
+                            const pubkeyHex = response.result;
+                            console.log("[bunker] Got public key:", pubkeyHex);
+                            
+                            if (pubkeyHex && pubkeyHex.length === 64 && /^[a-fA-F0-9]+$/.test(pubkeyHex)) {
+                                cleanup();
+                                const user = ndkInstance.getUser({ hexpubkey: pubkeyHex });
+                                resolve(user);
+                            } else {
+                                console.error("[bunker] Invalid pubkey format:", pubkeyHex);
+                            }
+                        } else if (response.error) {
+                            console.error("[bunker] Error:", JSON.stringify(response.error));
+                            cleanup();
+                            reject(new Error(response.error.message || response.error || 'Connection failed'));
+                        }
+                    } catch (error) {
+                        console.error("[bunker] Failed to process event:", error);
+                    }
+                });
+
+                subscription.start();
+
+                setTimeout(async () => {
+                    console.log("[bunker] Sending connect request...");
+                    try {
+                        const connectRequest = { id: connectRequestId, method: "connect", params: connectParams };
+                        console.log("[bunker] Connect request ID:", connectRequestId);
+                        const encryptedConnect = await nip44Encrypt(tempPrivKeyBytes, bunkerPubkey, JSON.stringify(connectRequest));
+                        
+                        const event = new NDKEvent(ndkInstance);
+                        event.kind = 24133;
+                        event.created_at = Math.floor(Date.now() / 1000);
+                        event.content = encryptedConnect;
+                        event.tags = [['p', bunkerPubkey]];
+                        event.pubkey = tempPubKeyHex;
+                        
+                        const sig = await localSigner.sign(event.rawEvent());
+                        event.sig = sig;
+                        event.id = event.getEventHash();
+                        
+                        console.log("[bunker] Publishing connect event...");
+                        await event.publish();
+                    } catch (error) {
+                        console.error("[bunker] Failed to send connect request:", error);
+                        cleanup();
+                        reject(error);
+                    }
+                }, 1000);
+            });
+
+            console.log("[bunker] Connection established! User:", user.npub);
+            
+            const localSignerPayload = (localSigner as NDKPrivateKeySigner & { privateKey: string }).privateKey;
+            const payloadObj = {
+                type: "nip46",
+                payload: {
+                    bunkerPubkey: bunkerPubkey,
+                    userPubkey: user.pubkey,
+                    relayUrls: NIP46_RELAYS,
+                    secret: null,
+                    localSignerPayload: localSignerPayload,
+                    nip05: null,
+                },
+            };
+            const payload = JSON.stringify(payloadObj);
+            setNip46SessionPayload(payload);
+            await saveNip46SessionToDb(payload);
+            
+            setCurrentUserNpub(user.npub);
+            setCurrentUserNsec(null);
+            setNip46ConnectUri(null);
+            setAuthError(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            setIsLoadingAuth(false);
+            console.log("[bunker] NIP-46 login successful!");
+
+        } catch (error: unknown) {
+            console.error("[bunker] NIP-46 connection failed:", error);
+            cleanup();
+            const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+            setAuthError(`Bunker Connection Failed: ${errorMessage}`);
+            setNip46ConnectUri(null);
+            setIsLoadingAuth(false);
+        }
+    }, [ndkInstance, loadFollowedTags, saveNip46SessionToDb]);
+
+    const parseBunkerUri = (uri: string): { pubkey: string; relays: string[]; secret?: string } => {
+        try {
+            const url = new URL(uri);
+            const pubkey = url.hostname || url.pathname.replace(/^\/\//, "");
+            const relays = url.searchParams.getAll('relay');
+            const secret = url.searchParams.get('secret') || undefined;
+            return { pubkey, relays, secret };
+        } catch (error) {
+            console.error("Failed to parse bunker URI:", error);
+            throw new Error("Invalid bunker URI");
+        }
+    };
+
+    const connectWithBunkerUri = useCallback(async (bunkerUri: string): Promise<void> => {
+        if (!ndkInstance) {
+            setAuthError("NDK not initialized.");
+            console.error("Cannot connect with bunker: NDK instance is missing.");
+            return;
+        }
+
+        console.log("[bunker] Connecting with bunker URI:", bunkerUri);
+        setIsLoadingAuth(true);
+        setAuthError(null);
+
+        try {
+            const signer = new NDKNip46Signer(ndkInstance, bunkerUri);
+            
+            signer.on('authUrl', (url: string) => {
+                console.log("[bunker] Auth URL event:", url);
+            });
+
+            console.log("[bunker] Waiting for connection (blockUntilReady)...");
+            const user = await signer.blockUntilReady();
+            
+            console.log("[bunker] NIP-46 connection established for user:", user.npub);
+            
+            const payload = signer.toPayload();
+            setNip46SessionPayload(payload);
+            await saveNip46SessionToDb(payload);
+            
+            setCurrentUserNpub(user.npub);
+            setCurrentUserNsec(null);
+            setNip46ConnectUri(null);
+            setAuthError(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            setIsLoadingAuth(false);
+            console.log("[bunker] NIP-46 login successful!");
+
+        } catch (error: unknown) {
+            console.error("[bunker] NIP-46 connection failed:", error);
+            const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+            setAuthError(`Bunker Connection Failed: ${errorMessage}`);
+            setNip46ConnectUri(null);
+            setIsLoadingAuth(false);
+        }
+    }, [ndkInstance, loadFollowedTags, saveNip46SessionToDb]);
+
+    const restoreNip46Session = useCallback(async (): Promise<boolean> => {
+        if (!ndkInstance) return false;
+        
+        try {
+            const payload = await loadNip46SessionFromDb();
+            if (!payload) return false;
+
+            console.log("Restoring NIP-46 session...");
+            const signer = await NDKNip46Signer.fromPayload(payload, ndkInstance);
+            
+            signer.on('authUrl', (url: string) => {
+                console.log("NIP-46 auth URL received during restore:", url);
+                if (url) {
+                    window.open(url, 'auth', 'width=600,height=600');
+                }
+            });
+
+            const user = await signer.blockUntilReady();
+            
+            setNip46SessionPayload(payload);
+            setCurrentUserNpub(user.npub);
+            setCurrentUserNsec(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            console.log("NIP-46 session restored for user:", user.npub);
+            return true;
+        } catch (error) {
+            console.error("Failed to restore NIP-46 session:", error);
+            await clearNip46SessionFromDb();
+            return false;
+        }
+    }, [ndkInstance, loadNip46SessionFromDb, loadFollowedTags, clearNip46SessionFromDb]);
+
+    const connectWithExtension = useCallback(async (): Promise<void> => {
+        if (typeof window === 'undefined' || !window.nostr) {
+            setAuthError("No Nostr extension found.");
+            return;
+        }
+
+        console.log("[extension] Connecting with NIP-07 extension...");
+        setIsLoadingAuth(true);
+        setAuthError(null);
+
+        try {
+            const pubkey = await window.nostr.getPublicKey();
+            const npub = nip19.npubEncode(pubkey);
+            
+            setCurrentUserNpub(npub);
+            setCurrentUserNsec(null);
+            setNip46SessionPayload(null);
+            setIsExtensionSession(true);
+            setAuthError(null);
+            
+            const userTags = await loadFollowedTags();
+            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+            setFollowedTagsState(mergedTags);
+            
+            setIsLoadingAuth(false);
+            console.log("[extension] Logged in with extension:", npub);
+
+        } catch (error: unknown) {
+            console.error("[extension] Connection failed:", error);
+            const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+            setAuthError(`Extension Error: ${errorMessage}`);
+            setIsLoadingAuth(false);
+        }
+    }, [loadFollowedTags]);
+
+    const cancelNip46Connection = useCallback(() => {
+        console.log("User cancelled NIP-46 connection attempt.");
+        setAuthError("Connection cancelled.");
+        setNip46ConnectUri(null);
+        setIsLoadingAuth(false);
+    }, []);
+
+    // --- General Auth Logic ---
+
+    const logout = useCallback(async () => {
+        console.log("Logging out...");
+        setIsLoadingAuth(true);
+        setAuthError(null);
+        setCurrentUserNpub(null);
+        setCurrentUserNsec(null);
+        setNip46SessionPayload(null);
+        setNip46ConnectUri(null);
+        setIsExtensionSession(false);
+        await clearNsecFromDb();
+        await clearNip46SessionFromDb();
+        setFollowedTagsState(DEFAULT_FOLLOWED_TAGS);
+        setIsLoadingAuth(false);
+        console.log("Logout complete.");
+    }, [clearNsecFromDb, clearNip46SessionFromDb]);
 
     // --- Initialization Effect ---
     useEffect(() => {
         const initializeAuth = async () => {
-            console.log("useAuth: Initializing authentication...");
-            // Ensure ndk is ready before proceeding
-            if (!ndk) {
-                console.log("useAuth: NDK instance not ready yet, waiting...");
-                // We might need a mechanism here to re-trigger init if ndk becomes available later,
-                // but useNDK should provide it ready within the context.
-                // Setting loading back to false might be premature if ndk isn't ready.
-                // For now, assume ndk is ready or becomes ready triggering the effect.
-                setIsLoadingAuth(false); // Or handle appropriately
-                return;
+            console.log("Initializing auth...");
+            setIsLoadingAuth(true);
+            setAuthError(null);
+
+            const loadedNsec = await loadNsecFromDb();
+            const loadedTags = await loadFollowedTags();
+
+            if (loadedNsec) {
+                const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...loadedTags]));
+                setFollowedTagsState(mergedTags);
+                console.log("Auth initialized with stored nsec.");
+            } else {
+                // Check for NIP-46 session first
+                const sessionRestored = await restoreNip46Session();
+                if (sessionRestored) {
+                    console.log("Auth initialized with restored NIP-46 session.");
+                } else {
+                    // Check for extension session
+                    if (typeof window !== 'undefined' && window.nostr) {
+                        try {
+                            console.log("[extension] Checking for extension session on init...");
+                            const pubkey = await window.nostr.getPublicKey();
+                            const npub = nip19.npubEncode(pubkey);
+                            setCurrentUserNpub(npub);
+                            setCurrentUserNsec(null);
+                            setNip46SessionPayload(null);
+                            setIsExtensionSession(true);
+                            const userTags = await loadFollowedTags();
+                            const mergedTags = Array.from(new Set([...DEFAULT_FOLLOWED_TAGS, ...userTags]));
+                            setFollowedTagsState(mergedTags);
+                            console.log("[extension] Auth initialized with extension session:", npub);
+                        } catch {
+                            console.log("[extension] No extension session available, using defaults.");
+                            setFollowedTagsState(loadedTags);
+                        }
+                    } else {
+                        setFollowedTagsState(loadedTags);
+                        console.log("Auth initialized, no stored credentials.");
+                    }
+                }
             }
 
             // Check if already logged in (e.g., via previous action in this session)
@@ -338,77 +938,148 @@ export const useAuth = (): UseAuthReturn => {
         };
 
         initializeAuth();
+    }, [loadNsecFromDb, loadFollowedTags, restoreNip46Session]);
 
-         // Cleanup function (optional, might not be needed here)
-         return () => {
-             // console.log("useAuth: Cleanup effect (if needed).");
-         };
-    // Add all dependencies used within the effect
-    }, [ndk, loadNip46DataFromDb, loadNsecFromDb, clearNip46DataFromDb, clearNsecFromDb, loadFollowedTags, saveNip46DataToDb, saveNsecToDbInternal]); // Added save functions as they might be indirectly related via state updates if needed
+    // Load followed tags on mount, regardless of login state
+    useEffect(() => {
+        const initializeTags = async () => {
+            const storedTags = await loadFollowedTags();
+            setFollowedTagsState(storedTags);
+        };
+        initializeTags();
+    }, [loadFollowedTags]);
 
+    // Load video tags on mount, regardless of login state
+    useEffect(() => {
+        const initializeVideoTags = async () => {
+            const storedTags = await loadVideoTags();
+            setVideoTagsState(storedTags);
+        };
+        initializeVideoTags();
+    }, [loadVideoTags]);
 
-    // --- Core Auth Logic (functions like generateNewKeys, loginWithNsec, initiateNip46Connection, logout) ---
+    // Load music tags on mount, regardless of login state
+    useEffect(() => {
+        const initializeMusicTags = async () => {
+            const storedTags = await loadMusicTags();
+            setMusicTagsState(storedTags);
+        };
+        initializeMusicTags();
+    }, [loadMusicTags]);
 
-    const loginWithNsec = useCallback(async (nsecInput: string): Promise<boolean> => {
-        if (!ndk) {
-            setAuthError("NDK not initialized.");
-            console.error("useAuth: NDK instance not available in loginWithNsec.");
-            return false;
+    // --- Mute List (Kind 10000) ---
+    const fetchMuteList = useCallback(async () => {
+        if (!ndkInstance || !currentUserNpub) {
+            return [];
         }
-         setIsLoadingAuth(true);
-         setAuthError(null);
-        console.log("Attempting login with nsec...");
+
         try {
-            const decoded = nip19.decode(nsecInput);
-            if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) {
-                throw new Error("Invalid nsec format provided.");
-            }
-            const privateKeySigner = new NDKPrivateKeySigner(nsecInput);
-            ndk.signer = privateKeySigner;
-            const user = await ndk.signer.user();
-            console.log("Logged in with nsec, user:", user.npub);
-            setCurrentUserNpub(user.npub);
-            await saveNsecToDbInternal(nsecInput);
-            await clearNip46DataFromDb();
-            setIsLoadingAuth(false);
-            return true;
+            const decoded = nip19.decode(currentUserNpub);
+            if (decoded.type !== 'npub') return [];
+            const pubkeyHex = decoded.data as string;
+
+            console.log("[mute] Fetching mute list for pubkey:", pubkeyHex.substring(0, 16) + "...");
+
+            const filter = { kinds: [10000], authors: [pubkeyHex], limit: 1 };
+            const subscription = ndkInstance.subscribe(filter, { closeOnEose: true });
+
+            return new Promise<string[]>((resolve) => {
+                let foundEvent = false;
+                subscription.on('event', (event) => {
+                    foundEvent = true;
+                    const muted = event.tags
+                        .filter(tag => tag[0] === 'p' && tag[1])
+                        .map(tag => tag[1]);
+                    console.log("[mute] Found mute list with", muted.length, "entries");
+                    setMutedPubkeys(muted);
+                    resolve(muted);
+                });
+                subscription.on('eose', () => {
+                    if (!foundEvent) {
+                        console.log("[mute] No mute list found, using empty list");
+                        setMutedPubkeys([]);
+                        resolve([]);
+                    }
+                });
+                setTimeout(() => {
+                    if (!foundEvent) {
+                        resolve([]);
+                    }
+                    subscription.stop();
+                }, 10000); // 10 second timeout
+            });
         } catch (error) {
-            console.error("Failed to login with nsec:", error);
-            setAuthError(`Login failed: ${error instanceof Error ? error.message : String(error)}`);
-            if (ndk) ndk.signer = undefined;
-            setCurrentUserNpub(null);
-            setCurrentUserNsecForBackup(null);
-            setIsLoadingAuth(false);
-            return false;
+            console.error("[mute] Error fetching mute list:", error);
+            return [];
         }
-    }, [ndk, saveNsecToDbInternal, clearNip46DataFromDb]);
+    }, [ndkInstance, currentUserNpub]);
 
-    const generateNewKeys = useCallback(async (): Promise<{ npub: string; nsec: string } | null> => {
-        console.log("Generating new keys...");
-        setIsLoadingAuth(true);
-        setAuthError(null);
-        try {
-            const skBytes = generateSecretKey();
-            const pkHex = getPublicKey(skBytes);
-            const nsec = nip19.nsecEncode(skBytes);
-            const npub = nip19.npubEncode(pkHex);
-            console.log("Generated new keys - npub:", npub);
+    // Fetch mute list when user logs in
+    useEffect(() => {
+        if (currentUserNpub && isLoggedIn) {
+            fetchMuteList();
+        }
+    }, [currentUserNpub, isLoggedIn, fetchMuteList]);
 
-            // Log in with the new nsec (Now defined above)
-            const loggedIn = await loginWithNsec(nsec);
-            if (loggedIn) {
-                // loginWithNsec sets loading to false
-                return { npub, nsec };
-            } else {
-                throw new Error("Failed to log in with newly generated keys.");
+    // --- Signer Logic ---
+    const cachedSignerRef = useRef<NDKPrivateKeySigner | NDKNip46Signer | undefined>(undefined);
+    const cachedNsecRef = useRef<string | null>(null);
+    const cachedNip46PayloadRef = useRef<string | null>(null);
+
+    const getNdkSigner = useCallback(async (): Promise<NDKPrivateKeySigner | NDKNip46Signer | undefined> => {
+        if (nip46SessionPayload && ndkInstance) {
+            if (cachedNip46PayloadRef.current === nip46SessionPayload && cachedSignerRef.current) {
+                return cachedSignerRef.current;
             }
-        } catch (error) {
-            console.error("Failed to generate or login with new keys:", error);
-            setAuthError(`Key generation failed: ${error instanceof Error ? error.message : String(error)}`);
-            setIsLoadingAuth(false);
-            if(ndk) ndk.signer = undefined;
-            setCurrentUserNpub(null);
-            setCurrentUserNsecForBackup(null);
+            console.log("Restoring NIP-46 signer from session...");
+            try {
+                const signer = await NDKNip46Signer.fromPayload(nip46SessionPayload, ndkInstance);
+                cachedSignerRef.current = signer;
+                cachedNip46PayloadRef.current = nip46SessionPayload;
+                cachedNsecRef.current = null;
+                return signer;
+            } catch (error) {
+                console.error("Failed to restore NIP-46 signer:", error);
+                return undefined;
+            }
+        } else if (currentUserNsec && ndkInstance) {
+            if (cachedNsecRef.current === currentUserNsec && cachedSignerRef.current) {
+                return cachedSignerRef.current;
+            }
+            try {
+                const decoded = nip19.decode(currentUserNsec);
+                if (decoded.type === 'nsec') {
+                    const signer = new NDKPrivateKeySigner(decoded.data as Uint8Array);
+                    cachedSignerRef.current = signer;
+                    cachedNsecRef.current = currentUserNsec;
+                    cachedNip46PayloadRef.current = null;
+                    return signer;
+                }
+            } catch (error) {
+                console.error("Failed to create NDKPrivateKeySigner from nsec:", error);
+            }
+        }
+        return undefined;
+    }, [currentUserNsec, nip46SessionPayload, ndkInstance]);
+
+      const signEvent = useCallback(async (event: NostrEvent): Promise<NostrEvent | null> => {
+        if (isExtensionSession && window.nostr) {
+            try {
+                console.log("[extension] Signing event with extension...");
+                const signedEvent = await window.nostr.signEvent(event);
+                console.log("[extension] Signed event:", signedEvent);
+                return signedEvent as NostrEvent;
+            } catch (error) {
+                console.error("[extension] Failed to sign event:", error);
+                setAuthError(`Extension sign failed: ${error instanceof Error ? error.message : String(error)}`);
+                return null;
+            }
+        }
+
+        const signer = await getNdkSigner();
+        if (!signer) {
+            setAuthError("Cannot sign event: No active signer (not logged in?).");
+            console.error("signEvent called without an active signer.");
             return null;
         }
     }, [ndk, loginWithNsec]);
@@ -443,144 +1114,61 @@ export const useAuth = (): UseAuthReturn => {
         cancelNip46Connection();
 
         try {
-             // Generate a temporary local keypair for this connection attempt
-             const localSecretKeyBytes = generateSecretKey();
-             const localPublicKeyHex = getPublicKey(localSecretKeyBytes);
-             const localSecretKeyHex = Buffer.from(localSecretKeyBytes).toString('hex');
-             nip46TempPrivKeyRef.current = localSecretKeyBytes;
-             const localSigner = new NDKPrivateKeySigner(localSecretKeyHex);
-
-             // Create the nostrconnect URI
-             const uriParams = new URLSearchParams();
-             NIP46_RELAYS.forEach(relay => uriParams.append('relay', relay));
-             uriParams.append('metadata', JSON.stringify({
-                 name: "MadTrips TV App",
-                 url: window.location.origin,
-                 description: "Nostr media experience for your TV",
-                 // icons: ["url_to_icon.png"]
-             }));
-             const connectUri = `nostr+connect://${localPublicKeyHex}?${uriParams.toString()}`;
-             console.log("Generated NIP-46 Connect URI:", connectUri);
-            setNip46ConnectUri(connectUri);
-
-             // Create filter to listen for responses from the remote signer
-             const filter: NDKFilter = {
-                 kinds: [24133],
-                 "#p": [localPublicKeyHex],
-                 since: Math.floor(Date.now() / 1000) - 5,
-             };
-             console.log("Subscribing for NIP-46 connection response with filter:", filter);
-
-              // Create the subscription
-              const sub = ndk.subscribe(filter, { closeOnEose: false, groupable: false });
-              nip46SubscriptionRef.current = sub;
-
-             sub.on("event", async (event: NDKEvent) => {
-                 if (!nip46TempPrivKeyRef.current) return;
-                 try {
-                     const remotePubkey = event.pubkey;
-                     // Create NDKUser object for decryption
-                     const remoteUser = ndk.getUser({ hexpubkey: remotePubkey });
-                     const decryptedContent = await localSigner.decrypt(remoteUser, event.content);
-                     const response = JSON.parse(decryptedContent);
-                     console.log("Decrypted NIP-46 response:", response);
-
-                     if (response.result && !response.error) {
-                         console.log(`NIP-46 connection acknowledged by ${remotePubkey}. Finalizing...`);
-                         if (nip46TimeoutRef.current) clearTimeout(nip46TimeoutRef.current);
-                        if (nip46SubscriptionRef.current) nip46SubscriptionRef.current.stop();
-                        nip46SubscriptionRef.current = null;
-                nip46TimeoutRef.current = null;
-
-                         // Create the *persistent* NDKNip46Signer using the remote pubkey and our local signer
-                        const persistentNip46Signer = new NDKNip46Signer(ndk, remotePubkey, localSigner);
-                        ndk.signer = persistentNip46Signer;
-                        const user = await ndk.signer.user();
-                        console.log("NIP-46 Signer set successfully for user:", user.npub);
-                        setCurrentUserNpub(user.npub);
-
-                         // Revert: Store localSecretKeyHex in the 'token' field
-                        const nip46DataToStore: Omit<StoredNip46Data, 'id'> = {
-                            remoteNpub: remotePubkey,
-                            token: localSecretKeyHex, // Store local secret hex here
-                            relay: NIP46_RELAYS[0],
-                            // Remove explicit localSecretKeyHex field
-                        };
-                        await saveNip46DataToDb(nip46DataToStore);
-            await clearNsecFromDb();
-                        setCurrentUserNsecForBackup(null);
-
-                         // Clear generating state, URI, temp key ref
-                        setIsGeneratingUri(false);
-            setNip46ConnectUri(null);
-                        nip46TempPrivKeyRef.current = null;
-
-                    } else if (response.error) {
-                         console.error(`NIP-46 Error from ${remotePubkey}: ${response.error}`);
-                    }
-                 } catch (error) {
-                     console.error("Error processing NIP-46 event:", error);
-                 }
-             });
-
-             sub.on("eose", () => {
-                 console.log("NIP-46 subscription EOSE received.");
-                 // Keep listening if timeout hasn't occurred and connection not established.
-             });
-
-             // Start the connection timeout
-             nip46TimeoutRef.current = window.setTimeout(() => {
-                 if (!ndk.signer && nip46SubscriptionRef.current) {
-                     console.warn("NIP-46 connection timed out.");
-                     setAuthError("Remote sign-in request timed out. Please try again.");
-                     cancelNip46Connection();
-                 }
-             }, NIP46_CONNECT_TIMEOUT);
+             const ndkEvent = new NDKEvent(ndkInstance ?? undefined);
+             ndkEvent.kind = event.kind as number;
+             ndkEvent.content = event.content;
+             ndkEvent.tags = event.tags || [];
 
         } catch (error) {
              console.error("Failed to initiate NIP-46 connection:", error);
              setAuthError(`Failed to start remote sign-in: ${error instanceof Error ? error.message : String(error)}`);
              cancelNip46Connection();
         }
-    }, [ndk, cancelNip46Connection, saveNip46DataToDb, clearNsecFromDb]);
+     }, [isExtensionSession, getNdkSigner, ndkInstance]);
 
-    const logout = useCallback(async () => {
-        if (!ndk) {
-            console.error("useAuth: NDK instance not available in logout.");
-            return;
-        }
-        console.log("Logging out...");
-        setIsLoadingAuth(true);
-        setAuthError(null);
-        ndk.signer = undefined;
-        setCurrentUserNpub(null);
-        setCurrentUserNsecForBackup(null);
-        await clearNsecFromDb();
-        await clearNip46DataFromDb();
-        setIsLoadingAuth(false);
-        console.log("Logout complete.");
-    }, [ndk, clearNsecFromDb, clearNip46DataFromDb]);
+    // --- NIP-44 Encryption/Decryption Helpers ---
+
+    const getPrivateKeyBytes = (sk: string | Uint8Array): Uint8Array => {
+        if (sk instanceof Uint8Array) return sk;
+        return new Uint8Array(Buffer.from(sk, 'hex'));
+    };
 
     // --- NIP-04/44 Methods (Using NDK Signer) ---
     const encryptDm = useCallback(async (recipientPubkeyHex: string, plaintext: string): Promise<string> => {
-        if (!ndk?.signer) throw new Error("Not logged in / Signer not available");
-        try {
-            const recipientUser = ndk.getUser({ hexpubkey: recipientPubkeyHex });
-            return await ndk.signer.encrypt(recipientUser, plaintext);
-        } catch (error) {
-            console.error("Encryption failed:", error);
-            throw new Error(`Encryption failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        const signer = await getNdkSigner();
+        if (!signer) throw new Error("Cannot encrypt DM: No user signer available.");
+        if (!ndkInstance) throw new Error("NDK instance not available for creating NDKUser.");
+
+        if (signer instanceof NDKPrivateKeySigner) {
+            const sk = signer.privateKey;
+            if (!sk) throw new Error("Nsec signer has no private key.");
+            const skBytes = getPrivateKeyBytes(sk);
+            return nip44Encrypt(skBytes, recipientPubkeyHex, plaintext);
+        } else if (signer instanceof NDKNip46Signer) {
+            const recipientUser = new NDKUser({ pubkey: recipientPubkeyHex });
+            recipientUser.ndk = ndkInstance;
+            return signer.encrypt(recipientUser, plaintext);
+        } else {
+            throw new Error("Unsupported signer type for DM encryption.");
         }
     }, [ndk, ndk?.signer]);
 
     const decryptDm = useCallback(async (senderPubkeyHex: string, ciphertext: string): Promise<string> => {
-        if (!ndk?.signer) throw new Error("Not logged in / Signer not available");
-        try {
-            const senderUser = ndk.getUser({ hexpubkey: senderPubkeyHex });
-            return await ndk.signer.decrypt(senderUser, ciphertext);
-        } catch (error) {
-            console.error("Decryption failed:", error);
-            throw new Error(`Decryption failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        const signer = await getNdkSigner();
+        if (!signer) throw new Error("Cannot decrypt DM: No user signer available.");
+        if (!ndkInstance) throw new Error("NDK instance not available for creating NDKUser.");
+
+        if (signer instanceof NDKPrivateKeySigner) {
+            const sk = signer.privateKey;
+            if (!sk) throw new Error("Nsec signer has no private key.");
+            const skBytes = getPrivateKeyBytes(sk);
+            return nip44Decrypt(skBytes, senderPubkeyHex, ciphertext);
+        } else if (signer instanceof NDKNip46Signer) {
+            const senderUser = new NDKUser({ pubkey: senderPubkeyHex });
+            senderUser.ndk = ndkInstance;
+            return signer.decrypt(senderUser, ciphertext);
+        } else {
+            throw new Error("Unsupported signer type for DM decryption.");
         }
     }, [ndk, ndk?.signer]);
 
@@ -593,14 +1181,36 @@ export const useAuth = (): UseAuthReturn => {
         authError,
         nip46ConnectUri,
         isGeneratingUri,
+        hasExtension,
         initiateNip46Connection,
+        connectWithBunkerUri,
+        connectWithExtension,
         cancelNip46Connection,
         generateNewKeys,
         loginWithNsec,
         logout,
+        saveNsecToDb,
+        getNdkSigner,
+        signEvent,
         followedTags,
         setFollowedTags,
+        videoTags,
+        setVideoTags,
+        musicTags,
+        setMusicTags,
         encryptDm,
         decryptDm,
+        // Add new properties for hashtag filtering
+        fetchImagesByTagEnabled,
+        fetchVideosByTagEnabled,
+        fetchMusicByTagEnabled,
+        keywordSearch,
+        setKeywordSearch,
+        setFetchImagesByTagEnabled,
+        setFetchVideosByTagEnabled,
+        setFetchMusicByTagEnabled,
+        // Mute list
+        mutedPubkeys,
+        ndk: ndkInstance, // Added NDK instance
     };
 };

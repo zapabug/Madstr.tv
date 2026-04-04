@@ -35,18 +35,18 @@ This document summarizes the key styling and user experience improvements implem
     *   Duplicated button hides during fullscreen mode with a fade animation.
 *   **Video Overlay Play Button (`VideoPlayer.tsx`):**
     *   Icon color changed to purple (`text-purple-400`).
-    *   Visibility logic updated: Only shown if autoplay failed or video is playing muted.
+    *   Visibility logic updated: Only shown if autoplay failed or video is playing muted. currently stays visible need atention
 *   **Hidden Settings Button (`RelayStatus.tsx`):**
     *   Integrated *inside* the `RelayStatus` component.
     *   Uses `opacity-0 focus:opacity-100` (and `group-focus-within`) to appear only when focused, remaining visually hidden otherwise.
 
 ## 4. QR Codes & Status Indicators
 
-*   **Main QR Code (Bottom-Left):**
+*   Main QR Code (Bottom-Left): **does not exist anymore**
     *   Slightly increased size (`w-20 h-20`+).
     *   Increased padding (`p-1.5`) on white background for better scan margins.
     *   Positioning preserved.
-*   **Author QR Code (Bottom-Right in Media Area):**
+*   Author QR Code (Bottom-Right in Media Area): **is now nevent**
     *   Rendered inside `ImageFeed`/`VideoPlayer`.
     *   Positioned absolutely (`bottom-2 right-2`) with standard sizing.
 *   **Relay Status Indicator:**
