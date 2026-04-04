@@ -14,8 +14,10 @@ interface UseMediaStateProps {
   // Keep fetchers and lengths
   fetchOlderImages?: () => void;
   fetchOlderVideos?: () => void;
+  fetchOlderAudio?: () => void;
   shuffledImageNotesLength?: number; // Need length for boundary check
   shuffledVideoNotesLength?: number; // Need length for boundary check
+  shuffledAudioNotesLength?: number; // Need length for boundary check
 }
 
 // Define return type for clarity
@@ -57,10 +59,12 @@ export function useMediaState({
     initialAudioNotes = [],
     initialVideoNotes = [],
     // Keep others
-    fetchOlderImages, 
-    fetchOlderVideos, 
-    shuffledImageNotesLength = 0, 
-    shuffledVideoNotesLength = 0 
+    fetchOlderImages,
+    fetchOlderVideos,
+    fetchOlderAudio,
+    shuffledImageNotesLength = 0,
+    shuffledVideoNotesLength = 0,
+    shuffledAudioNotesLength = 0,
   }: UseMediaStateProps = {}): UseMediaStateReturn {
 
     // State for selected video author npub
@@ -177,10 +181,13 @@ export function useMediaState({
         console.log("useMediaState: setCurrentAudioIndex called with", index);
         if (index >= 0 && index < audioNotes.length) {
             setCurrentAudioIndexInternal(index);
+        } else if (index >= shuffledAudioNotesLength && shuffledAudioNotesLength > 0) {
+            console.log("useMediaState: Reached end of audio list, calling fetchOlderAudio...");
+            fetchOlderAudio?.();
         } else {
             console.warn(`useMediaState: Attempted to set invalid audio index ${index}`);
         }
-    }, [audioNotes]);
+    }, [audioNotes, shuffledAudioNotesLength, fetchOlderAudio]);
 
     // Function to set view mode directly
     const setViewMode = useCallback((mode: 'imagePodcast' | 'videoPlayer') => {

@@ -44,14 +44,16 @@ function App() {
   const [videoFetchLimit] = useState<number>(30);
   const [imageFetchUntil, setImageFetchUntil] = useState<number | undefined>(undefined);
   const [videoFetchUntil, setVideoFetchUntil] = useState<number | undefined>(undefined);
+  const [audioFetchUntil, setAudioFetchUntil] = useState<number | undefined>(undefined);
   const [notesRefreshKey, setNotesRefreshKey] = useState<number>(0);
 
   // Fetch notes using dynamic parameters
-  const { notes: audioNotes, isLoading: isLoadingAudioNotes, markAsSeen: markAudioSeen } = useMediaNotes({ 
-    authors: mediaAuthors, 
-    mediaType: 'audio', 
-    ndk: ndkInstance, 
-    limit: 25,
+  const { notes: audioNotes, isLoading: isLoadingAudioNotes, markAsSeen: markAudioSeen } = useMediaNotes({
+    authors: mediaAuthors,
+    mediaType: 'audio',
+    ndk: ndkInstance,
+    limit: 100,
+    until: audioFetchUntil,
     followedTags: fetchMusicByTagEnabled ? musicTags : undefined,
     refreshKey: notesRefreshKey,
     mutedPubkeys,
@@ -109,9 +111,16 @@ function App() {
   const fetchOlderVideos = useCallback(() => {
     if (videoNotes.length > 0) {
       const oldestTimestamp = videoNotes[videoNotes.length - 1].created_at;
-      setVideoFetchUntil(oldestTimestamp); 
+      setVideoFetchUntil(oldestTimestamp);
     }
-  }, [videoNotes]); 
+  }, [videoNotes]);
+
+  const fetchOlderAudio = useCallback(() => {
+    if (audioNotes.length > 0) {
+      const oldestTimestamp = audioNotes[audioNotes.length - 1].created_at;
+      setAudioFetchUntil(oldestTimestamp);
+    }
+  }, [audioNotes]);
 
   // Keyword filter for follows content
   const filterByKeyword = (notes: NostrNote[], keyword: string): NostrNote[] => {
@@ -143,10 +152,12 @@ function App() {
       initialImageNotes: keywordSearch ? filterByKeyword(shuffledImageNotes, keywordSearch) : shuffledImageNotes, 
       initialAudioNotes: keywordFilteredAudioNotes,
       initialVideoNotes: keywordSearch ? filterByKeyword(filteredVideoNotes, keywordSearch) : filteredVideoNotes,
-      fetchOlderImages: fetchOlderImages, 
+      fetchOlderImages: fetchOlderImages,
       fetchOlderVideos: fetchOlderVideos,
+      fetchOlderAudio: fetchOlderAudio,
       shuffledImageNotesLength: keywordSearch ? filterByKeyword(shuffledImageNotes, keywordSearch).length : shuffledImageNotes.length,
       shuffledVideoNotesLength: keywordSearch ? filterByKeyword(filteredVideoNotes, keywordSearch).length : filteredVideoNotes.length,
+      shuffledAudioNotesLength: keywordFilteredAudioNotes.length,
   });
 
   // Effects for shuffling notes
@@ -211,7 +222,7 @@ function App() {
     elementType: 'audio',
     onEnded: isAudioMode ? handleNext : undefined, 
     initialTime: initialAudioTime, 
-    autoplayEnabled: true,
+    autoplayEnabled: false,
     next: true,
   });
 
@@ -423,9 +434,10 @@ function App() {
                      >
                            <VideoPlayer
                                videoRef={videoRef}
-                               src={currentItemUrl} 
+                               src={currentItemUrl}
                                isPlaying={videoPlayback.isPlaying}
                                togglePlayPause={videoPlayback.togglePlayPause}
+                               onPlay={videoPlayback.play}
                                authorNpub={currentAuthorNpub}
                                isMuted={videoPlayback.isMuted}
                                noteId={currentVideoNote?.id || null}

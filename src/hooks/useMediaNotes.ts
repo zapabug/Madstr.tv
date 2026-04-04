@@ -247,31 +247,41 @@ export function useMediaNotes({
             // Podcast logic - prioritize NIP-94 m tag with audio/*, then enclosure, url, media
             const mimeTag = event.tags.find((t) => t[0] === 'm' && t[1]?.startsWith('audio/'));
             if (mimeTag) {
-                 foundVia = 'm tag (audio)';
-                 const urlTag = event.tags.find((t) => t[0] === 'url');
-                 if (urlTag && urlTag[1]) { mediaUrl = urlTag[1]; foundVia += ' + url tag'; }
-                 if (!mediaUrl) {
-                     const mediaTag = event.tags.find((t) => t[0] === 'media');
-                     if (mediaTag && mediaTag[1]) { mediaUrl = mediaTag[1]; foundVia += ' + media tag'; }
-                 }
-                 // Fallback to content regex if mime type found but no URL tag
-                 if (!mediaUrl) {
-                     const genericUrlRegex = /https?:\/\/\S+/i;
-                     const contentMatch = event.content.match(genericUrlRegex);
-                     if (contentMatch) { mediaUrl = contentMatch[0]; foundVia += ' + content regex fallback'; }
-                 }
+                foundVia = 'm tag (audio)';
+                // Validate url/media tags against audioRegex — avoid accepting cover art images
+                const urlTag = event.tags.find((t) => t[0] === 'url');
+                if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia += ' + url tag'; }
+                if (!mediaUrl) {
+                    const mediaTag = event.tags.find((t) => t[0] === 'media');
+                    if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia += ' + media tag'; }
+                }
+                // Fallback to enclosure tag
+                if (!mediaUrl) {
+                    const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
+                    if (enclosureTag && enclosureTag[1]?.match(urlRegex)) { mediaUrl = enclosureTag[1]; foundVia += ' + enclosure tag'; }
+                }
+                // Fallback to content regex if mime type found but no valid audio URL tag
+                if (!mediaUrl) {
+                    const anyUrlRegex = /https?:\/\/[^\s<>"\]]+/gi;
+                    const allUrls = event.content.match(anyUrlRegex);
+                    if (allUrls) {
+                        for (const foundUrl of allUrls) {
+                            if (urlRegex.test(foundUrl)) { mediaUrl = foundUrl; foundVia += ' + content regex fallback'; break; }
+                        }
+                    }
+                }
             } else {
-                 // Fallback: check enclosure, url, media tags with audio regex
-                 const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
-                 if (enclosureTag && enclosureTag[1]?.match(urlRegex)) { mediaUrl = enclosureTag[1]; foundVia = 'enclosure tag'; }
-                 if (!mediaUrl) {
-                      const urlTag = event.tags.find((t) => t[0] === 'url');
-                      if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia = 'url tag + audio regex'; }
-                 }
-                 if (!mediaUrl) {
-                      const mediaTag = event.tags.find((t) => t[0] === 'media');
-                      if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + audio regex'; }
-                 }
+                // Fallback: check enclosure, url, media tags with audio regex
+                const enclosureTag = event.tags.find((t) => t[0] === 'enclosure');
+                if (enclosureTag && enclosureTag[1]?.match(urlRegex)) { mediaUrl = enclosureTag[1]; foundVia = 'enclosure tag'; }
+                if (!mediaUrl) {
+                     const urlTag = event.tags.find((t) => t[0] === 'url');
+                     if (urlTag && urlTag[1]?.match(urlRegex)) { mediaUrl = urlTag[1]; foundVia = 'url tag + audio regex'; }
+                }
+                if (!mediaUrl) {
+                     const mediaTag = event.tags.find((t) => t[0] === 'media');
+                     if (mediaTag && mediaTag[1]?.match(urlRegex)) { mediaUrl = mediaTag[1]; foundVia = 'media tag + audio regex'; }
+                }
             }
         }
 

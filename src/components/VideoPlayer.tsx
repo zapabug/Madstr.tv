@@ -7,6 +7,7 @@ export interface VideoPlayerProps {
   src: string | null;
   isPlaying: boolean;
   togglePlayPause: () => void;
+  onPlay: () => void;
   authorNpub: string | null;
   isMuted: boolean;
   noteId: string | null;
@@ -14,31 +15,18 @@ export interface VideoPlayerProps {
   profilePicture?: string | null;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
-  videoRef, 
+const VideoPlayer: React.FC<VideoPlayerProps> = ({
+  videoRef,
   src,
   isPlaying,
   togglePlayPause,
+  onPlay,
   isMuted,
   noteId,
   posterPubkey,
   profilePicture,
 }) => {
   const playButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current && src) {
-      console.log('VideoPlayer: Setting src to', src);
-      if (!videoRef.current.paused) videoRef.current.pause();
-      videoRef.current.src = src;
-      videoRef.current.load();
-    } else if (videoRef.current) {
-       console.log('VideoPlayer: Clearing src');
-       if (!videoRef.current.paused) videoRef.current.pause();
-       videoRef.current.removeAttribute('src');
-       videoRef.current.load();
-    }
-  }, [src, videoRef]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'ArrowUp' && !isPlaying) {
@@ -73,11 +61,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </video>
 
       { !isPlaying && (
-        <button 
+        <button
           ref={playButtonRef}
-          onClick={togglePlayPause}
+          onClick={onPlay}
           onKeyDown={handleKeyDown}
-          tabIndex={0} 
+          tabIndex={0}
           className="absolute p-3 z-10 bg-black bg-opacity-50 text-purple-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 focus:ring-offset-black transition-opacity duration-200 opacity-80 hover:opacity-100"
           aria-label="Play Video"
         >

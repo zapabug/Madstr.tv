@@ -81,9 +81,9 @@ export function useMediaElementPlayback({
       console.log(`useMediaElementPlayback (${elementType}): Attempting play... Current src: ${mediaElement.currentSrc}`);
       hasAttemptedPlayRef.current = true;
       
-      // For videos with autoplay, unmute on play for back-to-back playback with sound
-      if (elementType === 'video' && mediaElement.muted) {
-        console.log(`useMediaElementPlayback (video): Unmuting for back-to-back playback with sound.`);
+      // Unmute on play for both audio and video
+      if (mediaElement.muted) {
+        console.log(`useMediaElementPlayback (${elementType}): Unmuting on play.`);
         mediaElement.muted = false;
         setIsMuted(false);
       }
@@ -202,6 +202,13 @@ export function useMediaElementPlayback({
 
     const handlePlay = () => {
       console.log("useMediaElementPlayback: Play event fired.");
+      // Auto-pause muted video — button will appear for user to press and play unmuted
+      if (elementType === 'video' && mediaElement.muted) {
+        console.log("useMediaElementPlayback (video): Muted autoplay detected — auto-pausing. Button will appear.");
+        mediaElement.pause();
+        setIsPlaying(false);
+        return;
+      }
       setIsPlaying(true);
       setIsMuted(mediaElement.muted);
       setAutoplayFailed(false);
