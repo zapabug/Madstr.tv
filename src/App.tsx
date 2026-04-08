@@ -8,17 +8,17 @@ import { } from './constants';
 import { useMediaAuthors } from './hooks/useMediaAuthors';
 import { useMediaState } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
+import { useMediaNotes } from './hooks/useMediaNotes';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
 import { useCurrentAuthor } from './hooks/useCurrentAuthor';
 import { useNDKInit } from './hooks/useNDKInit';
 import { NostrNote } from './types/nostr';
+import { shuffleArray } from './utils/shuffleArray';
 import { motion, AnimatePresence } from 'framer-motion';
 import SettingsModal from './components/SettingsModal';
 import { useAuth } from './hooks/useAuth';
-import { useMediaContent } from './hooks/useMediaContent';
-import { nip19 } from 'nostr-tools'; // <-- Re-added nip19 import
 
 // Fullscreen Timeouts
 const INTERACTION_TIMEOUT = 30000; // 30 seconds
@@ -86,10 +86,8 @@ function App() {
   // State for audio saved position
   const [initialAudioTime] = useState<number>(0);
 
-  // --- Media Refs --- 
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const imageFeedRef = useRef<HTMLDivElement>(null);
+  // State for preload URL
+  const [preloadVideoUrl, setPreloadVideoUrl] = useState<string | null>(null);
 
   // State for video author filter
   const [selectedVideoAuthor] = useState<string | null>(null);
@@ -246,9 +244,11 @@ function App() {
   // Ref for ImageFeed component
   const imageFeedRef = useRef<ImageFeedRef>(null);
 
-  // --- Keyboard Controls Hook --- 
+  // Function to focus the toggle button in ImageFeed
   const focusImageFeedToggle = useCallback(() => {
-      imageFeedRef.current?.focus();
+    if (imageFeedRef.current) {
+      imageFeedRef.current.focusToggleButton();
+    }
   }, []);
 
 
@@ -265,10 +265,11 @@ function App() {
     viewMode,
   });
 
-  // --- Image Carousel Hook --- 
+  // Image Carousel Hook
+  const isCarouselActive = viewMode === 'imagePodcast' && shuffledImageNotes.length > 1;
   useImageCarousel({
-      isActive: viewMode === 'imagePodcast' && isPlaying,
-      onTick: handleNext,
+      isActive: isCarouselActive,
+      onTick: handleNext, 
       intervalDuration: IMAGE_CAROUSEL_INTERVAL,
   });
 
@@ -329,35 +330,41 @@ function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // --- Render Logic --- 
-  // Determine overall loading state (optional, could show spinners per section)
-  const isLoadingContent = isLoadingKind3 || isLoadingImages || isLoadingVideos || isLoadingPodcasts;
+  const handleCloseSettings = useCallback(() => {
+    setIsSettingsOpen(false);
+  }, []);
 
-  // Calculate Relay Status Props
-  const relayStatusProps = useMemo(() => ({
-      isReceivingData: !!ndk?.pool?.connectedRelays?.().length, // Check if any relays are connected
-      relayCount: ndk?.pool?.relays?.size ?? RELAYS.length, // Use NDK pool size or fallback to constant
-  }), [ndk]);
+  // Callback to toggle the settings modal state
+  const toggleSettingsModal = useCallback(() => {
+    setIsSettingsOpen(prev => !prev);
+    signalInteraction(); // Also signal interaction when settings are toggled
+  }, [signalInteraction]);
 
   // Global Loading/Error States
   const isLoading = isNdkConnecting || isLoadingAuthors || isLoadingAudioNotes || isLoadingVideoNotes || isLoadingImages;
 
   if (isNdkConnecting) {
     return (
-      <div className="relative flex flex-col min-h-screen h-screen text-white border-2 border-purple-900 bg-gradient-radial from-gray-900 via-black to-black items-center justify-center">
-        <div className="mb-4 w-16 h-16 animate-spin border-4 border-purple-600 border-t-transparent rounded-full"></div>
-        <p className="animate-pulse">Initializing Nostr Connection...</p>
+      <div className="flex items-center justify-center h-screen bg-black text-white">
+        Connecting to Nostr Relays...
       </div>
     );
   }
 
-  // --- Main Render (NDK is ready) --- 
-  console.log("App.tsx: NDK instance is ready, rendering main app.");
+  if (ndkConnectionError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-black text-red-500">
+        <p>Error connecting to Nostr Relays:</p>
+        <p>{ndkConnectionError.message}</p>
+        <p className="mt-4 text-gray-400 text-sm">Please check console or try refreshing.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`flex flex-col h-screen overflow-hidden bg-black text-white relative ${isFullScreen ? '' : 'p-4 border-8 border-gray-800'}`}>
-      {/* Invisible Audio Player */}
-      <audio ref={audioRef} src={viewMode === 'imagePodcast' ? (currentItemUrl ?? undefined) : undefined} preload="auto" />
+    <>
+    {/* Outermost div */}
+    <div className="relative flex flex-col min-h-screen h-screen text-white border-2 border-purple-900 bg-gradient-radial from-gray-900 via-black to-black">
 
       {/* Invisible Audio Element */}
       <audio
@@ -583,7 +590,6 @@ function App() {
            )
         }
         </AnimatePresence>
-      </div>
 
         {/* Animated Bottom Split Screen Container */}
         <AnimatePresence>
@@ -652,26 +658,11 @@ function App() {
         onClose={handleCloseSettings}
         ndkInstance={ndkInstance}
         onCloseAndRefresh={() => setNotesRefreshKey(k => k + 1)}
+        onToggleFullscreen={toggleBrowserFullscreen}
+        isFullscreen={isBrowserFullscreen}
     />
 
-      {/* Relay Status / Settings Button */}
-      {!isFullScreen && (
-        <div className="absolute bottom-0 right-0 mb-1 mr-1 z-50">
-          <RelayStatus 
-            onSettingsClick={() => setIsSettingsOpen(true)} 
-            isReceivingData={relayStatusProps.isReceivingData}
-            relayCount={relayStatusProps.relayCount}
-          />
-        </div>
-      )}
-
-      {/* Optional Global Loading Indicator */}
-      {/* {isLoadingContent && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <p>Loading Content...</p> 
-          </div>
-      )} */}
-    </div>
+    </>
   );
 }
 

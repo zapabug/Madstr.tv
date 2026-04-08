@@ -108,163 +108,88 @@ let dbPromise: Promise<IDBPDatabase<MadstrTvAppDB>> | null = null;
 const DB_NAME = 'MadstrTvAppDB';
 const DB_VERSION = 7;
 
-// Export StoredProof type
-export type StoredProof = Proof & { mintUrl: string };
-
-export interface StoredNip46Data {
-  id: string; // Fixed key like 'currentNip46Session'
-  remoteNpub: string;
-  token: string;
-  relay?: string; // Optional relay hint
-}
-
-// --- Database Initialization and Upgrade Logic ---
-const DB_NAME = 'MadTripsDB';
-const DB_VERSION = 4; // Increment version number to reflect schema change
-
-let dbPromise: Promise<IDBPDatabase<AppDbSchema>> | null = null;
-
-const getDb = (): Promise<IDBPDatabase<AppDbSchema>> => {
+// --- DB Initialization ---
+const getDb = (): Promise<IDBPDatabase<MadstrTvAppDB>> => {
   if (!dbPromise) {
     dbPromise = openDB<MadstrTvAppDB>(DB_NAME, DB_VERSION, {
       upgrade(db, oldVersion, newVersion) {
         console.log(`Upgrading DB from version ${oldVersion} to ${newVersion}`);
-
-        // Settings Store (Simple key-value)
+        
+        // Logic for version 1 creation (settings, media, profile)
         if (oldVersion < 1) {
-          console.log("Creating 'settings' object store.");
-          db.createObjectStore('settings');
+          if (!db.objectStoreNames.contains('settings')) {
+            const store = db.createObjectStore('settings', { keyPath: 'id' });
+            store.createIndex('id', 'id', { unique: true });
+            console.log("Created 'settings' object store.");
+          }
+          if (!db.objectStoreNames.contains('mediaNoteCache')) {
+            const store = db.createObjectStore('mediaNoteCache', { keyPath: 'id' });
+            store.createIndex('created_at', 'created_at');
+            store.createIndex('pubkey', 'pubkey');
+            store.createIndex('kind', 'kind');
+            console.log("Created 'mediaNoteCache' object store.");
+          }
+          if (!db.objectStoreNames.contains('profileCache')) {
+            const store = db.createObjectStore('profileCache', { keyPath: 'pubkey' });
+            store.createIndex('name', 'name'); // Index by name (optional)
+            console.log("Created 'profileCache' object store.");
+          }
         }
         
         // Add blocks for future versions here
 
-        // Nsec, NIP46, Tags stores
-        if (oldVersion < 3) {
-             // Nsec store
-             console.log("Creating 'nsec' object store.");
-             db.createObjectStore('nsec'); // Fixed key 'currentUserNsec'
-             // NIP-46 session store
-             console.log("Creating 'nip46Session' object store.");
-             db.createObjectStore('nip46Session', { keyPath: 'id' }); // Fixed key 'currentNip46Session'
-             // Followed Tags store
-             console.log("Creating 'followedTags' object store.");
-             db.createObjectStore('followedTags'); // Fixed key 'userFollowedTags'
-        }
-
-        // Delete old profileCache store if upgrading from v3
-        if (oldVersion === 3 && newVersion === 4) { // Check specific upgrade path
-             // Use type assertion for the old store name
-             const oldStoreName = 'profileCache' as any;
-             if (db.objectStoreNames.contains(oldStoreName)) {
-                console.log("Deleting old 'profileCache' object store during upgrade to v4.");
-                db.deleteObjectStore(oldStoreName);
-             }
-        }
-
-        // Add other future upgrades here...
-        // if (oldVersion < 5) { ... }
       },
-      blocked() {
-        console.error('IDB blocked: Another tab might be holding the database open.');
-        alert('Database access is blocked. Please close other tabs using this app and refresh.');
-      },
-      blocking() {
-        console.warn('IDB blocking: Database version change blocked by another tab.');
-      },
-      terminated() {
-        console.error('IDB terminated: The browser unexpectedly terminated the connection.');
-        dbPromise = null; // Reset promise to allow re-initialization
-      },
+      blocked: () => console.error("IndexedDB access blocked."),
+      blocking: () => console.warn("IndexedDB upgrade blocked."),
+      terminated: () => { console.error("IndexedDB connection terminated."); dbPromise = null; }
     });
   }
   return dbPromise;
 };
 
-// --- Generic CRUD Operations (Adjusted for stricter types) ---
+// --- Export consolidated object containing ALL helpers ---
+export const idb = {
+    getDbInstance: getDb,
 
-const get = async <StoreName extends keyof AppDbSchema>(
-  storeName: StoreName,
-  key: string
-): Promise<AppDbSchema[StoreName]['value'] | undefined> => {
-  const db = await getDb();
-  try {
-    // Cast storeName after the check
-    if (!db.objectStoreNames.contains(storeName as StoreNames<AppDbSchema>)) {
-        console.warn(`Store '${String(storeName)}' does not exist in the current DB schema.`);
-        return undefined;
-    }
-    return await db.get(storeName as StoreNames<AppDbSchema>, key);
-  } catch (error) {
-    console.error(`Error getting key '${key}' from store '${String(storeName)}':`, error);
-    throw error; // Re-throw or handle appropriately
-  }
-};
+    // --- Settings Store Basic Helpers ---
+    getSetting: async (key: MadstrTvAppDB['settings']['key']): Promise<SettingsValue | undefined> => {
+        const db = await getDb();
+        return db.get('settings', key);
+    },
 
-const put = async <StoreName extends keyof AppDbSchema>(
-  storeName: StoreName,
-  value: AppDbSchema[StoreName]['value'],
-  key?: string
-): Promise<IDBValidKey> => {
-  const db = await getDb();
-  try {
-    // Cast storeName after the check
-    if (!db.objectStoreNames.contains(storeName as StoreNames<AppDbSchema>)) {
-        console.error(`Store '${String(storeName)}' does not exist. Cannot put value.`);
-        throw new Error(`Store '${String(storeName)}' does not exist.`);
-    }
-    return await db.put(storeName as StoreNames<AppDbSchema>, value, key);
-  } catch (error) {
-    console.error(`Error putting value into store '${String(storeName)}':`, value, error);
-    throw error;
-  }
-};
+    putSetting: async (value: SettingsValue): Promise<MadstrTvAppDB['settings']['key']> => {
+        const db = await getDb();
+        return db.put('settings', value);
+    },
 
-const clear = async <StoreName extends keyof AppDbSchema>(
-  storeName: StoreName
-): Promise<void> => {
-  const db = await getDb();
-  try {
-    // Cast storeName after the check
-     if (!db.objectStoreNames.contains(storeName as StoreNames<AppDbSchema>)) {
-        console.warn(`Store '${String(storeName)}' does not exist. Cannot clear.`);
-        return;
-    }
-    await db.clear(storeName as StoreNames<AppDbSchema>);
-    console.log(`Cleared store: ${String(storeName)}`);
-  } catch (error) {
-    console.error(`Error clearing store '${String(storeName)}':`, error);
-    throw error;
-  }
-};
+    deleteSetting: async (key: MadstrTvAppDB['settings']['key']): Promise<void> => {
+        const db = await getDb();
+        return db.delete('settings', key);
+    },
 
-const deleteDbEntry = async <StoreName extends keyof AppDbSchema>(
-  storeName: StoreName,
-  key: string
-): Promise<void> => {
-  const db = await getDb();
-  try {
-    // Cast storeName after the check
-    if (!db.objectStoreNames.contains(storeName as StoreNames<AppDbSchema>)) {
-        console.warn(`Store '${String(storeName)}' does not exist. Cannot delete key '${key}'.`);
-        return;
-    }
-    await db.delete(storeName as StoreNames<AppDbSchema>, key);
-    console.log(`Deleted key '${key}' from store '${String(storeName)}'.`);
-  } catch (error) {
-    console.error(`Error deleting key '${key}' from store '${String(storeName)}':`, error);
-    throw error;
-  }
-};
+    // --- Specific Settings Helpers ---
+    saveNsecToDb: async (nsec: string): Promise<void> => {
+        // Use 'this' to refer to other methods within the idb object
+        await idb.putSetting({ id: 'currentUserNsec', nsec });
+    },
 
+    loadNsecFromDb: async (): Promise<string | null> => {
+        const setting = await idb.getSetting('currentUserNsec');
+        return setting && 'nsec' in setting ? setting.nsec : null;
+    },
 
-// --- Specific Helpers for Data Types ---
+    clearNsecFromDb: async (): Promise<void> => {
+        await idb.deleteSetting('currentUserNsec');
+    },
 
-// Settings
-const getSetting = (key: string) => get('settings', key);
-const putSetting = (key: string, value: any) => put('settings', value, key);
+    saveFollowedTagsToDb: async (tags: string[]): Promise<void> => {
+        await idb.putSetting({ id: 'followedTags', tags });
+    },
 
-// Cashu Proofs
-const getProofs = (mintUrl: string): Promise<Proof[] | undefined> => get('cashuProofs', mintUrl);
+    loadFollowedTagsFromDb: async (): Promise<string[]> => {
+        const setting = await idb.getSetting('followedTags');
+        return setting && 'tags' in setting ? setting.tags : [];
+    },
 
     saveVideoTagsToDb: async (tags: string[]): Promise<void> => {
         await idb.putSetting({ id: 'videoTags', tags });
@@ -275,18 +200,17 @@ const getProofs = (mintUrl: string): Promise<Proof[] | undefined> => get('cashuP
         return setting && 'tags' in setting ? setting.tags : [];
     },
 
-    await Promise.all(putPromises); // Wait for all puts in the transaction
-    await tx.done; // Commit transaction
-    console.log(`saveProofs: Finished saving proofs for ${Object.keys(proofsByMint).length} mints.`);
-};
+    // --- Media Note Cache Helpers ---
+    getMediaNote: async (key: string): Promise<NostrNote | undefined> => {
+        const db = await getDb();
+        return db.get('mediaNoteCache', key);
+    },
 
-const getAllProofs = async (): Promise<StoredProof[]> => {
-  const db = await getDb();
-  // Use readonly transaction unless write operations are needed inside
-  const tx = db.transaction('cashuProofs', 'readonly');
-  const store = tx.objectStore('cashuProofs');
-  let cursor = await store.openCursor();
-  const results: StoredProof[] = [];
+    putMediaNote: async (value: NostrNote): Promise<string> => {
+        const db = await getDb();
+        if (!value.id) throw new Error("MediaNote must have an 'id' property for IndexedDB keyPath.");
+        return db.put('mediaNoteCache', value);
+    },
 
     getAllMediaNotes: async (): Promise<NostrNote[]> => {
         const db = await getDb();
@@ -356,4 +280,4 @@ const getAllProofs = async (): Promise<StoredProof[]> => {
 
 // --- Initialize ---
 getDb().then(() => console.log("IndexedDB initialized successfully."))
-       .catch(err => console.error("IndexedDB initialization failed:", err));
+       .catch(err => console.error("IndexedDB initialization failed:", err)); 

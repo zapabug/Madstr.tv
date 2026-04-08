@@ -52,7 +52,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
       <video 
-        ref={videoRef as React.RefObject<HTMLVideoElement>}
+        ref={videoRef}
         className="max-w-full max-h-full object-contain"
         muted={isMuted}
         playsInline

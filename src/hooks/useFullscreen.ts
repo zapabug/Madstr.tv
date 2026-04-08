@@ -31,6 +31,11 @@ export const useFullscreen = ({
   const [lastInteractionTimestamp, setLastInteractionTimestamp] = useState<number>(Date.now());
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const isFullScreenRef = useRef(isFullScreen);
+  useEffect(() => {
+    isFullScreenRef.current = isFullScreen;
+  }, [isFullScreen]);
+
   const signalActivity = useCallback((isMessage: boolean) => {
     const now = Date.now();
     if (isMessage) {
@@ -38,13 +43,11 @@ export const useFullscreen = ({
     }
     setLastInteractionTimestamp(now);
 
-    if (isFullScreen) {
-      // Reset both timestamps so the immediate checkFullScreen() call in the effect
-      // doesn't re-enter fullscreen due to a stale message timeout
+    if (isFullScreenRef.current) {
       setLastMessageTimestamp(now);
       setIsFullScreen(false);
     }
-  }, [isFullScreen]);
+  }, []);
 
   const signalInteraction = useCallback(() => {
     signalActivity(false);

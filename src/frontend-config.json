@@ -176,6 +176,8 @@
     "RelayStatus" 
   ],
   "keyHooks": [
+      "useMediaAuthors",
+      "useMediaNotes",
       "useMediaState",
       "useMediaElementPlayback"
   ],

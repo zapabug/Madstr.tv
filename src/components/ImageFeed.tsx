@@ -106,30 +106,10 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-        {/* Image Container */}
-        <AnimatePresence mode="wait">
-          <motion.div
-             key={currentImageNote?.id || currentImageIndex} // Ensure key changes
-            className="w-full h-full flex items-center justify-center"
-          >
-             {imageUrl ? (
-                <img 
-                    src={imageUrl} 
-                    alt={`Nostr media ${currentImageNote?.id}`}
-                    className="max-w-full max-h-full object-contain shadow-lg"
-                    // loading="lazy" // Let the browser handle lazy loading if needed
-                    onError={(e) => {
-                        console.error(`ImageFeed: Error loading image ${imageUrl}`);
-                        // Optionally handle image errors, e.g., show placeholder
-                        (e.target as HTMLImageElement).style.display = 'none'; // Hide broken image
-                    }}
-                />
-            ) : (
-                <div className="text-gray-500">No Image Available</div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden">
+      {isLoading && !imageUrl && (
+        <p className="text-gray-400">Loading images...</p>
+      )}
 
       <AnimatePresence initial={false} mode="wait">
         {imageUrl ? (
@@ -209,6 +189,6 @@ const ImageFeed = forwardRef<ImageFeedRef, MediaFeedProps>((props, ref) => {
       </button>
     </div>
   );
-};
+});
 
 export default ImageFeed; 

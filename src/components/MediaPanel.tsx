@@ -126,7 +126,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
 
   // Focus first list item on notes load (check viewMode dependency?)
   useEffect(() => {
-    if (notes.length > 0 && listItemRefs.current[0]) {
+    if (!isLoadingNotes && notes.length > 0 && listItemRefs.current[0]) {
         console.log(`MediaPanel: Focusing first list item in ${viewMode} mode.`);
         setTimeout(() => { 
             if (listItemRefs.current[0]) {
@@ -134,7 +134,7 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
             }
         }, 50);
     }
-  }, [viewMode, notes]); // Added viewMode dependency
+  }, [viewMode, notes, isLoadingNotes]); // Added viewMode dependency
 
   // Initialize/Resize list item refs when notes change (No change)
   useEffect(() => {
@@ -332,11 +332,13 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
           aria-label={listAriaLabel} 
           role="listbox"
       >
-        {notes.length === 0 ? (
+        {isLoadingNotes ? (
+            // ... Skeleton Loading State ...
             <>
-                {Array.from({ length: 8 }).map((_, index) => (
-                    <SkeletonItem key={index} />
-                ))}
+                <SkeletonItem />
+                <SkeletonItem />
+                <SkeletonItem />
+                <SkeletonItem />
             </>
         ) : notes.length === 0 ? (
              <div className='w-full h-full flex items-center justify-center'>

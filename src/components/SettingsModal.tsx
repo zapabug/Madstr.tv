@@ -11,6 +11,8 @@ interface SettingsModalProps {
     onClose: () => void;
     ndkInstance: NDKInstance | undefined;
     onCloseAndRefresh?: () => void;
+    onToggleFullscreen?: () => void;
+    isFullscreen?: boolean;
 }
 
 const truncateNpub = (npub: string | null): string => {
@@ -19,7 +21,7 @@ const truncateNpub = (npub: string | null): string => {
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, onCloseAndRefresh }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, onCloseAndRefresh, onToggleFullscreen, isFullscreen }) => {
     const auth: UseAuthReturn = useAuth(ndkInstance);
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
@@ -470,6 +472,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
         >
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-purple-400">Settings</h2>
+                <button
+                        onClick={onToggleFullscreen}
+                        className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                        aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            {isFullscreen ? (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                            ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                            )}
+                        </svg>
+                </button>
                 <button
                         ref={closeButtonRef}
                         onClick={handleClose}
