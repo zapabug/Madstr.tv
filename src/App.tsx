@@ -261,6 +261,8 @@ function App() {
     onTogglePlayPause: activePlayback.togglePlayPause,
     onNext: handleNext, 
     onPrevious: handlePrevious, 
+    onOpenSettings: handleOpenSettings,
+    onCloseSettings: handleCloseSettings,
     onFocusToggle: focusImageFeedToggle, 
     viewMode,
   });
@@ -329,15 +331,19 @@ function App() {
   }, [viewMode, currentVideoIndex, currentAudioIndex, videoNotes, audioNotes, markVideoSeen, markAudioSeen]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
   const handleCloseSettings = useCallback(() => {
     setIsSettingsOpen(false);
   }, []);
 
   // Callback to toggle the settings modal state
   const toggleSettingsModal = useCallback(() => {
-    setIsSettingsOpen(prev => !prev);
-    signalInteraction(); // Also signal interaction when settings are toggled
+    setIsSettingsOpen(true);
+    signalInteraction();
+  }, [signalInteraction]);
+
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+    signalInteraction();
   }, [signalInteraction]);
 
   // Global Loading/Error States
@@ -470,74 +476,9 @@ function App() {
                        {viewMode === 'imagePodcast' ? 'Videos' : 'Images'}
                    </motion.button>
                  )}
-               </AnimatePresence>
+</AnimatePresence>
 
-               {/* Fullscreen Toggle Button (Hide on Media Fullscreen) */}
-               <AnimatePresence>
-                 {!isFullScreen && (
-                   <motion.button
-                       key="fullscreen-button"
-                       initial={{ opacity: 0 }}
-                       animate={{ opacity: 1 }}
-                       exit={{ opacity: 0 }}
-                       transition={{ duration: 0.3 }}
-                       onClick={toggleBrowserFullscreen}
-                       tabIndex={0}
-                       className="absolute top-2 right-2 z-20 p-2 rounded-md
-                                  bg-black/50 text-purple-400
-                                  hover:text-purple-200 hover:bg-black/70
-                                  focus:outline-none focus:text-purple-300
-                                  focus:ring-2 focus:ring-purple-500/50
-                                  transition-all duration-150"
-                       aria-label="Fullscreen"
-                       title="Fullscreen"
-                   >
-                       {isBrowserFullscreen ? (
-                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                         </svg>
-                       ) : (
-                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                         </svg>
-                       )}
-                   </motion.button>
-                 )}
-               </AnimatePresence>
-
-               {/* Fullscreen Toggle Button (Hide on Fullscreen) */}
-               <AnimatePresence>
-                 {!isFullScreen && (
-                   <motion.button
-                       key="fullscreen-button"
-                       initial={{ opacity: 0 }}
-                       animate={{ opacity: 1 }}
-                       exit={{ opacity: 0 }}
-                       transition={{ duration: 0.3 }}
-                       onClick={toggleBrowserFullscreen}
-                       tabIndex={0}
-                       className="absolute top-2 right-2 z-20 p-2 rounded-md
-                                  bg-black/50 text-purple-400
-                                  hover:text-purple-200 hover:bg-black/70
-                                  focus:outline-none focus:text-purple-300
-                                  focus:ring-2 focus:ring-purple-500/50
-                                  transition-all duration-150"
-                       aria-label={isBrowserFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                       title={isBrowserFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                   >
-                       {isBrowserFullscreen ? (
-                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                         </svg>
-                       ) : (
-                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                         </svg>
-                       )}
-                   </motion.button>
-                 )}
-               </AnimatePresence>
-              {/* Author QR Code is rendered inside ImageFeed/VideoPlayer */}
+               {/* Author QR Code is rendered inside ImageFeed/VideoPlayer */}
 
          </div>
 

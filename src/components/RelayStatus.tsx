@@ -1,29 +1,12 @@
 import React from 'react';
 
 interface RelayStatusProps {
-  isReceivingData: boolean; // Simplified prop
-  relayCount: number; // <<< Re-add relayCount prop
-  onSettingsClick: () => void; // Add the callback prop
+  isReceivingData: boolean;
+  relayCount: number;
+  onSettingsClick: () => void;
 }
 
 const RelayStatus: React.FC<RelayStatusProps> = ({ isReceivingData, relayCount, onSettingsClick }) => {
-
-  // <<< REMOVE unused getTextColor function >>>
-  /*
-  const getTextColor = (): string => {
-      if (!isReceivingData) {
-          return 'text-yellow-500'; // Connecting or not receiving
-      }
-      if (relayCount < 3) {
-          return 'text-orange-400'; // Receiving, but few relays
-      }
-      return 'text-green-400 font-semibold'; // Receiving data, 3+ relays: Green, slightly bolder
-  };
-  */
-
-  // Determine status text and color based on the prop (keep for potential future use or title)
-  // const statusText = isReceivingData ? 'Connected' : 'Connecting...';
-  // const statusColor = isReceivingData ? 'bg-green-500' : 'bg-yellow-500';
 
   return (
     // Use relative positioning on the container to position the button absolutely

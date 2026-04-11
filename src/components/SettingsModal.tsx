@@ -59,33 +59,50 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                 }
             }, 100);
 
-            const handleKeyDown = (e: KeyboardEvent) => {
-                 if (e.key === 'Tab' && modalRef.current) {
-                    const focusableElements = Array.from(
-                        modalRef.current.querySelectorAll<HTMLElement>(
-                         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-                       )
-                      ).filter(el => el.offsetParent !== null);
+const handleKeyDown = (e: KeyboardEvent) => {
+                 if (e.key === 'Escape' || e.key === 'Backspace') {
+                     handleClose();
+                     return;
+                 }
 
-                     if (focusableElements.length === 0) return;
+                 if (!modalRef.current) return;
 
-                     const firstElement = focusableElements[0];
-                     const lastElement = focusableElements[focusableElements.length - 1];
-                     const currentIndex = focusableElements.findIndex(el => el === document.activeElement);
+                 const focusableElements = Array.from(
+                     modalRef.current.querySelectorAll<HTMLElement>(
+                      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                    )
+                   ).filter(el => el.offsetParent !== null && el.style.display !== 'none');
 
+                 if (focusableElements.length === 0) return;
+
+                 const currentIndex = focusableElements.findIndex(el => el === document.activeElement);
+
+                 if (e.key === 'Tab') {
                      if (e.shiftKey) {
-                         if (document.activeElement === firstElement || currentIndex === -1) {
-                             lastElement.focus();
-                             e.preventDefault();
+                         if (document.activeElement === focusableElements[0] || currentIndex === -1) {
+                             focusableElements[focusableElements.length - 1].focus();
                          }
                      } else {
-                         if (document.activeElement === lastElement || currentIndex === -1) {
-                             firstElement.focus();
-                             e.preventDefault();
+                         if (document.activeElement === focusableElements[focusableElements.length - 1] || currentIndex === -1) {
+                             focusableElements[0].focus();
                          }
                      }
-                 } else if (e.key === 'Escape') {
-                     handleClose();
+                     e.preventDefault();
+                     return;
+                 }
+
+                 if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                     e.preventDefault();
+                     const nextIndex = (currentIndex + 1) % focusableElements.length;
+                     focusableElements[nextIndex].focus();
+                     return;
+                 }
+
+                 if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                     e.preventDefault();
+                     const prevIndex = currentIndex <= 0 ? focusableElements.length - 1 : currentIndex - 1;
+                     focusableElements[prevIndex].focus();
+                     return;
                  }
              };
 
