@@ -86,8 +86,9 @@ Android native (feat-android-native, 2026-11-15), numbers the agent wrote into t
 Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the spec:
 - Faces: picture poster 56 px, now-playing author 72 px.
 - Up vote takes a second press to withdraw (a kind 5 deletion of the like); logged out it stays on the device.
-  A down-voted item moves to the end of its list (it is not removed). Hide artist covers Music, Podcasts and
-  videos, not the picture show. Caps: 2000 votes, 2000 hidden songs, hidden artists uncapped.
+  Down vote = hide song (zapa); it also withdraws a like. Hide artist covers Music, Podcasts and videos, not the
+  picture show. Caps: 2000 up votes, 2000 down-voted songs, hidden artists uncapped. Hidden card shows 40.
+- Double tap: left / right half of the picture, 300 ms window; the single tap waits that long.
 - Device cache: music 3000, videos 1500, profiles 3000, lengths 5000; written every 3 s, capped at start.
 - Walk back in time (zapa: one batch per 30 dropped): what counts as dropped is the agent's reading: played this
   session, hidden, or (Music) under 2 minutes; one batch on opening the list; only while a list is open; 4 walks

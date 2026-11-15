@@ -28,22 +28,24 @@ Scope: web app and Android app (same code).
 
 ## T2: Votes and hiding
 
-On the media controls, for what is playing:
+zapa, 2026-11-15, after trying the first version: "hide song and downvote do the same job, no need for
+duplicate buttons". So a down vote **is** hiding the song.
+
+One row under previous / play / next: **up vote**, **down vote**, **Hide artist**, and the speed button.
 - **Up vote** (thumb up). Logged in, and the item is from Nostr: publishes a public like (NIP-25 reaction,
   kind 7, content `+`, tags `e` (+ `a` for an addressable track), `p`, `k`) to the content relays. Logged
   out, or not from Nostr: kept on this device only. The button stays lit while voted; pressing it again takes
   the vote back (a published like is withdrawn with a NIP-09 deletion, kind 5).
-- **Down vote** (thumb down). Never published. Kept on this device. A down-voted item moves to the end of
-  every list it is in. Up and down exclude each other: one replaces the other.
-- **Hide song**: the item leaves every list on this device, and the player moves to the next item.
+- **Down vote** (thumb down). Never published. The song leaves every list on this device and the player moves
+  to the next item; a like it had is withdrawn.
 - **Hide artist** (Nostr items only): everything that account posted leaves every list (Music, Podcasts,
   videos) on this device, and the player moves on.
-- Hidden songs and artists are listed under **Your sources → Hidden**, each with **Bring back**.
-- Stored in `localStorage` (`madstr:taste`): at most 2000 votes and 2000 hidden songs, the oldest dropped
-  first; hidden artists are not capped.
+- Down-voted songs and hidden artists are listed under **Your sources → Hidden**, each with **Bring back**.
+- Stored in `localStorage` (`madstr:taste`): at most 2000 up votes and 2000 down-voted songs, the oldest
+  dropped first; hidden artists are not capped.
 - The signer is asked for kinds 7 and 5 up front alongside 3, so Amber can remember them.
-- Exit: an up vote logged in shows as a kind 7 event on a relay; down vote, hide song and hide artist change
-  the lists and come back with Bring back; all of it survives a reload.
+- Exit: an up vote logged in shows as a kind 7 event on a relay; down vote and hide artist change the lists
+  and come back with Bring back; all of it survives a reload.
 
 ## T3: Keep music, videos, profiles and follow lists on the device
 
@@ -81,10 +83,26 @@ On the media controls, for what is playing:
   `relay.wavlake.com`, `theforest.nostr1.com`, `nostr.bitcoiner.social`, `relay.nostr.net`.
 - Exit: `pnpm relays` passes with the new relays.
 
+## T6: Seeking by double tap and the remote
+
+zapa, 2026-11-15: "remove the -10s +30s buttons and handle double tap without disabling fullscreen; on the
+remote there are usually buttons for this".
+- The −10 s and +30 s buttons go from the media controls.
+- On the picture area (the video, or the slideshow behind music): a **double tap on the left half goes back
+  10 s, on the right half forward 30 s**, with a short "−10 s" / "+30 s" sign on that side. A double tap does
+  not bring the panel back when the picture fills the screen.
+- A single tap keeps its job (on a video, play / pause; anywhere, the panel comes back), done once no second
+  tap has come within **300 ms**, so a double tap never also pauses or wakes.
+- Remote and keyboard: the rewind / fast-forward media keys already do −10 s / +30 s (feat-android-native
+  §N1 in the app, the browser's media keys on the web); the chevrons on the edges stay previous / next.
+- Exit: in the full picture, a double tap on either side seeks and the panel stays away; a single tap on a
+  video pauses it and the panel comes back.
+
 ## Milestones
 
 - [ ] T1 bigger faces (built + machine-verified)
-- [ ] T2 votes and hiding (built + machine-verified; a real published like not run here)
+- [ ] T2 votes and hiding (rebuilt after zapa's try: down vote = hide song)
 - [ ] T3 device cache (built + machine-verified)
 - [ ] T4 reach back in time (built + machine-verified)
 - [ ] T5 more relays (built; probe passes for the new relays)
+- [ ] T6 double tap to seek; −10 s / +30 s buttons removed
