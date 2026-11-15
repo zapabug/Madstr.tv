@@ -46,9 +46,6 @@ export const FilmIcon = (p: IconProps) => (
 export const ImageIcon = (p: IconProps) => (
   <Svg {...p}><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm2 11h12l-3.5-4.5-2.5 3-2-2.5zm2.5-7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" /></Svg>
 );
-export const HeartIcon = (p: IconProps) => (
-  <Svg {...p}><path d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z" /></Svg>
-);
 export const PlusPersonIcon = (p: IconProps) => (
   <Svg {...p}><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 8a7 7 0 0 1 14 0zM19 8h2v3h3v2h-3v3h-2v-3h-3v-2h3z" /></Svg>
 );

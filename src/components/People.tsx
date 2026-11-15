@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { hasExtension, loginWithBunker, loginWithExtension, logout, startQrLogin, type QrLogin } from '../lib/accounts.ts';
-import { toggleLike, useLiked } from '../lib/liked.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
-import { HeartIcon } from './icons.tsx';
 
 export function Avatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
@@ -105,15 +103,6 @@ export function LoginPanel() {
   );
 }
 
-function LikeButton({ pubkey }: { pubkey: string }) {
-  const liked = useLiked().includes(pubkey);
-  return (
-    <button type="button" className="chip-btn" data-nav aria-pressed={liked} onClick={() => toggleLike(pubkey)} aria-label={liked ? 'Unlike' : 'Like'}>
-      <HeartIcon size={16} /> {liked ? 'Liked' : 'Like'}
-    </button>
-  );
-}
-
 export function FollowView() {
   const account = useAccount();
   const { creators, following } = useCreatorSuggestions();
@@ -135,7 +124,6 @@ export function FollowView() {
   return (
     <div className="people">
       <LoginPanel />
-      <LikedPeople />
       <section className="own" aria-label="Creators to follow">
         <h2>Podcast and music creators</h2>
         <p className="own-note">People publishing audio on Nostr: friends of the people you follow first, then others.</p>
@@ -151,7 +139,6 @@ export function FollowView() {
                 <h3 className="card-name"><PersonName pubkey={c.pubkey} /></h3>
                 <p className="card-sub">{c.count} {c.count === 1 ? 'item' : 'items'} · {c.latest}</p>
                 <div className="card-actions">
-                  <LikeButton pubkey={c.pubkey} />
                   <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
                     onClick={() => { void run(c.pubkey, isFollowing); }}>
                     {pending.includes(c.pubkey) ? '…' : isFollowing ? 'Unfollow' : 'Follow'}
@@ -161,32 +148,8 @@ export function FollowView() {
             );
           })}
         </ul>
-        {!account && creators.length > 0 && <p className="own-note">Log in above to follow. You can already like people for the Liked sticker.</p>}
+        {!account && creators.length > 0 && <p className="own-note">Log in above to follow.</p>}
       </section>
     </div>
-  );
-}
-
-export function LikedPeople() {
-  const liked = useLiked();
-  return (
-    <section className="own" aria-label="Liked npubs">
-      <h2>Liked npubs</h2>
-      {liked.length === 0 ? (
-        <p className="own-note">Nobody yet. Press ♥ Like in the player on any track or video, or on a creator under “Follow more creators”.</p>
-      ) : (
-        <ul className="creators">
-          {liked.map(pubkey => (
-            <li key={pubkey} className="creator-card">
-              <Avatar pubkey={pubkey} />
-              <h3 className="card-name"><PersonName pubkey={pubkey} /></h3>
-              <div className="card-actions">
-                <button type="button" className="chip-btn" data-nav onClick={() => toggleLike(pubkey)} aria-label="Unlike">Unlike</button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }

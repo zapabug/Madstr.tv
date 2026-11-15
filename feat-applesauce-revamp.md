@@ -218,6 +218,11 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       for the session where there is no folder picker).
 - [ ] later: TV (Android) build and native permission, see Parked.
 
+## Dropped later (zapa, 2026-11-15)
+
+**Liked npubs** is not needed: the sticker, its view, the heart buttons and the saved list are gone.
+The people lane keeps "Follow more creators", whose suggestions come from friends of your follows first.
+
 ## Not in this feat
 
 Wavlake intake (its own feat once the music kinds are verified), zaps, chat,

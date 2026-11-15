@@ -2,9 +2,8 @@ import type { CSSProperties } from 'react';
 import { player, usePlayer } from '../lib/player.ts';
 import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
-import { toggleLike, useLiked } from '../lib/liked.ts';
 import { Avatar } from './People.tsx';
-import { FolderArt, HeartIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
+import { FolderArt, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -42,15 +41,9 @@ export function SeekBar() {
 
 export function ExtraButtons({ speed = true }: { speed?: boolean }) {
   const p = usePlayer();
-  const liked = useLiked();
-  const author = p.queue[p.index]?.pubkey;
   const has = p.queue.length > 0;
   return (
-    <div className="dock-extra" role="group" aria-label="Seek, speed and like">
-      {author && (
-        <button type="button" className="chip-btn heart" data-nav aria-pressed={liked.includes(author)} onClick={() => toggleLike(author)}
-          aria-label={liked.includes(author) ? 'Unlike this creator' : 'Like this creator'}><HeartIcon size={16} /></button>
-      )}
+    <div className="dock-extra" role="group" aria-label="Seek and speed">
       <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
       <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
       {speed && <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>}
@@ -78,11 +71,9 @@ function AuthorSpot() {
 
 export function PanelControls() {
   const p = usePlayer();
-  const liked = useLiked();
   const playing = p.status === 'playing' || p.status === 'loading';
   const has = p.queue.length > 0;
   const item = p.queue[p.index];
-  const author = item?.pubkey;
   const noun = item?.kind === 'video' ? 'video' : 'song';
   return (
     <div className="pc" role="group" aria-label="Media controls">
@@ -98,10 +89,6 @@ export function PanelControls() {
       <div className="pc-extra">
         <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
         <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
-        {author && (
-          <button type="button" className="chip-btn heart" data-nav aria-pressed={liked.includes(author)} onClick={() => toggleLike(author)}
-            aria-label={liked.includes(author) ? 'Unlike this creator' : 'Like this creator'}><HeartIcon size={16} /></button>
-        )}
         <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
       </div>
     </div>

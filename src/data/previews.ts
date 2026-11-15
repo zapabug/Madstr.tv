@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { isPodcast, type MediaItem } from '../lib/media.ts';
 import { useProbedDurations } from '../lib/durations.ts';
-import { useLiked } from '../lib/liked.ts';
 import { useTagSet } from '../lib/tags.ts';
 import { loadLastVideo } from '../lib/player.ts';
 import { useOwn } from './ownContext.ts';
@@ -31,7 +30,6 @@ export function usePreviews(): Record<string, PreviewData> {
   const audio = useProbedDurations(useNostrItems('audio', contacts, tags.audio));
   const video = useNostrItems('video', contacts, tags.video);
   const images = useNostrItems('image', contacts, tags.image);
-  const liked = useLiked();
   const { creators } = useCreatorSuggestions();
   const last = useMemo(() => loadLastVideo(), []);
 
@@ -57,8 +55,7 @@ export function usePreviews(): Record<string, PreviewData> {
       short: fromVideos(short),
       long: fromVideos(long),
       pictures: { ...empty, urls: [...own.pictures, ...images].slice(0, 6).map(i => i.url), text: own.pictures.length > 0 ? `${own.pictures.length} of yours` : undefined },
-      liked: { ...empty, avatars: liked.slice(0, SHOW), text: liked.length > 0 ? `${liked.length} liked` : undefined },
       follow: { ...empty, avatars: creators.slice(0, SHOW).map(c => c.pubkey), text: creators.length > 0 ? `${creators.length} to follow` : undefined },
     } satisfies Record<string, PreviewData>;
-  }, [audio, video, images, own.rss, own.local, own.pictures, liked, creators, last]);
+  }, [audio, video, images, own.rss, own.local, own.pictures, creators, last]);
 }

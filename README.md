@@ -7,16 +7,16 @@ Built on [Applesauce](https://applesauce.build) (React 19, Vite, TypeScript).
 
 ## What it does
 
-- **Board**: nine stickers, each a shortcut that opens the player already set up (Music,
-  Podcasts, Local, Keep watching, Short videos, Long videos, My pictures, Liked npubs, Follow
+- **Board**: eight stickers, each a shortcut that opens the player already set up (Music,
+  Podcasts, Local, Keep watching, Short videos, Long videos, My pictures, Follow
   more creators). Each shows a live preview of what it would open.
 - **Split screen** (anything but the board): the picture on top, a bottom panel with the media
   picker on the left (70%) and the controls on the right (30%). The bottom panel hides after
   45 s without input.
 - **Sources**: the people the TV account (or you, once logged in) follow on Nostr, hashtags you
   add, RSS feeds, folders on your device, and your own pictures as slides.
-- **People**: log in with a browser extension or a `bunker://` link, follow creators, like
-  people for the Liked sticker.
+- **People**: log in with a browser extension, a `bunker://` link or a QR code, and follow creators
+  (friends of the people you follow first).
 
 ## Run it
 
@@ -34,7 +34,7 @@ in development and preview, `api/rss.ts` as a Vercel function; see `server/rssPr
 ## Layout
 
 ```
-src/lib/        plain logic with tests (routes, focus, queue, media rules, tags, liked, shuffle)
+src/lib/        plain logic with tests (routes, focus, queue, media rules, tags, shuffle)
                 and the app singletons (applesauce store + relay pool, accounts, player)
 src/data/       hooks that turn relays, RSS and local files into lists
 src/components/ the board, split screen, panels, controls

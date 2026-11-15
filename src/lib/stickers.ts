@@ -2,7 +2,7 @@ import { toHash, type Route } from './route.ts';
 
 export type Lane = 'listen' | 'watch' | 'people';
 export type Tone = 'mint' | 'pink' | 'sky' | 'butter' | 'lilac' | 'peach';
-export type GlyphName = 'music' | 'podcasts' | 'local' | 'continue' | 'short' | 'long' | 'pictures' | 'liked' | 'follow';
+export type GlyphName = 'music' | 'podcasts' | 'local' | 'continue' | 'short' | 'long' | 'pictures' | 'follow';
 
 // A sticker is a shortcut: where it goes is just a Route.
 export interface Sticker {
@@ -32,8 +32,6 @@ export const STICKERS: readonly Sticker[] = [
     title: 'Long videos', blurb: 'The long ones.', tag: 'Watch', tone: 'peach', glyph: 'long' },
   { id: 'pictures', lane: 'watch', route: { page: 'viewer', mode: 'pictures', filter: 'mine' },
     title: 'My pictures', blurb: 'Your own pictures, as slides.', tag: 'Watch', tone: 'mint', glyph: 'pictures', note: 'epic' },
-  { id: 'liked', lane: 'people', route: { page: 'viewer', mode: 'people', filter: 'liked' },
-    title: 'Liked npubs', blurb: 'The people you liked, and what they posted.', tag: 'People', tone: 'pink', glyph: 'liked' },
   { id: 'follow', lane: 'people', route: { page: 'viewer', mode: 'people', filter: 'follow' },
     title: 'Follow more creators', blurb: 'Find podcast creators and follow in one press.', tag: 'People', tone: 'sky', glyph: 'follow', note: 'one press' },
 ];

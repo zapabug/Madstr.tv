@@ -11,7 +11,6 @@ test('every viewer route round-trips through the hash', () => {
     { page: 'viewer', mode: 'watch', filter: 'short' },
     { page: 'viewer', mode: 'watch', filter: 'long' },
     { page: 'viewer', mode: 'pictures', filter: 'mine' },
-    { page: 'viewer', mode: 'people', filter: 'liked' },
     { page: 'viewer', mode: 'people', filter: 'follow' },
   ];
   for (const route of routes) assert.deepEqual(parseHash(toHash(route)), route);
@@ -34,12 +33,12 @@ test('a filter from another mode is not accepted', () => {
   assert.deepEqual(parseHash('#/listen/short'), BOARD);
   assert.deepEqual(parseHash('#/watch/podcasts'), BOARD);
   assert.deepEqual(parseHash('#/people/music'), BOARD);
+  assert.deepEqual(parseHash('#/people/liked'), BOARD, 'liked npubs no longer exists');
 });
 
 test('everything but the board and the follow page is the theatre', () => {
   assert.equal(isTheater(BOARD), false);
   assert.equal(isTheater({ page: 'viewer', mode: 'people', filter: 'follow' }), false);
-  assert.equal(isTheater({ page: 'viewer', mode: 'people', filter: 'liked' }), true);
   assert.equal(isTheater({ page: 'viewer', mode: 'listen', filter: 'music' }), true);
   assert.equal(isTheater({ page: 'viewer', mode: 'watch', filter: 'short' }), true);
   assert.equal(isTheater({ page: 'viewer', mode: 'pictures', filter: 'mine' }), true);

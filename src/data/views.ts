@@ -6,7 +6,6 @@ import { useOwn } from './ownContext.ts';
 import { useContacts, useNostrItems } from './nostr.ts';
 import { useFeedPubkey } from './people.ts';
 import { useProbedDurations } from '../lib/durations.ts';
-import { useLiked } from '../lib/liked.ts';
 import { useTagSet } from '../lib/tags.ts';
 
 type ViewerRoute = Extract<Route, { page: 'viewer' }>;
@@ -26,15 +25,10 @@ export function useViewItems(route: ViewerRoute): ViewData {
   const own = useOwn();
   const feed = useFeedPubkey();
   const contacts = useContacts(feed);
-  const liked = useLiked();
   const tags = useTagSet();
-  const isLiked = route.mode === 'people' && route.filter === 'liked';
 
   const wantsAudio = route.mode === 'listen' && route.filter !== 'local';
   const wantsVideo = route.mode === 'watch';
-  // Liked: everything the liked people posted, audio and video together.
-  const likedAudio = useNostrItems('audio', isLiked ? liked : undefined);
-  const likedVideo = useNostrItems('video', isLiked ? liked : undefined);
   const audio = useProbedDurations(useNostrItems('audio', wantsAudio ? contacts : undefined, wantsAudio ? tags.audio : []));
   const video = useNostrItems('video', wantsVideo ? contacts : undefined, wantsVideo ? tags.video : []);
   const last = useMemo(() => loadLastVideo(), []);
@@ -65,10 +59,6 @@ export function useViewItems(route: ViewerRoute): ViewData {
     if (route.mode === 'pictures') {
       return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Add a folder of pictures under Your sources on the home screen; they play as a slideshow.' };
     }
-    if (route.filter === 'liked') {
-      const items = sortNewest(dedupeByUrl([...likedAudio, ...likedVideo]));
-      return { items, label: 'Liked npubs', waiting: false, emptyText: liked.length === 0 ? 'Like a creator and their posts show up here.' : 'Nothing from your liked people yet.' };
-    }
     return { items: NO_ITEMS, label: 'Follow more creators', waiting: false, emptyText: '' };
-  }, [route, contacts, audio, video, own.rss, own.local, last, likedAudio, likedVideo, liked]);
+  }, [route, contacts, audio, video, own.rss, own.local, last]);
 }

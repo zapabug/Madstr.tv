@@ -5,14 +5,14 @@ import { OwnControls } from './OwnControls.tsx';
 import { TagControls } from './TagControls.tsx';
 import { LANES, STICKERS, hrefOf, type GlyphName, type Lane, type Sticker } from '../lib/stickers.ts';
 import {
-  BoltIcon, FilmIcon, FolderIcon, HeartIcon, ImageIcon, MicIcon, NoteIcon, PlusPersonIcon, ResumeIcon,
+  BoltIcon, FilmIcon, FolderIcon, ImageIcon, MicIcon, NoteIcon, PlusPersonIcon, ResumeIcon,
 } from './icons.tsx';
 
 type Filter = 'all' | Lane;
 
 const GLYPHS: Record<GlyphName, (_props: { size?: number }) => React.JSX.Element> = {
   music: NoteIcon, podcasts: MicIcon, local: FolderIcon, continue: ResumeIcon, short: BoltIcon,
-  long: FilmIcon, pictures: ImageIcon, liked: HeartIcon, follow: PlusPersonIcon,
+  long: FilmIcon, pictures: ImageIcon, follow: PlusPersonIcon,
 };
 
 // Pictures that fade through one after another (cover art, posters, slides).

@@ -39,8 +39,7 @@ export function Viewer({ route }: { route: ViewerRoute }) {
     );
   }
 
-  const isLiked = route.mode === 'people' && route.filter === 'liked';
-  const hasVideo = route.mode === 'watch' || isLiked;
+  const hasVideo = route.mode === 'watch';
   // The chip that hops to the other side, as the old "VIDEOS" toggle did.
   const sibling = route.mode === 'watch' ? { label: 'MUSIC', href: '#/listen/music' } : route.mode === 'listen' ? { label: 'VIDEOS', href: '#/watch/continue' } : undefined;
 

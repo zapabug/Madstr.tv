@@ -6,7 +6,7 @@ export type ViewerMode = 'listen' | 'watch' | 'pictures' | 'people';
 
 export type ListenFilter = 'music' | 'podcasts' | 'local';
 export type WatchFilter = 'continue' | 'short' | 'long';
-export type PeopleFilter = 'liked' | 'follow';
+export type PeopleFilter = 'follow';
 
 export type Route =
   | { page: 'board' }
@@ -17,7 +17,7 @@ export type Route =
 
 const LISTEN: readonly string[] = ['music', 'podcasts', 'local'];
 const WATCH: readonly string[] = ['continue', 'short', 'long'];
-const PEOPLE: readonly string[] = ['liked', 'follow'];
+const PEOPLE: readonly string[] = ['follow'];
 
 export const BOARD: Route = { page: 'board' };
 
