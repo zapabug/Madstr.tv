@@ -1,0 +1,20 @@
+# zapstore listing for the Android app (spec feat-pwa-zapstore.md §P3). Published with zsp; signed through
+# zapa's bunker (SIGN_WITH, set in his own shell, never in this file).
+repository: https://github.com/zapabug/Madstr.tv
+name: Mad⚡tr.tv
+summary: A lean-back TV for Nostr. Music, podcasts, videos and a picture show from the people you follow.
+description: |
+  Mad⚡tr.tv turns Nostr into a TV you can drive with a remote. A board of stickers opens straight into
+  music, podcasts, short or long videos, keep-watching, your own pictures and local files, with a picture
+  show from the people you follow behind the music. Log in with Amber (NIP-46) or a bunker link to see your
+  own follows and follow new creators. Works on phones and on Android TV.
+website: https://madstr-tv.vercel.app
+tags:
+  - nostr
+  - tv
+  - music
+  - podcasts
+  - video
+icon: ./public/icons/icon-512.png
+# The signed APK (scripts/sign-release.sh writes it); `zsp check` verifies it.
+release_source: ./android/app/build/outputs/apk/release/app-release-signed.apk

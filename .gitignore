@@ -28,7 +28,6 @@ dist-ssr
 *.sw?
 
 # Capacitor/Native platform builds
-/android
 /ios
 
 # Environment and API keys
