@@ -27,6 +27,12 @@
 
         </activity>
 
+        <!-- Keeps the app alive while it plays in the background (spec feat-android-play §A2). -->
+        <service
+            android:name=".PlaybackService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -41,6 +47,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Background play: a media foreground service with a notification, wake and Wi-Fi locks. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Runs on phones and on Android TV: neither a touchscreen nor the TV (leanback) UI is required. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
