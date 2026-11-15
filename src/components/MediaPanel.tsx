@@ -369,9 +369,9 @@ const MediaPanel: React.FC<MediaPanelProps> = ({
                     
                     // Profile Data lookup
                     const profile = note.posterPubkey ? profiles[note.posterPubkey] : undefined;
-                    const itemDisplayName = profile?.name || profile?.displayName || note.posterPubkey?.slice(-4) || 'Anon';
+                    const itemDisplayName = note.source ? (note.title || 'Untitled') : (profile?.name || profile?.displayName || note.posterPubkey?.slice(-4) || 'Anon');
                     const itemPictureUrl = profile?.picture;
-                    const fallbackText = note.posterPubkey ? note.posterPubkey.slice(-3).toUpperCase() : '???';
+                    const fallbackText = note.source ? '♪' : note.posterPubkey ? note.posterPubkey.slice(-3).toUpperCase() : '???';
 
                     return (
                         <div

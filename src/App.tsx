@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import ImageFeed, { ImageFeedRef } from './components/ImageFeed';
 import InfoPanel from './components/InfoPanel';
 import MediaPanel from './components/MediaPanel';
@@ -9,6 +9,7 @@ import { useMediaAuthors } from './hooks/useMediaAuthors';
 import { useMediaState } from './hooks/useMediaState';
 import { useMediaElementPlayback } from './hooks/useMediaElementPlayback';
 import { useMediaNotes } from './hooks/useMediaNotes';
+import { useOwnAudio } from './hooks/useOwnAudio';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { useImageCarousel } from './hooks/useImageCarousel';
@@ -48,7 +49,8 @@ function App() {
   const [notesRefreshKey, setNotesRefreshKey] = useState<number>(0);
 
   // Fetch notes using dynamic parameters
-  const { notes: audioNotes, isLoading: isLoadingAudioNotes, markAsSeen: markAudioSeen } = useMediaNotes({
+  const ownAudio = useOwnAudio();
+  const { notes: nostrAudioNotes, isLoading: isLoadingAudioNotes, markAsSeen: markAudioSeen } = useMediaNotes({
     authors: mediaAuthors,
     mediaType: 'audio',
     ndk: ndkInstance,
@@ -58,6 +60,8 @@ function App() {
     refreshKey: notesRefreshKey,
     mutedPubkeys,
   });
+  // Nostr audio plus the user's own sources (local folders, RSS feeds).
+  const audioNotes = useMemo(() => [...ownAudio.notes, ...nostrAudioNotes], [ownAudio.notes, nostrAudioNotes]);
   const { notes: videoNotes, isLoading: isLoadingVideoNotes, markAsSeen: markVideoSeen } = useMediaNotes({ 
     authors: mediaAuthors, 
     mediaType: 'video', 
@@ -658,6 +662,7 @@ function App() {
         onClose={handleCloseSettings}
         ndkInstance={ndkInstance}
         onCloseAndRefresh={() => setNotesRefreshKey(k => k + 1)}
+        ownAudio={ownAudio}
     />
 
     </>

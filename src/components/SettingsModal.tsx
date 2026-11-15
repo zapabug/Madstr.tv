@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { useAuth, UseAuthReturn } from '../hooks/useAuth';
 import QRCode from 'react-qr-code';
 import NDK from '@nostr-dev-kit/ndk';
+import OwnAudioSettings from './OwnAudioSettings';
+import type { UseOwnAudioReturn } from '../hooks/useOwnAudio';
 
 type NDKInstance = NDK;
 
@@ -11,6 +13,7 @@ interface SettingsModalProps {
     onClose: () => void;
     ndkInstance: NDKInstance | undefined;
     onCloseAndRefresh?: () => void;
+    ownAudio?: UseOwnAudioReturn;
 }
 
 const truncateNpub = (npub: string | null): string => {
@@ -19,7 +22,7 @@ const truncateNpub = (npub: string | null): string => {
     return `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
 };
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, onCloseAndRefresh }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInstance, onCloseAndRefresh, ownAudio }) => {
     const auth: UseAuthReturn = useAuth(ndkInstance);
     const [generatedNpub, setGeneratedNpub] = useState<string | null>(null);
     const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
@@ -788,6 +791,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, ndkInsta
                         <p className="text-sm text-gray-500 italic">Login to manage video hashtags.</p>
                     )}
                 </div>
+
+                {ownAudio && <OwnAudioSettings ownAudio={ownAudio} />}
 
                 <div className="mb-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
                     <h3 className="text-lg font-semibold mb-3 text-gray-300 border-b border-gray-600 pb-1">Cache Management</h3>

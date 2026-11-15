@@ -35,4 +35,5 @@ export interface NostrNote {
     summary?: string;      // e.g., from 'summary' tag
     image?: string;        // e.g., from 'image' tag (cover art)
     duration?: string;     // e.g., from 'duration' tag (audio/video length)
+    source?: 'local' | 'rss'; // Set on audio the user added themselves (no Nostr author)
 } 
