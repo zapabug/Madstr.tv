@@ -4,7 +4,9 @@ import { mergeOrder, wrapIndex } from '../lib/shuffle.ts';
 
 // The picture show behind the music: pictures cross-fade every few seconds, in an order
 // that stays put while more pictures arrive. A picture that will not load is dropped.
-export function Slideshow({ images, intervalMs = 9000, onCurrent }: { images: MediaItem[]; intervalMs?: number; onCurrent?: (_item: MediaItem | null) => void }) {
+export interface SlideCommand { dir: 1 | -1; n: number }
+
+export function Slideshow({ images, intervalMs = 9000, onCurrent, command }: { images: MediaItem[]; intervalMs?: number; onCurrent?: (_item: MediaItem | null) => void; command?: SlideCommand | null }) {
   const urls = useMemo(() => [...new Set(images.map(i => i.url))], [images]);
   const urlKey = urls.join('\n');
   const [order, setOrder] = useState<string[]>([]);
@@ -18,11 +20,20 @@ export function Slideshow({ images, intervalMs = 9000, onCurrent }: { images: Me
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlKey]);
 
+  // The previous / next chevrons step the picture by hand; the show then carries on from there.
+  const orderLength = useRef(0);
+  orderLength.current = order.length;
+  useEffect(() => {
+    if (command) setIndex(i => wrapIndex(i + command.dir, orderLength.current));
+    // only a new command steps the show
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [command?.n]);
+
   useEffect(() => {
     if (order.length < 2) return;
     const timer = window.setInterval(() => setIndex(i => wrapIndex(i + 1, order.length)), intervalMs);
     return () => window.clearInterval(timer);
-  }, [order.length, intervalMs]);
+  }, [order.length, intervalMs, index]);
 
   const current = order.length > 0 ? order[wrapIndex(index, order.length)] : null;
 

@@ -246,13 +246,14 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 @media (prefers-reduced-motion: no-preference) { .slide-in { animation: slidein 1.4s ease-out both, drift-zoom 16s ease-out both; } }
 @keyframes drift-zoom { from { scale: 1; } to { scale: 1.06; } }
 .brand { position: absolute; top: 10px; right: 18px; z-index: 2; font: 700 1rem var(--display); letter-spacing: -0.03em; pointer-events: none; text-shadow: 0 0 8px #000; }
-.edge { position: absolute; top: 50%; translate: 0 -50%; z-index: 2; display: grid; place-items: center; width: 54px; height: 88px; padding: 0; background: transparent; border: 0;
+.edge { position: absolute; top: 50%; translate: 0 -50%; z-index: 2; display: grid; place-items: center; width: 64px; height: min(66%, 380px); padding: 0; background: transparent; border: 0;
   color: var(--text); cursor: pointer; filter: drop-shadow(0 0 6px #000); transition: opacity 450ms ease-out; }
-.edge-prev { left: 10px; } .edge-next { right: 10px; }
+.edge-prev { left: 6px; } .edge-next { right: 6px; }
+.edge svg { display: block; }
 .edge:disabled { opacity: .3; cursor: default; }
 .edge:not(:disabled):focus-visible { outline: 3px solid #fff; outline-offset: 2px; border-radius: 12px; }
 .theater[data-hidden="true"] .edge, .theater[data-hidden="true"] .mode-chip { opacity: 0; }
-.mode-chip { position: absolute; right: 72px; bottom: 54px; z-index: 2; text-decoration: none; font: 800 .85rem var(--body); letter-spacing: .04em; color: var(--ink); background: var(--lilac);
+.mode-chip { position: absolute; right: 72px; bottom: 14px; z-index: 2; text-decoration: none; font: 800 .85rem var(--body); letter-spacing: .04em; color: var(--ink); background: var(--lilac);
   border: 2.5px solid var(--ink); border-radius: 999px; padding: 7px 16px; box-shadow: 3px 3px 0 #000; transition: opacity 450ms ease-out; }
 .mode-chip:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .split { position: absolute; left: 0; right: 0; bottom: 0; height: var(--split-h); z-index: 3; display: flex; gap: 10px; padding: 8px 10px 10px;
@@ -313,13 +314,15 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .pc { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .pc .dock-seek { width: 100%; }
 .pc-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
-.pc-extra { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.pc-extra { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.pc-main .dock-btn:not(.dock-play) { width: 46px; height: 46px; }
 .pc .dock-play { width: 64px; height: 64px; }
 /* a narrow panel (small or zoomed window): smaller buttons so the row fits instead of clipping */
 @container (max-width: 240px) {
   .pc { gap: 10px; }
   .pc-main { gap: 6px; }
   .pc .dock-play { width: 52px; height: 52px; }
+  .pc-main .dock-btn:not(.dock-play) { width: 40px; height: 40px; }
   .pc .chip-btn { padding: 6px 8px; font-size: .72rem; min-height: 32px; }
   .pc .dock-seek { gap: 6px; }
   .pc .dock-time { min-width: 0; font-size: .7rem; }
@@ -345,11 +348,15 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 }
 
 /* --- on-screen words: the 20 s track name and the permanent ticker ------------------------------------- */
-.track-toast { position: absolute; top: 12px; left: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; max-width: min(62%, 680px); margin: 0; padding: 8px 18px 8px 14px;
+/* The ticker slides out of the Mad⚡tr.tv corner (top right) and runs left across the top: its strip
+   ends where the brand begins, and the words start at that end. The track name sits bottom left. */
+.track-toast { position: absolute; bottom: 14px; left: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; max-width: min(62%, 680px); margin: 0; padding: 8px 18px 8px 14px;
   border-radius: 999px; background: #0b0716e8; border: 2.5px solid var(--ink); box-shadow: 3px 3px 0 #000; font: 800 1rem var(--display); letter-spacing: -0.02em; animation: slidein 500ms ease-out both; }
 .track-toast svg { flex: none; color: var(--orange); }
 .track-toast-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ticker { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; height: 40px; overflow: hidden; display: flex; align-items: center; background: #0b0716d9; border-top: 2.5px solid var(--ink); pointer-events: none; }
+.ticker { position: absolute; top: 8px; left: 12px; right: calc(18px + 104px + 10px); z-index: 2; height: 38px; overflow: hidden; display: flex; align-items: center; pointer-events: none;
+  background: #0b0716cc; border: 2.5px solid var(--ink); border-radius: 999px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 22px), transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 22px), transparent 100%); }
 .ticker-run { display: inline-block; white-space: nowrap; padding-left: 100%; font: 700 1rem var(--body); letter-spacing: .01em; animation: ticker linear infinite; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 @media (prefers-reduced-motion: reduce) { .ticker-run { animation: none; padding-left: 16px; overflow: hidden; text-overflow: ellipsis; max-width: 100%; } }

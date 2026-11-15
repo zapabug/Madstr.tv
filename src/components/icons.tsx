@@ -53,10 +53,16 @@ export const PlusPersonIcon = (p: IconProps) => (
   <Svg {...p}><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 8a7 7 0 0 1 14 0zM19 8h2v3h3v2h-3v3h-2v-3h-3v-2h3z" /></Svg>
 );
 
-// The thin "⟨ ⟩" on-screen previous / next from the first Madstr.
-export const PrevChevron = ({ size = 44 }: { size?: number }) => (
-  <svg width={size * 0.6} height={size} viewBox="0 0 24 40" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M17 3 L7 20 L17 37" /></svg>
-);
-export const NextChevron = ({ size = 44 }: { size?: number }) => (
-  <svg width={size * 0.6} height={size} viewBox="0 0 24 40" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M7 3 L17 20 L7 37" /></svg>
-);
+// The first Madstr's on-screen previous / next: the same two paths on the same 24x24 grid. With
+// `stretch` they fill whatever box they are given (tall and oversized on the picture's edges) while
+// the line stays the same thickness on screen.
+function Chevron({ d, size, stretch }: { d: string; size: number; stretch: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={stretch ? '100%' : size} height={stretch ? '100%' : size} fill="none" viewBox="0 0 24 24" stroke="currentColor"
+      strokeWidth={stretch ? 3 : 2} preserveAspectRatio={stretch ? 'none' : undefined} aria-hidden="true" focusable="false">
+      <path strokeLinecap="round" strokeLinejoin="round" d={d} vectorEffect={stretch ? 'non-scaling-stroke' : undefined} />
+    </svg>
+  );
+}
+export const PrevChevron = ({ size = 24, stretch = false }: { size?: number; stretch?: boolean }) => <Chevron d="M15 5 L 13 12 L 15 19" size={size} stretch={stretch} />;
+export const NextChevron = ({ size = 24, stretch = false }: { size?: number; stretch?: boolean }) => <Chevron d="M9 5 L 11 12 L 9 19" size={size} stretch={stretch} />;

@@ -64,18 +64,22 @@ export function PanelControls() {
   const liked = useLiked();
   const playing = p.status === 'playing' || p.status === 'loading';
   const has = p.queue.length > 0;
-  const author = p.queue[p.index]?.pubkey;
+  const item = p.queue[p.index];
+  const author = item?.pubkey;
+  const noun = item?.kind === 'video' ? 'video' : 'song';
   return (
     <div className="pc" role="group" aria-label="Media controls">
       <SeekBar />
       <div className="pc-main">
-        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
+        <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
         <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
           {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
         </button>
-        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
+        <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
       </div>
       <div className="pc-extra">
+        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
+        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
         {author && (
           <button type="button" className="chip-btn heart" data-nav aria-pressed={liked.includes(author)} onClick={() => toggleLike(author)}
             aria-label={liked.includes(author) ? 'Unlike this creator' : 'Like this creator'}><HeartIcon size={16} /></button>

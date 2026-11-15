@@ -7,7 +7,7 @@ import { useAutoHide } from '../lib/useAutoHide.ts';
 import { NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
-import { Slideshow } from './Slideshow.tsx';
+import { Slideshow, type SlideCommand } from './Slideshow.tsx';
 import { Ticker } from './Ticker.tsx';
 import { TrackToast } from './TrackToast.tsx';
 
@@ -23,6 +23,8 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
   const hidden = useAutoHide(p.queue.length > 0);
   const none = p.queue.length === 0;
   const [slide, setSlide] = useState<MediaItem | null>(null);
+  const [command, setCommand] = useState<SlideCommand | null>(null);
+  const stepPicture = (dir: 1 | -1) => setCommand(c => ({ dir, n: (c?.n ?? 0) + 1 }));
   // Only pictures that came from a Nostr post have words to show; your own pictures have none.
   const tickerText = !showingVideo && slide?.origin === 'nostr' ? firstSentence(slide.title) : '';
 
@@ -31,13 +33,18 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
       <div className="media">
         <div className="stage-full">
           {hasVideo && <video ref={player.registerVideo} playsInline onClick={player.toggle} hidden={!showingVideo} />}
-          {!showingVideo && <Slideshow images={pictures} onCurrent={setSlide} />}
+          {!showingVideo && <Slideshow images={pictures} onCurrent={setSlide} command={command} />}
         </div>
         <TrackToast item={item?.kind === 'audio' ? item : undefined} />
         <Ticker text={tickerText} />
         <span className="brand" aria-hidden="true">Mad<span className="bolt-mark">⚡</span>tr.tv</span>
-        <button type="button" className="edge edge-prev" aria-label="Previous" data-nav disabled={none} onClick={player.prev}><PrevChevron /></button>
-        <button type="button" className="edge edge-next" aria-label="Next" data-nav disabled={none} onClick={player.next}><NextChevron /></button>
+        {/* As in the first Madstr: previous / next item of what fills the picture area. Over a
+            slideshow that is the pictures; over a video it is the videos. The songs have their own
+            previous / next in the controls. */}
+        <button type="button" className="edge edge-prev" aria-label={showingVideo ? 'Previous video' : 'Previous picture'} data-nav
+          disabled={showingVideo ? none : pictures.length < 2} onClick={() => (showingVideo ? player.prev() : stepPicture(-1))}><PrevChevron stretch /></button>
+        <button type="button" className="edge edge-next" aria-label={showingVideo ? 'Next video' : 'Next picture'} data-nav
+          disabled={showingVideo ? none : pictures.length < 2} onClick={() => (showingVideo ? player.next() : stepPicture(1))}><NextChevron stretch /></button>
         {modeLabel && modeHref && <a className="mode-chip" href={modeHref} data-nav>{modeLabel}</a>}
       </div>
       <div className="split">
