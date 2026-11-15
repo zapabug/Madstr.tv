@@ -56,6 +56,21 @@ Scope: the Android app (phones and TV). The web app gains the browser's version 
 - Exit: on a phone, a picked music folder and a picked picture folder are still there after closing and
   reopening the app; tracks play and seek; pictures show.
 
+## N3: Mixing local music into Music (web and app)
+
+zapa, 2026-11-15: "also add a slider for mixing local music with others".
+- Under Your sources → Folders, a slider "How much of my music plays in Music", from **none** to **lots**, kept
+  on this device (`madstr:musicMix`). Default **none**, so Music stays as it was until it is moved.
+- At a setting `often` (0 to 1), about `8 × often` in 10 tracks of the Music list are your local tracks
+  (steps of 10 %), spread evenly through the list, in the order the Local list shows them; when one side runs
+  out, the rest is the other side. The order is fixed (not random), so the list does not jump as new posts
+  arrive; the picker's Shuffle still shuffles it.
+- The note under it says what happens: "Music has none of your tracks." / "About N in 10 tracks in Music are
+  yours." With no local music the slider is off: "Add a music folder to use this."
+- Local stays as it is (only your files).
+- Exit: with a folder added and the slider at the middle, about 4 in 10 Music tracks are yours, evenly spread;
+  at none, Music has none.
+
 ## Release
 
 - `versionCode 3`, `versionName "1.2"`, built, signed and published on zapstore like 1.0 and 1.1.
@@ -64,3 +79,4 @@ Scope: the Android app (phones and TV). The web app gains the browser's version 
 
 - [ ] N1 native controls (Android) and media controls (web)
 - [ ] N2 remembered folders (Android)
+- [ ] N3 local music mixed into Music
