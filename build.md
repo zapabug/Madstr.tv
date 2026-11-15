@@ -125,6 +125,10 @@ network back); checked headless with the first request forced to fail, shown 15 
 
 - b6a258c: creator cards bigger and scaling with the screen (4 per row at 1280, 5 at 1920).
 
+- 909de93: design pass fixes: each view shows its own list or empty text (+ "Still playing"); My pictures
+  empty state; person icon for unnamed people; image fallbacks; "Logged in as" on Log out; no tilt on
+  phones; flat dashed disabled chips. Checked with screenshots (Podcasts, My pictures, People phone).
+
 ## RSS [incoming]
 Spec: §Milestones RSS
 
