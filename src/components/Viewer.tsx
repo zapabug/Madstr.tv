@@ -48,5 +48,5 @@ export function Viewer({ route }: { route: ViewerRoute }) {
   // The chip that hops to the other side, as the old "VIDEOS" toggle did.
   const sibling = route.mode === 'watch' ? { label: 'MUSIC', href: '#/listen/music' } : route.mode === 'listen' ? { label: 'VIDEOS', href: '#/watch/continue' } : undefined;
 
-  return <Theater data={data} hasVideo={hasVideo} extras={extras} modeLabel={sibling?.label} modeHref={sibling?.href} />;
+  return <Theater route={route} data={data} hasVideo={hasVideo} extras={extras} modeLabel={sibling?.label} modeHref={sibling?.href} />;
 }

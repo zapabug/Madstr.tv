@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { ViewData } from '../data/views.ts';
 import { usePictures } from '../data/pictures.ts';
 import { player, usePlayer } from '../lib/player.ts';
+import type { Route } from '../lib/route.ts';
 import { useAutoHide } from '../lib/useAutoHide.ts';
 import { NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
@@ -11,9 +12,10 @@ import { Slideshow } from './Slideshow.tsx';
 // Out of the home view the screen is split, as in the first Madstr: the picture (the
 // slideshow behind music, the video itself for video) fills the top with the thin
 // previous / next chevrons on its edges, and the bottom is split in two: the media picker
-// on the left, the player on the right. After a while without input the bottom panel
+// on the left (where the message board was), the media control panel with the playlist and
+// player on the right. After a while without input the bottom panel
 // slides away and the picture takes the whole screen.
-export function Theater({ data, hasVideo, extras, modeLabel, modeHref }: { data: ViewData; hasVideo: boolean; extras?: ReactNode; modeLabel?: string; modeHref?: string }) {
+export function Theater({ route, data, hasVideo, extras, modeLabel, modeHref }: { route: Extract<Route, { page: 'viewer' }>; data: ViewData; hasVideo: boolean; extras?: ReactNode; modeLabel?: string; modeHref?: string }) {
   const p = usePlayer();
   const item = p.queue[p.index];
   const showingVideo = hasVideo && item?.kind === 'video';
@@ -35,8 +37,8 @@ export function Theater({ data, hasVideo, extras, modeLabel, modeHref }: { data:
         {modeLabel && modeHref && <a className="mode-chip" href={modeHref} data-nav>{modeLabel}</a>}
       </div>
       <div className="split">
-        <PickerPanel label={data.label} emptyText={data.emptyText} waiting={data.waiting} extras={extras} />
-        <PlayerPanel />
+        <PickerPanel route={route} label={data.label} extras={extras} />
+        <PlayerPanel emptyText={data.emptyText} waiting={data.waiting} />
       </div>
     </main>
   );
