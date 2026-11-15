@@ -12,6 +12,11 @@ export const CONTENT_RELAYS: readonly string[] = [
   'wss://nostr.wine',
   'wss://relay.olas.app',
   'wss://relay.snort.social',
+  // Added 2026-11-15 (feat-taste-cache §T5): each answered a probe and held music posts.
+  'wss://relay.wavlake.com',
+  'wss://theforest.nostr1.com',
+  'wss://nostr.bitcoiner.social',
+  'wss://relay.nostr.net',
 ];
 
 /** Index relays: follow lists and profiles of small accounts often live only here.
