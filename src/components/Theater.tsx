@@ -36,8 +36,10 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
           {!showingVideo && <Slideshow images={pictures} onCurrent={setSlide} command={command} />}
         </div>
         <TrackToast item={item?.kind === 'audio' ? item : undefined} />
-        <Ticker text={tickerText} />
-        <span className="brand" aria-hidden="true">Mad<span className="bolt-mark">⚡</span>tr.tv</span>
+        <div className="topline">
+          <Ticker text={tickerText} />
+          <span className="brand" aria-hidden="true">Mad<span className="bolt-mark">⚡</span>tr.tv</span>
+        </div>
         {/* As in the first Madstr: previous / next item of what fills the picture area. Over a
             slideshow that is the pictures; over a video it is the videos. The songs have their own
             previous / next in the controls. */}
