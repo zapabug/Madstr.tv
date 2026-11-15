@@ -2045,3 +2045,43 @@ h1 {
     rotate: 0deg;
   }
 }
+
+/* --- creator cards: bigger, and they grow with the screen (zapa, 2026-11-15) ------------------------- */
+/* the People page may use more of a big screen, so the cards grow without becoming two huge columns */
+.viewer[data-mode="people"] {
+  max-width: min(1800px, 94vw);
+}
+.creators {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(250px, 17vw, 380px)), 1fr));
+  gap: clamp(26px, 2.4vw, 44px) clamp(20px, 2vw, 36px);
+}
+.own .creators > .creator-card {
+  min-height: clamp(230px, 20vw, 380px);
+  padding: clamp(18px, 1.6vw, 30px) clamp(16px, 1.5vw, 28px) clamp(14px, 1.3vw, 24px);
+  gap: clamp(6px, 0.6vw, 12px);
+}
+.creator-card .avatar {
+  width: clamp(68px, 6vw, 120px);
+  height: clamp(68px, 6vw, 120px);
+  border-width: 3px;
+}
+.creator-card .avatar-fallback {
+  font-size: clamp(1.2rem, 1.6vw, 2.2rem);
+}
+.card-name {
+  font-size: clamp(1.2rem, 1.1rem + 0.6vw, 2rem);
+}
+.card-counts {
+  font-size: clamp(0.85rem, 0.8rem + 0.25vw, 1.1rem);
+}
+.card-sub {
+  font-size: clamp(0.85rem, 0.8rem + 0.3vw, 1.15rem);
+}
+.creator-card .note {
+  font-size: clamp(0.75rem, 0.7rem + 0.2vw, 0.95rem);
+}
+.creator-card .card-actions .chip-btn {
+  font-size: clamp(0.8rem, 0.75rem + 0.25vw, 1.05rem);
+  padding: clamp(6px, 0.5vw, 10px) clamp(14px, 1.2vw, 22px);
+  min-height: clamp(36px, 2.8vw, 48px);
+}

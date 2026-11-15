@@ -272,6 +272,8 @@ proposed, waiting for zapa's OK), and a profile picture is only shown when it is
   each get their own pastel sticker colour with a slight tilt, like the board stickers. The People
   category chips (Everything, Images, Videos, Podcasts, Music, Short videos) are little stickers in
   different colours; the picked one turns dark with its colour as text.
+  The creator cards on People are bigger and grow with the screen (picture, name, counts and text
+  scale with the width; fewer, larger cards per row on a big screen).
 
 ## Decided after the audit (zapa, 2026-11-15)
 
