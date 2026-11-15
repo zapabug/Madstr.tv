@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advanceWalk, batchesWanted, fingerprint, freshWalk, openRequests, parseWalk } from './walk.ts';
+import { advanceWalk, batchesWanted, fingerprint, freshWalk, openRequests, parseWalk, pickWalk, storeWalk } from './walk.ts';
 
 test('batchesWanted: one on opening, one more per 30 dropped', () => {
   assert.equal(batchesWanted(0), 1);
@@ -29,4 +29,19 @@ test('advanceWalk: before the oldest returned, finished when nothing came back; 
   assert.deepEqual(w.until, [499, null, null]);
   assert.deepEqual(w.finished, [false, true, false]);
   assert.deepEqual(openRequests(w), [0, 2]);
+});
+
+test('storeWalk / pickWalk: one walk per key, the most recently used few kept', () => {
+  let map: unknown = null;
+  map = storeWalk(map, { key: 'tv', until: [5], finished: [false] }, 1);
+  map = storeWalk(map, { key: 'me', until: [9], finished: [false] }, 2);
+  assert.deepEqual(pickWalk(map, 'tv', 1).until, [5]); // the TV's walk did not overwrite mine, nor mine the TV's
+  assert.deepEqual(pickWalk(map, 'me', 1).until, [9]);
+  for (let i = 0; i < 5; i++) map = storeWalk(map, { key: `k${i}`, until: [1], finished: [false] }, 10 + i, 4);
+  assert.equal(Object.keys(map as object).length, 4);
+  assert.deepEqual(pickWalk(map, 'me', 1), freshWalk('me', 1));
+  assert.deepEqual(pickWalk('junk', 'x', 1), freshWalk('x', 1));
+  // finished is for one visit only
+  map = storeWalk(map, { key: 'done', until: [3], finished: [true] }, 20);
+  assert.deepEqual(pickWalk(map, 'done', 1), { key: 'done', until: [3], finished: [false] });
 });

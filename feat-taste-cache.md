@@ -71,7 +71,8 @@ On the media controls, for what is playing:
 - One batch at a time; it stops when the cached count reaches its cap (T3) or the relays have nothing older.
   Pictures keep their own walk (every 20 s), unchanged.
 - Where each walk got to is remembered on the device, so the next visit carries on instead of starting again;
-  a change in who the board follows starts it over.
+  one walk per follow list (the last **4**), so the TV's list before a login lands does not overwrite yours.
+  "Reached the start" lasts one visit: an empty answer may have been a slow relay, so the next visit asks again.
 - Exit: playing through a list (or hiding from it) brings older items in; the next visit continues further back.
 
 ## T5: More relays

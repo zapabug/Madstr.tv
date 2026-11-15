@@ -3,7 +3,7 @@ import { matchFilter, type Filter, type NostrEvent } from 'applesauce-core/helpe
 import { RELAYS, eventStore, pool } from '../lib/applesauce.ts';
 import { CACHE_CAPS } from '../lib/eventCacheRules.ts';
 import { mediaFilters } from '../lib/mediaFilters.ts';
-import { advanceWalk, batchesWanted, fingerprint, openRequests, parseWalk, type WalkState } from '../lib/walk.ts';
+import { advanceWalk, batchesWanted, fingerprint, openRequests, pickWalk, storeWalk, type WalkState } from '../lib/walk.ts';
 import { ALL_KINDS } from './nostr.ts';
 
 // Reach back in time for older music or videos while their list is open (spec feat-taste-cache §T4): one batch
@@ -13,11 +13,14 @@ import { ALL_KINDS } from './nostr.ts';
 
 const storeKey = (kind: string) => `madstr:walk:${kind}`;
 
+function readMap(kind: string): unknown {
+  try { return JSON.parse(localStorage.getItem(storeKey(kind)) ?? 'null'); } catch { return null; }
+}
 function loadWalk(kind: string, key: string, n: number): WalkState {
-  try { return parseWalk(JSON.parse(localStorage.getItem(storeKey(kind)) ?? 'null'), key, n); } catch { return parseWalk(null, key, n); }
+  return pickWalk(readMap(kind), key, n);
 }
 function saveWalk(kind: string, walk: WalkState): void {
-  try { localStorage.setItem(storeKey(kind), JSON.stringify(walk)); } catch { /* storage blocked: this session only */ }
+  try { localStorage.setItem(storeKey(kind), JSON.stringify(storeWalk(readMap(kind), walk, Date.now()))); } catch { /* storage blocked: this session only */ }
 }
 
 export function useOlderMedia(kind: 'audio' | 'video', authors: string[] | undefined, hashtags: string[], dropped: number, known: number): void {

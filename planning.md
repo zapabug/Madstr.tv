@@ -90,7 +90,8 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   videos, not the picture show. Caps: 2000 votes, 2000 hidden songs, hidden artists uncapped.
 - Device cache: music 3000, videos 1500, profiles 3000, lengths 5000; written every 3 s, capped at start.
 - Walk back in time (zapa: one batch per 30 dropped): what counts as dropped is the agent's reading: played this
-  session, hidden, or outside the list's length rule; one batch on opening the list; only while a list is open.
+  session, hidden, or (Music) under 2 minutes; one batch on opening the list; only while a list is open; 4 walks
+  kept (one per follow list); "reached the start" lasts one visit.
 - Relays added: relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net.
 
 ## Open questions
