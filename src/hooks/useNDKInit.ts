@@ -29,7 +29,9 @@ export const useNDKInit = (): UseNDKInitReturn => {
         // but might throw errors or take time. We assume connection starts here.
         // We rely on other parts of the app using the instance,
         // and potentially NDK events, to know when it's fully ready/connected to relays.
-        await ndk.connect(); // Connect the singleton instance
+        // Bounded wait: one dead relay (nostr.band, nsec.app) must not hold the whole app on
+        // the loading screen. NDK keeps connecting to the rest in the background.
+        await ndk.connect(4000); // Connect the singleton instance
         if (isMounted) {
           console.log('useNDKInit: NDK connect() called successfully.');
           // We mark connecting as false once the connect call finishes,
