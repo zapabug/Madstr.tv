@@ -3,7 +3,7 @@ import { useOwn } from '../data/ownContext.ts';
 
 // Adding your own sources, right where they show up: RSS feeds under Podcasts,
 // local folders under Local.
-export function OwnControls({ kind }: { kind: 'feeds' | 'folders' }) {
+export function OwnControls({ kind }: { kind: 'feeds' | 'folders' | 'pictures' }) {
   const own = useOwn();
   const [text, setText] = useState('');
   const [adding, setAdding] = useState(false);
@@ -40,15 +40,17 @@ export function OwnControls({ kind }: { kind: 'feeds' | 'folders' }) {
     );
   }
 
+  const wanted = kind === 'pictures' ? 'image' : 'audio';
+  const noun = kind === 'pictures' ? 'pictures' : 'tracks';
   return (
-    <section className="own" aria-label="Local folders">
-      <h2>Folders</h2>
+    <section className="own" aria-label={kind === 'pictures' ? 'Picture folders' : 'Local folders'}>
+      <h2>{kind === 'pictures' ? 'Picture folders' : 'Folders'}</h2>
       <ul>
-        {own.folders.map(folder => (
+        {own.folders.filter(f => f.kind === wanted).map(folder => (
           <li key={folder.id}>
             <span className="own-name" title={folder.name}>{folder.name}</span>
             <span className={`own-status${folder.status === 'error' ? ' bad' : ''}`}>
-              {folder.status === 'loading' ? 'Loading…' : folder.status === 'needs-permission' ? 'Needs permission' : folder.status === 'error' ? folder.error : `${folder.count} tracks`}
+              {folder.status === 'loading' ? 'Loading…' : folder.status === 'needs-permission' ? 'Needs permission' : folder.status === 'error' ? folder.error : `${folder.count} ${noun}`}
             </span>
             {folder.status === 'needs-permission' && (
               <button type="button" className="chip-btn solid" data-nav onClick={() => { void own.reconnectFolder(folder.id); }}>Reconnect</button>
@@ -58,12 +60,12 @@ export function OwnControls({ kind }: { kind: 'feeds' | 'folders' }) {
         ))}
       </ul>
       {own.canPickFolder ? (
-        <button type="button" className="chip-btn solid" data-nav onClick={() => { void own.addFolder(); }}>Add music folder</button>
+        <button type="button" className="chip-btn solid" data-nav onClick={() => { void own.addFolder(wanted); }}>{kind === 'pictures' ? 'Add picture folder' : 'Add music folder'}</button>
       ) : (
         <>
-          <input ref={fileRef} type="file" multiple hidden accept="audio/*,.mp3,.m4a,.ogg,.opus,.aac,.wav,.flac"
-            onChange={e => { own.addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
-          <button type="button" className="chip-btn solid" data-nav onClick={() => fileRef.current?.click()}>Add audio files</button>
+          <input ref={fileRef} type="file" multiple hidden accept={kind === 'pictures' ? 'image/*,.jpg,.jpeg,.png,.webp,.gif,.avif' : 'audio/*,.mp3,.m4a,.ogg,.opus,.aac,.wav,.flac'}
+            onChange={e => { own.addFiles(Array.from(e.target.files ?? []), wanted); e.target.value = ''; }} />
+          <button type="button" className="chip-btn solid" data-nav onClick={() => fileRef.current?.click()}>{kind === 'pictures' ? 'Add pictures' : 'Add audio files'}</button>
           <p className="own-note">This browser cannot remember folders, so picked files last until you reload.</p>
         </>
       )}

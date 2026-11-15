@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ViewData } from '../data/views.ts';
-import { usePictures } from '../data/pictures.ts';
 import { player, usePlayer } from '../lib/player.ts';
+import type { MediaItem } from '../lib/media.ts';
 import type { Route } from '../lib/route.ts';
 import { useAutoHide } from '../lib/useAutoHide.ts';
 import { NextChevron, PrevChevron } from './icons.tsx';
@@ -15,12 +15,11 @@ import { Slideshow } from './Slideshow.tsx';
 // on the left (where the message board was), the media control panel with the playlist and
 // player on the right. After a while without input the bottom panel
 // slides away and the picture takes the whole screen.
-export function Theater({ route, data, hasVideo, extras, modeLabel, modeHref }: { route: Extract<Route, { page: 'viewer' }>; data: ViewData; hasVideo: boolean; extras?: ReactNode; modeLabel?: string; modeHref?: string }) {
+export function Theater({ route, data, hasVideo, pictures, extras, modeLabel, modeHref }: { route: Extract<Route, { page: 'viewer' }>; data: ViewData; hasVideo: boolean; pictures: MediaItem[]; extras?: ReactNode; modeLabel?: string; modeHref?: string }) {
   const p = usePlayer();
   const item = p.queue[p.index];
   const showingVideo = hasVideo && item?.kind === 'video';
   const hidden = useAutoHide(p.queue.length > 0);
-  const pictures = usePictures();
   const none = p.queue.length === 0;
 
   return (

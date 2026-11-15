@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { usePictures } from '../data/pictures.ts';
 import { useViewItems } from '../data/views.ts';
 import { player } from '../lib/player.ts';
 import type { Route } from '../lib/route.ts';
@@ -13,6 +14,7 @@ type ViewerRoute = Extract<Route, { page: 'viewer' }>;
 // creators, a plain page).
 export function Viewer({ route }: { route: ViewerRoute }) {
   const data = useViewItems(route);
+  const pictures = usePictures(route.mode === 'pictures' ? 'mine' : 'all');
   const sig = data.items.map(i => i.id).join('|');
 
   // Open the queue when the list first has something; keep it in step as more arrives.
@@ -42,11 +44,12 @@ export function Viewer({ route }: { route: ViewerRoute }) {
   const hasVideo = route.mode === 'watch' || isLiked;
   const extras = route.mode === 'listen' && route.filter === 'podcasts' ? <OwnControls kind="feeds" />
     : route.mode === 'listen' && route.filter === 'local' ? <OwnControls kind="folders" />
+    : route.mode === 'pictures' ? <OwnControls kind="pictures" />
     : isLiked ? <LikedPeople />
     : undefined;
 
   // The chip that hops to the other side, as the old "VIDEOS" toggle did.
   const sibling = route.mode === 'watch' ? { label: 'MUSIC', href: '#/listen/music' } : route.mode === 'listen' ? { label: 'VIDEOS', href: '#/watch/continue' } : undefined;
 
-  return <Theater route={route} data={data} hasVideo={hasVideo} extras={extras} modeLabel={sibling?.label} modeHref={sibling?.href} />;
+  return <Theater route={route} data={data} pictures={pictures} hasVideo={hasVideo} extras={extras} modeLabel={sibling?.label} modeHref={sibling?.href} />;
 }

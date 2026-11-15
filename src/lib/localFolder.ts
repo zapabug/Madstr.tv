@@ -1,6 +1,6 @@
+import { matchesKind, titleFromName, type LocalKind } from './fileKinds.ts';
 import type { FsDirHandle, FsFileHandle } from './ownAudioStore.ts';
 
-export const AUDIO_EXT = /\.(mp3|m4a|ogg|opus|aac|wav|flac)$/i;
 export const MAX_LOCAL_FILES = 2000;
 const MAX_DEPTH = 6;
 
@@ -8,10 +8,7 @@ export interface LocalTrack {
   id: string; // stable per folder + relative path
   title: string;
   file: File;
-}
-
-export function titleFromName(name: string): string {
-  return name.replace(AUDIO_EXT, '').replace(/[_]+/g, ' ').trim().slice(0, 200) || name;
+  kind: LocalKind;
 }
 
 type PickerWindow = Window & { showDirectoryPicker?: (_options?: { mode?: 'read' }) => Promise<FsDirHandle> };
@@ -41,7 +38,7 @@ export async function hasReadPermission(handle: FsDirHandle, request: boolean): 
   return (await handle.requestPermission({ mode: 'read' })) === 'granted';
 }
 
-export async function scanFolder(folderId: string, root: FsDirHandle): Promise<LocalTrack[]> {
+export async function scanFolder(folderId: string, root: FsDirHandle, kind: LocalKind = 'audio'): Promise<LocalTrack[]> {
   const tracks: LocalTrack[] = [];
 
   async function walk(dir: FsDirHandle, prefix: string, depth: number): Promise<void> {
@@ -49,10 +46,10 @@ export async function scanFolder(folderId: string, root: FsDirHandle): Promise<L
       if (tracks.length >= MAX_LOCAL_FILES) return;
       if (entry.kind === 'directory') {
         if (depth < MAX_DEPTH) await walk(entry, `${prefix}${entry.name}/`, depth + 1);
-      } else if (AUDIO_EXT.test(entry.name)) {
+      } else if (matchesKind(entry.name, '', kind)) {
         try {
           const file = await (entry as FsFileHandle).getFile();
-          tracks.push({ id: `${folderId}:${prefix}${entry.name}`, title: titleFromName(entry.name), file });
+          tracks.push({ id: `${folderId}:${prefix}${entry.name}`, title: titleFromName(entry.name), file, kind });
         } catch (error) {
           console.error('[ownAudio] Could not read file:', entry.name, error);
         }
@@ -67,9 +64,9 @@ export async function scanFolder(folderId: string, root: FsDirHandle): Promise<L
 
 // Fallback for browsers without showDirectoryPicker: plain picked files, kept for
 // this session only.
-export function tracksFromFiles(groupId: string, files: File[]): LocalTrack[] {
+export function tracksFromFiles(groupId: string, files: File[], kind: LocalKind = 'audio'): LocalTrack[] {
   return files
-    .filter(f => AUDIO_EXT.test(f.name) || f.type.startsWith('audio/'))
+    .filter(f => matchesKind(f.name, f.type, kind))
     .slice(0, MAX_LOCAL_FILES)
-    .map((file, i) => ({ id: `${groupId}:${i}:${file.name}`, title: titleFromName(file.name), file }));
+    .map((file, i) => ({ id: `${groupId}:${i}:${file.name}`, title: titleFromName(file.name), file, kind }));
 }

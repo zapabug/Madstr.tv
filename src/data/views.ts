@@ -60,7 +60,7 @@ export function useViewItems(route: ViewerRoute): ViewData {
       return { items: last ? [last.item, ...rest] : video, label: 'Keep watching', waiting: waiting && !last, emptyText: 'Nothing watched yet.' };
     }
     if (route.mode === 'pictures') {
-      return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Local pictures arrive in a later step.' };
+      return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Add a folder of pictures on the left; they play as a slideshow.' };
     }
     if (route.filter === 'liked') {
       const items = sortNewest(dedupeByUrl([...likedAudio, ...likedVideo]));

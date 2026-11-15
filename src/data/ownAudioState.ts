@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseDuration, type MediaItem } from '../lib/media.ts';
+import type { LocalKind } from '../lib/fileKinds.ts';
 import { loadFeed, type FeedItem } from '../lib/rssFeed.ts';
 import {
   loadFolders, saveFolder, deleteFolder, loadFeeds, saveFeed, deleteFeed,
@@ -12,6 +13,7 @@ import {
 export type SourceStatus = 'loading' | 'ready' | 'needs-permission' | 'error';
 
 export interface OwnFolder {
+  kind: LocalKind;
   id: string;
   name: string;
   status: SourceStatus;
@@ -28,16 +30,18 @@ export interface OwnFeed {
   error?: string;
 }
 
-const SESSION_GROUP = 'session';
+const SESSION_PREFIX = 'session-';
+const isSession = (id: string): boolean => id.startsWith(SESSION_PREFIX);
 
 export interface OwnAudio {
   local: MediaItem[];
+  pictures: MediaItem[];
   rss: MediaItem[];
   folders: OwnFolder[];
   feeds: OwnFeed[];
   canPickFolder: boolean;
-  addFolder: () => Promise<void>;
-  addFiles: (_files: File[]) => void;
+  addFolder: (_kind?: LocalKind) => Promise<void>;
+  addFiles: (_files: File[], _kind?: LocalKind) => void;
   reconnectFolder: (_id: string) => Promise<void>;
   removeFolder: (_id: string) => void;
   addFeed: (_url: string) => Promise<void>;
@@ -71,7 +75,7 @@ export function useOwnAudioState(): OwnAudio {
         setFolderState(prev => ({ ...prev, [folder.id]: { status: 'needs-permission' } }));
         return;
       }
-      const tracks = await scanFolder(folder.id, folder.handle);
+      const tracks = await scanFolder(folder.id, folder.handle, folder.kind ?? 'audio');
       setTracksByFolder(prev => ({ ...prev, [folder.id]: tracks }));
       setFolderState(prev => ({ ...prev, [folder.id]: { status: 'ready' } }));
     } catch (error) {
@@ -120,20 +124,21 @@ export function useOwnAudioState(): OwnAudio {
     };
   }, []);
 
-  const addFolder = useCallback(async () => {
+  const addFolder = useCallback(async (kind: LocalKind = 'audio') => {
     const handle: FsDirHandle | null = await pickFolder();
     if (!handle) return;
-    const folder: StoredFolder = { id: `dir-${Date.now().toString(36)}`, name: handle.name.slice(0, 80), handle };
+    const folder: StoredFolder = { id: `dir-${Date.now().toString(36)}`, name: handle.name.slice(0, 80), handle, kind };
     await saveFolder(folder);
     setStoredFolders(prev => [...prev, folder]);
     await loadFolderTracks(folder, true);
   }, [loadFolderTracks]);
 
-  const addFiles = useCallback((files: File[]) => {
-    const tracks = tracksFromFiles(`${SESSION_GROUP}-${Date.now().toString(36)}`, files);
+  const addFiles = useCallback((files: File[], kind: LocalKind = 'audio') => {
+    const group = `${SESSION_PREFIX}${kind}`;
+    const tracks = tracksFromFiles(`${group}-${Date.now().toString(36)}`, files, kind);
     if (tracks.length === 0) return;
-    setTracksByFolder(prev => ({ ...prev, [SESSION_GROUP]: [...(prev[SESSION_GROUP] ?? []), ...tracks] }));
-    setFolderState(prev => ({ ...prev, [SESSION_GROUP]: { status: 'ready' } }));
+    setTracksByFolder(prev => ({ ...prev, [group]: [...(prev[group] ?? []), ...tracks] }));
+    setFolderState(prev => ({ ...prev, [group]: { status: 'ready' } }));
   }, []);
 
   const reconnectFolder = useCallback(async (id: string) => {
@@ -155,7 +160,7 @@ export function useOwnAudioState(): OwnAudio {
     dropTrackUrls(tracksByFolder[id]);
     setTracksByFolder(prev => { const next = { ...prev }; delete next[id]; return next; });
     setFolderState(prev => { const next = { ...prev }; delete next[id]; return next; });
-    if (id !== SESSION_GROUP) {
+    if (!isSession(id)) {
       setStoredFolders(prev => prev.filter(f => f.id !== id));
       void deleteFolder(id);
     }
@@ -181,13 +186,16 @@ export function useOwnAudioState(): OwnAudio {
 
   const folders = useMemo((): OwnFolder[] => {
     const list: OwnFolder[] = storedFolders.map(f => ({
-      id: f.id, name: f.name, session: false,
+      id: f.id, kind: f.kind ?? 'audio', name: f.name, session: false,
       status: folderState[f.id]?.status ?? 'loading',
       error: folderState[f.id]?.error,
       count: tracksByFolder[f.id]?.length ?? 0,
     }));
-    if (tracksByFolder[SESSION_GROUP]) {
-      list.push({ id: SESSION_GROUP, name: 'Picked files (this session)', session: true, status: 'ready', count: tracksByFolder[SESSION_GROUP].length });
+    for (const kind of ['audio', 'image'] as const) {
+      const group = `${SESSION_PREFIX}${kind}`;
+      if (tracksByFolder[group]) {
+        list.push({ id: group, kind, name: 'Picked files (this session)', session: true, status: 'ready', count: tracksByFolder[group].length });
+      }
     }
     return list;
   }, [storedFolders, folderState, tracksByFolder]);
@@ -199,21 +207,23 @@ export function useOwnAudioState(): OwnAudio {
     count: itemsByFeed[f.url]?.length ?? 0,
   })), [storedFeeds, feedState, itemsByFeed]);
 
-  const local = useMemo((): MediaItem[] => {
-    const out: MediaItem[] = [];
+  const { local, pictures } = useMemo(() => {
+    const audio: MediaItem[] = [];
+    const images: MediaItem[] = [];
     Object.values(tracksByFolder).forEach(tracks => {
       tracks.forEach(track => {
-        out.push({
+        const item: MediaItem = {
           id: `local:${track.id}`,
-          kind: 'audio',
+          kind: track.kind,
           origin: 'local',
           url: urlFor(track),
           title: track.title,
           createdAt: Math.floor(track.file.lastModified / 1000),
-        });
+        };
+        (track.kind === 'image' ? images : audio).push(item);
       });
     });
-    return out;
+    return { local: audio, pictures: images };
   }, [tracksByFolder, urlFor]);
 
   const rss = useMemo((): MediaItem[] => {
@@ -238,7 +248,7 @@ export function useOwnAudioState(): OwnAudio {
   }, [itemsByFeed, storedFeeds]);
 
   return {
-    local, rss, folders, feeds,
+    local, pictures, rss, folders, feeds,
     canPickFolder: canPickFolder(),
     addFolder, addFiles, reconnectFolder, removeFolder, addFeed, refreshFeed, removeFeed,
   };

@@ -19,6 +19,7 @@ export interface StoredFolder {
   id: string;
   name: string;
   handle: FsDirHandle;
+  kind?: 'audio' | 'image'; // folders saved before pictures existed are audio
 }
 
 export interface StoredFeed {
