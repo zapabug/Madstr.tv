@@ -113,7 +113,8 @@ Spec: §Local media, §Milestones R7
 
 ## Styling (in scope, decided after the audit)
 Commits: f2eeaec, b538884, 1478632 (melting clock), plus the halo / tiles / ticker commits above;
-uncommitted: profile picture as the planet (`Sky.tsx`, `styles.css`, zapa's work in progress).
+5948541: profile picture as the planet (`Sky.tsx`, `styles.css`; the rest of that CSS diff is a formatter
+rewrite). Known weak spot: a picture that fails to load once stays hidden until a reload.
 
 ## RSS [incoming]
 Spec: §Milestones RSS
