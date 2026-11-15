@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { stripNostrRefs, type MediaItem } from './media.ts';
-import { nextIndex, nextRate, prevAction, rateKey, resumeTime, validRate } from './queue.ts';
+import { isHttpUrl, stripNostrRefs, type MediaItem } from './media.ts';
+import { mergeShuffled, nextIndex, nextRate, prevAction, rateKey, resumeTime, shuffleAround, unshuffle, validRate } from './queue.ts';
 
 export type Status = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -12,10 +12,11 @@ export interface PlayerState {
   position: number;
   duration: number;
   rate: number;
+  shuffle: boolean; // the playlist is in shuffled order (spec §Added later)
   error: string | null;
 }
 
-const INITIAL: PlayerState = { queue: [], index: -1, label: '', status: 'idle', position: 0, duration: 0, rate: 1, error: null };
+const INITIAL: PlayerState = { queue: [], index: -1, label: '', status: 'idle', position: 0, duration: 0, rate: 1, shuffle: false, error: null };
 
 const POS_PREFIX = 'madstr:pos:';
 const LAST_VIDEO = 'madstr:lastvideo';
@@ -31,7 +32,8 @@ function drop(key: string): void {
   try { localStorage.removeItem(key); } catch { /* same */ }
 }
 
-export interface LastVideo { item: MediaItem; position: number }
+// duration: the video's length as the player measured it (seconds), when known; the Continue sticker's bar uses it.
+export interface LastVideo { item: MediaItem; position: number; duration?: number }
 
 export function loadLastVideo(): LastVideo | null {
   const raw = read(LAST_VIDEO);
@@ -40,7 +42,12 @@ export function loadLastVideo(): LastVideo | null {
     const parsed = JSON.parse(raw) as Partial<LastVideo>;
     const item = parsed.item;
     if (item && item.kind === 'video' && typeof item.url === 'string' && /^https?:/.test(item.url) && typeof item.id === 'string') {
-      return { item: { ...item, title: stripNostrRefs(String(item.title ?? '')).slice(0, 160) }, position: Number(parsed.position) || 0 };
+      const duration = Number(parsed.duration);
+      return {
+        item: { ...item, title: stripNostrRefs(String(item.title ?? '')).slice(0, 160), image: isHttpUrl(item.image) ? item.image : undefined },
+        position: Number(parsed.position) || 0,
+        duration: Number.isFinite(duration) && duration > 0 ? duration : undefined,
+      };
     }
   } catch { /* fall through */ }
   return null;
@@ -58,6 +65,8 @@ export class PlayerStore {
   private failures = 0;
   private lastSavedAt = 0;
   private cleanups: Array<() => void> = [];
+  private natural: MediaItem[] = []; // the playlist in its normal order, for turning shuffle off
+  private pendingSeek: number | null = null; // where to start once the element has loaded (a hand-over)
 
   subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
@@ -74,9 +83,10 @@ export class PlayerStore {
     return this.state.queue[this.state.index] ?? null;
   }
 
+  // A video plays in the viewer's <video>; with no viewer on screen its sound plays in the hidden <audio>.
   private elementFor(item: MediaItem | null): HTMLMediaElement | null {
     if (!item) return null;
-    return item.kind === 'video' ? this.videoEl : this.audioEl;
+    return item.kind === 'video' ? this.videoEl ?? this.audioEl : this.audioEl;
   }
 
   // --- elements ----------------------------------------------------------------
@@ -87,15 +97,27 @@ export class PlayerStore {
 
   registerVideo = (el: HTMLVideoElement | null): void => {
     if (!el) {
-      this.videoEl?.pause();
-      this.videoEl = null;
-      if (this.current?.kind === 'video' && this.state.status === 'playing') this.set({ status: 'paused' });
+      // Leaving the viewer: the video's sound carries on in the hidden <audio> from the same second.
+      const old = this.videoEl;
+      this.videoEl = null; // first, so the pause below is no longer this item's element
+      if (!old) return;
+      const handingOver = this.current?.kind === 'video' && !!old.getAttribute('src');
+      const at = old.currentTime;
+      old.pause();
+      if (handingOver) {
+        this.savePosition(at);
+        this.loadCurrent(this.wantPlay, at);
+      }
       return;
     }
+    // The viewer came back while a video was the current item: the picture picks up where the sound is.
+    const sound = this.audioEl;
+    const at = this.current?.kind === 'video' && sound?.getAttribute('src') === this.current.url
+      ? this.pendingSeek ?? sound.currentTime
+      : undefined;
     this.videoEl = el;
     this.attach(el);
-    // The viewer came back while a video was the current item: load it into the new element.
-    if (this.current?.kind === 'video') this.loadCurrent(this.wantPlay);
+    if (this.current?.kind === 'video') this.loadCurrent(this.wantPlay, at);
   };
 
   private attach(el: HTMLMediaElement): void {
@@ -107,7 +129,9 @@ export class PlayerStore {
     on('loadedmetadata', () => {
       if (!mine()) return;
       this.set({ duration: Number.isFinite(el.duration) ? el.duration : 0 });
-      const at = resumeTime(Number(read(POS_PREFIX + this.current?.url)) || undefined, el.duration);
+      const handOver = this.pendingSeek;
+      this.pendingSeek = null;
+      const at = handOver ?? resumeTime(Number(read(POS_PREFIX + this.current?.url)) || undefined, el.duration);
       if (at > 0) el.currentTime = at;
     });
     on('durationchange', () => { if (mine() && Number.isFinite(el.duration)) this.set({ duration: el.duration }); });
@@ -134,7 +158,9 @@ export class PlayerStore {
     this.failures = 0;
     // Each queue label has its own saved speed (podcasts fast, music at 1×): switching modes restores it.
     const rate = validRate(Number(read(rateKey(label)))) ?? 1;
-    this.set({ queue: items, index, label, rate, position: 0, duration: 0, error: null });
+    // A newly opened playlist starts in its normal order.
+    this.natural = items;
+    this.set({ queue: items, index, label, rate, shuffle: false, position: 0, duration: 0, error: null });
     this.loadCurrent(autoplay);
   }
 
@@ -145,13 +171,29 @@ export class PlayerStore {
     if (!playing) return;
     const at = items.findIndex(i => i.id === playing.id);
     if (at < 0) return; // the item is not in this list: leave the queue alone
+    this.natural = items;
+    if (this.state.shuffle) {
+      const merged = mergeShuffled(this.state.queue, items, playing.id);
+      this.set({ queue: merged.queue, index: merged.index, label });
+      return;
+    }
     this.set({ queue: items, index: at, label });
   }
 
-  private loadCurrent(play: boolean): void {
+  // Shuffle on / off for the open playlist; the item playing keeps playing either way.
+  toggleShuffle = (): void => {
+    const currentId = this.current?.id;
+    if (this.state.queue.length === 0) return;
+    const next = this.state.shuffle ? unshuffle(this.natural, currentId) : shuffleAround(this.state.queue, currentId);
+    if (next.index < 0 && currentId) return; // the playing item is not in the normal order any more: keep things as they are
+    this.set({ queue: next.queue, index: next.index, shuffle: !this.state.shuffle });
+  };
+
+  private loadCurrent(play: boolean, at?: number): void {
     const item = this.current;
     const el = this.elementFor(item);
     this.wantPlay = play;
+    this.pendingSeek = at !== undefined && Number.isFinite(at) && at > 0 ? at : null;
     for (const other of [this.audioEl, this.videoEl]) {
       if (other && other !== el) { other.pause(); }
     }
@@ -162,6 +204,11 @@ export class PlayerStore {
     if (item.kind === 'video') this.rememberVideo(item, Number(read(POS_PREFIX + item.url)) || 0);
     this.lastSavedAt = 0;
     if (el.getAttribute('src') !== item.url) el.src = item.url;
+    else if (this.pendingSeek !== null && el.readyState >= 1) {
+      // Same file already loaded, so no new 'loadedmetadata': jump to the hand-over second now.
+      el.currentTime = this.pendingSeek;
+      this.pendingSeek = null;
+    }
     el.playbackRate = this.state.rate;
     this.set({ status: play ? 'loading' : 'paused', position: 0, duration: 0, error: null });
     if (play) this.start(el);
@@ -280,7 +327,8 @@ export class PlayerStore {
   }
 
   private rememberVideo(item: MediaItem, position: number): void {
-    write(LAST_VIDEO, JSON.stringify({ item, position: Math.floor(position) }));
+    const duration = this.state.duration > 0 ? Math.floor(this.state.duration) : undefined;
+    write(LAST_VIDEO, JSON.stringify({ item, position: Math.floor(position), duration }));
   }
 
   dispose(): void {

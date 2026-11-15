@@ -1,63 +1,35 @@
 import { useMemo } from 'react';
-import { isPodcast, type MediaItem } from '../lib/media.ts';
+import { isPodcast } from '../lib/media.ts';
 import { useProbedDurations } from '../lib/durations.ts';
-import { usePictureMix } from '../lib/pictureMix.ts';
 import { useTagSet } from '../lib/tags.ts';
 import { loadLastVideo } from '../lib/player.ts';
+import { buildPreviews, type PreviewData } from '../lib/previews.ts';
 import { useOwn } from './ownContext.ts';
 import { useContacts, useNostrItems } from './nostr.ts';
 import { useCreatorSuggestions, useFeedPubkey } from './people.ts';
 
-// What each sticker on the board shows: a picture of what it would open (cover art, a
-// poster, a slide) or the next item in its queue. Everything comes from the same lists
-// the viewer plays, so "next up" on the board is exactly what opens. Nothing is invented:
-// with no source yet a sticker says so.
-export interface PreviewData {
-  urls: string[]; // pictures to rotate through
-  frame?: string; // a video with no poster: show its first frame
-  avatars: string[]; // pubkeys, for the people stickers
-  text?: string; // the next title, or a short status
-  progress?: number; // 0..1, for "keep watching"
-}
+export type { PreviewData };
 
-const SHOW = 4;
-const picturesOf = (items: MediaItem[]): string[] => items.filter(i => i.image).slice(0, SHOW).map(i => i.image as string);
-
+// The board's sticker previews, fed by the same lists the viewer plays. The rules are in lib/previews.ts.
 export function usePreviews(): Record<string, PreviewData> {
   const own = useOwn();
   const feed = useFeedPubkey();
   const contacts = useContacts(feed);
   const tags = useTagSet();
-  const mix = usePictureMix();
   const audio = useProbedDurations(useNostrItems('audio', contacts, tags.audio));
   const video = useNostrItems('video', contacts, tags.video);
-  const images = useNostrItems('image', contacts, tags.image);
   const { creators } = useCreatorSuggestions();
   const last = useMemo(() => loadLastVideo(), []);
 
-  return useMemo(() => {
-    const music = audio.filter(i => !isPodcast(i));
-    const podcasts = [...own.rss, ...audio.filter(isPodcast)];
-    const short = video.filter(v => v.short);
-    const long = video.filter(v => !v.short);
-    const empty: PreviewData = { urls: [], avatars: [] };
-    const fromVideos = (items: MediaItem[]): PreviewData => {
-      const posters = picturesOf(items);
-      const first = items[0];
-      return { ...empty, urls: posters, frame: posters.length === 0 ? first?.url : undefined, text: first?.title };
-    };
-    return {
-      music: { ...empty, urls: picturesOf(music), text: music[0]?.title },
-      podcasts: { ...empty, urls: picturesOf(podcasts), text: podcasts[0]?.title },
-      local: { ...empty, text: own.local.length > 0 ? `${own.local.length} tracks` : undefined },
-      continue: last
-        ? { ...empty, urls: last.item.image ? [last.item.image] : [], frame: last.item.image ? undefined : last.item.url, text: last.item.title,
-            progress: last.item.duration ? Math.min(1, last.position / last.item.duration) : undefined }
-        : fromVideos(video),
-      short: fromVideos(short),
-      long: fromVideos(long),
-      pictures: { ...empty, urls: (mix.onlyMine && own.pictures.length > 0 ? own.pictures : [...own.pictures.slice(0, 2), ...images]).slice(0, 6).map(i => i.url), text: own.pictures.length > 0 ? `${own.pictures.length} of yours` : undefined },
-      follow: { ...empty, avatars: creators.slice(0, SHOW).map(c => c.pubkey), text: creators.length > 0 ? `${creators.length} to follow` : undefined },
-    } satisfies Record<string, PreviewData>;
-  }, [audio, video, images, own.rss, own.local, own.pictures, mix, creators, last]);
+  return useMemo(() => buildPreviews({
+    music: audio.filter(i => !isPodcast(i)),
+    podcasts: [...own.rss, ...audio.filter(isPodcast)],
+    localCount: own.local.length,
+    video,
+    short: video.filter(v => v.short),
+    long: video.filter(v => !v.short),
+    last,
+    ownPictures: own.pictures.map(p => p.url),
+    creators: creators.map(c => c.pubkey),
+  }), [audio, video, own.rss, own.local, own.pictures, creators, last]);
 }

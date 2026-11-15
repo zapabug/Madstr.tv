@@ -53,3 +53,40 @@ test('a saved speed must be one of the known rates', () => {
   assert.equal(validRate('1.5'), null, 'localStorage strings come through Number() first');
   assert.equal(validRate(null), null);
 });
+
+// --- shuffle ---------------------------------------------------------------------------------
+import { mergeShuffled, shuffleAround, unshuffle } from './queue.ts';
+
+const items = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => ({ id }));
+// A fixed "random" so the order is checkable; a seeded LCG.
+const seeded = (seed = 7) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+test('shuffle keeps the playing item first and every other item once', () => {
+  const { queue, index } = shuffleAround(items, 'c', seeded());
+  assert.equal(index, 0);
+  assert.equal(queue[0].id, 'c');
+  assert.deepEqual(queue.map(i => i.id).sort(), ['a', 'b', 'c', 'd', 'e', 'f']);
+  assert.notDeepEqual(queue.map(i => i.id), ['c', 'a', 'b', 'd', 'e', 'f'], 'the rest is actually reordered');
+});
+
+test('shuffle with nothing playing still shuffles everything', () => {
+  const { queue, index } = shuffleAround(items, undefined, seeded());
+  assert.equal(queue.length, items.length);
+  assert.equal(index, 0);
+  assert.deepEqual(shuffleAround([], undefined), { queue: [], index: -1 });
+});
+
+test('items that arrive while shuffled join at the end; gone ones drop out; order otherwise holds', () => {
+  const now = shuffleAround(items, 'c', seeded()).queue;
+  const natural = [...items.filter(i => i.id !== 'e'), { id: 'g' }, { id: 'h' }];
+  const { queue, index } = mergeShuffled(now, natural, 'c', seeded(3));
+  const kept = now.map(i => i.id).filter(id => id !== 'e');
+  assert.deepEqual(queue.slice(0, kept.length).map(i => i.id), kept);
+  assert.deepEqual(queue.slice(kept.length).map(i => i.id).sort(), ['g', 'h']);
+  assert.equal(queue[index].id, 'c');
+  assert.equal(queue.find(i => i.id === 'g'), natural.find(i => i.id === 'g'), 'the fresh item objects are used');
+});
+
+test('turning shuffle off goes back to the normal order, same item playing', () => {
+  assert.deepEqual(unshuffle(items, 'd'), { queue: items, index: 3 });
+});

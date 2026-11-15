@@ -26,9 +26,7 @@ export function useProfile(pubkey: string | undefined) {
   return use$(() => (pubkey ? castUser(pubkey, eventStore).profile$ : undefined), [pubkey]);
 }
 
-export function shortName(pubkey: string, name?: string): string {
-  return name?.trim() || `${pubkey.slice(0, 8)}…`;
-}
+export { shortName } from '../lib/names.ts';
 
 // Follow / unfollow through Applesauce's actions: they edit the account's existing
 // contact list, so nothing is overwritten.

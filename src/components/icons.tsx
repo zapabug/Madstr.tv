@@ -25,6 +25,9 @@ export const PlayIcon = (p: IconProps) => (
 export const PauseIcon = (p: IconProps) => (
   <Svg {...p}><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></Svg>
 );
+export const ShuffleIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M16 4l4 3.5-4 3.5V8.5h-1.6l-3 3.5 3 3.5H16V13l4 3.5-4 3.5v-2.5h-2.5L10 13.5 6.5 17.5H3v-2h2.6l3.1-3.5L5.6 8.5H3v-2h3.5L10 10.5 13.5 6.5H16z" /></Svg>
+);
 export const NoteIcon = (p: IconProps) => (
   <Svg {...p}><path d="M9 3v11.6A3.5 3.5 0 1 0 11 18V8h7V3z" /></Svg>
 );

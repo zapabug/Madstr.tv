@@ -2,12 +2,13 @@ import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { CATEGORIES, type Category } from '../lib/creators.ts';
 import { hasExtension, loginWithBunker, loginWithExtension, logout, startQrLogin, type QrLogin } from '../lib/accounts.ts';
+import { isHttpUrl } from '../lib/media.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
 
 export function Avatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
   const name = shortName(pubkey, profile?.displayName);
-  return profile?.picture
+  return isHttpUrl(profile?.picture)
     ? <img className="avatar" src={profile.picture} alt="" loading="lazy" referrerPolicy="no-referrer" />
     : <span className="avatar avatar-fallback" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>;
 }
@@ -17,20 +18,16 @@ export function PersonName({ pubkey }: { pubkey: string }) {
   return <>{shortName(pubkey, profile?.displayName)}</>;
 }
 
-// The small chip in the header: who you are, or a way to log in.
+// The small chip in the header: log out, or a way to log in.
 export function AccountChip() {
   const account = useAccount();
-  const profile = useProfile(account?.pubkey);
-  return (
-    <a className="chip-link" href="#/people/follow" data-nav>
-      {account ? `♥ ${shortName(account.pubkey, profile?.displayName)}` : 'Log in'}
-    </a>
-  );
+  return account
+    ? <button type="button" className="chip-link" data-nav onClick={() => { void logout(); }}>Log out</button>
+    : <a className="chip-link" href="#/people/follow" data-nav>Log in</a>;
 }
 
 export function LoginPanel() {
   const account = useAccount();
-  const profile = useProfile(account?.pubkey);
   const [uri, setUri] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,19 +54,7 @@ export function LoginPanel() {
     }
   };
 
-  if (account) {
-    return (
-      <section className="own" aria-label="Account">
-        <h2>Logged in</h2>
-        <ul><li>
-          <Avatar pubkey={account.pubkey} />
-          <span className="own-name">{shortName(account.pubkey, profile?.displayName)}</span>
-          <button type="button" className="chip-btn" data-nav onClick={() => { void logout(); }}>Log out</button>
-        </li></ul>
-        <p className="own-note">The board now shows what the people <b>you</b> follow post.</p>
-      </section>
-    );
-  }
+  if (account) return null;
 
   return (
     <section className="own" aria-label="Log in">
