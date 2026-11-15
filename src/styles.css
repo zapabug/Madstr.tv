@@ -1984,3 +1984,61 @@ h1 {
 .own .seek::-moz-range-thumb {
   box-shadow: 0 0 0 3px var(--ink);
 }
+
+/* --- sticker colours (zapa, 2026-11-15) ---------------------------------------------------------------
+   Bigger halo around profile pictures; "Your sources" and People cards in their own pastel colours with
+   a slight tilt; the People category chips as little coloured stickers, the picked one inverted. */
+.bottomline .avatar,
+.author-spot {
+  box-shadow:
+    0 0 8px 2px rgba(255, 255, 255, 0.5),
+    0 0 30px 10px rgba(255, 255, 255, 0.24);
+}
+
+.sources-grid > .own,
+.people > .own {
+  rotate: var(--tilt, 0deg);
+  transition: rotate 260ms var(--ease);
+}
+.sources-grid > .own:focus-within,
+.people > .own:focus-within {
+  rotate: 0deg;
+}
+.sources-grid > .own:nth-child(6n + 1) { background: var(--mint); --tilt: -1deg; }
+.sources-grid > .own:nth-child(6n + 2) { background: var(--pinkp); --tilt: 0.8deg; }
+.sources-grid > .own:nth-child(6n + 3) { background: var(--sky); --tilt: -0.6deg; }
+.sources-grid > .own:nth-child(6n + 4) { background: var(--butter); --tilt: 1deg; }
+.sources-grid > .own:nth-child(6n + 5) { background: var(--lilac); --tilt: -0.8deg; }
+.sources-grid > .own:nth-child(6n + 6) { background: var(--peach); --tilt: 0.6deg; }
+.people > .own:nth-of-type(2n + 1) { background: var(--lilac); --tilt: -0.6deg; }
+.people > .own:nth-of-type(2n + 2) { background: var(--mint); --tilt: 0.5deg; }
+
+.creator-chips button {
+  --tone: var(--butter);
+  background: var(--tone);
+  color: var(--ink);
+  border-color: var(--ink);
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  min-height: 38px;
+  rotate: var(--tilt, 0deg);
+  transition-property: background-color, color, border-color, rotate, translate, box-shadow;
+}
+.creator-chips button:nth-child(6n + 1) { --tone: var(--butter); --tilt: -2deg; }
+.creator-chips button:nth-child(6n + 2) { --tone: var(--mint); --tilt: 1.5deg; }
+.creator-chips button:nth-child(6n + 3) { --tone: var(--pinkp); --tilt: -1deg; }
+.creator-chips button:nth-child(6n + 4) { --tone: var(--sky); --tilt: 2deg; }
+.creator-chips button:nth-child(6n + 5) { --tone: var(--lilac); --tilt: -1.5deg; }
+.creator-chips button:nth-child(6n + 6) { --tone: var(--peach); --tilt: 1deg; }
+.creator-chips button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--tone);
+  border-color: var(--tone);
+  rotate: 0deg;
+}
+@media (hover: hover) {
+  .creator-chips button[aria-pressed="false"]:hover {
+    background: var(--tone);
+    rotate: 0deg;
+  }
+}
