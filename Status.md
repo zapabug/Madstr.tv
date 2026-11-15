@@ -11,6 +11,9 @@ last-worked: 2026-11-15
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Installable web app and Android app on zapstore
+State: The service worker and app manifest are built and machine-verified on a feat branch: the web app installs and opens offline. The Android app and the zapstore release are next; publishing needs zapa to approve the signature through his bunker.
+────────────────────────────────────────
 Feat: Deploy
 State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker. The Android app and a zapstore release are not built; they need a spec first.
 ────────────────────────────────────────
