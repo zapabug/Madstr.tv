@@ -18,7 +18,7 @@ export function PlayerPanel() {
         </div>
       </div>
       <PlayerStrip />
-      <ExtraButtons />
+      <ExtraButtons speed={false} />
     </aside>
   );
 }

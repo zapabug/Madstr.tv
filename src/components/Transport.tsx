@@ -34,7 +34,7 @@ export function SeekBar() {
   );
 }
 
-export function ExtraButtons() {
+export function ExtraButtons({ speed = true }: { speed?: boolean }) {
   const p = usePlayer();
   const liked = useLiked();
   const author = p.queue[p.index]?.pubkey;
@@ -47,7 +47,7 @@ export function ExtraButtons() {
       )}
       <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
       <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
-      <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
+      {speed && <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>}
     </div>
   );
 }
