@@ -1063,6 +1063,47 @@ h1 {
   display: grid;
   place-items: center;
   overflow: hidden;
+  /* double tap seeks (feat-taste-cache §T6): no browser double-tap zoom here */
+  touch-action: manipulation;
+}
+/* the "−10 s" / "+30 s" sign on the side that was double-tapped */
+.tap-sign {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  translate: -50% -50%;
+  padding: 10px 18px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--butter);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 #000;
+  font: 800 1.3rem var(--body);
+  pointer-events: none;
+}
+.tap-back {
+  left: 25%;
+}
+.tap-forward {
+  left: 75%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tap-sign {
+    animation: tap-sign 700ms var(--ease) both;
+  }
+}
+@keyframes tap-sign {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+  20% {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 .stage-full video {
   position: absolute;
@@ -1578,18 +1619,47 @@ h1 {
 }
 .pc .dock-seek {
   width: 100%;
+  min-width: 0;
 }
-/* the author's face beside previous / play / next, so the 72 px face fits the panel (feat-taste-cache §T1) */
-.pc-row {
+/* zapa's layout (feat-taste-cache §T2): face with the thumbs either side; prev / play / next; the seek bar
+   between two little post-it notes (speed, Hide artist) */
+.pc-top {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 16px;
+  /* room for the thumbs that stick out on either side */
+  padding-inline: 26px;
+}
+.pc-face {
+  position: relative;
+}
+.pc-face .taste-btn {
+  position: absolute;
+  top: calc(50% - 22px);
+  z-index: 1;
+}
+.taste-up {
+  left: -26px;
+}
+.taste-down {
+  right: -26px;
+}
+/* Hide artist: stuck on the face's bottom-right corner */
+.pc-face .postit-hide {
+  position: absolute;
+  right: -12px;
+  bottom: -10px;
+  z-index: 2;
+}
+.pc-seek {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 .author-spot {
-  /* 72 px: readable at TV distance (feat-taste-cache §T1) */
-  width: 72px;
-  height: 72px;
+  /* 96 px: readable at TV distance (feat-taste-cache §T1; zapa: bigger again) */
+  width: 96px;
+  height: 96px;
   flex: none;
   display: grid;
   place-items: center;
@@ -1668,29 +1738,103 @@ h1 {
   justify-content: center;
   gap: 14px;
 }
-.pc-extra {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.pc-taste {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
 .taste-btn {
+  width: 44px;
+  height: 44px;
   display: inline-grid;
   place-items: center;
-  min-width: 44px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--lilac);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+  transition:
+    translate 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+.taste-btn:active:not(:disabled) {
+  translate: 2px 2px;
+  box-shadow: 0 0 0 #000;
+}
+.taste-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .taste-btn.on {
   /* voted: the play button's yellow, so it stands out on the dark panel */
   background: var(--butter);
   outline: 2px solid var(--orange);
+}
+/* a little post-it note: pastel, slightly turned, a folded corner */
+.postit {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 10px 2px;
+  background: linear-gradient(315deg, #00000026 0 7px, transparent 7px) var(--butter);
+  color: var(--ink);
+  font: 800 0.85rem var(--body);
+  box-shadow: 2px 3px 0 #000;
+  rotate: -4deg;
+  cursor: pointer;
+  transition:
+    rotate 160ms ease-out,
+    translate 140ms ease-out;
+}
+.postit-hide {
+  width: 28px;
+  height: 28px;
+  border-radius: 2px 2px 7px 2px;
+  background: linear-gradient(315deg, #00000026 0 5px, transparent 5px) var(--pinkp);
+  box-shadow: 1px 2px 0 #000;
+  rotate: 6deg;
+}
+/* Hide artist: the person crossed out with a red diagonal line */
+.postit-hide::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background: linear-gradient(to top right, transparent calc(50% - 2px), #d61f1f calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px));
+  pointer-events: none;
+}
+/* speed: just bigger than the number, made oversized by the word SPEED (fast stickers add horse power) */
+.postit-speed {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-bottom: -3px; /* stuck onto the seek bar */
+  margin-right: 4px;
+  padding: 2px 9px 3px 7px;
+  rotate: -3deg;
+}
+.postit-speed b {
+  font: 800 0.9rem var(--body);
+}
+.postit-speed span {
+  font: italic 800 0.95rem/1 var(--display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #d61f1f;
+}
+.postit:active:not(:disabled) {
+  translate: 1px 2px;
+}
+.postit:focus-visible {
+  outline: 3px solid var(--butter);
+  outline-offset: 3px;
+}
+.postit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+@media (hover: hover) {
+  .postit:hover:not(:disabled) {
+    rotate: 0deg;
+  }
 }
 .pc-taste-note {
   flex-basis: 100%;
@@ -2218,43 +2362,27 @@ a.chip-btn {
     padding: 8px 10px;
   }
   .pc {
-    display: grid;
-    grid-template-columns: 52px 1fr auto;
-    grid-template-areas:
-      "author seek seek"
-      "main   main extra"
-      "taste  taste taste";
-    align-items: center;
-    gap: 8px 12px;
+    gap: 6px;
   }
   .pc .author-spot {
-    grid-area: author;
-    /* phones: 52 px, so the two compact rows still fit (feat-taste-cache §T1) */
-    width: 52px;
-    height: 52px;
+    /* phones: 64 px, so the panel still fits (feat-taste-cache §T1) */
+    width: 64px;
+    height: 64px;
   }
-  .pc-taste {
-    grid-area: taste;
+  /* smaller thumbs that only overlap the face's edges */
+  .pc-face .taste-btn {
+    width: 36px;
+    height: 36px;
+    top: calc(50% - 18px);
   }
-  .pc-row {
-    display: contents;
+  .taste-up {
+    left: -28px;
   }
-  .pc .dock-seek {
-    grid-area: seek;
-    min-width: 0;
+  .taste-down {
+    right: -28px;
   }
   .pc-main {
-    grid-area: main;
     flex-wrap: nowrap;
-    justify-content: flex-start;
     gap: 10px;
-  }
-  .pc-extra .chip-btn {
-    padding-inline: 10px;
-  }
-  .pc-extra {
-    grid-area: extra;
-    justify-self: end;
-    flex-wrap: nowrap;
   }
 }

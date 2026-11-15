@@ -23,7 +23,8 @@ Scope: web app and Android app (same code).
 ## T1: Bigger faces
 
 - The face of whoever posted the picture on screen (bottom left of the picture): **56 px** (was 32).
-- The face of whoever made what is playing (top of the media controls): **72 px** (was 40).
+- The face of whoever made what is playing (top of the media controls): **96 px** (was 40; zapa asked for it
+  bigger again after 72), 64 px on phones.
 - Exit: both read clearly at TV distance, and the media controls still fit their panel at a phone's width.
 
 ## T2: Votes and hiding
@@ -31,7 +32,11 @@ Scope: web app and Android app (same code).
 zapa, 2026-11-15, after trying the first version: "hide song and downvote do the same job, no need for
 duplicate buttons". So a down vote **is** hiding the song.
 
-One row under previous / play / next: **up vote**, **down vote**, **Hide artist**, and the speed button.
+The media controls, top to bottom (zapa, 2026-11-15): the **author's face, bigger (96 px, 64 on phones), with
+the thumbs either side overlapping its edges** (up vote left, down vote right) and **Hide artist** as a small
+post-it (28 px) stuck on its bottom-right corner, crossed with a red diagonal line; **previous / play / next**;
+a little **speed** post-it, just bigger than the number and made oversized with the word "SPEED" (fast
+stickers add horse power); the **seek bar** across the full width under it.
 - **Up vote** (thumb up). Logged in, and the item is from Nostr: publishes a public like (NIP-25 reaction,
   kind 7, content `+`, tags `e` (+ `a` for an addressable track), `p`, `k`) to the content relays. Logged
   out, or not from Nostr: kept on this device only. The button stays lit while voted; pressing it again takes
@@ -87,7 +92,8 @@ One row under previous / play / next: **up vote**, **down vote**, **Hide artist*
 
 zapa, 2026-11-15: "remove the -10s +30s buttons and handle double tap without disabling fullscreen; on the
 remote there are usually buttons for this".
-- The −10 s and +30 s buttons go from the media controls.
+- The −10 s and +30 s buttons go from the media controls, and from the slim player bar on the board (seek bar
+  and remote keys there).
 - On the picture area (the video, or the slideshow behind music): a **double tap on the left half goes back
   10 s, on the right half forward 30 s**, with a short "−10 s" / "+30 s" sign on that side. A double tap does
   not bring the panel back when the picture fills the screen.

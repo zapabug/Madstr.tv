@@ -4,7 +4,7 @@ import type { MediaItem } from '../lib/media.ts';
 import { player } from '../lib/player.ts';
 import { eventIdOf, likeTemplate, unlikeTemplate } from '../lib/reaction.ts';
 import {
-  getTaste, setTaste, withDownVote, withHiddenArtist, withHiddenSong, withUpVote, withoutVote,
+  getTaste, setTaste, withDownVote, withHiddenArtist, withUpVote, withoutUpVote,
 } from '../lib/taste.ts';
 
 // The vote and hide buttons on the media controls (spec feat-taste-cache §T2). Up votes are public likes when
@@ -17,7 +17,7 @@ export async function toggleUpVote(item: MediaItem): Promise<string | null> {
   const taste = getTaste();
   const existing = taste.up[item.id];
   if (existing) {
-    setTaste(t => withoutVote(t, item.id));
+    setTaste(t => withoutUpVote(t, item.id));
     if (existing.reaction && isLoggedIn()) {
       try { await signAndPublish(unlikeTemplate(existing.reaction, now())); }
       catch (error) { return `The like stays on Nostr: ${error instanceof Error ? error.message : String(error)}`; }
@@ -38,19 +38,6 @@ export async function toggleUpVote(item: MediaItem): Promise<string | null> {
   }
 }
 
-/** Down vote (private), or take it back. A down vote also withdraws a published like. */
-export async function toggleDownVote(item: MediaItem): Promise<string | null> {
-  const taste = getTaste();
-  if (taste.down[item.id]) { setTaste(t => withoutVote(t, item.id)); return null; }
-  const reaction = taste.up[item.id]?.reaction;
-  setTaste(t => withDownVote(t, item.id, Date.now()));
-  if (reaction && isLoggedIn()) {
-    try { await signAndPublish(unlikeTemplate(reaction, now())); }
-    catch (error) { return `The like stays on Nostr: ${error instanceof Error ? error.message : String(error)}`; }
-  }
-  return null;
-}
-
 // Hiding what is playing moves the player on first, so the list can drop it without stopping the music.
 function moveOnFrom(item: MediaItem, gone: (_i: MediaItem) => boolean): void {
   if (player.current?.id !== item.id) return;
@@ -60,9 +47,17 @@ function moveOnFrom(item: MediaItem, gone: (_i: MediaItem) => boolean): void {
   else player.pause();
 }
 
-export function hideSong(item: MediaItem): void {
+/** Down vote (zapa: the same as hiding the song): private; the song leaves every list, the player moves on,
+ *  and a like it had is withdrawn. Brought back from the Hidden card. */
+export async function downVote(item: MediaItem): Promise<string | null> {
+  const reaction = getTaste().up[item.id]?.reaction;
   moveOnFrom(item, q => q.id === item.id);
-  setTaste(t => withHiddenSong(t, item, Date.now()));
+  setTaste(t => withDownVote(t, item, Date.now()));
+  if (reaction && isLoggedIn()) {
+    try { await signAndPublish(unlikeTemplate(reaction, now())); }
+    catch (error) { return `The like stays on Nostr: ${error instanceof Error ? error.message : String(error)}`; }
+  }
+  return null;
 }
 
 export function hideArtist(item: MediaItem, name: string): void {

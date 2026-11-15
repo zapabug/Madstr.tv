@@ -1,13 +1,12 @@
 import { useState, type CSSProperties } from 'react';
-import type { MediaItem } from '../lib/media.ts';
 import { useTaste } from '../lib/taste.ts';
-import { hideArtist, hideSong, toggleDownVote, toggleUpVote } from '../data/votes.ts';
+import { downVote, hideArtist, toggleUpVote } from '../data/votes.ts';
 import { shortName, useProfile } from '../data/people.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
 import { Avatar } from './People.tsx';
-import { FolderArt, NextIcon, PauseIcon, PlayIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
+import { FolderArt, NextIcon, PauseIcon, PersonIcon, PlayIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -43,21 +42,20 @@ export function SeekBar() {
   );
 }
 
-export function ExtraButtons({ speed = true }: { speed?: boolean }) {
+// The speed button; seeking is the seek bar, a double tap on the picture, or the remote's keys (spec
+// feat-taste-cache §T6: the -10s / +30s buttons are gone).
+export function ExtraButtons() {
   const p = usePlayer();
   const has = p.queue.length > 0;
   return (
-    <div className="dock-extra" role="group" aria-label="Seek and speed">
-      <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
-      <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
-      {speed && <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>}
+    <div className="dock-extra" role="group" aria-label="Speed">
+      <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
     </div>
   );
 }
 
-// The right-hand control panel, laid out on purpose so it reads the same at any width:
-// the seek bar across the top, the main transport row under it (-10s, play, +30s), and the
-// two small extras (like, speed) below. Previous / next are the chevrons on the picture.
+// The right-hand control panel: the seek bar across the top, the author's face beside previous / play / next,
+// and one row of up vote, down vote, Hide artist and speed.
 // A small square for the author of what is playing (see lib/author.ts for what goes in it).
 function AuthorSpot() {
   const p = usePlayer();
@@ -73,61 +71,60 @@ function AuthorSpot() {
   );
 }
 
-// Up / down vote and hide, for what is playing (spec feat-taste-cache §T2). An up vote is a public like when
-// logged in; the rest stays on this device.
-function TasteButtons({ item }: { item: MediaItem }) {
-  const taste = useTaste();
-  const profile = useProfile(item.pubkey);
-  const [note, setNote] = useState<{ id: string; text: string } | null>(null);
-  const up = !!taste.up[item.id];
-  const down = !!taste.down[item.id];
-  const artist = item.pubkey ? shortName(item.pubkey, profile?.displayName) : '';
-  const run = (action: Promise<string | null>) => {
-    setNote(null);
-    void action.then(text => { if (text) setNote({ id: item.id, text }); });
-  };
-  return (
-    <div className="pc-taste" role="group" aria-label="Your taste">
-      <button type="button" className={`chip-btn taste-btn${up ? ' on' : ''}`} data-nav aria-pressed={up} aria-label="Up vote" title="Up vote (a public like when logged in)" onClick={() => run(toggleUpVote(item))}>
-        <ThumbUpIcon size={18} />
-      </button>
-      <button type="button" className={`chip-btn taste-btn${down ? ' on' : ''}`} data-nav aria-pressed={down} aria-label="Down vote" title="Down vote (private, moves it to the end)" onClick={() => run(toggleDownVote(item))}>
-        <ThumbDownIcon size={18} />
-      </button>
-      <button type="button" className="chip-btn" data-nav onClick={() => hideSong(item)} title="Hide this from every list on this device">Hide song</button>
-      {item.pubkey && (
-        <button type="button" className="chip-btn" data-nav onClick={() => hideArtist(item, artist)} title={`Hide everything by ${artist} on this device`}>Hide artist</button>
-      )}
-      {note && note.id === item.id && <p className="own-note bad pc-taste-note" role="status">{note.text}</p>}
-    </div>
-  );
-}
-
+// The media controls, top to bottom (spec feat-taste-cache §T2, §T6; zapa's layout): the author's face with
+// up vote and down vote overlapping its sides and Hide artist (a post-it crossed out in red) on its bottom-right
+// corner; previous / play / next; the speed post-it; the seek bar, full width. Seeking by steps is a double tap
+// on the picture or the remote's keys.
 export function PanelControls() {
   const p = usePlayer();
   const playing = p.status === 'playing' || p.status === 'loading';
   const has = p.queue.length > 0;
   const item = p.queue[p.index];
   const noun = item?.kind === 'video' ? 'video' : 'song';
+  const taste = useTaste();
+  const profile = useProfile(item?.pubkey);
+  const [note, setNote] = useState<{ id: string; text: string } | null>(null);
+  const up = item ? !!taste.up[item.id] : false;
+  const artist = item?.pubkey ? shortName(item.pubkey, profile?.displayName) : '';
+  const run = (id: string, action: Promise<string | null>) => {
+    setNote(null);
+    void action.then(text => { if (text) setNote({ id, text }); });
+  };
   return (
     <div className="pc" role="group" aria-label="Media controls">
-      <SeekBar />
-      <div className="pc-row">
-        <AuthorSpot />
-        <div className="pc-main">
-          <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
-          <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-            {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
+      <div className="pc-top">
+        <div className="pc-face">
+          <AuthorSpot />
+          <button type="button" className={`taste-btn taste-up${up ? ' on' : ''}`} data-nav aria-pressed={up} aria-label="Up vote" disabled={!item}
+            title="Up vote (a public like when logged in)" onClick={() => { if (item) run(item.id, toggleUpVote(item)); }}>
+            <ThumbUpIcon size={22} />
           </button>
-          <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
+          <button type="button" className="taste-btn taste-down" data-nav aria-label="Down vote" disabled={!item}
+            title="Down vote: hidden from your lists on this device" onClick={() => { if (item) run(item.id, downVote(item)); }}>
+            <ThumbDownIcon size={22} />
+          </button>
+          {item?.pubkey && (
+            <button type="button" className="postit postit-hide" data-nav aria-label={`Hide artist ${artist}`}
+              title={`Hide everything by ${artist} on this device`} onClick={() => hideArtist(item, artist)}>
+              <PersonIcon size={14} />
+            </button>
+          )}
         </div>
       </div>
-      <div className="pc-extra">
-        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
-        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
-        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
+      <div className="pc-main">
+        <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
+        <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
+          {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
+        </button>
+        <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
       </div>
-      {item && <TasteButtons item={item} />}
+      <div className="pc-seek">
+        <button type="button" className="postit postit-speed" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>
+          <b>{p.rate}×</b> <span>speed</span>
+        </button>
+        <SeekBar />
+      </div>
+      {item && note?.id === item.id && <p className="own-note bad pc-taste-note" role="status">{note.text}</p>}
     </div>
   );
 }

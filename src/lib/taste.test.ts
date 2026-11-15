@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { MediaItem } from './media.ts';
 import {
   EMPTY_TASTE, MAX_VOTES, applyTaste, newestEntries, parseTaste, withArtistBack, withDownVote, withHiddenArtist,
-  withHiddenSong, withSongBack, withUpVote, withoutVote,
+  withSongBack, withUpVote, withoutUpVote,
 } from './taste.ts';
 import { eventIdOf, likeTemplate, unlikeTemplate } from './reaction.ts';
 
@@ -17,24 +17,21 @@ test('applyTaste: nothing set leaves the list as it is', () => {
   assert.equal(applyTaste(list, EMPTY_TASTE), list);
 });
 
-test('applyTaste: hidden songs and hidden artists leave, down votes go to the end in order', () => {
+test('applyTaste: down-voted songs and hidden artists leave; Bring back returns them in place', () => {
   const list = [item('1', A), item('2', B), item('3', B), item('4'), item('5', A), item('6')];
-  let t = withHiddenSong(EMPTY_TASTE, item('4'), 1);
+  let t = withDownVote(EMPTY_TASTE, item('4'), 1);
   t = withHiddenArtist(t, A, 'Ann', 1);
-  t = withDownVote(t, '2', 1);
-  assert.deepEqual(ids(applyTaste(list, t)), ['3', '6', '2']);
-  assert.deepEqual(ids(applyTaste(list, withArtistBack(withSongBack(t, '4'), A))), ['1', '3', '4', '5', '6', '2']);
+  assert.deepEqual(ids(applyTaste(list, t)), ['2', '3', '6']);
+  assert.deepEqual(ids(applyTaste(list, withArtistBack(withSongBack(t, '4'), A))), ['1', '2', '3', '4', '5', '6']);
 });
 
-test('votes: up and down replace each other; withoutVote clears both', () => {
+test('votes: a down vote hides the song and drops its up vote; withoutUpVote clears the up vote', () => {
   let t = withUpVote(EMPTY_TASTE, 'x', 5, 'c'.repeat(64));
   assert.equal(t.up.x.reaction, 'c'.repeat(64));
-  t = withDownVote(t, 'x', 6);
+  assert.deepEqual(withoutUpVote(t, 'x'), EMPTY_TASTE);
+  t = withDownVote(t, item('x'), 6);
   assert.equal(t.up.x, undefined);
-  assert.equal(t.down.x, 6);
-  t = withUpVote(t, 'x', 7);
-  assert.equal(t.down.x, undefined);
-  assert.deepEqual(withoutVote(t, 'x'), EMPTY_TASTE);
+  assert.deepEqual(t.songs.x, { name: 'x', at: 6 });
 });
 
 test('newestEntries keeps the newest by time', () => {
@@ -46,19 +43,17 @@ test('parseTaste: bad input is empty; bad entries are dropped; names clipped; vo
   assert.deepEqual(parseTaste('x'), EMPTY_TASTE);
   const t = parseTaste({
     up: { ok: { at: 1, reaction: 'nothex' }, bad: { at: 'x' } },
-    down: { d: 2, e: -1 },
     songs: { s: { name: `  Song  ${'x'.repeat(300)}`, at: 3 }, t: { at: 'no' } },
     artists: { [A]: { name: 'Ann', at: 4 }, nothex: { name: 'x', at: 1 } },
   });
   assert.deepEqual(t.up, { ok: { at: 1 } });
-  assert.deepEqual(t.down, { d: 2 });
   assert.deepEqual(Object.keys(t.songs), ['s']);
   assert.ok(t.songs.s.name.startsWith('Song x') && t.songs.s.name.length <= 160);
   assert.deepEqual(Object.keys(t.artists), [A]);
-  const many = Object.fromEntries(Array.from({ length: MAX_VOTES + 5 }, (_, i) => [`i${i}`, i]));
-  const capped = parseTaste({ down: many });
-  assert.equal(Object.keys(capped.down).length, MAX_VOTES);
-  assert.equal(capped.down.i0, undefined);
+  const many = Object.fromEntries(Array.from({ length: MAX_VOTES + 5 }, (_, i) => [`i${i}`, { at: i }]));
+  const capped = parseTaste({ up: many });
+  assert.equal(Object.keys(capped.up).length, MAX_VOTES);
+  assert.equal(capped.up.i0, undefined);
 });
 
 test('withHiddenArtist ignores a key that is not a pubkey', () => {

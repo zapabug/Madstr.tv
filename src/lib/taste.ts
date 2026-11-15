@@ -3,8 +3,7 @@ import { clip, type MediaItem } from './media.ts';
 
 // What you like and do not want to hear, kept on this device (spec feat-taste-cache §T2):
 //  - up votes: lit on the controls; a published like (kind 7) is remembered so a second press can withdraw it;
-//  - down votes: private; a down-voted item moves to the end of its list;
-//  - hidden songs and hidden artists: gone from every list until brought back.
+//  - down votes (zapa: the same as hiding the song) and hidden artists: gone from every list until brought back.
 // Stored in localStorage and read back as untrusted (ids and names clipped, pubkeys checked).
 
 export const TASTE_KEY = 'madstr:taste';
@@ -19,12 +18,11 @@ export interface Hidden { name: string; at: number }
 
 export interface Taste {
   up: Record<string, UpVote>;
-  down: Record<string, number>;
-  songs: Record<string, Hidden>;
+  songs: Record<string, Hidden>; // down-voted songs
   artists: Record<string, Hidden>;
 }
 
-export const EMPTY_TASTE: Taste = { up: {}, down: {}, songs: {}, artists: {} };
+export const EMPTY_TASTE: Taste = { up: {}, songs: {}, artists: {} };
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const goodId = (id: string) => id.length > 0 && id.length <= MAX_ID;
@@ -46,10 +44,6 @@ export function parseTaste(raw: unknown): Taste {
       up[id] = typeof v.reaction === 'string' && HEX64.test(v.reaction) ? { at: v.at, reaction: v.reaction } : { at: v.at };
     }
   }
-  const down: Record<string, number> = {};
-  if (isRecord(raw.down)) {
-    for (const [id, at] of Object.entries(raw.down)) if (goodId(id) && goodTime(at)) down[id] = at;
-  }
   const hidden = (value: unknown, key: (_k: string) => boolean): Record<string, Hidden> => {
     const out: Record<string, Hidden> = {};
     if (!isRecord(value)) return out;
@@ -61,7 +55,6 @@ export function parseTaste(raw: unknown): Taste {
   };
   return {
     up: newestEntries(up, MAX_VOTES, v => v.at),
-    down: newestEntries(down, MAX_VOTES, v => v),
     songs: newestEntries(hidden(raw.songs, goodId), MAX_HIDDEN_SONGS, v => v.at),
     artists: hidden(raw.artists, k => HEX64.test(k)),
   };
@@ -70,24 +63,19 @@ export function parseTaste(raw: unknown): Taste {
 // --- changes (pure: each returns a new Taste) ---------------------------------------------
 
 export function withUpVote(taste: Taste, id: string, at: number, reaction?: string): Taste {
-  const { [id]: _gone, ...down } = taste.down;
   const up = newestEntries({ ...taste.up, [id]: reaction ? { at, reaction } : { at } }, MAX_VOTES, v => v.at);
-  return { ...taste, up, down };
+  return { ...taste, up };
 }
 
-export function withDownVote(taste: Taste, id: string, at: number): Taste {
+export function withoutUpVote(taste: Taste, id: string): Taste {
   const { [id]: _gone, ...up } = taste.up;
-  return { ...taste, up, down: newestEntries({ ...taste.down, [id]: at }, MAX_VOTES, v => v) };
+  return { ...taste, up };
 }
 
-export function withoutVote(taste: Taste, id: string): Taste {
-  const { [id]: _u, ...up } = taste.up;
-  const { [id]: _d, ...down } = taste.down;
-  return { ...taste, up, down };
-}
-
-export function withHiddenSong(taste: Taste, item: Pick<MediaItem, 'id' | 'title'>, at: number): Taste {
-  return { ...taste, songs: newestEntries({ ...taste.songs, [item.id]: { name: clip(item.title) || 'Untitled', at } }, MAX_HIDDEN_SONGS, v => v.at) };
+// A down vote: the song is hidden, and an up vote it had is gone.
+export function withDownVote(taste: Taste, item: Pick<MediaItem, 'id' | 'title'>, at: number): Taste {
+  const { [item.id]: _gone, ...up } = taste.up;
+  return { ...taste, up, songs: newestEntries({ ...taste.songs, [item.id]: { name: clip(item.title) || 'Untitled', at } }, MAX_HIDDEN_SONGS, v => v.at) };
 }
 
 export function withHiddenArtist(taste: Taste, pubkey: string, name: string, at: number): Taste {
@@ -105,19 +93,10 @@ export function withArtistBack(taste: Taste, pubkey: string): Taste {
   return { ...taste, artists };
 }
 
-// A list as your taste wants it: hidden songs and artists gone, down-voted items at the end (in their order).
+// A list as your taste wants it: down-voted songs and hidden artists gone.
 export function applyTaste(items: MediaItem[], taste: Taste): MediaItem[] {
-  const hasHidden = Object.keys(taste.songs).length > 0 || Object.keys(taste.artists).length > 0;
-  const hasDown = Object.keys(taste.down).length > 0;
-  if (!hasHidden && !hasDown) return items;
-  const kept = hasHidden
-    ? items.filter(i => !(i.id in taste.songs) && !(i.pubkey !== undefined && i.pubkey in taste.artists))
-    : items;
-  if (!hasDown) return kept;
-  const liked: MediaItem[] = [];
-  const disliked: MediaItem[] = [];
-  for (const item of kept) (item.id in taste.down ? disliked : liked).push(item);
-  return disliked.length === 0 ? kept : [...liked, ...disliked];
+  if (Object.keys(taste.songs).length === 0 && Object.keys(taste.artists).length === 0) return items;
+  return items.filter(i => !(i.id in taste.songs) && !(i.pubkey !== undefined && i.pubkey in taste.artists));
 }
 
 // --- the store on this device ---------------------------------------------------------------
