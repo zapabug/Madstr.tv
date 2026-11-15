@@ -12,7 +12,7 @@ import {
 // follows are who the board shows content from.
 export const TV_PUBKEY = 'ed199f23408d7f90ec7387b1a9607d5962eae1baf8ba421cb864a09109d3262b';
 
-const CONTACT_RELAYS = [...new Set([...LOOKUP_RELAYS, ...RELAYS])];
+export const CONTACT_RELAYS = [...new Set([...LOOKUP_RELAYS, ...RELAYS])];
 const PER_CHUNK_LIMIT = 300;
 const AUTHORS_PER_FILTER = 100;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -25,7 +25,7 @@ const CONVERT: Record<MediaKind, (_e: NostrEvent) => MediaItem | null> = {
   audio: audioFromEvent, video: videoFromEvent, image: imageFromEvent,
 };
 
-function chunk<T>(list: T[], size: number): T[][] {
+export function chunk<T>(list: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;

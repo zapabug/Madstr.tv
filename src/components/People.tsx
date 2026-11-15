@@ -138,7 +138,7 @@ export function FollowView() {
       <LikedPeople />
       <section className="own" aria-label="Creators to follow">
         <h2>Podcast and music creators</h2>
-        <p className="own-note">People publishing audio on Nostr right now that you do not follow yet.</p>
+        <p className="own-note">People publishing audio on Nostr: friends of the people you follow first, then others.</p>
         {message && <p className="own-status bad" role="alert">{message}</p>}
         {creators.length === 0 && <p className="own-note">Looking for creators…</p>}
         <ul className="creators">
@@ -149,7 +149,7 @@ export function FollowView() {
                 <Avatar pubkey={c.pubkey} />
                 <span className="creator-text">
                   <span className="own-name"><PersonName pubkey={c.pubkey} /></span>
-                  <span className="own-status">{c.count} {c.count === 1 ? 'item' : 'items'} · {c.latest}</span>
+                  <span className="own-status">{c.mutual > 0 ? `${c.mutual} of your follows follow them · ` : ''}{c.count} {c.count === 1 ? 'item' : 'items'} · {c.latest}</span>
                 </span>
                 <LikeButton pubkey={c.pubkey} />
                 <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
