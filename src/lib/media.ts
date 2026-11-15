@@ -45,6 +45,7 @@ export const VIDEO_KINDS = [1, 21, 22, 34235, 34236, 1063];
 export const IMAGE_KINDS = [1, 20, 1063];
 
 export const MUSIC_MAX_SECONDS = 9 * 60; // zapa's rule: longer than 9 minutes is a podcast
+export const MUSIC_MIN_SECONDS = 2 * 60; // zapa's rule (feat-android-native §N4): shorter than 2 minutes is not music
 export const SHORT_VIDEO_SECONDS = 30; // zapa's rule: a short video is under 30 seconds
 
 const MAX_TEXT = 160;
@@ -260,6 +261,13 @@ export function isPodcast(item: MediaItem): boolean {
   if (item.origin === 'local') return false;
   if (item.duration !== undefined) return item.duration > MUSIC_MAX_SECONDS;
   return (item.hashtags ?? []).some(t => PODCAST_TAG.test(t)) || PODCAST_WORD.test(item.title);
+}
+
+// Music: not a podcast, and not shorter than 2 minutes once the length is known (local files always count).
+export function isMusic(item: MediaItem): boolean {
+  if (isPodcast(item)) return false;
+  if (item.origin === 'local' || item.duration === undefined) return true;
+  return item.duration >= MUSIC_MIN_SECONDS;
 }
 
 export function sortNewest(items: MediaItem[]): MediaItem[] {
