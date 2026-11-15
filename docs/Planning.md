@@ -2,6 +2,11 @@
 
 ## Current Development Focus
 
+### Own audio sources (feat-own-audio, branch `feat/own-audio`)
+- [x] RSS feeds and local music folders feed the audio list (see `feat-own-audio.md`)
+- [ ] Device-test the folder picker and local playback
+- [ ] Next feat: Wavlake / Nostr music intake on top of this list
+
 ### Audio Discovery Issues (OPEN)
 - [ ] **Images being detected as audio** - URL extraction returning image URLs (.jpg, .png, .webp) for audio notes
 - [ ] **Few audio events from follows** - Most followed users post images/videos, not audio files

@@ -1,0 +1,161 @@
+// Same-origin fetch proxy for RSS feeds: most podcast hosts refuse cross-origin
+// reads from a browser. Used by the Vite dev/preview middleware (vite.config.ts)
+// and the Vercel function (api/rss.ts).
+//
+// It only relays bytes; parsing happens in the browser. The feed URL comes from
+// the user, so it is treated as hostile: http(s) only, no private / loopback /
+// link-local targets (checked on every connection, which also covers redirects
+// and DNS rebinding), capped size, capped time, capped redirects.
+
+import http from 'node:http';
+import https from 'node:https';
+import dns from 'node:dns';
+import { isIP } from 'node:net';
+
+const MAX_BYTES = 20 * 1024 * 1024;
+const TIMEOUT_MS = 15000;
+const MAX_REDIRECTS = 3;
+
+export class ProxyError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export function isPrivateAddress(ip: string): boolean {
+  const v = ip.toLowerCase();
+  if (isIP(v) === 4) {
+    const [a, b] = v.split('.').map(Number);
+    return (
+      a === 0 || a === 10 || a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  if (v === '::' || v === '::1') return true;
+  if (v.startsWith('::ffff:')) {
+    const tail = v.slice(7);
+    return isIP(tail) === 4 ? isPrivateAddress(tail) : true;
+  }
+  return /^fe[89ab]/.test(v) || /^f[cd]/.test(v);
+}
+
+type LookupCallback = (_err: NodeJS.ErrnoException | null, _address: string | dns.LookupAddress[], _family?: number) => void;
+
+function safeLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback): void {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) return callback(err, '', 0);
+    const list = addresses as dns.LookupAddress[];
+    if (list.length === 0 || list.some(a => isPrivateAddress(a.address))) {
+      return callback(new ProxyError(403, 'Address not allowed') as NodeJS.ErrnoException, '', 0);
+    }
+    if (options.all) return callback(null, list);
+    return callback(null, list[0].address, list[0].family);
+  });
+}
+
+function requestOnce(target: URL): Promise<http.IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const client = target.protocol === 'https:' ? https : http;
+    const host = target.hostname.replace(/^\[|\]$/g, '');
+    if (isIP(host) && isPrivateAddress(host)) return reject(new ProxyError(403, 'Address not allowed'));
+
+    const req = client.request(
+      target,
+      {
+        method: 'GET',
+        timeout: TIMEOUT_MS,
+        lookup: safeLookup as unknown as net_LookupFunction,
+        headers: {
+          'user-agent': 'madstr-tv-feed-proxy/1',
+          accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.1',
+        },
+      },
+      resolve,
+    );
+    req.on('timeout', () => req.destroy(new ProxyError(504, 'Feed timed out')));
+    req.on('error', err => reject(err instanceof ProxyError ? err : new ProxyError(502, 'Could not reach feed')));
+    req.end();
+  });
+}
+
+type net_LookupFunction = NonNullable<http.RequestOptions['lookup']>;
+
+function readBody(res: http.IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    res.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BYTES) {
+        res.destroy();
+        reject(new ProxyError(413, 'Feed too large'));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    res.on('end', () => resolve(Buffer.concat(chunks)));
+    res.on('error', () => reject(new ProxyError(502, 'Feed download failed')));
+  });
+}
+
+export async function fetchFeedBytes(rawUrl: string): Promise<Buffer> {
+  let target: URL;
+  try {
+    target = new URL(rawUrl);
+  } catch {
+    throw new ProxyError(400, 'Invalid URL');
+  }
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new ProxyError(400, 'Only http(s) feeds');
+    const res = await requestOnce(target);
+    const status = res.statusCode ?? 502;
+
+    if (status >= 300 && status < 400 && res.headers.location) {
+      res.resume();
+      try {
+        target = new URL(res.headers.location, target);
+      } catch {
+        throw new ProxyError(502, 'Bad redirect');
+      }
+      continue;
+    }
+    if (status !== 200) {
+      res.resume();
+      throw new ProxyError(502, `Feed returned HTTP ${status}`);
+    }
+    return readBody(res);
+  }
+  throw new ProxyError(502, 'Too many redirects');
+}
+
+export interface ProxyResult {
+  status: number;
+  headers: Record<string, string>;
+  body: Buffer | string;
+}
+
+// Always labelled text/plain + nosniff + sandbox: the browser must never render
+// what an arbitrary feed host sent as a page on this origin.
+const SAFE_HEADERS = {
+  'content-type': 'text/plain; charset=utf-8',
+  'x-content-type-options': 'nosniff',
+  'content-security-policy': 'sandbox',
+};
+
+export async function handleRssRequest(feedUrl: string | null): Promise<ProxyResult> {
+  if (!feedUrl) return { status: 400, headers: SAFE_HEADERS, body: 'Missing url' };
+  try {
+    const body = await fetchFeedBytes(feedUrl);
+    return { status: 200, headers: { ...SAFE_HEADERS, 'cache-control': 'public, max-age=300' }, body };
+  } catch (error) {
+    if (error instanceof ProxyError) return { status: error.status, headers: SAFE_HEADERS, body: error.message };
+    return { status: 502, headers: SAFE_HEADERS, body: 'Feed proxy failed' };
+  }
+}

@@ -29,7 +29,7 @@ This document describes the architecture of the React-based TV application desig
 *   **Caching:** IndexedDB via `idb` (`settings`, `mediaNoteCache`, `profileCache`)
 *   **Styling:** Tailwind CSS, `framer-motion` (for animations)
 *   **Icons:** `react-icons`
-*   **Utilities:** `shuffleArray` (`src/utils/shuffleArray.ts`), `react-qr-code`
+*   **Utilities:** `shuffleArray`, `react-qr-code`
 
 ## 3. NDK Singleton Pattern
 
