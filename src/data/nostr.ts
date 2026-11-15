@@ -9,6 +9,7 @@ import {
   type MediaItem, type MediaKind,
 } from '../lib/media.ts';
 import { chunk, mediaFilters } from '../lib/mediaFilters.ts';
+import { keepContactsOf } from '../lib/eventCache.ts';
 
 // The TV's own account (npub1a5ve7g6q…). Until someone logs in, the people it
 // follows are who the board shows content from.
@@ -23,6 +24,21 @@ export const CONVERT: Record<MediaKind, (_e: NostrEvent) => MediaItem | null> = 
 };
 
 export { chunk };
+
+// Converting an event is the same every time; the store keeps one instance per event, so remember the result.
+const converted: Record<MediaKind, WeakMap<NostrEvent, MediaItem | null>> = { audio: new WeakMap(), video: new WeakMap(), image: new WeakMap() };
+function convert(kind: MediaKind, event: NostrEvent): MediaItem | null {
+  const memo = converted[kind];
+  let item = memo.get(event);
+  if (item === undefined) { item = CONVERT[kind](event); memo.set(event, item); }
+  return item;
+}
+
+// The relay filters without their limits: the store answers with everything it holds (the device cache and
+// older batches included), not only the newest page (feat-taste-cache §T3).
+export function unlimited(filters: Filter[]): Filter[] {
+  return filters.map(({ limit: _limit, ...rest }) => rest);
+}
 
 // Open a live subscription on the relays and pour what arrives into the event store.
 // Nothing here waits for a relay: items appear in the store as they come.
@@ -41,6 +57,7 @@ export function useRelayFeed(filters: Filter[], key: string, relays: readonly st
 
 // The pubkeys a person follows (their kind 3 contact list), or undefined until it arrives.
 export function useContacts(pubkey: string | undefined): string[] | undefined {
+  if (pubkey) keepContactsOf(pubkey); // the board's follow list is kept on the device (feat-taste-cache §T3)
   const filters = useMemo<Filter[]>(() => (pubkey ? [{ kinds: [3], authors: [pubkey], limit: 1 }] : []), [pubkey]);
   useRelayFeed(filters, `contacts:${pubkey ?? ''}`, CONTACT_RELAYS);
   const contacts = use$(() => (pubkey ? eventStore.replaceable(3, pubkey) : undefined), [pubkey]);
@@ -64,13 +81,13 @@ export function useNostrItems(kind: MediaKind, authors: string[] | undefined, ha
 
   const key = `${kind}:${authorKey}:${tagKey}`;
   useRelayFeed(filters, key);
-  const events = use$(() => (filters.length > 0 ? eventStore.timeline(filters) : undefined), [key]);
+  const events = use$(() => (filters.length > 0 ? eventStore.timeline(unlimited(filters)) : undefined), [key]);
 
   return useMemo(() => {
     if (!events) return [];
     const items: MediaItem[] = [];
     for (const event of events) {
-      const item = CONVERT[kind](event);
+      const item = convert(kind, event);
       if (item) items.push(item);
     }
     return dedupeByUrl(sortNewest(items));
