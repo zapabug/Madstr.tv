@@ -1034,7 +1034,10 @@ h1 {
   position: fixed;
   inset: 0;
   z-index: 2;
-  overflow: hidden;
+  /* clip, not hidden: a hidden box can still be scrolled by script. With the panel slid away, the
+     playlist scrolling the next tile into view used to scroll the whole viewer up, so the video
+     looked cut off instead of filling the screen. */
+  overflow: clip;
   background: #000;
 }
 .theater[data-hidden="true"] {

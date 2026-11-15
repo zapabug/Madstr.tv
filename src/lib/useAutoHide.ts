@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
 // As in the first Madstr: the controls fade away after a while with no mouse, key or
-// touch, and come straight back on the next one. 45 seconds, like before.
-export const AUTOHIDE_MS = 45_000;
+// touch, and come straight back on the next one. 25 seconds (spec §Split screen; zapa 2026-11-15, was 45).
+export const AUTOHIDE_MS = 25_000;
 
 function configuredMs(): number {
   // Only for testing: localStorage 'madstr:hideMs' shortens the wait.
