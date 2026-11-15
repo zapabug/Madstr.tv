@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePreviews, type PreviewData } from "../data/previews.ts";
 import { Avatar } from "./People.tsx";
 import { OwnControls } from "./OwnControls.tsx";
+import { HiddenControls } from "./HiddenControls.tsx";
 import { TagControls } from "./TagControls.tsx";
 import {
   LANES,
@@ -191,6 +192,7 @@ export function Board() {
           <TagControls kind="audio" />
           <TagControls kind="video" />
           <TagControls kind="image" />
+          <HiddenControls />
         </div>
       </section>
     </main>

@@ -21,6 +21,13 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | N2 | Remembered folders in the app | built; not run on a device |
 | N3 | Local music mixed into Music (slider) | built + machine-verified |
 | N4 | Music is 2 to 9 minutes | built + machine-verified |
+| T1 | Bigger faces (feat-taste-cache) | built + machine-verified |
+| T2 | Votes and hiding | built + machine-verified (logged-in publish not run: no signing key here) |
+| T3 | Device cache | built + machine-verified |
+| T4 | Reach back in time | built + machine-verified |
+| T5 | More relays | built + probed |
+| T6 | Double tap to seek; -10s / +30s buttons gone | built + machine-verified |
+| T7 | Phone turned sideways (Android app only) | built + machine-verified (emulated) |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -281,4 +288,111 @@ Commit: 1bf7fc0 · Spec: §N4
 
 ## Release 1.2
 - versionCode 3, signed with the same certificate (92aca110…). Published 2026-11-15 on zapstore: release `33ada0b0…`.
+
+## T1 — Bigger faces [built]
+Commit: 5292bfa, layout fix in 0a9b4a9
+Spec: feat-taste-cache §T1
+
+- Face of the picture's poster 56 px (was 32); face in the media controls 72 px (was 40), 52 px on phones.
+- The 72 px face overflowed the 263 px panel at 1280×900, so it now sits beside previous / play / next
+  (`.pc-row`; on phones the row dissolves into the existing grid).
+- Checked in headless Chromium at 1280×900, 1920×1080 and 400×860: the panel does not scroll, nothing is cut.
+
+## T2 — Votes and hiding [built]
+Commit: 0a9b4a9
+Spec: feat-taste-cache §T2
+
+- `lib/taste.ts` (device store `madstr:taste`, pure changes, `applyTaste`), `lib/reaction.ts` (kind 7 like,
+  kind 5 unlike templates), `data/votes.ts` (toggle up / down, hide song / artist, moving the player on),
+  `signAndPublish` in `accounts.ts`; signer asked for kinds 3, 7, 5. Buttons under the media controls;
+  Hidden card under Your sources with Bring back. Lists and board previews apply taste before played-hiding.
+- Tests: `taste.test.ts` (8). Headless as a logged-in account that cannot sign: down vote moved the playing
+  track to the end without stopping it; up vote cleared the down vote and showed "Liked on this device only";
+  Hide song / Hide artist moved the player on and dropped the items; the Hidden card listed both and Bring back
+  worked; all of it in `madstr:taste` after reload.
+- Not run: a real published like (needs a signer). Undiscussed numbers in planning.md.
+- Reworked after zapa tried it (2474bb0): down vote and Hide song were one job, so Hide song is gone and a
+  down vote hides the song (the `down` map left `madstr:taste`). zapa's layout: face 96 px (64 on phones,
+  replacing T1's 72 / 52 and the `.pc-row`), thumbs either side overlapping its edges, Hide artist as a small
+  pink post-it with a red diagonal on its bottom-right corner, previous / play / next, a SPEED post-it, and
+  the seek bar across the full width. Checked headless at 1920×1080, 1280×720, 960×540 and 747×727: all of
+  it shows and nothing is cut.
+- c796a79, zapa after trying it on the dev server: thumbs further apart (44 px out from the face, 40 on phones);
+  the speed post-it reads "SPEED ×1.5", tilts 7° and sits tucked under the right end of the seek bar, which is
+  drawn over it. Tests, lint and build pass; no screenshots this time (zapa).
+- 15ac919, zapa: "use this card for current playing instead of the currently playing artist; animate this card as
+  replacing the previous music disc; it removes the card from the playlist into now playing". The now-playing
+  card (`NowCard` in Transport.tsx) is the playing tile, bigger: butter sticker, round disc (face, cover or
+  folder), title, ▶. On a track change the old card drops away and the new one slides in from the playlist's
+  side (above on phones) with the disc spinning in; nothing moves with reduced motion. The playlist leaves out
+  the playing song and what has played this session, and says so when nothing else is left.
+- Checked headless, DOM only: the panel does not scroll at 1920×1080, 1280×720, 960×540, 747×727, 400×860
+  (the compact size, disc 60 px and one title line, fixed a 5 px overflow under 1000 px tall); the playing song
+  is not among the tiles; right after Next the old card is there, 900 ms later it is gone.
+- Changed behaviour: played songs used to stay in the list until the view reopened (applesauce spec,
+  "inside one visit nothing disappears"); in the playlist tiles they now go at once, per zapa.
+
+## T3 — Device cache [built]
+Commit: 1cb1a8d
+Spec: feat-taste-cache §T3
+
+- `lib/eventCacheRules.ts` (which events, keys, caps, revive), `lib/eventCache.ts` (IndexedDB
+  `MadstrEventCache`: events + kv; restore into the store at start, writes every 3 s, caps applied at start),
+  started from `main.tsx` without waiting. Track lengths kept in the same database (`durations.ts`).
+- Lists now ask the store without the relay limits (`unlimited` in `data/nostr.ts`), so cached and older
+  events show; event to item conversion is remembered per event (WeakMap), so the larger lists stay cheap.
+- Tests: `eventCacheRules.test.ts` (4), `durations.test.ts` (2). Headless, as zapa's account (read-only):
+  online, the first 25 Music tiles took 3.5 s; reloaded with every WebSocket blocked, 60 tiles and 54 faces
+  showed in 0.53 s from the device. Logged out: 2 tiles in 0.29 s offline.
+
+## T4 — Reach back in time [built]
+Commits: 688cb2d, 95313fb
+Spec: feat-taste-cache §T4 (zapa: "refetch for every 30 we drop")
+
+- `lib/walk.ts` (batches wanted, walk state, one walk per follow list), `data/older.ts` (`useOlderMedia`),
+  counted in `data/views.ts`: dropped = hidden + played this session (live) + Music's under-2-minute tracks.
+- Tests: `walk.test.ts` (5). Headless as zapa: hiding 31 songs brought more batches (the walk moved further
+  back, 2 requests reached the start); on the next visit the walk carried on from where it stopped.
+- Fixed while checking (95313fb): the TV's follow list, used until a login lands, overwrote your saved walk;
+  now one walk per follow list. An empty answer no longer ends a walk for good, only for that visit.
+- Found: zapa's follows' dedicated track posts all fit in the first page, and older pages are mostly notes
+  without audio, so Music stayed at 80 cached tracks. More sources (relays, hashtags) are what adds music.
+
+## T5 — More relays [built]
+Commit: 57f665b
+Spec: feat-taste-cache §T5
+
+- relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net added to the content
+  relays; each held music posts in a probe (wavlake 40, theforest 30, bitcoiner 13, nostr.net 10 of 200).
+- `pnpm relays`: all four ok. nos.lol and nostr.mom do not answer from this machine (known before; they work
+  elsewhere), so they stay.
+
+## T6 — Double tap to seek [built]
+Commit: 2474bb0
+Spec: feat-taste-cache §T6
+
+- The -10 s / +30 s buttons left the media controls and the board's player bar. `lib/doubleTap.ts`
+  (`createTapper`, `seekForSide`): a double tap within 300 ms and 60 px on the picture's left half goes back
+  10 s, on the right half forward 30 s, with a short sign on that side; a single tap waits out the 300 ms.
+  The picture area is marked `data-tap-zone`, and taps there do not wake the panel in the full picture.
+- Tests: `doubleTap.test.ts`. Headless on a video: a double tap on the right moved 4 s to 35 s, showed
+  "+30 s", the picture stayed full and the video kept playing; a single tap paused it after 300 ms.
+- Fixed while checking: a pending single tap was swallowed when a second, far-away tap arrived; it now runs.
+
+## T7 — Phone turned sideways [built]
+Commits: 8d0cfef, 06277f8, 87736c2
+Spec: feat-taste-cache §T7
+
+- One media query, `(orientation: landscape) and (max-height: 500px) and (pointer: coarse)`, in
+  `styles.css` and `useAutoHide.ts`: the picture fills the screen, the playlist, face, thumbs and SPEED
+  post-it are not shown, and a touch brings back only previous / play / next and the seek bar. Turning
+  sideways hides the controls at once (matchMedia change, resize or orientationchange).
+- 06277f8: zapa saw the designed buttons go on the desktop. The first version keyed on the window's shape
+  alone; it now needs a touch screen too, so desktops and TVs keep the full controls. (What zapa saw that
+  time was also the folder left on main by an interrupted speed comparison; restored.)
+- Checked headless: a touch phone at 860×400 gets the full picture and the transport only; a desktop window
+  at 1280×450 keeps everything. Not run on a real phone.
+- 87736c2: zapa: "keep that android only, and iOS when and if people ask". The app marks the page with
+  `data-native` (main.tsx); the CSS block and the auto-hide both need it. Checked headless at 860×400 touch:
+  in a browser the normal layout stays; with the app's bridge present the full picture and transport only.
 

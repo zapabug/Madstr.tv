@@ -1,11 +1,12 @@
 import type { ViewData } from '../data/views.ts';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { createTapper, seekForSide } from '../lib/doubleTap.ts';
 import { firstSentence } from '../lib/media.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import type { MediaItem } from '../lib/media.ts';
 import type { PictureSources } from '../data/pictures.ts';
 import { availableCount, usePictureMix } from '../lib/pictureMix.ts';
-import { useAutoHide } from '../lib/useAutoHide.ts';
+import { useAutoHide, wakeControls } from '../lib/useAutoHide.ts';
 import { ImageIcon, NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
@@ -39,11 +40,44 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
   const author = showingVideo ? item?.pubkey : slide?.origin === 'nostr' ? slide.pubkey : undefined;
   const tickerText = !showingVideo && slide?.origin === 'nostr' ? firstSentence(slide.title) : '';
 
+  // Taps on the picture (spec feat-taste-cache §T6): a double tap seeks (left half -10 s, right half +30 s) and
+  // leaves the full picture alone; a single tap pauses / plays a video and brings the controls back.
+  const [sign, setSign] = useState<{ seconds: number; n: number } | null>(null);
+  const zone = useRef<HTMLDivElement>(null);
+  const live = useRef({ showingVideo, none });
+  live.current = { showingVideo, none };
+  const tapper = useRef<ReturnType<typeof createTapper> | null>(null);
+  tapper.current ??= createTapper({
+    onSingle: () => {
+      if (live.current.showingVideo) player.toggle();
+      wakeControls();
+    },
+    onDouble: tap => {
+      const box = zone.current?.getBoundingClientRect();
+      if (!box || live.current.none) return;
+      const seconds = seekForSide(tap.x, box.left, box.width);
+      player.seekBy(seconds);
+      setSign(s => ({ seconds, n: (s?.n ?? 0) + 1 }));
+    },
+    setTimer: (fn, ms) => window.setTimeout(fn, ms),
+    clearTimer: handle => window.clearTimeout(handle as number),
+  });
+  useEffect(() => () => tapper.current?.cancel(), []);
+  useEffect(() => {
+    if (!sign) return;
+    const timer = window.setTimeout(() => setSign(null), 700);
+    return () => window.clearTimeout(timer);
+  }, [sign]);
+  const onTap = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    tapper.current?.tap({ x: event.clientX, y: event.clientY, t: event.timeStamp });
+  };
+
   return (
     <main className="theater" data-hidden={hidden ? 'true' : undefined}>
       <div className="media" data-nav-group>
-        <div className="stage-full">
-          {hasVideo && <video ref={player.registerVideo} playsInline onClick={player.toggle} hidden={!showingVideo} />}
+        <div className="stage-full" ref={zone} data-tap-zone onPointerUp={onTap}>
+          {hasVideo && <video ref={player.registerVideo} playsInline hidden={!showingVideo} />}
           {!showingVideo && <Slideshow mine={pictures.mine} others={pictures.others} onCurrent={setSlide} command={command} />}
           {!showingVideo && pictureCount === 0 && emptyStage && (
             <div className="stage-empty">
@@ -53,6 +87,11 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
             </div>
           )}
         </div>
+        {sign && (
+          <div key={sign.n} className={`tap-sign ${sign.seconds < 0 ? 'tap-back' : 'tap-forward'}`} aria-hidden="true">
+            {sign.seconds < 0 ? `−${-sign.seconds} s` : `+${sign.seconds} s`}
+          </div>
+        )}
         <div className="topline">
           <Clock />
           <Ticker text={tickerText} />

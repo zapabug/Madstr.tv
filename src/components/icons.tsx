@@ -86,3 +86,9 @@ export const FolderArt = () => (
     <path className="folder-spark folder-spark-2" d="M9 1 L10.2 4.4 L13.6 5.6 L10.2 6.8 L9 10.2 L7.8 6.8 L4.4 5.6 L7.8 4.4 Z" style={{ fill: 'var(--mint)', stroke: 'var(--ink)', strokeWidth: 1.4 }} />
   </svg>
 );
+export const ThumbUpIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M2 21h3.5V9H2zm19.6-10.4c0-1-.8-1.8-1.8-1.8h-5.6l.9-4.1v-.3c0-.4-.2-.8-.4-1L13.6 2 7.4 8.2c-.3.3-.5.8-.5 1.3v9.7c0 1 .8 1.8 1.8 1.8h8.3c.7 0 1.4-.5 1.6-1.1l2.8-6.5c.1-.2.1-.4.1-.7z" /></Svg>
+);
+export const ThumbDownIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M22 3h-3.5v12H22zM2.4 13.4c0 1 .8 1.8 1.8 1.8h5.6l-.9 4.1v.3c0 .4.2.8.4 1l1.1 1.4 6.2-6.2c.3-.3.5-.8.5-1.3V4.8c0-1-.8-1.8-1.8-1.8H7c-.7 0-1.4.5-1.6 1.1l-2.8 6.5c-.1.2-.1.4-.1.7z" /></Svg>
+);

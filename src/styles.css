@@ -1063,6 +1063,47 @@ h1 {
   display: grid;
   place-items: center;
   overflow: hidden;
+  /* double tap seeks (feat-taste-cache §T6): no browser double-tap zoom here */
+  touch-action: manipulation;
+}
+/* the "−10 s" / "+30 s" sign on the side that was double-tapped */
+.tap-sign {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  translate: -50% -50%;
+  padding: 10px 18px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--butter);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 #000;
+  font: 800 1.3rem var(--body);
+  pointer-events: none;
+}
+.tap-back {
+  left: 25%;
+}
+.tap-forward {
+  left: 75%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tap-sign {
+    animation: tap-sign 700ms var(--ease) both;
+  }
+}
+@keyframes tap-sign {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+  20% {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 .stage-full video {
   position: absolute;
@@ -1578,15 +1619,184 @@ h1 {
 }
 .pc .dock-seek {
   width: 100%;
+  min-width: 0;
 }
-.author-spot {
-  width: 40px;
-  height: 40px;
+/* zapa's layout (feat-taste-cache §T2): face with the thumbs either side; prev / play / next; the seek bar
+   between two little post-it notes (speed, Hide artist) */
+.pc-top {
+  display: flex;
+  justify-content: center;
+  /* room for the thumbs that stick out on either side */
+  padding-inline: 44px;
+}
+.pc-face {
+  position: relative;
+}
+.pc-face .taste-btn {
+  position: absolute;
+  top: calc(50% - 22px);
+  z-index: 1;
+}
+.taste-up {
+  left: -44px;
+}
+.taste-down {
+  right: -44px;
+}
+/* Hide artist: stuck on the face's bottom-right corner */
+.pc-face .postit-hide {
+  position: absolute;
+  right: -12px;
+  bottom: -10px;
+  z-index: 2;
+}
+.pc-seek {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+/* the seek bar is drawn over the speed post-it, which is tucked under its right end */
+.pc-seek .dock-seek {
+  position: relative;
+  z-index: 1;
+}
+/* the now-playing card (feat-taste-cache §T2): the playlist's playing tile, bigger; its round disc is the face */
+.now-card {
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px 9px;
+  border: 2.5px solid var(--ink);
+  border-radius: 18px;
+  background: var(--butter);
+  color: var(--ink);
+  box-shadow: 4px 4px 0 #000;
+  rotate: -2deg;
+}
+.now-out {
+  /* the card being replaced, on top of the place the new one takes; gone at once without motion */
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  pointer-events: none;
+}
+.now-disc {
+  width: 84px;
+  height: 84px;
   flex: none;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 8px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+}
+.now-disc img,
+.now-disc .avatar {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  object-fit: cover;
+}
+.now-disc .folder-art {
+  rotate: 0deg;
+}
+.now-title {
+  max-width: 100%;
+  font: 800 0.82rem/1.2 var(--body);
+  text-align: center;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.now-n {
+  position: absolute;
+  top: 6px;
+  left: 11px;
+  font: 800 0.7rem var(--mono);
+  opacity: 0.65;
+}
+.now-card {
+  position: relative;
+}
+.now-out {
+  position: absolute;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .now-in {
+    animation: now-in 550ms var(--ease) both;
+  }
+  .now-in .now-disc {
+    animation: now-spin 700ms var(--ease) both;
+  }
+  .now-out {
+    display: flex;
+    z-index: 0;
+    animation: now-out 450ms cubic-bezier(0.5, 0, 0.75, 0) both;
+  }
+}
+/* the new card comes in from the playlist's side (left of the panel; above it on phones) */
+@keyframes now-in {
+  from {
+    opacity: 0;
+    translate: var(--now-from, -90px 10px);
+    rotate: -12deg;
+  }
+}
+.tiles-empty {
+  grid-column: 1 / -1;
+  padding: 8px 4px;
+  color: var(--muted, #b9b3c9);
+  font: 600 0.85rem var(--body);
+}
+@keyframes now-spin {
+  from {
+    rotate: -270deg;
+  }
+}
+@keyframes now-out {
+  to {
+    opacity: 0;
+    translate: -80px 60px;
+    rotate: -24deg;
+  }
+}
+/* shorter screens: a smaller disc and one line of title, so the panel never scrolls */
+@media (max-height: 999px) {
+  .now-card {
+    width: 130px;
+    gap: 4px;
+    padding: 8px 7px 5px;
+  }
+  .now-disc {
+    width: 60px;
+    height: 60px;
+  }
+  .now-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+  .pc {
+    gap: 5px;
+  }
+}
+.author-spot {
+  /* 96 px: readable at TV distance (feat-taste-cache §T1; zapa: bigger again) */
+  width: 96px;
+  height: 96px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 12px;
   background: #ffffff14;
   color: var(--text);
   box-shadow: 0 0 10px 1px rgba(255, 255, 255, 0.22);
@@ -1660,12 +1870,111 @@ h1 {
   justify-content: center;
   gap: 14px;
 }
-.pc-extra {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.taste-btn {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--lilac);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+  transition:
+    translate 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+.taste-btn:active:not(:disabled) {
+  translate: 2px 2px;
+  box-shadow: 0 0 0 #000;
+}
+.taste-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.taste-btn.on {
+  /* voted: the play button's yellow, so it stands out on the dark panel */
+  background: var(--butter);
+  outline: 2px solid var(--orange);
+}
+/* a little post-it note: pastel, slightly turned, a folded corner */
+.postit {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 10px 2px;
+  background: linear-gradient(315deg, #00000026 0 7px, transparent 7px) var(--butter);
+  color: var(--ink);
+  font: 800 0.85rem var(--body);
+  box-shadow: 2px 3px 0 #000;
+  rotate: -4deg;
+  cursor: pointer;
+  transition:
+    rotate 160ms ease-out,
+    translate 140ms ease-out;
+}
+.postit-hide {
+  width: 28px;
+  height: 28px;
+  border-radius: 2px 2px 7px 2px;
+  background: linear-gradient(315deg, #00000026 0 5px, transparent 5px) var(--pinkp);
+  box-shadow: 1px 2px 0 #000;
+  rotate: 6deg;
+}
+/* Hide artist: the person crossed out with a red diagonal line */
+.postit-hide::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background: linear-gradient(to top right, transparent calc(50% - 2px), #d61f1f calc(50% - 2px) calc(50% + 2px), transparent calc(50% + 2px));
+  pointer-events: none;
+}
+/* speed: just bigger than the number, made oversized by the word SPEED (fast stickers add horse power) */
+.postit-speed {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-bottom: -4px; /* tucked under the seek bar */
+  margin-right: 4px;
+  padding: 2px 9px 3px 7px;
+  rotate: -7deg;
+}
+.postit-speed b {
+  font: 800 0.9rem var(--body);
+}
+.postit-speed span {
+  font: italic 800 0.95rem/1 var(--display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #d61f1f;
+}
+.postit:active:not(:disabled) {
+  translate: 1px 2px;
+}
+.postit:focus-visible {
+  outline: 3px solid var(--butter);
+  outline-offset: 3px;
+}
+.postit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+@media (hover: hover) {
+  .postit:hover:not(:disabled) {
+    rotate: 0deg;
+  }
+}
+.pc-taste-note {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+.pc .pc-taste-note {
+  color: var(--pinkp);
 }
 .pc-main .dock-btn:not(.dock-play) {
   width: 46px;
@@ -1866,8 +2175,9 @@ h1 {
   display: none;
 }
 .bottomline .avatar {
-  width: 32px;
-  height: 32px;
+  /* 56 px: readable at TV distance (feat-taste-cache §T1) */
+  width: 56px;
+  height: 56px;
   flex: none;
   border: 0;
   outline: 0;
@@ -2184,35 +2494,92 @@ a.chip-btn {
     padding: 8px 10px;
   }
   .pc {
-    display: grid;
-    grid-template-columns: 36px 1fr auto;
-    grid-template-areas:
-      "author seek seek"
-      "main   main extra";
-    align-items: center;
-    gap: 8px 12px;
+    gap: 6px;
   }
-  .pc .author-spot {
-    grid-area: author;
+  .pc .now-card {
+    --now-from: 0 -70px;
+    width: 118px;
+    gap: 4px;
+    padding: 9px 6px 6px;
+  }
+  .pc .now-disc {
+    /* phones: 56 px and one line of title, so the panel still fits (feat-taste-cache §T2) */
+    width: 56px;
+    height: 56px;
+  }
+  .pc .now-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+  /* smaller thumbs that only overlap the face's edges */
+  .pc-face .taste-btn {
     width: 36px;
     height: 36px;
+    top: calc(50% - 18px);
   }
-  .pc .dock-seek {
-    grid-area: seek;
-    min-width: 0;
+  .taste-up {
+    left: -40px;
+  }
+  .taste-down {
+    right: -40px;
   }
   .pc-main {
-    grid-area: main;
     flex-wrap: nowrap;
-    justify-content: flex-start;
     gap: 10px;
   }
-  .pc-extra .chip-btn {
-    padding-inline: 10px;
+}
+
+/* --- phone turned sideways (feat-taste-cache §T7, zapa 2026-11-15) ---------------------------------------
+   The picture takes the whole screen. A touch brings back only previous / play / next and the seek bar, over
+   the bottom of the picture; the playlist is for holding the phone upright. The Android app only (zapa): the
+   app marks the page with `data-native`. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  :root[data-native] .theater .media {
+    bottom: 0;
   }
-  .pc-extra {
-    grid-area: extra;
-    justify-self: end;
+  :root[data-native] .theater .split {
+    top: auto;
+    height: auto;
+    justify-content: center;
+    padding: 18px 16px max(10px, env(safe-area-inset-bottom, 0px));
+    border-top: 0;
+    background: linear-gradient(to top, #0b0716e6, #0b071600);
+  }
+  :root[data-native] .theater .picker,
+  :root[data-native] .theater .pc-top,
+  :root[data-native] .theater .postit-speed,
+  :root[data-native] .theater .pc-taste-note,
+  :root[data-native] .theater .edge,
+  :root[data-native] .theater .mode-chip,
+  :root[data-native] .theater .bottomline {
+    display: none;
+  }
+  :root[data-native] .theater .player-panel {
+    flex: 0 1 640px;
+    padding: 0;
+    background: none;
+    border: 0;
+    overflow: visible;
+  }
+  :root[data-native] .theater .pc {
+    flex-direction: row;
+    gap: 14px;
+  }
+  :root[data-native] .theater .pc-main {
+    flex: none;
     flex-wrap: nowrap;
+    gap: 8px;
+  }
+  :root[data-native] .theater .pc .dock-play {
+    width: 52px;
+    height: 52px;
+  }
+  :root[data-native] .theater .pc-main .dock-btn:not(.dock-play) {
+    width: 40px;
+    height: 40px;
+  }
+  :root[data-native] .theater .pc-seek {
+    flex: 1;
+    min-width: 0;
   }
 }

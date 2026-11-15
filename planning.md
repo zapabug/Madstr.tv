@@ -83,6 +83,19 @@ Android native (feat-android-native, 2026-11-15), numbers the agent wrote into t
 - Music mix: default none, at most 8 in 10 tracks, evenly spread, fixed order; when one side runs out the
   rest is the other. Music floor: a track of unknown length stays until measured.
 
+Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the spec:
+- Faces: picture poster 56 px, now-playing author 72 px.
+- Up vote takes a second press to withdraw (a kind 5 deletion of the like); logged out it stays on the device.
+  Down vote = hide song (zapa); it also withdraws a like. Hide artist covers Music, Podcasts and videos, not the
+  picture show. Caps: 2000 up votes, 2000 down-voted songs, hidden artists uncapped. Hidden card shows 40.
+- Double tap: left / right half of the picture, 300 ms window; the single tap waits that long.
+- Device cache: music 3000, videos 1500, profiles 3000, lengths 5000; written every 3 s, capped at start.
+- Walk back in time (zapa: one batch per 30 dropped): what counts as dropped is the agent's reading: played this
+  session, hidden, or (Music) under 2 minutes; one batch on opening the list; only while a list is open; 4 walks
+  kept (one per follow list); "reached the start" lasts one visit.
+- Relays added: relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net.
+- Now-playing card (§T2): disc 84 px / 60 px under 1000 px tall / 56 px on phones; title 2 lines, 1 when small; card 150 / 130 / 118 px wide; swap animation 450 ms out, 550 ms in, disc spins 270°.
+
 ## Open questions
 
 - **Legacy files still tracked:** `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
@@ -103,8 +116,10 @@ Android native (feat-android-native, 2026-11-15), numbers the agent wrote into t
 - 2026-11-15: the planet retries a profile picture that failed to load.
 - 2026-11-15: bigger halo; coloured source / people cards and sticker chips.
 - 2026-11-15: autohide 25 s; video fills the screen when the panel hides (viewer no longer scrollable).
+- 2026-11-15: autohide 15 s (zapa, on feat/taste-cache).
 - 2026-11-15: design pass (two HIGH, four MEDIUM fixed); "Logged in as" label to check the signer's key.
 - 2026-11-15: R8 remote pass built; arrows stay inside an area (picture, picker, controls) until nothing lies further.
 - 2026-11-15: played items hide per session; slideshow avoids repeats per session; picture cache walks back in time.
 - 2026-11-15: feat-android-play: the app picks files instead of a folder; background play service (1.1).
 - 2026-11-15: feat-android-native: native media controls, remembered folders in the app, music mix slider, music 2-9 min (1.2).
+- 2026-11-15: feat-taste-cache spec: bigger faces, votes and hiding, device cache, walk back in time, more relays.
