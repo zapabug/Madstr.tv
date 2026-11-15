@@ -74,6 +74,14 @@ room of its own.
 - **Focus is first-class**: every sticker and button is reachable with arrow
   keys and Enter, with a clear focus ring. Hover tilt is a bonus on top.
 
+## The theatre (updated 2026-11-15 from zapa)
+
+While playing, the picture fills the screen: the **slideshow** behind music and podcasts, the
+**video** itself for video. The **media picker (playlist) is on the left, the player on the
+right**, and both **auto-hide after 45 s of no input, as the first Madstr did**, coming back on
+any mouse move or key. Arrow keys work while they are hidden. Following creators is a plain
+page, and the board and plain pages keep a slim player bar at the bottom.
+
 ## The viewer (one screen, two modes)
 
 One screen, as the old app had: the picture area on top, the **bottom panel**
@@ -189,7 +197,10 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
 - [x] R3 Listen mode (Music / Podcasts / Local): Nostr audio from the TV's follows, RSS feeds
       and local folders (add them right in the viewer).
 - [x] R4 Watch mode: short, long, keep-watching (last video first, then newest).
-- [ ] R5 People: login (NIP-46 / NIP-07), liked npubs, follow more creators.
+- [x] R5 People: login with a NIP-07 extension or a pasted NIP-46 bunker:// link (Applesauce
+      AccountManager, saved across reloads), follow / unfollow through Applesauce's FollowUser
+      action, device-local Liked npubs with a heart in the player, and a creator picker built
+      from audio actually found on relays. No QR codes.
 - [ ] R6 picture wall (Nostr pictures), polish.
 - [ ] R7 local media on the web: Local playlist and My pictures (folder picker).
 - [ ] later: TV (Android) build and native permission, see Parked.

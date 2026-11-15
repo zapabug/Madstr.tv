@@ -3,7 +3,9 @@ import { dedupeByUrl, isPodcast, sortNewest, type MediaItem } from '../lib/media
 import { loadLastVideo } from '../lib/player.ts';
 import type { Route } from '../lib/route.ts';
 import { useOwn } from './ownContext.ts';
-import { TV_PUBKEY, useContacts, useNostrItems } from './nostr.ts';
+import { useContacts, useNostrItems } from './nostr.ts';
+import { useFeedPubkey } from './people.ts';
+import { useLiked } from '../lib/liked.ts';
 
 type ViewerRoute = Extract<Route, { page: 'viewer' }>;
 
@@ -20,10 +22,16 @@ const NO_ITEMS: MediaItem[] = [];
 // what it needs, so Music does not subscribe to videos and the other way round.
 export function useViewItems(route: ViewerRoute): ViewData {
   const own = useOwn();
-  const contacts = useContacts(TV_PUBKEY);
+  const feed = useFeedPubkey();
+  const contacts = useContacts(feed);
+  const liked = useLiked();
+  const isLiked = route.mode === 'people' && route.filter === 'liked';
 
   const wantsAudio = route.mode === 'listen' && route.filter !== 'local';
   const wantsVideo = route.mode === 'watch';
+  // Liked: everything the liked people posted, audio and video together.
+  const likedAudio = useNostrItems('audio', isLiked ? liked : undefined);
+  const likedVideo = useNostrItems('video', isLiked ? liked : undefined);
   const audio = useNostrItems('audio', wantsAudio ? contacts : undefined);
   const video = useNostrItems('video', wantsVideo ? contacts : undefined);
   const last = useMemo(() => loadLastVideo(), []);
@@ -54,6 +62,10 @@ export function useViewItems(route: ViewerRoute): ViewData {
     if (route.mode === 'pictures') {
       return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Local pictures arrive in a later step.' };
     }
-    return { items: NO_ITEMS, label: route.filter === 'liked' ? 'Liked npubs' : 'Follow more creators', waiting: false, emptyText: 'People arrive in a later step.' };
-  }, [route, contacts, audio, video, own.rss, own.local, last]);
+    if (route.filter === 'liked') {
+      const items = sortNewest(dedupeByUrl([...likedAudio, ...likedVideo]));
+      return { items, label: 'Liked npubs', waiting: false, emptyText: liked.length === 0 ? 'Like a creator and their posts show up here.' : 'Nothing from your liked people yet.' };
+    }
+    return { items: NO_ITEMS, label: 'Follow more creators', waiting: false, emptyText: '' };
+  }, [route, contacts, audio, video, own.rss, own.local, last, likedAudio, likedVideo, liked]);
 }

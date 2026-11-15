@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHash, toHash, BOARD, type Route } from './route.ts';
+import { parseHash, toHash, isTheater, BOARD, type Route } from './route.ts';
 
 test('every viewer route round-trips through the hash', () => {
   const routes: Route[] = [
@@ -34,4 +34,13 @@ test('a filter from another mode is not accepted', () => {
   assert.deepEqual(parseHash('#/listen/short'), BOARD);
   assert.deepEqual(parseHash('#/watch/podcasts'), BOARD);
   assert.deepEqual(parseHash('#/people/music'), BOARD);
+});
+
+test('everything but the board and the follow page is the theatre', () => {
+  assert.equal(isTheater(BOARD), false);
+  assert.equal(isTheater({ page: 'viewer', mode: 'people', filter: 'follow' }), false);
+  assert.equal(isTheater({ page: 'viewer', mode: 'people', filter: 'liked' }), true);
+  assert.equal(isTheater({ page: 'viewer', mode: 'listen', filter: 'music' }), true);
+  assert.equal(isTheater({ page: 'viewer', mode: 'watch', filter: 'short' }), true);
+  assert.equal(isTheater({ page: 'viewer', mode: 'pictures', filter: 'mine' }), true);
 });

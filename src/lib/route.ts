@@ -37,3 +37,9 @@ export function parseHash(hash: string): Route {
   if (mode === 'people' && PEOPLE.includes(filter)) return { page: 'viewer', mode, filter: filter as PeopleFilter };
   return BOARD;
 }
+
+// Most views are the theatre: the picture (slideshow or video) fills the screen with the
+// picker on the left and the player on the right. Following creators is a plain page.
+export function isTheater(route: Route): boolean {
+  return route.page === 'viewer' && !(route.mode === 'people' && route.filter === 'follow');
+}

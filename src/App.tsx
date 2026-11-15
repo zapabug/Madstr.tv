@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 import { Board } from './components/Board.tsx';
 import { Dock } from './components/Dock.tsx';
 import { Engine } from './components/Engine.tsx';
+import { AccountChip } from './components/People.tsx';
 import { Sky } from './components/Sky.tsx';
 import { Viewer } from './components/Viewer.tsx';
-import { BOARD } from './lib/route.ts';
+import { BOARD, isTheater } from './lib/route.ts';
 import { useFocusNav } from './lib/useFocusNav.ts';
 import { useRoute } from './lib/useRoute.ts';
 
@@ -29,14 +30,19 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [route.page, go]);
 
+  const theater = isTheater(route);
+
   return (
     <>
       <Sky />
-      <header className="top">
-        <a className="logo" href="#/" aria-label="Madstr.tv home">Mad<span className="bolt-mark" aria-hidden="true">⚡</span>tr.tv</a>
-      </header>
+      {!theater && (
+        <header className="top">
+          <a className="logo" href="#/" aria-label="Madstr.tv home">Mad<span className="bolt-mark" aria-hidden="true">⚡</span>tr.tv</a>
+          <AccountChip />
+        </header>
+      )}
       {route.page === 'board' ? <Board /> : <Viewer key={`${route.mode}/${route.filter}`} route={route} />}
-      <Dock open={route.page === 'viewer'} />
+      {!theater && <Dock />}
       <Engine />
     </>
   );

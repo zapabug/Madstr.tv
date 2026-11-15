@@ -33,7 +33,7 @@ function chunk<T>(list: T[], size: number): T[][] {
 
 // Open a live subscription on the relays and pour what arrives into the event store.
 // Nothing here waits for a relay: items appear in the store as they come.
-function useRelayFeed(filters: Filter[], key: string, relays: string[] = RELAYS): void {
+export function useRelayFeed(filters: Filter[], key: string, relays: string[] = RELAYS): void {
   useEffect(() => {
     if (filters.length === 0) return;
     const sub = pool.subscription(relays, filters).pipe(onlyEvents()).subscribe({
