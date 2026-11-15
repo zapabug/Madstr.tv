@@ -245,10 +245,6 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 @keyframes slidein { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: no-preference) { .slide-in { animation: slidein 1.4s ease-out both, drift-zoom 16s ease-out both; } }
 @keyframes drift-zoom { from { scale: 1; } to { scale: 1.06; } }
-.caption { position: absolute; left: 50%; bottom: 22px; translate: -50% 0; max-width: min(70vw, 900px); margin: 0; padding: 8px 18px; border-radius: 999px;
-  background: #0b0716cc; border: 2.5px solid var(--ink); font: 800 1rem var(--display); letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  opacity: 0; transition: opacity 500ms ease-out; pointer-events: none; }
-.theater[data-hidden="true"] .caption { opacity: 1; }
 .brand { position: absolute; top: 10px; right: 18px; z-index: 2; font: 700 1rem var(--display); letter-spacing: -0.03em; pointer-events: none; text-shadow: 0 0 8px #000; }
 .edge { position: absolute; top: 50%; translate: 0 -50%; z-index: 2; display: grid; place-items: center; width: 54px; height: 88px; padding: 0; background: transparent; border: 0;
   color: var(--text); cursor: pointer; filter: drop-shadow(0 0 6px #000); transition: opacity 450ms ease-out; }
@@ -256,7 +252,7 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .edge:disabled { opacity: .3; cursor: default; }
 .edge:not(:disabled):focus-visible { outline: 3px solid #fff; outline-offset: 2px; border-radius: 12px; }
 .theater[data-hidden="true"] .edge, .theater[data-hidden="true"] .mode-chip { opacity: 0; }
-.mode-chip { position: absolute; right: 72px; bottom: 14px; z-index: 2; text-decoration: none; font: 800 .85rem var(--body); letter-spacing: .04em; color: var(--ink); background: var(--lilac);
+.mode-chip { position: absolute; right: 72px; bottom: 54px; z-index: 2; text-decoration: none; font: 800 .85rem var(--body); letter-spacing: .04em; color: var(--ink); background: var(--lilac);
   border: 2.5px solid var(--ink); border-radius: 999px; padding: 7px 16px; box-shadow: 3px 3px 0 #000; transition: opacity 450ms ease-out; }
 .mode-chip:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .split { position: absolute; left: 0; right: 0; bottom: 0; height: var(--split-h); z-index: 3; display: flex; gap: 10px; padding: 8px 10px 10px;
@@ -347,3 +343,13 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
   .dock { gap: 12px; }
   .dock-btn { width: 48px; height: 48px; } .dock-play { width: 58px; height: 58px; }
 }
+
+/* --- on-screen words: the 20 s track name and the permanent ticker ------------------------------------- */
+.track-toast { position: absolute; top: 12px; left: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; max-width: min(62%, 680px); margin: 0; padding: 8px 18px 8px 14px;
+  border-radius: 999px; background: #0b0716e8; border: 2.5px solid var(--ink); box-shadow: 3px 3px 0 #000; font: 800 1rem var(--display); letter-spacing: -0.02em; animation: slidein 500ms ease-out both; }
+.track-toast svg { flex: none; color: var(--orange); }
+.track-toast-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticker { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; height: 40px; overflow: hidden; display: flex; align-items: center; background: #0b0716d9; border-top: 2.5px solid var(--ink); pointer-events: none; }
+.ticker-run { display: inline-block; white-space: nowrap; padding-left: 100%; font: 700 1rem var(--body); letter-spacing: .01em; animation: ticker linear infinite; }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) { .ticker-run { animation: none; padding-left: 16px; overflow: hidden; text-overflow: ellipsis; max-width: 100%; } }

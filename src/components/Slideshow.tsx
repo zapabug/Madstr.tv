@@ -4,7 +4,7 @@ import { mergeOrder, wrapIndex } from '../lib/shuffle.ts';
 
 // The picture show behind the music: pictures cross-fade every few seconds, in an order
 // that stays put while more pictures arrive. A picture that will not load is dropped.
-export function Slideshow({ images, intervalMs = 9000 }: { images: MediaItem[]; intervalMs?: number }) {
+export function Slideshow({ images, intervalMs = 9000, onCurrent }: { images: MediaItem[]; intervalMs?: number; onCurrent?: (_item: MediaItem | null) => void }) {
   const urls = useMemo(() => [...new Set(images.map(i => i.url))], [images]);
   const urlKey = urls.join('\n');
   const [order, setOrder] = useState<string[]>([]);
@@ -39,6 +39,16 @@ export function Slideshow({ images, intervalMs = 9000 }: { images: MediaItem[]; 
     img.referrerPolicy = 'no-referrer';
     img.src = order[wrapIndex(index + 1, order.length)];
   }, [order, index]);
+
+  // Tell the ticker which post the picture on screen came from.
+  const currentItem = current ? images.find(i => i.url === current) ?? null : null;
+  const currentId = currentItem?.id;
+  useEffect(() => {
+    onCurrent?.(currentItem);
+    return () => onCurrent?.(null);
+    // the item is identified by its id
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
 
   if (!current) return null;
   const drop = (url: string) => setOrder(o => o.filter(u => u !== url));

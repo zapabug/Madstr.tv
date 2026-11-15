@@ -1,4 +1,6 @@
 import type { ViewData } from '../data/views.ts';
+import { useState } from 'react';
+import { firstSentence } from '../lib/media.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import type { MediaItem } from '../lib/media.ts';
 import { useAutoHide } from '../lib/useAutoHide.ts';
@@ -6,6 +8,8 @@ import { NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
 import { Slideshow } from './Slideshow.tsx';
+import { Ticker } from './Ticker.tsx';
+import { TrackToast } from './TrackToast.tsx';
 
 // Out of the home view the screen is split, as in the first Madstr: the picture (the
 // slideshow behind music, the video itself for video) fills the top with the thin
@@ -18,15 +22,19 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
   const showingVideo = hasVideo && item?.kind === 'video';
   const hidden = useAutoHide(p.queue.length > 0);
   const none = p.queue.length === 0;
+  const [slide, setSlide] = useState<MediaItem | null>(null);
+  // Only pictures that came from a Nostr post have words to show; your own pictures have none.
+  const tickerText = !showingVideo && slide?.origin === 'nostr' ? firstSentence(slide.title) : '';
 
   return (
     <main className="theater" data-hidden={hidden ? 'true' : undefined}>
       <div className="media">
         <div className="stage-full">
           {hasVideo && <video ref={player.registerVideo} playsInline onClick={player.toggle} hidden={!showingVideo} />}
-          {!showingVideo && <Slideshow images={pictures} />}
-          {item && <p className="caption" aria-hidden="true">{item.title}{item.subtitle ? ` · ${item.subtitle}` : ''}</p>}
+          {!showingVideo && <Slideshow images={pictures} onCurrent={setSlide} />}
         </div>
+        <TrackToast item={item?.kind === 'audio' ? item : undefined} />
+        <Ticker text={tickerText} />
         <span className="brand" aria-hidden="true">Mad<span className="bolt-mark">⚡</span>tr.tv</span>
         <button type="button" className="edge edge-prev" aria-label="Previous" data-nav disabled={none} onClick={player.prev}><PrevChevron /></button>
         <button type="button" className="edge edge-next" aria-label="Next" data-nav disabled={none} onClick={player.next}><NextChevron /></button>

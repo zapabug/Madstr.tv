@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audioFromEvent, videoFromEvent, imageFromEvent, parseDuration, isPodcast, imetaEntries, dedupeByUrl, sortNewest, stripNostrRefs, clip, type NostrEventLike, type MediaItem } from './media.ts';
+import { audioFromEvent, videoFromEvent, imageFromEvent, parseDuration, isPodcast, imetaEntries, dedupeByUrl, sortNewest, stripNostrRefs, clip, firstSentence, type NostrEventLike, type MediaItem } from './media.ts';
 
 const ev = (kind: number, tags: string[][], content = '', id = 'e'.repeat(8)): NostrEventLike =>
   ({ id, pubkey: 'p'.repeat(8), kind, created_at: 1000, tags, content });
@@ -121,4 +121,28 @@ test('a kind 1 note with a trailing reference gets a clean title', () => {
   const note = audioFromEvent(ev(1, [], `Nice track\nhttps://cdn.example.com/a.mp3\n- nostr:${NPUB}`));
   assert.equal(note?.title, 'Nice track');
   assert.equal(clip(`Title - nostr:${NPUB}`), 'Title');
+});
+
+test('the ticker shows only the first sentence of a post', () => {
+  assert.equal(firstSentence('Hello world. A second sentence follows.'), 'Hello world.');
+  assert.equal(firstSentence('Look at this!! So much more to say'), 'Look at this!!');
+  assert.equal(firstSentence('Is this a question? It is.'), 'Is this a question?');
+  assert.equal(firstSentence('No punctuation at all'), 'No punctuation at all');
+  assert.equal(firstSentence('Version 2.5 is out. Yay'), 'Version 2.5 is out.', 'a dot inside a number does not end the sentence');
+  assert.equal(firstSentence('Line one\nstill the same sentence. Next'), 'Line one still the same sentence.');
+});
+
+test('links and nostr references never reach the ticker', () => {
+  assert.equal(firstSentence(`Sunset https://cdn.example.com/a.jpg nostr:${NPUB} over the bay. More`), 'Sunset over the bay.');
+  assert.equal(firstSentence('https://cdn.example.com/a.jpg'), '');
+  assert.equal(firstSentence(`nostr:${NPUB}`), '');
+});
+
+test('the ticker sentence is capped and empty input is safe', () => {
+  const long = firstSentence('word '.repeat(80));
+  assert.equal(long.length <= 140, true);
+  assert.equal(long.endsWith('\u2026'), true);
+  assert.equal(firstSentence(''), '');
+  assert.equal(firstSentence(undefined), '');
+  assert.equal(firstSentence(null), '');
 });

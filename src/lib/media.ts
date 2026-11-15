@@ -224,6 +224,18 @@ export function imageFromEvent(e: NostrEventLike): MediaItem | null {
   };
 }
 
+// The first sentence of a post, for the ticker: links and Nostr references removed, cut at the
+// first full stop, "!" or "?" that is followed by a space or the end, and capped in length.
+export const TICKER_MAX = 140;
+
+export function firstSentence(text: string | undefined | null): string {
+  const clean = stripNostrRefs((text ?? '').replace(ANY_URL, ' ')).replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const end = clean.match(/^(.+?[.!?\u2026]+)(?=\s|$)/);
+  const sentence = end ? end[1] : clean;
+  return sentence.length > TICKER_MAX ? `${sentence.slice(0, TICKER_MAX - 1).trimEnd()}\u2026` : sentence;
+}
+
 // Music vs podcast. RSS episodes are podcasts; a Nostr track is a podcast once it
 // runs past six minutes. No known length counts as music.
 export function isPodcast(item: MediaItem): boolean {
