@@ -6,7 +6,7 @@ import { handleRssRequest } from './server/rssProxy'
 function rssProxy(): Plugin {
   const middleware = async (
     req: { url?: string; method?: string },
-    res: { statusCode: number; setHeader(name: string, value: string): void; end(body?: Buffer | string): void },
+    res: { statusCode: number; setHeader(_name: string, _value: string): void; end(_body?: Buffer | string): void },
     next: () => void,
   ) => {
     if (!req.url || !req.url.startsWith('/api/rss')) return next()

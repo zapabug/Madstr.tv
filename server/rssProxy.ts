@@ -45,7 +45,7 @@ export function isPrivateAddress(ip: string): boolean {
   return /^fe[89ab]/.test(v) || /^f[cd]/.test(v);
 }
 
-type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void;
+type LookupCallback = (_err: NodeJS.ErrnoException | null, _address: string | dns.LookupAddress[], _family?: number) => void;
 
 function safeLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback): void {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
