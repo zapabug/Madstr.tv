@@ -1,19 +1,28 @@
 package com.madstr.tvapp;
 
-import android.content.Intent;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(PlaybackPlugin.class); // background play (spec feat-android-play §A2)
+        registerPlugin(PlaybackPlugin.class); // media controls (spec feat-android-native §N1)
         super.onCreate(savedInstanceState);
+    }
+
+    /** Media keys from TV remotes and keyboards while the app is open go to the page's player. */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        String action = MediaHub.actionForKey(event.getKeyCode());
+        if (action == null) return super.dispatchKeyEvent(event);
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) MediaHub.get(this).dispatch(action, null);
+        return true;
     }
 
     @Override
     public void onDestroy() {
-        stopService(new Intent(this, PlaybackService.class)); // the page and its music end with the activity
+        if (isFinishing()) MediaHub.get(this).end(); // the page and its music end with the activity
         super.onDestroy();
     }
 }

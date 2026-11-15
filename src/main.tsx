@@ -6,6 +6,7 @@ import { OwnProvider } from './data/own.tsx';
 import { restoreAccounts } from './lib/accounts.ts';
 import { eventStore } from './lib/applesauce.ts';
 import { isNativeApp } from './lib/platform.ts';
+import { startWebMediaSession } from './pwa/mediaSession.ts';
 import { registerServiceWorker } from './pwa/registerSw.ts';
 import './styles.css';
 
@@ -14,7 +15,8 @@ if (!root) throw new Error('#root is missing from index.html');
 
 void restoreAccounts();
 registerServiceWorker();
-if (isNativeApp()) void import('./native/backgroundPlay.ts').then(m => { m.startBackgroundPlay(); });
+if (isNativeApp()) void import('./native/nowPlayingNative.ts').then(m => { m.startNativeControls(); });
+else startWebMediaSession();
 
 createRoot(root).render(
   <StrictMode>
