@@ -4,7 +4,7 @@ import { toggleLike, useLiked } from '../lib/liked.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
 import { HeartIcon } from './icons.tsx';
 
-function Avatar({ pubkey }: { pubkey: string }) {
+export function Avatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
   const name = shortName(pubkey, profile?.displayName);
   return profile?.picture

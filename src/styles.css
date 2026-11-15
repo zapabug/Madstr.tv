@@ -108,7 +108,15 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .sticker .note { position: absolute; top: -14px; right: 16px; transform: rotate(5deg); }
 .preview { margin: 12px 0 10px; aspect-ratio: 16 / 9; border: 2.5px solid var(--ink); border-radius: 14px; background: #ffffff59;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; overflow: hidden; }
-.preview span { font: 400 .72rem var(--mono); opacity: .7; }
+.preview { position: relative; }
+.preview > span { font: 400 .72rem var(--mono); opacity: .7; }
+.preview-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: slidein 900ms ease-out both; }
+.preview-people { display: flex; gap: 6px; justify-content: center; opacity: 1 !important; }
+.preview-people .avatar { width: 52px; height: 52px; }
+.preview-text { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 8px; border-radius: 8px; background: #0b0716d9; color: #fff; font: 600 .72rem var(--body) !important; opacity: 1 !important;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: #0008; }
+.preview-bar i { display: block; height: 100%; background: var(--orange); }
 .sticker h3 { font: 800 1.2rem/1.15 var(--display); letter-spacing: -0.02em; margin: 0 0 4px; }
 .sticker p { margin: 0 0 12px; font-weight: 500; font-size: .95rem; }
 .go { margin-top: auto; align-self: flex-start; font-weight: 800; background: var(--ink); color: #fff; padding: 8px 15px; border-radius: 999px;
