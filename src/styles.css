@@ -252,14 +252,10 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; padding: 10px 12px; background: #ffffff0d; border: 2.5px solid var(--ink); border-radius: 18px; overflow: hidden; }
 .picker { flex: 7 1 0; }
 .player-panel { flex: 3 1 0; overflow-y: auto; justify-content: center; }
-.picker-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(230px, 2fr) 3fr; gap: 12px; }
-.picker-side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-.picker-list { min-height: 0; display: flex; flex-direction: column; }
-.pp-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.pp-text { min-width: 0; }
-.player-panel .cover { width: 48px; margin: 0; flex: none; border-radius: 12px; box-shadow: 3px 3px 0 #000; }
-.player-panel .now-title { font-size: .98rem; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.player-panel .now-sub { margin: 2px 0 0; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-side { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.picker-list { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.head-title { flex: 1 1 120px; min-width: 0; font: 800 1.05rem var(--display); letter-spacing: -0.03em; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.head-sources { flex: none; }
 .panel-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: none; }
 .panel-head h1 { font-size: 1.05rem; margin: 0; letter-spacing: -0.03em; }
 .panel-empty { margin: 8px 4px; color: var(--muted); font-weight: 600; }
@@ -267,28 +263,17 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; }
 .now-line { margin: 0; flex: none; font-size: .85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-line b { color: var(--text); }
-.pick-chips { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
-.pick-chip { text-decoration: none; font: 800 .85rem var(--body); color: var(--text); border: 2.5px solid var(--text); border-radius: 999px; padding: 6px 14px; box-shadow: 2px 2px 0 #000; }
-.pick-chip[aria-current="page"] { background: var(--butter); color: var(--ink); border-color: var(--ink); }
-.pick-chip:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .strip { display: flex; align-items: center; gap: 8px; }
 .strip input[type="range"] { flex: 1; min-width: 40px; accent-color: var(--orange); }
 .strip .dock-btn { width: 44px; height: 44px; flex: none; }
 .player-panel .dock-extra { flex-wrap: wrap; }
 .row-thumb { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; background: #0006; }
 /* The bottom panel is always split left (picker) / right (controls), however small the window
-   or however far the browser is zoomed. Narrow: the picker puts its sources above the list. */
-@media (max-width: 1100px) {
-  .picker-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
-  .picker-side { max-height: 38%; }
-  .pick-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
-  .pick-chip { flex: none; white-space: nowrap; }
-}
+   or however far the browser is zoomed. */
 .player-panel { container-type: inline-size; }
 .strip { flex-wrap: wrap; row-gap: 6px; }
 .strip input[type="range"] { flex: 1 1 90px; }
 @container (max-width: 260px) {
-  .player-panel .cover { display: none; }
   .strip .dock-time { display: none; }
 }
 @media (max-width: 760px) {

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import type { ViewData } from '../data/views.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import type { MediaItem } from '../lib/media.ts';
-import type { Route } from '../lib/route.ts';
 import { useAutoHide } from '../lib/useAutoHide.ts';
 import { NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
@@ -14,7 +13,7 @@ import { Slideshow } from './Slideshow.tsx';
 // previous / next chevrons on its edges, and the bottom is split in two: the media picker
 // on the left 70% (where the message board was), the media controls on the right 30%. After a while without input the bottom panel
 // slides away and the picture takes the whole screen.
-export function Theater({ route, data, hasVideo, pictures, extras, modeLabel, modeHref }: { route: Extract<Route, { page: 'viewer' }>; data: ViewData; hasVideo: boolean; pictures: MediaItem[]; extras?: ReactNode; modeLabel?: string; modeHref?: string }) {
+export function Theater({ data, hasVideo, pictures, extras, modeLabel, modeHref }: { data: ViewData; hasVideo: boolean; pictures: MediaItem[]; extras?: ReactNode; modeLabel?: string; modeHref?: string }) {
   const p = usePlayer();
   const item = p.queue[p.index];
   const showingVideo = hasVideo && item?.kind === 'video';
@@ -35,7 +34,7 @@ export function Theater({ route, data, hasVideo, pictures, extras, modeLabel, mo
         {modeLabel && modeHref && <a className="mode-chip" href={modeHref} data-nav>{modeLabel}</a>}
       </div>
       <div className="split">
-        <PickerPanel route={route} label={data.label} extras={extras} emptyText={data.emptyText} waiting={data.waiting} />
+        <PickerPanel label={data.label} extras={extras} emptyText={data.emptyText} waiting={data.waiting} />
         <PlayerPanel />
       </div>
     </main>
