@@ -196,5 +196,7 @@ Commit: a636e65
 Commit: d3ce3cd
 - Go 1.27.4 installed with mise; zsp v2.0.1 built with `go install` (in mise's Go bin, on PATH with mise).
 - `zapstore.yaml` written; unsigned release APK builds (3.5 MB).
+- Default signer on this machine: `zapstore` wrapper (`~/.local/bin/zapstore`) loads zapa's bunker from
+  `~/.config/zsp/signer.env` (600). Bunker signer key `de26d9ce…`.
 - Waiting on zapa, by hand (zsp's rule): keystore + hotbox, `SIGN_WITH` in his shell, first `zsp` run (C1
   proof). Then: `hotbox sign`, `release_source` in zapstore.yaml, `zsp publish -q`, approved in Amber.

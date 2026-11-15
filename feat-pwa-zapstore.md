@@ -60,6 +60,10 @@ Tool: **zsp** (zapstore's publisher, `github.com/zapstore/zsp`). Its own rules d
 - **zapa, by hand:** creates the release keystore and sets up **hotbox** (holds the keystore and signs the
   APK); sets `SIGN_WITH` to his bunker in his own shell or `.env` (never pasted into a chat or the repo);
   runs `zsp` once himself to create the C1 proof that ties the APK signing certificate to his Nostr key.
+- **This machine's default signer** (zapa, 2026-11-15): `zapstore` (`~/.local/bin/zapstore`) is zsp with
+  zapa's bunker loaded from `~/.config/zsp/signer.env` (mode 600, outside every repo); a `SIGN_WITH`
+  already set wins. zsp keeps its bunker client key in `~/.config/zsp/bunker-keys/` after the first
+  connect, so the link's secret is used once. Run `zapstore` wherever `zsp` would be run.
   zsp: "Do not give an agent your keystore, password, private key, nsec, or .env."
 - **The agent:** installs zsp, writes `zapstore.yaml`, builds the unsigned release APK
   (`./gradlew assembleRelease`), and once zapa's setup is done runs the sign + publish steps
