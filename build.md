@@ -123,6 +123,8 @@ network back); checked headless with the first request forced to fail, shown 15 
   pastel colours with a slight tilt; People category chips as coloured stickers (picked one dark).
   Checked with headless screenshots of the board, People and the short-video viewer.
 
+- b6a258c: creator cards bigger and scaling with the screen (4 per row at 1280, 5 at 1920).
+
 ## RSS [incoming]
 Spec: §Milestones RSS
 
