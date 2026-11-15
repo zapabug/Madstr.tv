@@ -108,13 +108,16 @@ remote there are usually buttons for this".
 
 zapa, 2026-11-15: "on mobile tilting the screen hides the bottom panels, interacting only shows the seek bar and
 prev play next buttons; to manage the playlist they tilt portrait".
-- A phone in landscape (a touch screen, landscape and at most **500 px** tall; never a desktop window or TV): the picture (video or slideshow) takes the
-  whole screen; the playlist and the rest of the controls are not shown.
+- **The Android app only** (zapa, 2026-11-15: "keep that android only, and iOS when and if people ask"): the
+  web app, installed or not, keeps the normal layout on a phone held sideways. There is no iOS app; an iPhone
+  version would get this when people ask for it.
+- A phone in landscape (in the app, a touch screen, landscape and at most **500 px** tall; never a TV): the
+  picture (video or slideshow) takes the whole screen; the playlist and the rest of the controls are not shown.
 - Turning the phone sideways hides the controls at once. A touch brings back only **previous / play / next and
   the seek bar**, over the bottom of the picture; they go again after the usual 25 s without input.
 - Turning it upright brings back the normal screen with the playlist.
-- Exit: at 860×400 the picture fills the screen; a tap shows only the transport and seek bar; at 400×860 the
-  normal layout returns.
+- Exit: in the app at 860×400 the picture fills the screen; a tap shows only the transport and seek bar; at
+  400×860 the normal layout returns. In a browser at 860×400 the normal layout stays.
 
 ## Milestones
 

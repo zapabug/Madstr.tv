@@ -20,6 +20,8 @@ startEventCache();
 startDurationCache();
 void restoreAccounts();
 registerServiceWorker();
+// Marks the page as the Android app, for what only the app does (the sideways view, feat-taste-cache §T7).
+if (isNativeApp()) document.documentElement.dataset.native = '';
 if (isNativeApp()) void import('./native/nowPlayingNative.ts').then(m => { m.startNativeControls(); });
 else startWebMediaSession();
 
