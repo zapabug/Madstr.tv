@@ -26,6 +26,8 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | T3 | Device cache | built + machine-verified |
 | T4 | Reach back in time | built + machine-verified |
 | T5 | More relays | built + probed |
+| T6 | Double tap to seek; -10s / +30s buttons gone | built + machine-verified |
+| T7 | Phone turned sideways | built + machine-verified (emulated touch phone) |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -309,6 +311,12 @@ Spec: feat-taste-cache §T2
   Hide song / Hide artist moved the player on and dropped the items; the Hidden card listed both and Bring back
   worked; all of it in `madstr:taste` after reload.
 - Not run: a real published like (needs a signer). Undiscussed numbers in planning.md.
+- Reworked after zapa tried it (2474bb0): down vote and Hide song were one job, so Hide song is gone and a
+  down vote hides the song (the `down` map left `madstr:taste`). zapa's layout: face 96 px (64 on phones,
+  replacing T1's 72 / 52 and the `.pc-row`), thumbs either side overlapping its edges, Hide artist as a small
+  pink post-it with a red diagonal on its bottom-right corner, previous / play / next, a SPEED post-it, and
+  the seek bar across the full width. Checked headless at 1920×1080, 1280×720, 960×540 and 747×727: all of
+  it shows and nothing is cut.
 
 ## T3 — Device cache [built]
 Commit: 1cb1a8d
@@ -344,4 +352,31 @@ Spec: feat-taste-cache §T5
   relays; each held music posts in a probe (wavlake 40, theforest 30, bitcoiner 13, nostr.net 10 of 200).
 - `pnpm relays`: all four ok. nos.lol and nostr.mom do not answer from this machine (known before; they work
   elsewhere), so they stay.
+
+## T6 — Double tap to seek [built]
+Commit: 2474bb0
+Spec: feat-taste-cache §T6
+
+- The -10 s / +30 s buttons left the media controls and the board's player bar. `lib/doubleTap.ts`
+  (`createTapper`, `seekForSide`): a double tap within 300 ms and 60 px on the picture's left half goes back
+  10 s, on the right half forward 30 s, with a short sign on that side; a single tap waits out the 300 ms.
+  The picture area is marked `data-tap-zone`, and taps there do not wake the panel in the full picture.
+- Tests: `doubleTap.test.ts`. Headless on a video: a double tap on the right moved 4 s to 35 s, showed
+  "+30 s", the picture stayed full and the video kept playing; a single tap paused it after 300 ms.
+- Fixed while checking: a pending single tap was swallowed when a second, far-away tap arrived; it now runs.
+
+## T7 — Phone turned sideways [built]
+Commits: 8d0cfef, 06277f8
+Spec: feat-taste-cache §T7
+
+- One media query, `(orientation: landscape) and (max-height: 500px) and (pointer: coarse)`, in
+  `styles.css` and `useAutoHide.ts`: the picture fills the screen, the playlist, face, thumbs and SPEED
+  post-it are not shown, and a touch brings back only previous / play / next and the seek bar. Turning
+  sideways hides the controls at once (matchMedia change, resize or orientationchange).
+- 06277f8: zapa saw the designed buttons go on the desktop. The first version keyed on the window's shape
+  alone; it now needs a touch screen too, so desktops and TVs keep the full controls. (What zapa saw that
+  time was also the folder left on main by an interrupted speed comparison; restored.)
+- Checked headless: a touch phone at 860×400 gets the full picture and the transport only; a desktop window
+  at 1280×450 keeps everything. Not run on a real phone. Applies to the web app on a phone as well as the
+  Android app; zapa asked whether it should be the app only (open).
 
