@@ -11,8 +11,11 @@ last-worked: 2026-11-15
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Deploy
+State: Merged into main and live at madstr-tv.vercel.app on Vercel. The RSS feed proxy crashed there; the fix is committed but needs one more production deploy, which waits for zapa's go-ahead.
+────────────────────────────────────────
 Feat: Applesauce revamp: board, viewer, player, listen, watch, people, pictures, local media
-State: Built on the feat branch and passing tests, lint and build. Ticked in the spec, but no confirmation from zapa is recorded yet. The sticker previews now follow the spec, and a list of choices made in code, including a 40-character limit on names, is waiting for zapa's review.
+State: Built and merged into main and passing tests, lint and build. Ticked in the spec, but no confirmation from zapa is recorded yet. The sticker previews now follow the spec, and a list of choices made in code, including a 40-character limit on names, is waiting for zapa's review.
 ────────────────────────────────────────
 Feat: Header Log out button, no "Logged in" box, board without hero note and filter chips, npub names
 State: Built, machine-verified and committed; needs zapa to check it, logged in and out.

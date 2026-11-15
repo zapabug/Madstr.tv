@@ -135,6 +135,15 @@ network back); checked headless with the first request forced to fail, shown 15 
 
 - f44572b: phones (< 640 px) stack the bottom panel: picker, then the controls in two rows; seek bar usable.
 
+## Deploy (2026-11-15)
+- Merged into `main` (dbf5bc8; main takes the rebuild's tree, the old NDK commits stay in history);
+  branch `feat/applesauce-revamp` deleted.
+- Vercel project `tugajoes-projects/madstr-tv` created and linked (GitHub repo connected, so pushes to
+  zapabug/Madstr.tv build). First deploy went to **production**: https://madstr-tv.vercel.app (page OK).
+- `/api/rss` crashed on Vercel (ERR_MODULE_NOT_FOUND, bare import in a Node ESM function); fixed in
+  9e52802, **not redeployed yet** (the production redeploy needs zapa's go-ahead). Snippet:
+  synch/snippets/vercel-function-esm-import-needs-js-extension.md.
+
 ## RSS [incoming]
 Spec: §Milestones RSS
 
