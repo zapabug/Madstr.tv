@@ -27,7 +27,7 @@ Scope: the Android app (phones and Android TV) only. The web app does not change
 
 ## A1 — Pick files in the app
 
-- Inside the Android app the folder picker is not offered. The music and picture sections show the
+- (Replaced by feat-android-native §N2: the app has remembered folders again.) Inside the Android app the folder picker is not offered. The music and picture sections show the
   "Add audio files" / "Add pictures" buttons (several files at once), which use the system file chooser.
 - The note under them reads, in the app: "Pick several files at once. They stay until the app is closed."
   The web note is unchanged.
@@ -39,7 +39,7 @@ Scope: the Android app (phones and Android TV) only. The web app does not change
 - While the player is **playing or loading**, the app runs an Android media foreground service with a
   notification ("Mad⚡tr.tv", the item's title, clipped to 80 characters; tapping it opens the app). The
   service holds a partial wake lock and a Wi-Fi lock, so streams keep going with the screen off.
-- When the player is paused, idle or in error for **3 s**, the service stops (the delay rides over
+- (Replaced by feat-android-native §N1 lifetime.) When the player is paused, idle or in error for **3 s**, the service stops (the delay rides over
   the moment between two tracks or the video-to-audio handover).
 - Android 13 and later: the notification permission is asked once, on the first play. Saying no does
   not stop the music; only the notification is hidden.
@@ -57,4 +57,4 @@ Scope: the Android app (phones and Android TV) only. The web app does not change
 ## Milestones
 
 - [ ] A1 pick files in the app (built + machine-verified; awaiting zapa on a device)
-- [ ] A2 keep playing in the background (built; published in 1.1, release dbc6dcbb…; not run on a device)
+- [x] A2 keep playing in the background (published in 1.1; zapa: background play works, 2026-11-15)

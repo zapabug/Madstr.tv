@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audioFromEvent, videoFromEvent, imageFromEvent, parseDuration, isPodcast, imetaEntries, dedupeByUrl, sortNewest, stripNostrRefs, clip, firstSentence, type NostrEventLike, type MediaItem } from './media.ts';
+import { audioFromEvent, videoFromEvent, imageFromEvent, parseDuration, isPodcast, isMusic, MUSIC_MIN_SECONDS, imetaEntries, dedupeByUrl, sortNewest, stripNostrRefs, clip, firstSentence, type NostrEventLike, type MediaItem } from './media.ts';
 
 const ev = (kind: number, tags: string[][], content = '', id = 'e'.repeat(8)): NostrEventLike =>
   ({ id, pubkey: 'p'.repeat(8), kind, created_at: 1000, tags, content });
@@ -177,4 +177,17 @@ test('the ticker sentence is capped and empty input is safe', () => {
   assert.equal(firstSentence(''), '');
   assert.equal(firstSentence(undefined), '');
   assert.equal(firstSentence(null), '');
+});
+
+test('isMusic: 2 to 9 minutes once known; unknown and local stay; podcasts never', () => {
+  const base: MediaItem = { id: 'm', kind: 'audio', origin: 'nostr', url: 'https://x/a.mp3', title: 'Song', createdAt: 1 };
+  assert.equal(isMusic({ ...base, duration: 25 }), false);
+  assert.equal(isMusic({ ...base, duration: MUSIC_MIN_SECONDS - 1 }), false);
+  assert.equal(isMusic({ ...base, duration: MUSIC_MIN_SECONDS }), true);
+  assert.equal(isMusic({ ...base, duration: 540 }), true);
+  assert.equal(isMusic({ ...base, duration: 541 }), false);
+  assert.equal(isMusic(base), true, 'unknown length stays until it is measured');
+  assert.equal(isMusic({ ...base, origin: 'local', duration: 10 }), true);
+  assert.equal(isMusic({ ...base, origin: 'rss' }), false);
+  assert.equal(isMusic({ ...base, title: 'Episode 4' }), false);
 });

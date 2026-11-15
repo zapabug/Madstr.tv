@@ -18,7 +18,8 @@ export interface FsDirHandle {
 export interface StoredFolder {
   id: string;
   name: string;
-  handle: FsDirHandle;
+  handle?: FsDirHandle; // web: File System Access handle
+  uri?: string; // Android app: the folder's content:// tree uri (spec feat-android-native §N2)
   kind?: 'audio' | 'image'; // folders saved before pictures existed are audio
 }
 

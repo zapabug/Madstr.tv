@@ -658,7 +658,8 @@ h1 {
   font: 400 0.8rem var(--mono);
   opacity: 0.8;
 }
-.own-status.bad {
+.own-status.bad,
+.own-note.bad {
   color: #9b1c1c;
   opacity: 1;
 }

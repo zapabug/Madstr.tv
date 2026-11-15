@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { dedupeByUrl, isPodcast, sortNewest, type MediaItem } from '../lib/media.ts';
+import { dedupeByUrl, isMusic, isPodcast, sortNewest, type MediaItem } from '../lib/media.ts';
+import { mixMusic, useMusicMix } from '../lib/musicMix.ts';
 import { loadLastVideo, player } from '../lib/player.ts';
 import { ALL_PLAYED_TEXT, hidePlayed, played } from '../lib/played.ts';
 import type { Route } from '../lib/route.ts';
@@ -39,11 +40,13 @@ export function useViewItems(route: ViewerRoute): ViewData {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const playingAtOpen = useMemo(() => player.current?.id, [route.mode, route.filter]);
 
+  const musicOften = useMusicMix();
+
   const raw = useMemo((): ViewData => {
     const waiting = contacts === undefined;
     if (route.mode === 'listen') {
       if (route.filter === 'music') {
-        return { items: audio.filter(i => !isPodcast(i)), label: 'Music', waiting, emptyText: 'No music from the people you follow yet.' };
+        return { items: mixMusic(audio.filter(isMusic), own.local, musicOften), label: 'Music', waiting, emptyText: 'No music from the people you follow yet.' };
       }
       if (route.filter === 'podcasts') {
         const items = sortNewest(dedupeByUrl([...own.rss, ...audio.filter(isPodcast)]));
@@ -68,7 +71,7 @@ export function useViewItems(route: ViewerRoute): ViewData {
         emptyText: n > 0 ? `${n} of your pictures, playing as a slideshow above.` : 'Add a folder of pictures under Your sources on the home screen; they play as a slideshow.' };
     }
     return { items: NO_ITEMS, label: 'Follow more creators', waiting: false, emptyText: '' };
-  }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last]);
+  }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last, musicOften]);
 
   return useMemo((): ViewData => {
     const { items, allPlayed } = hidePlayed(raw.items, playedAtOpen, [playingAtOpen, last?.item.id]);

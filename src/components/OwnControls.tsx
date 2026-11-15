@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties } from 'react';
 import { setMix, shareOf, usePictureMix } from '../lib/pictureMix.ts';
 import { useOwn } from '../data/ownContext.ts';
-import { isNativeApp } from '../lib/platform.ts';
+import { setMusicMix, shareOfMine, useMusicMix } from '../lib/musicMix.ts';
 
 // How your pictures and the slideshow's share the screen: only yours, or mixed in, and how often yours come up.
 function PictureMixControls({ count }: { count: number }) {
@@ -20,6 +20,24 @@ function PictureMixControls({ count }: { count: number }) {
         <span className="mix-end">very often</span>
       </div>
       <p className="own-note">{none ? 'Add pictures to use these.' : mix.onlyMine ? 'The slideshow shows only your pictures.' : `About ${inTen} in 10 pictures are yours.`}</p>
+    </div>
+  );
+}
+
+// How much of your local music plays in Music (spec feat-android-native §N3): none ... lots.
+function MusicMixControls({ count }: { count: number }) {
+  const often = useMusicMix();
+  const none = count === 0;
+  const inTen = Math.round(shareOfMine(often) * 10);
+  return (
+    <div className="mix" role="group" aria-label="How much of my music plays in Music">
+      <div className={`mix-row${none ? ' off' : ''}`}>
+        <span className="mix-end">none</span>
+        <input type="range" className="seek" data-nav aria-label="How much of my music plays in Music" min={0} max={100} step={10} value={Math.round(often * 100)}
+          style={{ '--p': often } as CSSProperties} disabled={none} onChange={e => setMusicMix(Number(e.target.value) / 100)} />
+        <span className="mix-end">lots</span>
+      </div>
+      <p className="own-note">{none ? 'Add a music folder to use this.' : inTen === 0 ? 'Music has none of your tracks.' : `About ${inTen} in 10 tracks in Music are yours.`}</p>
     </div>
   );
 }
@@ -83,16 +101,20 @@ export function OwnControls({ kind }: { kind: 'feeds' | 'folders' | 'pictures' }
         ))}
       </ul>
       {own.canPickFolder ? (
-        <button type="button" className="chip-btn solid" data-nav onClick={() => { void own.addFolder(wanted); }}>{kind === 'pictures' ? 'Add picture folder' : 'Add music folder'}</button>
+        <>
+          <button type="button" className="chip-btn solid" data-nav onClick={() => { void own.addFolder(wanted); }}>{kind === 'pictures' ? 'Add picture folder' : 'Add music folder'}</button>
+          {own.folderNote && <p className="own-note bad" role="status">{own.folderNote}</p>}
+        </>
       ) : (
         <>
           <input ref={fileRef} type="file" multiple hidden accept={kind === 'pictures' ? 'image/*,.jpg,.jpeg,.png,.webp,.gif,.avif' : 'audio/*,.mp3,.m4a,.ogg,.opus,.aac,.wav,.flac'}
             onChange={e => { own.addFiles(Array.from(e.target.files ?? []), wanted); e.target.value = ''; }} />
           <button type="button" className="chip-btn solid" data-nav onClick={() => fileRef.current?.click()}>{kind === 'pictures' ? 'Add pictures' : 'Add audio files'}</button>
-          <p className="own-note">{isNativeApp() ? 'Pick several files at once. They stay until the app is closed.' : 'This browser cannot remember folders, so picked files last until you reload.'}</p>
+          <p className="own-note">This browser cannot remember folders, so picked files last until you reload.</p>
         </>
       )}
       {kind === 'pictures' && <PictureMixControls count={own.pictures.length} />}
+      {kind === 'folders' && <MusicMixControls count={own.local.length} />}
     </section>
   );
 }

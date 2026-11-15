@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { isPodcast } from '../lib/media.ts';
+import { isMusic, isPodcast } from '../lib/media.ts';
 import { useProbedDurations } from '../lib/durations.ts';
 import { useTagSet } from '../lib/tags.ts';
 import { loadLastVideo } from '../lib/player.ts';
@@ -29,7 +29,7 @@ export function usePreviews(): Record<string, PreviewData> {
     const fresh = (items: MediaItem[]) => hidePlayed(items, playedAtOpen, [last?.item.id]).items;
     const unplayedVideo = fresh(video);
     return buildPreviews({
-    music: fresh(audio.filter(i => !isPodcast(i))),
+    music: fresh(audio.filter(isMusic)),
     podcasts: fresh([...own.rss, ...audio.filter(isPodcast)]),
     localCount: fresh(own.local).length,
     video: unplayedVideo,
