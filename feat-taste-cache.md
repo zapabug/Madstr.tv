@@ -47,6 +47,8 @@ On the media controls, for what is playing:
 
 ## T3: Keep music, videos, profiles and follow lists on the device
 
+- **Metadata only** (zapa, 2026-11-15: "a metadata cache"): the posts' text and tags are kept, never the audio,
+  video or picture files themselves.
 - Nostr events the app uses are kept on the device (IndexedDB, `MadstrEventCache`), and put back into the
   app's event store at start, so lists, faces and names show straight away and the relays only add to them:
   - music and podcast posts (what the audio converter accepts): newest **3000**;
@@ -62,12 +64,15 @@ On the media controls, for what is playing:
 
 ## T4: Reach back in time for music and videos
 
-- Like pictures already do: in the background, one older batch every **20 s** each for music and for videos,
-  until the cached count reaches its cap (T3) or the relays have nothing older. Runs while the app is open.
+- zapa, 2026-11-15: "refetch for every 30 we drop". While a Music, Podcasts or video list is open, the app
+  asks the relays for one older batch of that list's kind when the list opens, and **one more for every 30
+  items the list drops**: items left out because they played this session, are hidden, or fall outside the
+  list's length rule (Music 2-9 minutes, podcasts longer, short videos under 30 s).
+- One batch at a time; it stops when the cached count reaches its cap (T3) or the relays have nothing older.
+  Pictures keep their own walk (every 20 s), unchanged.
 - Where each walk got to is remembered on the device, so the next visit carries on instead of starting again;
   a change in who the board follows starts it over.
-- Exit: Music and videos grow past the newest page while the app is left open, and keep growing on the next
-  visit.
+- Exit: playing through a list (or hiding from it) brings older items in; the next visit continues further back.
 
 ## T5: More relays
 
