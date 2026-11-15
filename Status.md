@@ -12,7 +12,7 @@ last-worked: 2026-11-15
 
 ## Report
 Feat: Deploy
-State: Merged into main and live at madstr-tv.vercel.app on Vercel. The RSS feed proxy crashed there; the fix is committed but needs one more production deploy, which waits for zapa's go-ahead.
+State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker. The Android app and a zapstore release are not built; they need a spec first.
 ────────────────────────────────────────
 Feat: Applesauce revamp: board, viewer, player, listen, watch, people, pictures, local media
 State: Built and merged into main and passing tests, lint and build. Ticked in the spec, but no confirmation from zapa is recorded yet. The sticker previews now follow the spec, and a list of choices made in code, including a 40-character limit on names, is waiting for zapa's review.

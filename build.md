@@ -141,8 +141,12 @@ network back); checked headless with the first request forced to fail, shown 15 
 - Vercel project `tugajoes-projects/madstr-tv` created and linked (GitHub repo connected, so pushes to
   zapabug/Madstr.tv build). First deploy went to **production**: https://madstr-tv.vercel.app (page OK).
 - `/api/rss` crashed on Vercel (ERR_MODULE_NOT_FOUND, bare import in a Node ESM function); fixed in
-  9e52802, **not redeployed yet** (the production redeploy needs zapa's go-ahead). Snippet:
-  synch/snippets/vercel-function-esm-import-needs-js-extension.md.
+  9e52802. Snippet: synch/snippets/vercel-function-esm-import-needs-js-extension.md.
+- GitHub's main had 4 April commits (old NDK app via shakespeare.diy, a GitHub Pages workflow and a
+  Pages base path); merged into history keeping the rebuild's files (e4e29cf, zapa's call) and pushed.
+  Vercel built production from GitHub in ~30 s: board loads with 8 stickers, `/api/rss` returns a real
+  feed, private addresses get 403.
+- pleb.world: Mad⚡tr.tv sticker added (plebworld 98f862b), pushed; live on www.pleb.world in ~30 s.
 
 ## RSS [incoming]
 Spec: §Milestones RSS
