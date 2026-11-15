@@ -67,11 +67,11 @@ function AuthorSpot() {
   const spot = authorSpot(p.queue[p.index]);
   if (spot.kind === 'none') return null;
   return (
-    <div className="author-spot" title={spot.label} aria-label={`Author: ${spot.label}`} role="img">
+    <div className={`author-spot${spot.kind === 'folder' ? ' author-spot-folder' : ''}`} title={spot.label} aria-label={`Author: ${spot.label}`} role="img">
       {spot.kind === 'profile' ? <Avatar pubkey={spot.pubkey} />
         : spot.kind === 'cover' ? <img src={spot.image} alt="" referrerPolicy="no-referrer" />
         : spot.kind === 'initial' ? <span className="author-initial">{spot.letter}</span>
-        : <FolderIcon size={22} />}
+        : <FolderIcon size={40} />}
     </div>
   );
 }
