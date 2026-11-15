@@ -2,25 +2,18 @@ import { EventStore } from 'applesauce-core';
 import { RelayPool } from 'applesauce-relay';
 import { createEventLoaderForStore } from 'applesauce-loaders/loaders';
 
-// Relays that answer. The old app also listed relay.nostr.band and nsec.app, which
-// never connected and held the whole app on a loading screen; nothing here waits
-// on a relay, and a pool only connects once something subscribes.
-export const RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.primal.net',
-  'wss://nos.lol',
-  'wss://nostr.wine',
-  'wss://relay.olas.app',
-];
+import { CONTENT_RELAYS, LOOKUP_RELAYS } from './relays.ts';
 
-// Follow lists and profiles of small accounts often live only on the index relay.
-export const LOOKUP_RELAYS = ['wss://purplepag.es', 'wss://relay.damus.io'];
+// The relay lists live in relays.ts. Nothing here waits on a relay: a pool only connects once something
+// subscribes, and every list has several independent relays.
+export const RELAYS = CONTENT_RELAYS;
+export { LOOKUP_RELAYS };
 
 export const eventStore = new EventStore();
 export const pool = new RelayPool();
 
 // Lets the store fetch profiles and other events by id / pointer on demand.
 createEventLoaderForStore(eventStore, pool, {
-  extraRelays: RELAYS,
-  lookupRelays: LOOKUP_RELAYS,
+  extraRelays: [...RELAYS],
+  lookupRelays: [...LOOKUP_RELAYS],
 });

@@ -8,7 +8,8 @@ import { friendsOfFollows, rankCreators, type Category, type Creator } from '../
 import { useProbedDurations } from '../lib/durations.ts';
 import { eventStore } from '../lib/applesauce.ts';
 import { audioFromEvent, imageFromEvent, videoFromEvent, type MediaItem } from '../lib/media.ts';
-import { CONTACT_RELAYS, TV_PUBKEY, chunk, useContacts, useNostrItems, useRelayFeed } from './nostr.ts';
+import { TV_PUBKEY, chunk, useContacts, useNostrItems, useRelayFeed } from './nostr.ts';
+import { CONTACT_RELAYS } from '../lib/relays.ts';
 
 // The logged-in account, if any.
 export function useAccount(): { pubkey: string } | undefined {

@@ -2,7 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { use$ } from 'applesauce-react/hooks';
 import { onlyEvents } from 'applesauce-relay';
 import type { Filter, NostrEvent } from 'applesauce-core/helpers';
-import { LOOKUP_RELAYS, RELAYS, eventStore, pool } from '../lib/applesauce.ts';
+import { RELAYS, eventStore, pool } from '../lib/applesauce.ts';
+import { CONTACT_RELAYS } from '../lib/relays.ts';
 import {
   AUDIO_KINDS, IMAGE_KINDS, VIDEO_KINDS, audioFromEvent, dedupeByUrl, imageFromEvent, sortNewest, videoFromEvent,
   type MediaItem, type MediaKind,
@@ -12,7 +13,6 @@ import {
 // follows are who the board shows content from.
 export const TV_PUBKEY = 'ed199f23408d7f90ec7387b1a9607d5962eae1baf8ba421cb864a09109d3262b';
 
-export const CONTACT_RELAYS = [...new Set([...LOOKUP_RELAYS, ...RELAYS])];
 const PER_CHUNK_LIMIT = 300;
 const AUTHORS_PER_FILTER = 100;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -33,10 +33,10 @@ export function chunk<T>(list: T[], size: number): T[][] {
 
 // Open a live subscription on the relays and pour what arrives into the event store.
 // Nothing here waits for a relay: items appear in the store as they come.
-export function useRelayFeed(filters: Filter[], key: string, relays: string[] = RELAYS): void {
+export function useRelayFeed(filters: Filter[], key: string, relays: readonly string[] = RELAYS): void {
   useEffect(() => {
     if (filters.length === 0) return;
-    const sub = pool.subscription(relays, filters).pipe(onlyEvents()).subscribe({
+    const sub = pool.subscription([...relays], filters).pipe(onlyEvents()).subscribe({
       next: event => { eventStore.add(event); },
       error: error => { console.error('[nostr] subscription failed:', error); },
     });

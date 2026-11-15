@@ -1,9 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import { ActionRunner } from 'applesauce-actions';
+import { retry } from 'rxjs';
 import { ExtensionSigner, NostrConnectSigner, PrivateKeySigner, type ISigner } from 'applesauce-signers';
 import type { EventTemplate, NostrEvent } from 'applesauce-core/helpers';
 import { RELAYS, eventStore, pool } from './applesauce.ts';
+import { publishToFirst } from './publishFirst.ts';
 import { reconnect, withTimeout } from './reconnect.ts';
+import { SIGNER_RELAYS } from './relays.ts';
 import { clearSession, loadSession, parseCredential, saveSession } from './session.ts';
 
 // Logging in, and the one thing a login is for here: following people. Ways in: a NIP-07 browser extension,
@@ -13,16 +16,20 @@ import { clearSession, loadSession, parseCredential, saveSession } from './sessi
 // this app, and Amber's "already connected" reply on a reconnect is treated as success.
 
 export const APP_NAME = 'Mad⚡tr.tv';
-// NIP-46 relays for the signer connection. Not relay.nsec.app: it needs NIP-42 auth, and the connect
-// subscription there silently gets nothing.
-export const NIP46_RELAYS = ['wss://nos.lol', 'wss://nostr.mom', 'wss://relay.primal.net'];
+// The NIP-46 relays for the signer connection are SIGNER_RELAYS (relays.ts): never relay.nsec.app, which needs
+// NIP-42 auth, so a connect request there silently gets nothing.
+export const NIP46_RELAYS = [...SIGNER_RELAYS];
 // Kinds the app asks a signer for up front, so Amber can remember them: 3 = the contact list (follow).
 export const SIGN_KINDS = [3];
 const PERMISSIONS = [...new Set(['get_public_key', ...NostrConnectSigner.buildSigningPermissions(SIGN_KINDS)])];
 
-// The explicit method bindings are what actually works (setting `NostrConnectSigner.pool` alone does not).
-NostrConnectSigner.subscriptionMethod = pool.subscription.bind(pool);
-NostrConnectSigner.publishMethod = pool.publish.bind(pool);
+// The explicit method bindings are what actually works (setting `NostrConnectSigner.pool` alone does not), and
+// both are written so ONE bad relay cannot hold the login up:
+//  - publish resolves at the first relay that accepts (the library would otherwise wait for every relay to
+//    answer or time out before it even listens for the signer's reply);
+//  - subscribe retries a failed connection after a pause (the library's own retry has no delay).
+NostrConnectSigner.subscriptionMethod = (relays, filters) => pool.subscription(relays, filters).pipe(retry({ delay: 3000, resetOnSuccess: true }));
+NostrConnectSigner.publishMethod = (relays, event) => publishEvent(relays, event);
 
 export interface Signer {
   getPublicKey(): Promise<string>;
@@ -127,9 +134,17 @@ function currentSigner(): Signer {
 // Actions (follow, unfollow) are signed by whoever is logged in and published to the relays; they fail loudly
 // if no relay accepts the event.
 const signerProxy: ISigner = { getPublicKey: () => currentSigner().getPublicKey(), signEvent: t => currentSigner().signEvent(t) };
+// Publish an event so that ONE relay accepting it is enough (the others carry on in the background). Used for
+// the signer's requests and for follow updates; it fails loudly if no relay accepts.
+async function publishEvent(relays: readonly string[], event: NostrEvent): Promise<void> {
+  await publishToFirst(relays, async url => {
+    const result = await pool.relay(url).publish(event);
+    return { ok: result.ok, message: result.message };
+  });
+}
+
 export const actions = new ActionRunner(eventStore, signerProxy, async (event, relays) => {
-  const responses = await pool.publish(relays?.length ? relays : RELAYS, event);
-  if (!responses.some(r => r.ok)) throw new Error('No relay accepted the update');
+  await publishEvent(relays?.length ? relays : RELAYS, event);
 });
 
 export async function loginWithExtension(): Promise<void> {
