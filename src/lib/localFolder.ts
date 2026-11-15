@@ -1,5 +1,6 @@
 import { matchesKind, titleFromName, type LocalKind } from './fileKinds.ts';
 import type { FsDirHandle, FsFileHandle } from './ownAudioStore.ts';
+import { folderPickerUsable } from './platform.ts';
 
 export const MAX_LOCAL_FILES = 2000;
 const MAX_DEPTH = 6;
@@ -14,7 +15,7 @@ export interface LocalTrack {
 type PickerWindow = Window & { showDirectoryPicker?: (_options?: { mode?: 'read' }) => Promise<FsDirHandle> };
 
 export function canPickFolder(): boolean {
-  return typeof (window as PickerWindow).showDirectoryPicker === 'function';
+  return folderPickerUsable(window);
 }
 
 export async function pickFolder(): Promise<FsDirHandle | null> {

@@ -15,7 +15,8 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | R7 | Local media on the web | built; folder picker untested in a real browser |
 | RSS | RSS work (incoming) | in progress; parser and proxy tests come with it |
 | R8 | Remote pass (final stage before deploy) | built + machine-verified; awaiting zapa's remote test |
-| later | TV (Android) build | parked |
+| A1 | Android app picks files (feat-android-play) | built + machine-verified; awaiting zapa on a device |
+| A2 | Android app keeps playing in the background (1.1) | built; not run on a device |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -212,3 +213,31 @@ Commit: d3ce3cd
   30509 (proof for cert 92aca110…), all by zapa.
 - Next releases: the proof is valid 2 years, so stock `zapstore publish -q` (after `assembleRelease` and
   `scripts/sign-release.sh`, with a higher versionCode) is enough.
+
+## A1 — Pick files in the Android app [built + machine-verified]
+Commit: a790dcf · Spec: `feat-android-play.md` §A1
+- zapa (1.0 from zapstore): the folder / file picker does not open. Cause found in Capacitor 8.6.0's
+  `BridgeWebChromeClient.showFilePicker`: it calls `intent.getType().startsWith(".")`, and a folder request
+  (`showDirectoryPicker`, which newer WebViews have) carries no type. Not seen on a device.
+- `src/lib/platform.ts` (`isNativeApp`, `folderPickerUsable`, with tests): the app never offers the folder
+  picker; music and pictures show "Add audio files" / "Add pictures" (several files, plain file input).
+  The app's note: "Pick several files at once. They stay until the app is closed."
+- Headless Chromium with the Capacitor bridge faked: the app shows the file buttons and the chooser opens
+  in multi-select; the web still shows "Add music folder" / "Add picture folder".
+
+## A2 — Keep playing in the background [built; not run on a device]
+Commit: 48fb782 · Spec: `feat-android-play.md` §A2
+- `PlaybackService.java`: media foreground service (type mediaPlayback), notification "Mad⚡tr.tv" + title
+  (low importance, opens the app), partial wake lock + Wi-Fi lock; stops on swipe-away and with the activity.
+- `PlaybackPlugin.java` (`Playback.start/stop`): starts the service, or only updates the notification when it
+  runs (allowed from the background); asks the notification permission once on Android 13+.
+- Page: `src/lib/keepAlive.ts` (with tests: starts on playing / loading, updates on a new title, stops 3 s
+  after pause / idle / error, a gap between tracks does not stop it), `src/native/backgroundPlay.ts`, loaded
+  from `main.tsx` only in the app (its own 9 kB chunk).
+- versionCode 2 / 1.1. `assembleRelease` builds; signed with the same certificate (92aca110…); aapt2 shows
+  the service with type mediaPlayback and the four new permissions. `pnpm test` 151/151, lint, build clean.
+- Not verified: on a phone or TV (no emulator here: no KVM). Whether Android's WebView keeps an `<audio>`
+  element playing once the app is kept alive is the open question; if it does not, the next step is a native
+  player (snippet `capacitor-webview-audio-stops-in-background.md`).
+
+- Published 2026-11-15 on zapstore: release `dbc6dcbb…` (1.1, versionCode 2), status pending at first, like 1.0.
