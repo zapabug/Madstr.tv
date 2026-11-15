@@ -262,6 +262,11 @@ proposed, waiting for zapa's OK), and a profile picture is only shown when it is
   video playlist as sound only. Coming back to the watch viewer shows the picture again from where the
   sound is. Opening another playlist (the Music sticker, say) replaces it, as before.
 
+- **Your profile picture is the planet** in the sky while you are logged in (http(s) pictures only); the
+  orange ball stays underneath. If the picture fails to load, the planet tries again **every 15 s, up
+  to 4 times**, and also whenever the tab comes back into view or the network comes back, instead of
+  giving up until a reload (numbers proposed, waiting for zapa's OK).
+
 ## Decided after the audit (zapa, 2026-11-15)
 
 The audit of 2026-11-15 (`audits/audit-2026-11-15.md`) flagged these; zapa kept them as built:

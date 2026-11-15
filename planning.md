@@ -55,6 +55,7 @@ Mechanics:
 - Shuffle resets when another playlist opens; the Shuffle button sits in the picker header.
 
 Numbers:
+- Planet picture retry: every 15 s, up to 4 times (`Sky.tsx`); proposed 2026-11-15.
 - Names clipped to 40 characters (`MAX_NAME`, `names.ts`); proposed 2026-11-15.
 - Player: prev restarts after 5 s; resume skips < 5 s and the last 10 s; rates 1, 1.25, 1.5, 2,
   0.75; position saved every 5 s.
@@ -84,3 +85,4 @@ Numbers:
   the spec (pure `lib/previews.ts`); tests for previews, last-video restore, local folders, stickers.
 - 2026-11-15: Shuffle in the media picker; a video's sound keeps playing off the viewer; long-video
   previews look further down the list for posters.
+- 2026-11-15: the planet retries a profile picture that failed to load.
