@@ -115,7 +115,7 @@ prev play next buttons; to manage the playlist they tilt portrait".
 - A phone in landscape (in the app, a touch screen, landscape and at most **500 px** tall; never a TV): the
   picture (video or slideshow) takes the whole screen; the playlist and the rest of the controls are not shown.
 - Turning the phone sideways hides the controls at once. A touch brings back only **previous / play / next and
-  the seek bar**, over the bottom of the picture; they go again after the usual 25 s without input.
+  the seek bar**, over the bottom of the picture; they go again after the usual 15 s without input.
 - Turning it upright brings back the normal screen with the playlist.
 - Exit: in the app at 860×400 the picture fills the screen; a tap shows only the transport and seek bar; at
   400×860 the normal layout returns. In a browser at 860×400 the normal layout stays.

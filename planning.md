@@ -115,6 +115,7 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - 2026-11-15: the planet retries a profile picture that failed to load.
 - 2026-11-15: bigger halo; coloured source / people cards and sticker chips.
 - 2026-11-15: autohide 25 s; video fills the screen when the panel hides (viewer no longer scrollable).
+- 2026-11-15: autohide 15 s (zapa, on feat/taste-cache).
 - 2026-11-15: design pass (two HIGH, four MEDIUM fixed); "Logged in as" label to check the signer's key.
 - 2026-11-15: R8 remote pass built; arrows stay inside an area (picture, picker, controls) until nothing lies further.
 - 2026-11-15: played items hide per session; slideshow avoids repeats per session; picture cache walks back in time.

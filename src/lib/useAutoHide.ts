@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { isNativeApp } from './platform.ts';
 
 // As in the first Madstr: the controls fade away after a while with no mouse, key or
-// touch, and come straight back on the next one. 25 seconds (spec §Split screen; zapa 2026-11-15, was 45).
-export const AUTOHIDE_MS = 25_000;
+// touch, and come straight back on the next one. 15 seconds (spec §Split screen; zapa 2026-11-15, was 25, before that 45).
+export const AUTOHIDE_MS = 15_000;
 
 /** A phone held sideways; must match the landscape block in styles.css (spec feat-taste-cache §T7). In the Android app only. */
 export const SIDEWAYS_QUERY = '(orientation: landscape) and (max-height: 500px) and (pointer: coarse)';
