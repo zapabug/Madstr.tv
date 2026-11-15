@@ -76,6 +76,13 @@ Android play (feat-android-play, 2026-11-15), written into the spec by the agent
   playing; no play / pause buttons in the notification yet.
 - The Android app always picks files, never a folder (even if a later WebView could open folders).
 
+Android native (feat-android-native, 2026-11-15), numbers the agent wrote into the spec:
+- Controls stay 10 minutes while paused; an empty player ends them after 3 s; position resent past 2 s drift.
+- Notification picture: http(s) only, at most 2 MB, scaled to 512 px; texts clipped to 80 characters.
+- Remote fast-forward / rewind use the on-screen steps (+30 s / −10 s).
+- Music mix: default none, at most 8 in 10 tracks, evenly spread, fixed order; when one side runs out the
+  rest is the other. Music floor: a track of unknown length stays until measured.
+
 ## Open questions
 
 - **Legacy files still tracked:** `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
@@ -100,3 +107,4 @@ Android play (feat-android-play, 2026-11-15), written into the spec by the agent
 - 2026-11-15: R8 remote pass built; arrows stay inside an area (picture, picker, controls) until nothing lies further.
 - 2026-11-15: played items hide per session; slideshow avoids repeats per session; picture cache walks back in time.
 - 2026-11-15: feat-android-play: the app picks files instead of a folder; background play service (1.1).
+- 2026-11-15: feat-android-native: native media controls, remembered folders in the app, music mix slider, music 2-9 min (1.2).

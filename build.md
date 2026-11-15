@@ -16,7 +16,11 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | RSS | RSS work (incoming) | in progress; parser and proxy tests come with it |
 | R8 | Remote pass (final stage before deploy) | built + machine-verified; awaiting zapa's remote test |
 | A1 | Android app picks files (feat-android-play) | built + machine-verified; awaiting zapa on a device |
-| A2 | Android app keeps playing in the background (1.1) | built; not run on a device |
+| A2 | Android app keeps playing in the background (1.1) | zapa: works (2026-11-15) |
+| N1 | Native media controls (app) + media session (web) | built; web machine-verified; app not run on a device |
+| N2 | Remembered folders in the app | built; not run on a device |
+| N3 | Local music mixed into Music (slider) | built + machine-verified |
+| N4 | Music is 2 to 9 minutes | built + machine-verified |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -241,3 +245,40 @@ Commit: 48fb782 · Spec: `feat-android-play.md` §A2
   player (snippet `capacitor-webview-audio-stops-in-background.md`).
 
 - Published 2026-11-15 on zapstore: release `dbc6dcbb…` (1.1, versionCode 2), status pending at first, like 1.0.
+
+## N1 — Native media controls [built; app not run on a device]
+Commits: be390b3 · Spec: `feat-android-native.md` §N1 (zapa chose "native controls, web player")
+- `MediaHub.java`: framework `MediaSession` + media-style notification (previous / play-pause / next, seek,
+  artwork ≤ 2 MB scaled to 512 px, http(s) only), wake + Wi-Fi locks only while playing / loading.
+  `PlaybackService` now only holds the foreground and takes notification taps; `PlaybackPlugin` = update /
+  end + `action` events; `MainActivity.dispatchKeyEvent` sends remote / keyboard media keys to the page.
+- Page: `src/lib/nowPlaying.ts` (bridge: starts with playing, tells only changes or a > 2 s position jump,
+  10 min while paused, 3 s after the player empties; tests), `src/lib/mediaActions.ts` (actions → player,
+  bad input ignored; tests), `src/native/nowPlayingNative.ts`, `src/pwa/mediaSession.ts` (web).
+- Headless Chromium: navigator.mediaSession shows the track and playlist name, playing / paused follow the
+  player. Debug and release APKs build; release lint passes.
+
+## N2 — Remembered folders in the app [built; not run on a device]
+Commit: 28bae75 · Spec: §N2
+- `LocalFoldersPlugin.java`: ACTION_OPEN_DOCUMENT_TREE + persisted read grant; scan via DocumentsContract
+  (depth 6, 2000 files, the web's file types); release on remove. `LocalFileServer.java` +
+  `LocalFilesWebViewClient.java`: `/_madstr_local/<base64url uri>` with 200 / 206 / 416, only inside held
+  folders. Capacitor's own content server was not used: it streams from byte 0 whatever the range says.
+- Page: `src/lib/nativeFolder.ts` (entries → tracks, untrusted input dropped, url encoding; tests),
+  `src/native/localFolders.ts`; `StoredFolder` holds `handle` (web) or `uri` (app); pick errors show as a note.
+- The 1.1 several-files path is gone from the app (the web keeps it for browsers without folders).
+
+## N3 — Local music in Music [built + machine-verified]
+Commit: 1bf7fc0 · Spec: §N3
+- `src/lib/musicMix.ts` (setting `madstr:musicMix`, default none, max 8 in 10, even spread; tests), slider
+  under Folders. Headless Chromium with 8 generated tracks: note "About 4 in 10 tracks in Music are yours" at
+  the middle; with only 2 Nostr tracks loaded, the rest of Music was local (one side ran out).
+
+## N4 — Music is 2 to 9 minutes [built + machine-verified]
+Commit: 1bf7fc0 · Spec: §N4
+- `isMusic` in `src/lib/media.ts` (tests); used by the Music list and its board preview. Logged out on the
+  default relays Music showed 2 tracks with and without the floor, so the floor is not what keeps it thin.
+
+## Release 1.2
+- versionCode 3, signed with the same certificate (92aca110…). Not published yet.
+

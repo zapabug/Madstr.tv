@@ -87,7 +87,7 @@ zapa, 2026-11-15: "some music files are under 30s, let's try min music length 2 
 
 ## Milestones
 
-- [ ] N1 native controls (Android) and media controls (web)
-- [ ] N2 remembered folders (Android)
-- [ ] N3 local music mixed into Music
-- [ ] N4 Music is 2 to 9 minutes
+- [ ] N1 native controls (Android) and media controls (web) (built; web machine-verified; app not run on a device)
+- [ ] N2 remembered folders (Android) (built; not run on a device)
+- [ ] N3 local music mixed into Music (built + machine-verified)
+- [ ] N4 Music is 2 to 9 minutes (built + machine-verified)
