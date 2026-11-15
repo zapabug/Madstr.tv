@@ -267,6 +267,12 @@ proposed, waiting for zapa's OK), and a profile picture is only shown when it is
   to 4 times**, and also whenever the tab comes back into view or the network comes back, instead of
   giving up until a reload (numbers proposed, waiting for zapa's OK).
 
+- **Looks** (zapa, 2026-11-15): the soft halo around profile pictures in the viewer (bottom-left author
+  and the author spot in the controls) is bigger. The "Your sources" cards and the People page cards
+  each get their own pastel sticker colour with a slight tilt, like the board stickers. The People
+  category chips (Everything, Images, Videos, Podcasts, Music, Short videos) are little stickers in
+  different colours; the picked one turns dark with its colour as text.
+
 ## Decided after the audit (zapa, 2026-11-15)
 
 The audit of 2026-11-15 (`audits/audit-2026-11-15.md`) flagged these; zapa kept them as built:

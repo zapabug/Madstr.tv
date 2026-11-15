@@ -86,3 +86,4 @@ Numbers:
 - 2026-11-15: Shuffle in the media picker; a video's sound keeps playing off the viewer; long-video
   previews look further down the list for posters.
 - 2026-11-15: the planet retries a profile picture that failed to load.
+- 2026-11-15: bigger halo; coloured source / people cards and sticker chips.

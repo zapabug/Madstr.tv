@@ -117,6 +117,10 @@ Commits: f2eeaec, b538884, 1478632 (melting clock), plus the halo / tiles / tick
 rewrite). 4fbb7ad: a picture that fails to load is tried again (every 15 s, up to 4 times, and on tab focus /
 network back); checked headless with the first request forced to fail, shown 15 s later.
 
+- 5b1e9aa: bigger halo around profile pictures in the viewer; "Your sources" and People cards in their own
+  pastel colours with a slight tilt; People category chips as coloured stickers (picked one dark).
+  Checked with headless screenshots of the board, People and the short-video viewer.
+
 ## RSS [incoming]
 Spec: §Milestones RSS
 
