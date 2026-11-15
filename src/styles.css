@@ -1580,13 +1580,14 @@ h1 {
   width: 100%;
 }
 .author-spot {
-  width: 40px;
-  height: 40px;
+  /* 72 px: readable at TV distance (feat-taste-cache §T1) */
+  width: 72px;
+  height: 72px;
   flex: none;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #ffffff14;
   color: var(--text);
   box-shadow: 0 0 10px 1px rgba(255, 255, 255, 0.22);
@@ -1866,8 +1867,9 @@ h1 {
   display: none;
 }
 .bottomline .avatar {
-  width: 32px;
-  height: 32px;
+  /* 56 px: readable at TV distance (feat-taste-cache §T1) */
+  width: 56px;
+  height: 56px;
   flex: none;
   border: 0;
   outline: 0;
@@ -2185,7 +2187,7 @@ a.chip-btn {
   }
   .pc {
     display: grid;
-    grid-template-columns: 36px 1fr auto;
+    grid-template-columns: 52px 1fr auto;
     grid-template-areas:
       "author seek seek"
       "main   main extra";
@@ -2194,8 +2196,9 @@ a.chip-btn {
   }
   .pc .author-spot {
     grid-area: author;
-    width: 36px;
-    height: 36px;
+    /* phones: 52 px, so the two compact rows still fit (feat-taste-cache §T1) */
+    width: 52px;
+    height: 52px;
   }
   .pc .dock-seek {
     grid-area: seek;
