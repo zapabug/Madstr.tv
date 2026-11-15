@@ -6,14 +6,35 @@ import { useEffect, useState } from 'react';
 import { useAccount, useProfile } from '../data/people.ts';
 import { isHttpUrl } from '../lib/media.ts';
 
+// A picture that fails to load is tried again (spec §Added later): every 15 s, up to 4 times, and
+// whenever the tab comes back into view or the network comes back.
+const RETRY_MS = 15_000;
+const RETRIES = 4;
+
 export function Sky() {
   const account = useAccount();
   const profile = useProfile(account?.pubkey);
   const face = isHttpUrl(profile?.picture) ? profile?.picture : undefined;
   const [broken, setBroken] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   // A new picture URL (or a login) gets a fresh chance to load.
-  useEffect(() => { setBroken(false); }, [face]);
+  useEffect(() => { setBroken(false); setAttempt(0); }, [face]);
+
+  // After a failure, try again later instead of giving up until a reload.
+  useEffect(() => {
+    if (!broken) return;
+    const retry = () => { setBroken(false); setAttempt(n => n + 1); };
+    const onVisible = () => { if (document.visibilityState === 'visible') retry(); };
+    const timer = attempt < RETRIES ? window.setTimeout(retry, RETRY_MS) : undefined;
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [broken, attempt]);
 
   return (
     <>
@@ -23,7 +44,8 @@ export function Sky() {
       </div>
       <div className="planet" aria-hidden="true">
         <div className="ball" />
-        {face && !broken && <img className="planet-face" src={face} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => { setBroken(true); }} />}
+        {/* key: a retry mounts a fresh <img>, so the browser asks for the picture again */}
+        {face && !broken && <img key={attempt} className="planet-face" src={face} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => { setBroken(true); }} />}
       </div>
     </>
   );
