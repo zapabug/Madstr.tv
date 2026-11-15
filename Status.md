@@ -1,0 +1,30 @@
+# Status
+project: Mad⚡tr.tv
+repo: /home/jester/Projects/Madstr.tv
+owner: zapa
+last-worked: 2026-11-15
+
+## Where to look
+- build.md: what was built per milestone, with commits and known gaps
+- planning.md: locked decisions, why, undiscussed decisions waiting for review
+- feat-applesauce-revamp.md: the spec (docs/ holds notes from the old NDK app)
+- AGENTS.md: rules and verify commands
+
+## Report
+Feat: Applesauce revamp: board, viewer, player, listen, watch, people, pictures, local media
+State: Built on the feat branch and passing tests, lint and build. Ticked in the spec, but no confirmation from zapa is recorded yet. The sticker previews now follow the spec, and a list of choices made in code, including a 40-character limit on names, is waiting for zapa's review.
+────────────────────────────────────────
+Feat: Header Log out button, no "Logged in" box, board without hero note and filter chips, npub names
+State: Built, machine-verified and committed; needs zapa to check it, logged in and out.
+────────────────────────────────────────
+Feat: Shuffle in the media picker, and video sound that keeps playing off the viewer
+State: Built, machine-verified against real relays and committed; needs zapa to try both.
+────────────────────────────────────────
+Feat: RSS
+State: Incoming. The feed parser and proxy exist from the earlier own-audio work; tests come with the new RSS work.
+────────────────────────────────────────
+Feat: Remote pass (final stage before deploy)
+State: Not built. Sliders and text boxes still cannot be reached with arrow keys.
+────────────────────────────────────────
+Feat: TV (Android) build
+State: Not built; parked.

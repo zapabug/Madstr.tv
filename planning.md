@@ -1,0 +1,86 @@
+# planning.md: Mad⚡tr.tv (feat-applesauce-revamp)
+
+The why. Spec: `feat-applesauce-revamp.md`. What was built: `build.md`. The old app's planning
+notes are in `docs/Planning.md` (NDK era, may describe code that is gone).
+
+## Locked decisions
+
+| Area | Decision |
+| --- | --- |
+| Stack | pnpm, Vite 6, React 19, TypeScript strict, ESLint, `node --test` |
+| Nostr | Applesauce, pinned exactly: core 7.1.3, relay 7.1.1, loaders 7.2.0, signers 7.1.0, actions 7.1.1, common 7.1.1, react 7.1.0. No `nostr-tools`, no NDK |
+| Extra runtime deps | `react-qr-code` (OK'd by zapa 2026-11-15). Anything else needs zapa's OK |
+| Login | Extension, bunker / nbunksec, QR. Own session store `src/lib/session.ts`, not AccountManager |
+| Scope | Web first; TV / Android parked |
+| Layout | One viewer; picker = playlist only; sources on the board under "Your sources" |
+| Styling | In scope: fresh app, the look is built as it goes |
+| Order | RSS work is incoming; the remote pass (R8) is the final stage before deploy |
+
+## Decisions made, with rationale
+
+- **2026-11-15, QR login kept.** zapa: keep it, it works. The spec's earlier "no QR codes" is
+  withdrawn.
+- **2026-11-15, own session store over AccountManager.** The flow copies the Madeira Livre app
+  (commit bb3a465); zapa: "it works, don't touch".
+- **2026-11-15, picker without a sources column.** Sources are set up once, on the board; the
+  viewer stays a playlist.
+- **2026-11-15, styling is in scope.** "Layout first, styling later" came from the first (NDK)
+  app; this is a fresh app.
+- **2026-11-15, header chip is Log out; "Logged in" box removed.**
+- **2026-11-15, process files skipped until now.** The project was an old one that needed a full
+  refresh; `build.md`, `planning.md` and `Status.md` were written after the audit.
+- **2026-11-15, remote pass last.** Remote navigation (inputs and sliders `data-nav`) is the final
+  stage before deploy, not a blocker for feature work.
+
+## Undiscussed decisions (needs lfg review)
+
+Found in the code by the audit of 2026-11-15; none was agreed in the spec. Keep (move into the
+spec), change, or revert.
+
+Mechanics:
+- Picture mix: "Only my pictures" plus a seldom / very often slider (`pictureMix.ts`).
+- Melting SVG clock (`Clock.tsx`, `clock.ts`).
+- Ticker with the first sentence of the picture's post (`Ticker.tsx`).
+- 20 s track toast (`TrackToast.tsx`).
+- Author spot in the controls (`author.ts`).
+- Playback speed remembered per queue kind (`queue.ts`, `player.ts`).
+- Audio-length probing limits (`durations.ts`).
+- Profile picture as the planet (uncommitted `Sky.tsx`).
+- "Everything" creator chip; Esc / Backspace goes back.
+- Podcast fallback also counts the word "podcast" and the tags podcasting / podcastindex /
+  podcastsonnostr (`media.ts`).
+- Kind 31337 `duration` treated as milliseconds only when above 10000 (`media.ts`).
+- localStorage overrides `madstr:hideMs` and `madstr:toastMs` for the hide and toast timers.
+
+- Shuffle resets when another playlist opens; the Shuffle button sits in the picker header.
+
+Numbers:
+- Names clipped to 40 characters (`MAX_NAME`, `names.ts`); proposed 2026-11-15.
+- Player: prev restarts after 5 s; resume skips < 5 s and the last 10 s; rates 1, 1.25, 1.5, 2,
+  0.75; position saved every 5 s.
+- Slideshow every 9 s, avoids the last 12; history 60; mix share 0.05 + 0.75 × often, default 0.5;
+  preview rotation 5 s, 4 shown.
+- Text: MAX_TEXT 160, ticker max 140, ticker duration max(14, len × 0.2 + 10) s.
+- Relay limits: 300 per chunk, 200 notes, 100 authors per filter; creator filters 300/200/200/200;
+  friends-of-follows cap 400, 30 creators; 300 pictures; playlist pages of 120; 12 tags.
+- Probing: 40 probes, 3 at a time, 8 s each. Local scan depth 6.
+- Signer: QR 240 s, sign 90 s, connect 20 s, key re-ask 5 s, publish 8 s, subscription retry 3 s,
+  extension wait 1.5 s. Clock refresh 10 s. The relay lists in `relays.ts`.
+
+## Open questions
+
+- **Legacy files still tracked:** `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
+  `NIP46_QR_FLOW.md`, `madstr-tv.npk`. Keep or delete?
+- **Cleanup:** the stray `*/` in `styles.css`; the 655 kB chunk.
+
+## Change log
+
+- 2026-11-15: audit (`audits/audit-2026-11-15.md`); zapa's answers recorded in the spec
+  (§Decided after the audit) and AGENTS.md; RSS and R8 milestones added; this file, `build.md`
+  and `Status.md` created.
+- 2026-11-15: board hero note, shortcut line and lane filter chips removed; names fall back to the
+  last 5 letters of the npub.
+- 2026-11-15: profile pictures checked for http(s), names clipped; sticker previews brought in line with
+  the spec (pure `lib/previews.ts`); tests for previews, last-video restore, local folders, stickers.
+- 2026-11-15: Shuffle in the media picker; a video's sound keeps playing off the viewer; long-video
+  previews look further down the list for posters.

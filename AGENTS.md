@@ -21,9 +21,9 @@ pnpm test && pnpm lint && pnpm build   # all three must pass before a commit
 - **Treat everything from relays, feeds and files as untrusted**: only http(s) URLs, clipped
   strings, plain-text rendering. Event rules live in `src/lib/media.ts` with tests built from
   real event shapes; change them together.
-- **Layout first, styling later.** zapa has said colours and styling come later: do not restyle.
-- **No secrets in the repo.** Saved logins sit in the browser's localStorage (Applesauce's
-  AccountManager); they are credentials.
+- **Styling is in scope.** This is a fresh app (zapa, 2026-11-15), so the look is built as it goes.
+- **No secrets in the repo.** Saved logins sit in the browser's localStorage (`src/lib/session.ts`,
+  key `madstr:session`); they are credentials.
 - Keep logic that can be pure in `src/lib/` with a test; hooks and components stay thin.
 - Branch per feat (`feat/<name>`), commits `feat(<name>): ...`; do not push without asking.
 

@@ -1,7 +1,8 @@
 # feat-applesauce-revamp: Madstr.tv rebuilt on Applesauce, pleb.world style
 
-Branch (not cut yet): `feat/applesauce-revamp`, off `feat/own-audio`.
-Status: draft spec from zapa's words on 2026-11-15. No code yet.
+Branch: `feat/applesauce-revamp`, off `feat/own-audio`.
+Status: built (R1–R7) on `feat/applesauce-revamp`; spec from zapa's words on 2026-11-15, updated after
+the audit the same day (see "Decided after the audit").
 Scope: **web first.** TV / Android (APK, native media permission) is parked: see
 "Parked: the TV".
 
@@ -15,7 +16,7 @@ look and feel of pleb.world: funky, playful, a bit over the place on purpose.
 
 - It stays **TV-minded** in feel (big targets, remote-style focus). Update
   2026-11-15: **don't worry about the TV now**; web first.
-- **No QR codes any more.**
+- ~~No QR codes any more.~~ Update 2026-11-15: **QR login stays** (it works; `react-qr-code` is OK'd).
 - The **bottom panel is dedicated to the playlist and the media player.**
 - Keep the **SVG previous / next buttons on the screen.**
 - The home screen shows the **divide: player + podcasts on one side, videos on
@@ -29,7 +30,8 @@ look and feel of pleb.world: funky, playful, a bit over the place on purpose.
 
 ## Home = the sticker board (shortcuts)
 
-Home is the pleb.world-style board and nothing else: a sky, and post-its.
+Home is the pleb.world-style board: a sky, post-its, and below them **Your sources** (RSS feeds,
+folders, my pictures, hashtags per kind).
 Each sticker is a **shortcut that opens the one viewer already set up**, not a
 room of its own.
 
@@ -56,7 +58,7 @@ room of its own.
   | Local | no cover art (local files rarely have any), so a drawn fallback with the track count |
   | My pictures | the device's own pictures, as slides |
   | Continue | the poster of the last video, with a progress bar at the saved position |
-  | Short / Long videos | poster of the next video in that queue, slowly rotating through the next few |
+  | Short / Long videos | posters of the next videos in that queue that have one, slowly rotating through a few (2026-11-15: most long videos are kind 1 notes with no poster at all, so "next few" skips the ones without) |
   | Liked npubs | a few avatars |
   | Follow more creators | avatars of suggested creators |
 
@@ -67,7 +69,8 @@ room of its own.
   list, so "next in queue" on the board is exactly what opens.
 - The board still shows the divide: the listen stickers (Music, Podcasts) on one
   side, the watch stickers (Continue, Short, Long) on the other, people stickers
-  apart. Chips filter the board like on pleb.world.
+  apart. ~~Chips filter the board like on pleb.world.~~ Update 2026-11-15: no filter chips;
+  all three lanes always show.
 - Stickers use pleb.world's language: pastel cards, thick ink outline, hard
   shadow, slight tilt that straightens on focus/hover, yellow handwritten
   notes, deep-space sky. Fonts Unbounded / Figtree / JetBrains Mono, bundled.
@@ -81,17 +84,15 @@ the **picture on top** (the slideshow behind music and podcasts, the video itsel
 with the thin **⟨ ⟩ previous / next chevrons on its edges**, the brand top right and the
 **VIDEOS / MUSIC chip bottom right**; and a **bottom panel split left / right, 70% / 30%**:
 
-- **Left 70%, the media picker** (where the old message board was): everything you pick from.
-  On one side the same shortcuts as the home stickers and the current source's own controls
-  (RSS feeds, folders, hashtags, liked people); beside it the playlist.
+- **Left 70%, the media picker** (where the old message board was): the playlist. Sources are
+  added on the board under "Your sources", not in the viewer.
 - **Right 30%, the media controls**: what is playing, play, seek bar, speed, and the small
   buttons (like, -10s, +30s).
 
 After 45 s without input the bottom panel slides away and the picture takes the whole
 screen; any mouse move or key brings it back, and arrow keys work while it is hidden.
-Following creators is a plain page; the board keeps a slim player bar. Colours and styling
-come later (the Winamp-style colours of the old panel are deliberately not applied yet).
-Below 1100 px wide the picker drops its sources column and shows the playlist alone.
+Following creators is a plain page; the board keeps a slim player bar. Styling is part of this
+feat: it is a fresh app, so the look (sky, halo, tiles, ticker) is designed as it goes.
 
 ## The viewer (one screen, two modes)
 
@@ -137,8 +138,7 @@ pnpm (bun is not installed here; `pnpm-lock.yaml` committed), Vite 6, React 19,
 TypeScript strict, ESLint, `node --test` for pure logic. Applesauce pinned
 exactly: core 7.1.3, relay 7.1.1, loaders 7.2.0, signers 7.1.0, actions 7.1.1,
 common 7.1.1, react 7.1.0. The old NDK/Tailwind app and its `bun.lock` are gone
-from the tree (still in git history). `AGENTS.md` and `README.md` still describe
-the old app and need a rewrite.
+from the tree (still in git history). `AGENTS.md` and `README.md` were rewritten for this app.
 
 ## Rules settled from real relay data (2026-11-15)
 
@@ -174,7 +174,7 @@ rooms, not Settings-only extras.
 
 ## Dropped
 
-QR codes (`react-qr-code`), the old `useAuth`, NDK, `ndk-hooks`, framer-motion
+The old `useAuth`, NDK, `ndk-hooks`, framer-motion
 unless a real need appears, the old 6-minute music/podcast duration hack.
 
 ## Open items (discuss later, not blockers)
@@ -206,16 +206,21 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
 - [x] R2 viewer + bottom panel: one player store (hidden audio + video in the viewer), queue,
       SVG prev / play / next, seek, -10s/+30s, speed, resume position, playlist drawer.
 - [x] R3 Listen mode (Music / Podcasts / Local): Nostr audio from the TV's follows, RSS feeds
-      and local folders (add them right in the viewer).
+      and local folders (added on the board under "Your sources").
 - [x] R4 Watch mode: short, long, keep-watching (last video first, then newest).
-- [x] R5 People: login with a NIP-07 extension or a pasted NIP-46 bunker:// link (Applesauce
-      AccountManager, saved across reloads), follow / unfollow through Applesauce's FollowUser
-      action, device-local Liked npubs with a heart in the player, and a creator picker built
-      from audio actually found on relays. No QR codes.
+- [x] R5 People: login with a NIP-07 extension, a pasted NIP-46 bunker:// / nbunksec link, or a
+      QR code (own session store in `src/lib/session.ts`, as the Madeira Livre app does, saved
+      across reloads), follow / unfollow through Applesauce's FollowUser
+      action, and a creator picker ranked by what people publish (Liked npubs was dropped later).
 - [x] R6 picture wall (Nostr pictures, slideshow with cross-fade), live sticker previews, and
       hashtag discovery per kind (music/podcast, video, pictures) as the first Madstr had.
 - [x] R7 local media on the web: Local playlist and My pictures (folder picker, or picked files
       for the session where there is no folder picker).
+- [ ] RSS (incoming): RSS is still being worked on; the parser (`rssFeed.ts`) and the proxy's
+      private-address guard (`server/rssProxy.ts`) get their tests with that work.
+- [ ] R8 remote pass, the **final stage before deploy**: every control, inputs and sliders
+      included (seek bar, picture mix, feed URL, hashtag, bunker link), is `data-nav`, and arrow
+      keys can leave a text input, so the whole app works from a remote.
 - [ ] later: TV (Android) build and native permission, see Parked.
 
 ## Rules added later (zapa, 2026-11-15)
@@ -231,6 +236,41 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
 
 **Liked npubs** is not needed: the sticker, its view, the heart buttons and the saved list are gone.
 The people lane keeps "Follow more creators", whose suggestions come from friends of your follows first.
+
+**Header account chip and the "Logged in" box** (zapa, 2026-11-15): the header chip no longer shows a
+heart and your profile name; logged in, it is a **Log out** button (logged out it stays "Log in", a link
+to People). People drops its "Logged in" section ("The board now shows what the people you follow
+post"); the login options show only while logged out.
+
+**Board hero and filter chips** (zapa, 2026-11-15): the board drops the "pick a sticker" note, the line
+"Each sticker is a shortcut: it opens the player already set up." and the All / Listen / Watch / People
+chips. The heading stays.
+
+**Names** (zapa, 2026-11-15): someone with no name set shows as the **last 5 letters of their npub**
+(`…ab3cd`). A name that is set is clipped to **40 characters** (relay data is untrusted; 40 is
+proposed, waiting for zapa's OK), and a profile picture is only shown when it is an http(s) URL.
+
+## Added later (zapa, 2026-11-15)
+
+- **Shuffle button in the media picker** (its header, beside the title): it turns shuffle on and off for
+  the playlist that is open. On: the item playing keeps playing and the rest of the playlist goes into
+  a random order; items that arrive later from relays are mixed in at the end. Off: the playlist goes
+  back to its normal order, with the same item still playing. Opening another playlist starts
+  unshuffled (proposed, waiting for zapa's OK).
+- **A video's sound keeps playing when you leave the viewer** (to the board, People, or My pictures):
+  it carries on from the same second, and next / previous and the end of a video move through the
+  video playlist as sound only. Coming back to the watch viewer shows the picture again from where the
+  sound is. Opening another playlist (the Music sticker, say) replaces it, as before.
+
+## Decided after the audit (zapa, 2026-11-15)
+
+The audit of 2026-11-15 (`audits/audit-2026-11-15.md`) flagged these; zapa kept them as built:
+
+- **QR login stays**, with `react-qr-code` as an OK'd dependency.
+- **Login keeps its own session store** (`src/lib/session.ts`), not Applesauce's AccountManager:
+  it works, do not touch.
+- **The viewer's picker is the playlist only**; sources are added on the board under "Your sources".
+- **Styling is in scope**: this is a fresh app, not a restyle of the old one.
 
 ## Not in this feat
 
