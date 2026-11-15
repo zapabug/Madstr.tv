@@ -2386,3 +2386,57 @@ a.chip-btn {
     gap: 10px;
   }
 }
+
+/* --- phone turned sideways (feat-taste-cache §T7, zapa 2026-11-15) ---------------------------------------
+   The picture takes the whole screen. A touch brings back only previous / play / next and the seek bar, over
+   the bottom of the picture; the playlist is for holding the phone upright. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .theater .media {
+    bottom: 0;
+  }
+  .theater .split {
+    top: auto;
+    height: auto;
+    justify-content: center;
+    padding: 18px 16px max(10px, env(safe-area-inset-bottom, 0px));
+    border-top: 0;
+    background: linear-gradient(to top, #0b0716e6, #0b071600);
+  }
+  .theater .picker,
+  .theater .pc-top,
+  .theater .postit-speed,
+  .theater .pc-taste-note,
+  .theater .edge,
+  .theater .mode-chip,
+  .theater .bottomline {
+    display: none;
+  }
+  .theater .player-panel {
+    flex: 0 1 640px;
+    padding: 0;
+    background: none;
+    border: 0;
+    overflow: visible;
+  }
+  .theater .pc {
+    flex-direction: row;
+    gap: 14px;
+  }
+  .theater .pc-main {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .theater .pc .dock-play {
+    width: 52px;
+    height: 52px;
+  }
+  .theater .pc-main .dock-btn:not(.dock-play) {
+    width: 40px;
+    height: 40px;
+  }
+  .theater .pc-seek {
+    flex: 1;
+    min-width: 0;
+  }
+}

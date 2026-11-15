@@ -104,6 +104,18 @@ remote there are usually buttons for this".
 - Exit: in the full picture, a double tap on either side seeks and the panel stays away; a single tap on a
   video pauses it and the panel comes back.
 
+## T7: Phone turned sideways
+
+zapa, 2026-11-15: "on mobile tilting the screen hides the bottom panels, interacting only shows the seek bar and
+prev play next buttons; to manage the playlist they tilt portrait".
+- A phone in landscape (landscape and at most **500 px** tall): the picture (video or slideshow) takes the
+  whole screen; the playlist and the rest of the controls are not shown.
+- Turning the phone sideways hides the controls at once. A touch brings back only **previous / play / next and
+  the seek bar**, over the bottom of the picture; they go again after the usual 25 s without input.
+- Turning it upright brings back the normal screen with the playlist.
+- Exit: at 860×400 the picture fills the screen; a tap shows only the transport and seek bar; at 400×860 the
+  normal layout returns.
+
 ## Milestones
 
 - [ ] T1 bigger faces (built + machine-verified)
@@ -112,3 +124,4 @@ remote there are usually buttons for this".
 - [ ] T4 reach back in time (built + machine-verified)
 - [ ] T5 more relays (built; probe passes for the new relays)
 - [ ] T6 double tap to seek; −10 s / +30 s buttons removed
+- [ ] T7 phone turned sideways: full picture, transport and seek bar only

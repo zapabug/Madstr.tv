@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 // touch, and come straight back on the next one. 25 seconds (spec §Split screen; zapa 2026-11-15, was 45).
 export const AUTOHIDE_MS = 25_000;
 
+/** A phone held sideways; must match the landscape block in styles.css (spec feat-taste-cache §T7). */
+export const SIDEWAYS_QUERY = '(orientation: landscape) and (max-height: 500px)';
+
 /** Bring the controls back from code (a single tap on the picture). */
 export const WAKE_EVENT = 'madstr:wake';
 export function wakeControls(): void {
@@ -46,10 +49,28 @@ export function useAutoHide(enabled: boolean): boolean {
     const events = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
     events.forEach(e => window.addEventListener(e, onInput, { passive: true }));
     window.addEventListener(WAKE_EVENT, wake);
+    // Turning a phone sideways hides the controls at once (spec feat-taste-cache §T7); a touch brings them back.
+    // Only the switch into sideways hides; resizes while sideways (the address bar sliding) do not.
+    const sideways = typeof window.matchMedia === 'function' ? window.matchMedia(SIDEWAYS_QUERY) : null;
+    let wasSideways = sideways?.matches ?? false;
+    const onTurn = () => {
+      const now = sideways?.matches ?? false;
+      if (now && !wasSideways) {
+        window.clearTimeout(timer);
+        setHidden(true);
+      }
+      wasSideways = now;
+    };
+    sideways?.addEventListener('change', onTurn);
+    window.addEventListener('resize', onTurn);
+    window.addEventListener('orientationchange', onTurn);
     return () => {
       window.clearTimeout(timer);
       events.forEach(e => window.removeEventListener(e, onInput));
       window.removeEventListener(WAKE_EVENT, wake);
+      sideways?.removeEventListener('change', onTurn);
+      window.removeEventListener('resize', onTurn);
+      window.removeEventListener('orientationchange', onTurn);
     };
   }, [enabled]);
 
