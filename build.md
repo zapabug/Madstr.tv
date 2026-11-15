@@ -280,5 +280,5 @@ Commit: 1bf7fc0 · Spec: §N4
   default relays Music showed 2 tracks with and without the floor, so the floor is not what keeps it thin.
 
 ## Release 1.2
-- versionCode 3, signed with the same certificate (92aca110…). Not published yet.
+- versionCode 3, signed with the same certificate (92aca110…). Published 2026-11-15 on zapstore: release `33ada0b0…`.
 
