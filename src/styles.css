@@ -1627,7 +1627,7 @@ h1 {
   display: flex;
   justify-content: center;
   /* room for the thumbs that stick out on either side */
-  padding-inline: 26px;
+  padding-inline: 44px;
 }
 .pc-face {
   position: relative;
@@ -1638,10 +1638,10 @@ h1 {
   z-index: 1;
 }
 .taste-up {
-  left: -26px;
+  left: -44px;
 }
 .taste-down {
-  right: -26px;
+  right: -44px;
 }
 /* Hide artist: stuck on the face's bottom-right corner */
 .pc-face .postit-hide {
@@ -1655,6 +1655,11 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+}
+/* the seek bar is drawn over the speed post-it, which is tucked under its right end */
+.pc-seek .dock-seek {
+  position: relative;
+  z-index: 1;
 }
 .author-spot {
   /* 96 px: readable at TV distance (feat-taste-cache §T1; zapa: bigger again) */
@@ -1806,10 +1811,10 @@ h1 {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  margin-bottom: -3px; /* stuck onto the seek bar */
+  margin-bottom: -4px; /* tucked under the seek bar */
   margin-right: 4px;
   padding: 2px 9px 3px 7px;
-  rotate: -3deg;
+  rotate: -7deg;
 }
 .postit-speed b {
   font: 800 0.9rem var(--body);
@@ -2376,10 +2381,10 @@ a.chip-btn {
     top: calc(50% - 18px);
   }
   .taste-up {
-    left: -28px;
+    left: -40px;
   }
   .taste-down {
-    right: -28px;
+    right: -40px;
   }
   .pc-main {
     flex-wrap: nowrap;

@@ -33,10 +33,11 @@ zapa, 2026-11-15, after trying the first version: "hide song and downvote do the
 duplicate buttons". So a down vote **is** hiding the song.
 
 The media controls, top to bottom (zapa, 2026-11-15): the **author's face, bigger (96 px, 64 on phones), with
-the thumbs either side overlapping its edges** (up vote left, down vote right) and **Hide artist** as a small
-post-it (28 px) stuck on its bottom-right corner, crossed with a red diagonal line; **previous / play / next**;
-a little **speed** post-it, just bigger than the number and made oversized with the word "SPEED" (fast
-stickers add horse power); the **seek bar** across the full width under it.
+the thumbs either side overlapping its edges** (up vote left, down vote right; moved further apart after
+zapa's try) and **Hide artist** as a small post-it (28 px) stuck on its bottom-right corner, crossed with a
+red diagonal line; **previous / play / next**; a little **speed** post-it reading "SPEED ×1.5", just bigger
+than the number and made oversized with the word (fast stickers add horse power), tilted a bit more, its
+bottom edge tucked under the right end of the **seek bar**, which runs the full width and is never covered.
 - **Up vote** (thumb up). Logged in, and the item is from Nostr: publishes a public like (NIP-25 reaction,
   kind 7, content `+`, tags `e` (+ `a` for an addressable track), `p`, `k`) to the content relays. Logged
   out, or not from Nostr: kept on this device only. The button stays lit while voted; pressing it again takes

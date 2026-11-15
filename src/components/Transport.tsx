@@ -120,7 +120,7 @@ export function PanelControls() {
       </div>
       <div className="pc-seek">
         <button type="button" className="postit postit-speed" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>
-          <b>{p.rate}×</b> <span>speed</span>
+          <span>speed</span> <b>×{p.rate}</b>
         </button>
         <SeekBar />
       </div>
