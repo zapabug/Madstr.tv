@@ -87,3 +87,4 @@ Numbers:
   previews look further down the list for posters.
 - 2026-11-15: the planet retries a profile picture that failed to load.
 - 2026-11-15: bigger halo; coloured source / people cards and sticker chips.
+- 2026-11-15: autohide 25 s; video fills the screen when the panel hides (viewer no longer scrollable).

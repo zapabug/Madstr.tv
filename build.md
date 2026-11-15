@@ -41,6 +41,8 @@ Spec: §Split screen, §The viewer, §Milestones R2
 - Split screen: picture on top with ⟨ ⟩ chevrons, brand, mode chip; bottom 70/30 picker / controls;
   45 s autohide (`useAutoHide.ts`); thin top bar with time; track toast; author spot; ticker.
 - fbc7e9d: autohide in picture mode, one playback speed per queue kind.
+- 37092b4: video failed to fill the screen when the panel hid (the playlist's scrollIntoView scrolled the
+  whole viewer once the panel was off-screen); `.theater` is now `overflow: clip`. Autohide 25 s (zapa).
 - Decided after the audit: the picker is the playlist only (no sources column, no 1100 px rule).
 
 ## Added later — Shuffle, video sound off-screen [built + machine-verified]

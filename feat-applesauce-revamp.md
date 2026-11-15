@@ -89,7 +89,7 @@ with the thin **⟨ ⟩ previous / next chevrons on its edges**, the brand top r
 - **Right 30%, the media controls**: what is playing, play, seek bar, speed, and the small
   buttons (like, -10s, +30s).
 
-After 45 s without input the bottom panel slides away and the picture takes the whole
+After 25 s without input (zapa, 2026-11-15; was 45 s) the bottom panel slides away and the picture takes the whole
 screen; any mouse move or key brings it back, and arrow keys work while it is hidden.
 Following creators is a plain page; the board keeps a slim player bar. Styling is part of this
 feat: it is a fresh app, so the look (sky, halo, tiles, ticker) is designed as it goes.
