@@ -5,7 +5,7 @@ import { ExtensionSigner, NostrConnectSigner, PrivateKeySigner, type ISigner } f
 import type { EventTemplate, NostrEvent } from 'applesauce-core/helpers';
 import { RELAYS, eventStore, pool } from './applesauce.ts';
 import { publishToFirst } from './publishFirst.ts';
-import { reconnect, withTimeout } from './reconnect.ts';
+import { askForKeyUntilAnswered, reconnect, withTimeout } from './reconnect.ts';
 import { SIGNER_RELAYS } from './relays.ts';
 import { clearSession, loadSession, parseCredential, saveSession } from './session.ts';
 
@@ -93,10 +93,11 @@ async function connectBunker(credential: string): Promise<Signer> {
       remote: p.remote,
       signer: new PrivateKeySigner(hexToBytes(p.clientKey)),
       bunkerSecret: p.bunkerSecret,
+      autoSwitchRelays: true,
     });
   } else {
     const p = NostrConnectSigner.parseBunkerURI(parsed.value);
-    remote = new NostrConnectSigner({ relays: p.relays.length ? p.relays : NIP46_RELAYS, remote: p.remote, bunkerSecret: p.bunkerSecret });
+    remote = new NostrConnectSigner({ relays: p.relays.length ? p.relays : NIP46_RELAYS, remote: p.remote, bunkerSecret: p.bunkerSecret, autoSwitchRelays: true });
   }
   await reconnect(remote, PERMISSIONS);
   await remote.getPublicKey();
@@ -192,7 +193,10 @@ export function restoreAccounts(): Promise<void> {
 // The app shows a nostrconnect:// QR code, the signer app (Amber and others) scans it and answers over the relays.
 // `uri` goes in the QR (and in a tap-to-open link); `connected` resolves once the signer has answered and the
 // account is active; `cancel` stops waiting (an approval that arrives later is ignored).
-const QR_TIMEOUT_MS = 120_000;
+// 240 s: a background tab throttles the retry interval to about once a minute (Chromium intensive
+// throttling), so the give-up limit must survive a couple of throttled ticks. Madeira Livre uses
+// the same value; about 20 s of retrying is the normal case.
+const QR_TIMEOUT_MS = 240_000;
 
 export interface QrLogin {
   uri: string;
@@ -201,7 +205,10 @@ export interface QrLogin {
 }
 
 export function startQrLogin(): QrLogin {
-  const remote = new NostrConnectSigner({ relays: NIP46_RELAYS });
+  // - autoSwitchRelays: NIP-46 says the client should send `switch_relays` right after connect — Amber answers
+  //   with its own relays and moves the session there, so requests flow on relays Amber actually listens on.
+  // - timeout: the library's own per-request timer; it must not fire before the app's total wait (QR_TIMEOUT_MS).
+  const remote = new NostrConnectSigner({ relays: NIP46_RELAYS, autoSwitchRelays: true, timeout: QR_TIMEOUT_MS });
   const uri = remote.getNostrConnectURI({ name: APP_NAME, permissions: PERMISSIONS });
   const controller = new AbortController();
   let cancelled = false;
@@ -209,7 +216,9 @@ export function startQrLogin(): QrLogin {
   const connected = (async () => {
     try {
       await remote.waitForSigner(controller.signal);
-      await remote.getPublicKey();
+      // The first get_public_key is usually lost (the signer is not listening yet — see
+      // nostrconnect-first-request-lost-before-signer-listens): repeat it every 5 s until an answer arrives.
+      await askForKeyUntilAnswered(remote, QR_TIMEOUT_MS);
       saveSession({ type: 'nip46', nbunksec: remote.getNbunksec() });
       if (cancelled) { void remote.close(); return; }
       await complete(wrapRemote(remote));

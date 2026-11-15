@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconnect, withTimeout, type RemoteLike } from './reconnect.ts';
+import { askForKeyUntilAnswered, reconnect, withTimeout, type RemoteLike } from './reconnect.ts';
 
 const fake = (connect: () => Promise<unknown>): RemoteLike & { opened: number } => {
   const remote = { isConnected: false, opened: 0, connect, open: async () => { remote.opened += 1; } };
@@ -30,4 +30,36 @@ test('a signer that never answers times out', async () => {
   const remote = fake(() => new Promise(() => {}));
   await assert.rejects(reconnect(remote, [], 30), /Signer connect timed out/);
   await assert.rejects(withTimeout(new Promise(() => {}), 20, 'x'), /x timed out/);
+});
+
+// --- askForKeyUntilAnswered -----------------------------------------------------------------
+// The 5 s production pacing is injected so tests can run on real timers in milliseconds.
+
+test('a key request answered on the first try resolves at once', async () => {
+  const key = await askForKeyUntilAnswered({ getPublicKey: async () => 'a'.repeat(64) }, 1_000, 50);
+  assert.equal(key, 'a'.repeat(64));
+});
+
+test('a lost first request is repeated until an answer arrives', async () => {
+  let calls = 0;
+  const key = await askForKeyUntilAnswered(
+    {
+      getPublicKey: () => {
+        calls += 1;
+        // the first two asks are lost (the relay dropped them); the third gets an answer
+        return calls < 3 ? Promise.reject(new Error('no subscriber')) : Promise.resolve('b'.repeat(64));
+      },
+    },
+    1_000,
+    20,
+  );
+  assert.equal(key, 'b'.repeat(64));
+  assert.equal(calls, 3);
+});
+
+test('giving up produces a clear error, not a library timeout message', async () => {
+  await assert.rejects(
+    askForKeyUntilAnswered({ getPublicKey: () => new Promise(() => {}) }, 80, 20),
+    /did not answer the key request in time/,
+  );
 });
