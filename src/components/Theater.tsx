@@ -6,7 +6,7 @@ import type { MediaItem } from '../lib/media.ts';
 import type { PictureSources } from '../data/pictures.ts';
 import { availableCount, usePictureMix } from '../lib/pictureMix.ts';
 import { useAutoHide } from '../lib/useAutoHide.ts';
-import { NextChevron, PrevChevron } from './icons.tsx';
+import { ImageIcon, NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
 import { Slideshow, type SlideCommand } from './Slideshow.tsx';
@@ -20,7 +20,8 @@ import { TrackToast } from './TrackToast.tsx';
 // previous / next chevrons on its edges, and the bottom is split in two: the media picker
 // on the left 70% (where the message board was), the media controls on the right 30%. After a while without input the bottom panel
 // slides away and the picture takes the whole screen.
-export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { data: ViewData; hasVideo: boolean; pictures: PictureSources; modeLabel?: string; modeHref?: string }) {
+// emptyStage: what the picture area says when it has nothing to show (My pictures with no pictures yet).
+export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptyStage }: { data: ViewData; hasVideo: boolean; pictures: PictureSources; modeLabel?: string; modeHref?: string; emptyStage?: string }) {
   const p = usePlayer();
   const item = p.queue[p.index];
   const showingVideo = hasVideo && item?.kind === 'video';
@@ -44,6 +45,13 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
         <div className="stage-full">
           {hasVideo && <video ref={player.registerVideo} playsInline onClick={player.toggle} hidden={!showingVideo} />}
           {!showingVideo && <Slideshow mine={pictures.mine} others={pictures.others} onCurrent={setSlide} command={command} />}
+          {!showingVideo && pictureCount === 0 && emptyStage && (
+            <div className="stage-empty">
+              <ImageIcon size={56} />
+              <p>{emptyStage}</p>
+              <a className="chip-btn solid" href="#/" data-nav>← Board · Your sources</a>
+            </div>
+          )}
         </div>
         <div className="topline">
           <Clock />

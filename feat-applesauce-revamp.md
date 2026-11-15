@@ -275,6 +275,21 @@ proposed, waiting for zapa's OK), and a profile picture is only shown when it is
   The creator cards on People are bigger and grow with the screen (picture, name, counts and text
   scale with the width; fewer, larger cards per row on a big screen).
 
+- **Design pass fixes** (zapa, 2026-11-15):
+  - A view shows **its own list** in the picker. While that list is empty or still loading, the picker
+    shows the view's own waiting / empty text, plus "Still playing: <title> · <its playlist>" when an
+    earlier playlist keeps playing; the header names the view, not the old playlist.
+  - **My pictures with no pictures** says so on the picture area, with a way back to the board to add a
+    picture folder.
+  - Someone with **no name and no picture** shows a person icon (not "…"). A picture that fails to
+    load (sticker preview, avatar, playlist tile) falls back to the drawn icon or initial, never the
+    browser's broken-image mark.
+  - Hovering the header's **Log out** shows who is logged in ("Logged in as <name or …npub>"), so a
+    signer that answers with a different key than expected is visible at a glance.
+  - On narrow screens (under 640 px) the source and People cards do not tilt, so they keep their side
+    margin. Disabled chips are flat (dashed outline, no shadow) instead of a muddy faded colour; chip
+    links are not underlined.
+
 ## Decided after the audit (zapa, 2026-11-15)
 
 The audit of 2026-11-15 (`audits/audit-2026-11-15.md`) flagged these; zapa kept them as built:

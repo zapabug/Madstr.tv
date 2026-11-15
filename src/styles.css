@@ -2085,3 +2085,67 @@ h1 {
   padding: clamp(6px, 0.5vw, 10px) clamp(14px, 1.2vw, 22px);
   min-height: clamp(36px, 2.8vw, 48px);
 }
+
+/* --- design pass fixes (zapa, 2026-11-15) -------------------------------------------------------------- */
+/* the person icon fills a fallback avatar at any size */
+.avatar-fallback svg {
+  width: 58%;
+  height: 58%;
+}
+/* the picker's own empty / waiting text, and what is still playing from before */
+.panel-empty p {
+  margin: 0 0 8px;
+}
+.still-playing {
+  font: 500 0.85rem/1.35 var(--mono);
+  color: var(--muted);
+}
+.still-playing b {
+  color: var(--text);
+  font-family: var(--body);
+}
+/* the picture area with nothing to show (My pictures before any are added) */
+.stage-empty {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 28rem;
+  padding: 24px;
+  text-align: center;
+  color: var(--text);
+  font: 600 1rem/1.4 var(--body);
+}
+.stage-empty p {
+  margin: 0;
+}
+.stage-empty .chip-btn {
+  text-decoration: none;
+}
+/* chip links look like the chip buttons */
+a.chip-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+/* disabled chips: flat and dashed, not a muddy faded pastel */
+.chip-btn:disabled {
+  opacity: 1;
+  background: transparent;
+  border-style: dashed;
+  color: color-mix(in oklch, currentColor, transparent 40%);
+  box-shadow: none;
+}
+/* narrow screens: no tilt on the source and People cards, so they keep their side margin */
+@media (max-width: 640px) {
+  .sources-grid > .own,
+  .people > .own {
+    rotate: 0deg;
+  }
+}
+/* a disabled chip on the dark panels keeps a visible dashed outline */
+.panel .chip-btn:disabled {
+  color: var(--muted);
+  border-color: #ffffff4d;
+}

@@ -57,8 +57,10 @@ export function useViewItems(route: ViewerRoute): ViewData {
       return { items: last ? [last.item, ...rest] : video, label: 'Keep watching', waiting: waiting && !last, emptyText: 'Nothing watched yet.' };
     }
     if (route.mode === 'pictures') {
-      return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Add a folder of pictures under Your sources on the home screen; they play as a slideshow.' };
+      const n = own.pictures.length;
+      return { items: NO_ITEMS, label: 'My pictures', waiting: false,
+        emptyText: n > 0 ? `${n} of your pictures, playing as a slideshow above.` : 'Add a folder of pictures under Your sources on the home screen; they play as a slideshow.' };
     }
     return { items: NO_ITEMS, label: 'Follow more creators', waiting: false, emptyText: '' };
-  }, [route, contacts, audio, video, own.rss, own.local, last]);
+  }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last]);
 }

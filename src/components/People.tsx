@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
+import { PersonIcon } from './icons.tsx';
 import { CATEGORIES, type Category } from '../lib/creators.ts';
 import { hasExtension, loginWithBunker, loginWithExtension, logout, startQrLogin, type QrLogin } from '../lib/accounts.ts';
 import { isHttpUrl } from '../lib/media.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
 
+// Someone's picture; without one (or when it fails to load) their initial, or a person icon when they
+// have not set a name either (spec §Design pass fixes).
 export function Avatar({ pubkey }: { pubkey: string }) {
   const profile = useProfile(pubkey);
-  const name = shortName(pubkey, profile?.displayName);
-  return isHttpUrl(profile?.picture)
-    ? <img className="avatar" src={profile.picture} alt="" loading="lazy" referrerPolicy="no-referrer" />
-    : <span className="avatar avatar-fallback" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>;
+  const picture = isHttpUrl(profile?.picture) ? profile.picture : undefined;
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const initial = profile?.displayName?.trim().slice(0, 1).toUpperCase();
+  return picture && failed !== picture
+    ? <img className="avatar" src={picture} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(picture)} />
+    : <span className="avatar avatar-fallback" aria-hidden="true">{initial || <PersonIcon size={18} />}</span>;
 }
 
 export function PersonName({ pubkey }: { pubkey: string }) {
@@ -21,8 +26,9 @@ export function PersonName({ pubkey }: { pubkey: string }) {
 // The small chip in the header: log out, or a way to log in.
 export function AccountChip() {
   const account = useAccount();
+  const profile = useProfile(account?.pubkey);
   return account
-    ? <button type="button" className="chip-link" data-nav onClick={() => { void logout(); }}>Log out</button>
+    ? <button type="button" className="chip-link" data-nav title={`Logged in as ${shortName(account.pubkey, profile?.displayName)}`} onClick={() => { void logout(); }}>Log out</button>
     : <a className="chip-link" href="#/people/follow" data-nav>Log in</a>;
 }
 

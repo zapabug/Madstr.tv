@@ -36,7 +36,7 @@ const GLYPHS: Record<
 };
 
 // Pictures that fade through one after another (cover art, posters, slides).
-function Rotator({ urls }: { urls: string[] }) {
+function Rotator({ urls, onFail }: { urls: string[]; onFail: (_url: string) => void }) {
   const [i, setI] = useState(0);
   const key = urls.join("\n");
   useEffect(() => {
@@ -64,6 +64,7 @@ function Rotator({ urls }: { urls: string[] }) {
           alt=""
           loading="lazy"
           referrerPolicy="no-referrer"
+          onError={() => onFail(u)}
         />
       ))}
     </>
@@ -74,10 +75,15 @@ function Rotator({ urls }: { urls: string[] }) {
 // the people involved. Never a video decode. With nothing to show it says so.
 function Preview({ sticker, data }: { sticker: Sticker; data: PreviewData }) {
   const Glyph = GLYPHS[sticker.glyph];
+  // A picture that fails to load drops out; with none left the sticker draws its glyph instead of
+  // the browser's broken-image mark (spec §Design pass fixes).
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+  const urls = data.urls.filter((u) => !failed.has(u));
+  const fail = (u: string) => setFailed((f) => new Set(f).add(u));
   return (
     <div className="preview" aria-hidden="true">
-      {data.urls.length > 0 ? (
-        <Rotator urls={data.urls} />
+      {urls.length > 0 ? (
+        <Rotator urls={urls} onFail={fail} />
       ) : data.avatars.length > 0 ? (
         <span className="preview-people">
           {data.avatars.map((pk) => (
@@ -95,7 +101,7 @@ function Preview({ sticker, data }: { sticker: Sticker; data: PreviewData }) {
           <i style={{ width: `${Math.round(data.progress * 100)}%` }} />
         </span>
       )}
-      {(data.urls.length > 0 || data.avatars.length > 0) &&
+      {(urls.length > 0 || data.avatars.length > 0) &&
         data.text && <span className="preview-text">{data.text}</span>}
     </div>
   );

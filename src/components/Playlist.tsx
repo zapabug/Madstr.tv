@@ -9,7 +9,9 @@ const MORE = 120;
 
 // The playlist as little sticker-like tiles: the account's picture (or the cover when there
 // is no account), a brief title, and the number. Hover or focus shows the full title.
-export function Playlist({ emptyText, waiting }: { emptyText: string; waiting: boolean }) {
+// `label` is the view's own playlist name: until the player holds that playlist, the view shows its own
+// waiting / empty text, and what is still playing from before (spec §Design pass fixes).
+export function Playlist({ label, emptyText, waiting }: { label: string; emptyText: string; waiting: boolean }) {
   const p = usePlayer();
   const [limit, setLimit] = useState(FIRST);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -21,7 +23,15 @@ export function Playlist({ emptyText, waiting }: { emptyText: string; waiting: b
   useEffect(() => { if (p.index >= limit) setLimit(p.index + MORE); }, [p.index, limit]);
   useEffect(() => { current.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [p.index, p.queue]);
 
-  if (p.queue.length === 0) return <p className="panel-empty">{waiting ? 'Looking for content…' : emptyText}</p>;
+  if (p.queue.length === 0 || p.label !== label) {
+    const still = p.queue[p.index];
+    return (
+      <div className="panel-empty">
+        <p>{waiting ? 'Looking for content…' : emptyText}</p>
+        {still && <p className="still-playing">Still playing: <b>{still.title}</b> · {p.label}</p>}
+      </div>
+    );
+  }
 
   const showTip = (el: HTMLElement, text: string) => {
     const r = el.getBoundingClientRect();
@@ -48,8 +58,7 @@ export function Playlist({ emptyText, waiting }: { emptyText: string; waiting: b
             >
               <span className="tile-art">
                 {row.pubkey ? <Avatar pubkey={row.pubkey} />
-                  : row.image ? <img src={row.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                  : row.kind === 'video' ? <FilmIcon size={26} /> : <NoteIcon size={26} />}
+                  : <TileArt image={row.image} video={row.kind === 'video'} />}
               </span>
               <span className="tile-title">{row.title}</span>
               <span className="tile-n" aria-hidden="true">{i === p.index && playing ? '▶' : i + 1}</span>
@@ -63,4 +72,12 @@ export function Playlist({ emptyText, waiting }: { emptyText: string; waiting: b
       {tip && createPortal(<div className="tile-tip" role="tooltip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div>, document.body)}
     </>
   );
+}
+
+// A tile's cover, or the drawn icon when there is none or it fails to load.
+function TileArt({ image, video }: { image?: string; video: boolean }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [image]);
+  if (image && !failed) return <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+  return video ? <FilmIcon size={26} /> : <NoteIcon size={26} />;
 }
