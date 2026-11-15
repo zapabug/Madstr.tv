@@ -133,6 +133,8 @@ network back); checked headless with the first request forced to fail, shown 15 
   every picture once before repeats; picture cache (2000) on the device, walking back in time 300 per
   20 s per request. Headless: played video gone on reopen; cache 629 -> 929 in under 2 minutes.
 
+- f44572b: phones (< 640 px) stack the bottom panel: picker, then the controls in two rows; seek bar usable.
+
 ## RSS [incoming]
 Spec: §Milestones RSS
 
