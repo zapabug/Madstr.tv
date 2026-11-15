@@ -169,7 +169,6 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 
 /* --- people ---------------------------------------------------------------------------------------- */
 .people { display: grid; gap: 4px; }
-.creators { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .creators li, .own li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .creator-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
 .creator-text .own-name, .creator-text .own-status { flex: none; }
@@ -284,6 +283,20 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
   :root { --split-h: max(44vh, 280px); }
 }
 
+
+/* --- creator / liked sticker cards ------------------------------------------------------------------------- */
+.creators { list-style: none; margin: 0; padding: 30px 4px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 26px 20px; }
+.own .creators > .creator-card { position: relative; display: flex; flex-direction: column; flex-wrap: nowrap; align-items: flex-start; gap: 6px; min-height: 190px; padding: 18px 16px 14px;
+  background: var(--tone, var(--mint)); border: 3px solid var(--ink); border-radius: 22px; box-shadow: 5px 5px 0 #000; rotate: var(--tilt, 0deg);
+  transition-property: rotate, translate, box-shadow; transition-duration: 220ms; transition-timing-function: var(--ease); }
+.creators > :nth-child(5n+1) { --tone: var(--mint); --tilt: -1.6deg; } .creators > :nth-child(5n+2) { --tone: var(--pinkp); --tilt: 1.3deg; }
+.creators > :nth-child(5n+3) { --tone: var(--sky); --tilt: -0.9deg; } .creators > :nth-child(5n+4) { --tone: var(--peach); --tilt: 1.8deg; } .creators > :nth-child(5n) { --tone: var(--lilac); --tilt: -1.2deg; }
+@media (hover: hover) { .own .creators > .creator-card:hover { rotate: 0deg; translate: -2px -4px; box-shadow: 8px 9px 0 #000; } }
+.creator-card .note { position: absolute; top: -13px; right: 12px; transform: rotate(4deg); }
+.creator-card .avatar { width: 56px; height: 56px; }
+.card-name { margin: 4px 0 0; font: 800 1.1rem/1.15 var(--display); letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.card-sub { margin: 0; font: 500 .85rem/1.3 var(--body); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.card-actions { margin-top: auto; padding-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* --- the playlist as tiles ------------------------------------------------------------------------------ */
 .tiles { list-style: none; margin: 0; padding: 4px 4px 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 14px 12px; flex: 1; min-height: 0; overflow-y: auto; align-content: start; }

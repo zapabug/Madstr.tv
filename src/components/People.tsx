@@ -145,17 +145,18 @@ export function FollowView() {
           {creators.map(c => {
             const isFollowing = following?.has(c.pubkey) ?? false;
             return (
-              <li key={c.pubkey}>
+              <li key={c.pubkey} className="creator-card">
+                {c.mutual > 0 && <span className="note">{c.mutual} of your follows</span>}
                 <Avatar pubkey={c.pubkey} />
-                <span className="creator-text">
-                  <span className="own-name"><PersonName pubkey={c.pubkey} /></span>
-                  <span className="own-status">{c.mutual > 0 ? `${c.mutual} of your follows follow them · ` : ''}{c.count} {c.count === 1 ? 'item' : 'items'} · {c.latest}</span>
-                </span>
-                <LikeButton pubkey={c.pubkey} />
-                <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
-                  onClick={() => { void run(c.pubkey, isFollowing); }}>
-                  {pending.includes(c.pubkey) ? '…' : isFollowing ? 'Unfollow' : 'Follow'}
-                </button>
+                <h3 className="card-name"><PersonName pubkey={c.pubkey} /></h3>
+                <p className="card-sub">{c.count} {c.count === 1 ? 'item' : 'items'} · {c.latest}</p>
+                <div className="card-actions">
+                  <LikeButton pubkey={c.pubkey} />
+                  <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
+                    onClick={() => { void run(c.pubkey, isFollowing); }}>
+                    {pending.includes(c.pubkey) ? '…' : isFollowing ? 'Unfollow' : 'Follow'}
+                  </button>
+                </div>
               </li>
             );
           })}
@@ -176,10 +177,12 @@ export function LikedPeople() {
       ) : (
         <ul className="creators">
           {liked.map(pubkey => (
-            <li key={pubkey}>
+            <li key={pubkey} className="creator-card">
               <Avatar pubkey={pubkey} />
-              <span className="creator-text"><span className="own-name"><PersonName pubkey={pubkey} /></span></span>
-              <button type="button" className="chip-btn" data-nav onClick={() => toggleLike(pubkey)} aria-label="Unlike">Unlike</button>
+              <h3 className="card-name"><PersonName pubkey={pubkey} /></h3>
+              <div className="card-actions">
+                <button type="button" className="chip-btn" data-nav onClick={() => toggleLike(pubkey)} aria-label="Unlike">Unlike</button>
+              </div>
             </li>
           ))}
         </ul>
