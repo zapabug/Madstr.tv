@@ -74,13 +74,18 @@ room of its own.
 - **Focus is first-class**: every sticker and button is reachable with arrow
   keys and Enter, with a clear focus ring. Hover tilt is a bonus on top.
 
-## The theatre (updated 2026-11-15 from zapa)
+## The split screen (updated 2026-11-15 from zapa: "my layout from before")
 
-While playing, the picture fills the screen: the **slideshow** behind music and podcasts, the
-**video** itself for video. The **media picker (playlist) is on the left, the player on the
-right**, and both **auto-hide after 45 s of no input, as the first Madstr did**, coming back on
-any mouse move or key. Arrow keys work while they are hidden. Following creators is a plain
-page, and the board and plain pages keep a slim player bar at the bottom.
+Out of the home view the screen is split exactly as the first Madstr was (`docs/Untitled.png`):
+the **picture on top** (the slideshow behind music and podcasts, the video itself for video)
+with the thin **⟨ ⟩ previous / next chevrons on its left and right edges**, the brand top
+right and the **VIDEOS / MUSIC chip bottom right**; and a **bottom split panel, about a
+quarter of the height, left two thirds and right one third**: the **media picker on the
+left, the player on the right**. After 45 s without input the bottom panel slides away and
+the picture takes the whole screen; any mouse move or key brings it back. Arrow keys still
+work while it is hidden. Following creators is a plain page, and the board keeps a slim
+player bar at the bottom. Colours and styling come later (the Winamp-style colours of the
+old panel are deliberately not applied yet).
 
 ## The viewer (one screen, two modes)
 

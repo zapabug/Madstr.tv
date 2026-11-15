@@ -52,3 +52,11 @@ export const HeartIcon = (p: IconProps) => (
 export const PlusPersonIcon = (p: IconProps) => (
   <Svg {...p}><path d="M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 8a7 7 0 0 1 14 0zM19 8h2v3h3v2h-3v3h-2v-3h-3v-2h3z" /></Svg>
 );
+
+// The thin "⟨ ⟩" on-screen previous / next from the first Madstr.
+export const PrevChevron = ({ size = 44 }: { size?: number }) => (
+  <svg width={size * 0.6} height={size} viewBox="0 0 24 40" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M17 3 L7 20 L17 37" /></svg>
+);
+export const NextChevron = ({ size = 44 }: { size?: number }) => (
+  <svg width={size * 0.6} height={size} viewBox="0 0 24 40" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M7 3 L17 20 L7 37" /></svg>
+);

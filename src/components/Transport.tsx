@@ -51,3 +51,23 @@ export function ExtraButtons() {
     </div>
   );
 }
+
+// One compact line, as in the first Madstr's media panel: play, time, slider, time, speed.
+export function PlayerStrip() {
+  const p = usePlayer();
+  const playing = p.status === 'playing' || p.status === 'loading';
+  const has = p.queue.length > 0;
+  const max = Math.max(1, Math.floor(p.duration));
+  return (
+    <div className="strip" role="group" aria-label="Player strip">
+      <button type="button" className="dock-btn" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
+        {playing ? <PauseIcon size={26} /> : <PlayIcon size={26} />}
+      </button>
+      <span className="dock-time">{formatTime(p.position)}</span>
+      <input type="range" aria-label="Position" min={0} max={max} step={1} value={Math.min(Math.floor(p.position), max)}
+        disabled={!has || p.duration === 0} onChange={e => player.seek(Number(e.target.value))} />
+      <span className="dock-time">{p.duration > 0 ? formatTime(p.duration) : '--:--'}</span>
+      <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
+    </div>
+  );
+}

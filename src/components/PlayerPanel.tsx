@@ -1,21 +1,24 @@
 import { usePlayer } from '../lib/player.ts';
 import { NoteIcon } from './icons.tsx';
-import { ExtraButtons, SeekBar, TransportButtons } from './Transport.tsx';
+import { ExtraButtons, PlayerStrip } from './Transport.tsx';
 
-// The player, on the right: what is playing and its controls.
+// The player, in the right third of the bottom split: what is playing and its controls.
 export function PlayerPanel() {
   const p = usePlayer();
   const item = p.queue[p.index];
   const status = p.error ?? (p.status === 'loading' ? 'Loading…' : item?.subtitle ?? p.label);
   return (
     <aside className="panel player-panel" aria-label="Player">
-      <div className="cover">
-        {item?.image ? <img src={item.image} alt="" referrerPolicy="no-referrer" /> : <NoteIcon size={64} />}
+      <div className="pp-top">
+        <div className="cover">
+          {item?.image ? <img src={item.image} alt="" referrerPolicy="no-referrer" /> : <NoteIcon size={28} />}
+        </div>
+        <div className="pp-text">
+          <h2 className="now-title">{item ? item.title : 'Nothing playing'}</h2>
+          <p className="now-sub" role="status">{item ? status : 'Pick something from the list.'}</p>
+        </div>
       </div>
-      <h2 className="now-title">{item ? item.title : 'Nothing playing'}</h2>
-      <p className="now-sub" role="status">{item ? status : 'Pick something from the list.'}</p>
-      <TransportButtons />
-      <SeekBar />
+      <PlayerStrip />
       <ExtraButtons />
     </aside>
   );

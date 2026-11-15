@@ -30,6 +30,7 @@ export function PickerPanel({ label, emptyText, waiting, extras }: { label: stri
             <li key={row.id}>
               <button type="button" className="row" data-nav aria-current={i === p.index ? 'true' : undefined} ref={i === p.index ? current : undefined} onClick={() => player.jump(i)}>
                 <span className="row-n" aria-hidden="true">{i === p.index && playing ? '▶' : i + 1}</span>
+                {row.image && <img className="row-thumb" src={row.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
                 <span className="row-t">{row.title}{row.subtitle && <span className="row-s"> · {row.subtitle}</span>}</span>
                 {row.duration !== undefined && <span className="row-d">{formatTime(row.duration)}</span>}
               </button>
