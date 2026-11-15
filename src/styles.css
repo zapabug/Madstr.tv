@@ -1579,6 +1579,13 @@ h1 {
 .pc .dock-seek {
   width: 100%;
 }
+/* the author's face beside previous / play / next, so the 72 px face fits the panel (feat-taste-cache §T1) */
+.pc-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
 .author-spot {
   /* 72 px: readable at TV distance (feat-taste-cache §T1) */
   width: 72px;
@@ -1667,6 +1674,31 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+.pc-taste {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.taste-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+}
+.taste-btn.on {
+  /* voted: the play button's yellow, so it stands out on the dark panel */
+  background: var(--butter);
+  outline: 2px solid var(--orange);
+}
+.pc-taste-note {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+.pc .pc-taste-note {
+  color: var(--pinkp);
 }
 .pc-main .dock-btn:not(.dock-play) {
   width: 46px;
@@ -2190,7 +2222,8 @@ a.chip-btn {
     grid-template-columns: 52px 1fr auto;
     grid-template-areas:
       "author seek seek"
-      "main   main extra";
+      "main   main extra"
+      "taste  taste taste";
     align-items: center;
     gap: 8px 12px;
   }
@@ -2199,6 +2232,12 @@ a.chip-btn {
     /* phones: 52 px, so the two compact rows still fit (feat-taste-cache §T1) */
     width: 52px;
     height: 52px;
+  }
+  .pc-taste {
+    grid-area: taste;
+  }
+  .pc-row {
+    display: contents;
   }
   .pc .dock-seek {
     grid-area: seek;

@@ -19,8 +19,9 @@ export const APP_NAME = 'Mad⚡tr.tv';
 // The NIP-46 relays for the signer connection are SIGNER_RELAYS (relays.ts): never relay.nsec.app, which needs
 // NIP-42 auth, so a connect request there silently gets nothing.
 export const NIP46_RELAYS = [...SIGNER_RELAYS];
-// Kinds the app asks a signer for up front, so Amber can remember them: 3 = the contact list (follow).
-export const SIGN_KINDS = [3];
+// Kinds the app asks a signer for up front, so Amber can remember them: 3 = the contact list (follow),
+// 7 = a like (up vote) and 5 = taking a like back (feat-taste-cache §T2).
+export const SIGN_KINDS = [3, 7, 5];
 const PERMISSIONS = [...new Set(['get_public_key', ...NostrConnectSigner.buildSigningPermissions(SIGN_KINDS)])];
 
 // The explicit method bindings are what actually works (setting `NostrConnectSigner.pool` alone does not), and
@@ -127,6 +128,10 @@ async function complete(signer: Signer): Promise<void> {
   set({ status: 'in', pubkey, signer });
 }
 
+export function isLoggedIn(): boolean {
+  return state.status === 'in' && !!state.signer;
+}
+
 function currentSigner(): Signer {
   if (!state.signer) throw new Error('Log in first');
   return state.signer;
@@ -142,6 +147,15 @@ async function publishEvent(relays: readonly string[], event: NostrEvent): Promi
     const result = await pool.relay(url).publish(event);
     return { ok: result.ok, message: result.message };
   });
+}
+
+/** Sign an event with whoever is logged in and publish it to the content relays (one accepting is enough).
+ *  Returns the signed event. Throws when nobody is logged in or no relay accepts it. */
+export async function signAndPublish(template: EventTemplate): Promise<NostrEvent> {
+  const event = await currentSigner().signEvent(template);
+  await publishEvent(RELAYS, event);
+  eventStore.add(event);
+  return event;
 }
 
 export const actions = new ActionRunner(eventStore, signerProxy, async (event, relays) => {

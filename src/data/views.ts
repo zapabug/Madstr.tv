@@ -9,6 +9,7 @@ import { useContacts, useNostrItems } from './nostr.ts';
 import { useFeedPubkey } from './people.ts';
 import { useProbedDurations } from '../lib/durations.ts';
 import { useTagSet } from '../lib/tags.ts';
+import { applyTaste, useTaste } from '../lib/taste.ts';
 
 type ViewerRoute = Extract<Route, { page: 'viewer' }>;
 
@@ -41,6 +42,7 @@ export function useViewItems(route: ViewerRoute): ViewData {
   const playingAtOpen = useMemo(() => player.current?.id, [route.mode, route.filter]);
 
   const musicOften = useMusicMix();
+  const taste = useTaste();
 
   const raw = useMemo((): ViewData => {
     const waiting = contacts === undefined;
@@ -74,7 +76,8 @@ export function useViewItems(route: ViewerRoute): ViewData {
   }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last, musicOften]);
 
   return useMemo((): ViewData => {
-    const { items, allPlayed } = hidePlayed(raw.items, playedAtOpen, [playingAtOpen, last?.item.id]);
+    // Your taste first (hidden songs and artists out, down votes last; spec feat-taste-cache §T2), then played.
+    const { items, allPlayed } = hidePlayed(applyTaste(raw.items, taste), playedAtOpen, [playingAtOpen, last?.item.id]);
     return { ...raw, items, emptyText: allPlayed ? ALL_PLAYED_TEXT : raw.emptyText };
-  }, [raw, playedAtOpen, playingAtOpen, last]);
+  }, [raw, playedAtOpen, playingAtOpen, last, taste]);
 }

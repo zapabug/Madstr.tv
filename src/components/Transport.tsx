@@ -1,9 +1,13 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
+import type { MediaItem } from '../lib/media.ts';
+import { useTaste } from '../lib/taste.ts';
+import { hideArtist, hideSong, toggleDownVote, toggleUpVote } from '../data/votes.ts';
+import { shortName, useProfile } from '../data/people.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
 import { Avatar } from './People.tsx';
-import { FolderArt, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
+import { FolderArt, NextIcon, PauseIcon, PlayIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -69,6 +73,36 @@ function AuthorSpot() {
   );
 }
 
+// Up / down vote and hide, for what is playing (spec feat-taste-cache §T2). An up vote is a public like when
+// logged in; the rest stays on this device.
+function TasteButtons({ item }: { item: MediaItem }) {
+  const taste = useTaste();
+  const profile = useProfile(item.pubkey);
+  const [note, setNote] = useState<{ id: string; text: string } | null>(null);
+  const up = !!taste.up[item.id];
+  const down = !!taste.down[item.id];
+  const artist = item.pubkey ? shortName(item.pubkey, profile?.displayName) : '';
+  const run = (action: Promise<string | null>) => {
+    setNote(null);
+    void action.then(text => { if (text) setNote({ id: item.id, text }); });
+  };
+  return (
+    <div className="pc-taste" role="group" aria-label="Your taste">
+      <button type="button" className={`chip-btn taste-btn${up ? ' on' : ''}`} data-nav aria-pressed={up} aria-label="Up vote" title="Up vote (a public like when logged in)" onClick={() => run(toggleUpVote(item))}>
+        <ThumbUpIcon size={18} />
+      </button>
+      <button type="button" className={`chip-btn taste-btn${down ? ' on' : ''}`} data-nav aria-pressed={down} aria-label="Down vote" title="Down vote (private, moves it to the end)" onClick={() => run(toggleDownVote(item))}>
+        <ThumbDownIcon size={18} />
+      </button>
+      <button type="button" className="chip-btn" data-nav onClick={() => hideSong(item)} title="Hide this from every list on this device">Hide song</button>
+      {item.pubkey && (
+        <button type="button" className="chip-btn" data-nav onClick={() => hideArtist(item, artist)} title={`Hide everything by ${artist} on this device`}>Hide artist</button>
+      )}
+      {note && note.id === item.id && <p className="own-note bad pc-taste-note" role="status">{note.text}</p>}
+    </div>
+  );
+}
+
 export function PanelControls() {
   const p = usePlayer();
   const playing = p.status === 'playing' || p.status === 'loading';
@@ -77,20 +111,23 @@ export function PanelControls() {
   const noun = item?.kind === 'video' ? 'video' : 'song';
   return (
     <div className="pc" role="group" aria-label="Media controls">
-      <AuthorSpot />
       <SeekBar />
-      <div className="pc-main">
-        <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
-        <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-          {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
-        </button>
-        <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
+      <div className="pc-row">
+        <AuthorSpot />
+        <div className="pc-main">
+          <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
+          <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
+            {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
+          </button>
+          <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
+        </div>
       </div>
       <div className="pc-extra">
         <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
         <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
         <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
       </div>
+      {item && <TasteButtons item={item} />}
     </div>
   );
 }
