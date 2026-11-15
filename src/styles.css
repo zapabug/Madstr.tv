@@ -353,10 +353,10 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .topline { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 26px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #0b0716e6; pointer-events: none; }
 .clock { flex: none; font: 700 .95rem/1 var(--mono); letter-spacing: .02em; }
 .brand { flex: none; margin-left: auto; padding-left: 6px; font: 700 1rem/1 var(--display); letter-spacing: -0.03em; }
-.bottomline { position: absolute; left: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 200px); padding: 3px 12px 3px 3px; background: #0b0716e6; pointer-events: none; }
+.bottomline { position: absolute; left: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 200px); padding: 8px; background: #0b0716e6; pointer-events: none; }
 .bottomline:empty { display: none; }
-.bottomline .avatar { width: 28px; height: 28px; flex: none; border: 0; border-radius: 0; object-fit: cover; }
-.track-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 .95rem/1.2 var(--body); animation: slidein 500ms ease-out both; }
+.bottomline .avatar { width: 32px; height: 32px; flex: none; border: 0; border-radius: 0; object-fit: cover; }
+.track-text { min-width: 0; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 .95rem/1.2 var(--body); animation: slidein 500ms ease-out both; }
 .ticker { flex: 1 1 auto; min-width: 0; height: 100%; overflow: hidden; display: flex; align-items: center; }
 .ticker-run { display: inline-block; white-space: nowrap; padding-left: 100%; animation: ticker linear infinite; }
 .ticker-text { display: inline-block; font: 700 .95rem/1 var(--body); letter-spacing: .01em; }
