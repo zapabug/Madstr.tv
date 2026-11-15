@@ -406,3 +406,17 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 /* --- log in with a QR code --------------------------------------------------------------------------------- */
 .qr-login { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .qr-box { background: #fff; padding: 12px; border: 3px solid var(--ink); border-radius: 12px; box-shadow: 4px 4px 0 #000; line-height: 0; }
+
+/* --- how your pictures mix with the slideshow (on the Picture folders card) ------------------------------- */
+.mix { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 2.5px dashed #00000040; }
+.mix-row { display: flex; align-items: center; gap: 10px; }
+.mix-row.off { opacity: .45; }
+.mix-row .seek { flex: 1; min-width: 80px; }
+.mix-end { flex: none; font: 700 .78rem var(--mono); }
+.own .chip-btn[aria-pressed="true"] { background: var(--ink); color: #fff; }
+/* on the yellow card the slider is dark ink instead of the white-on-dark look */
+.own .seek::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--ink) calc(14px + (100% - 28px) * var(--p, 0)), #00000026 0); }
+.own .seek::-webkit-slider-thumb { background: #fff; box-shadow: 0 0 0 3px var(--ink); }
+.own .seek::-moz-range-progress { background: var(--ink); }
+.own .seek::-moz-range-track { background: #00000026; }
+.own .seek::-moz-range-thumb { box-shadow: 0 0 0 3px var(--ink); }

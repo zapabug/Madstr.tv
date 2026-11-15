@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { isPodcast, type MediaItem } from '../lib/media.ts';
 import { useProbedDurations } from '../lib/durations.ts';
+import { usePictureMix } from '../lib/pictureMix.ts';
 import { useTagSet } from '../lib/tags.ts';
 import { loadLastVideo } from '../lib/player.ts';
 import { useOwn } from './ownContext.ts';
@@ -27,6 +28,7 @@ export function usePreviews(): Record<string, PreviewData> {
   const feed = useFeedPubkey();
   const contacts = useContacts(feed);
   const tags = useTagSet();
+  const mix = usePictureMix();
   const audio = useProbedDurations(useNostrItems('audio', contacts, tags.audio));
   const video = useNostrItems('video', contacts, tags.video);
   const images = useNostrItems('image', contacts, tags.image);
@@ -54,8 +56,8 @@ export function usePreviews(): Record<string, PreviewData> {
         : fromVideos(video),
       short: fromVideos(short),
       long: fromVideos(long),
-      pictures: { ...empty, urls: [...own.pictures, ...images].slice(0, 6).map(i => i.url), text: own.pictures.length > 0 ? `${own.pictures.length} of yours` : undefined },
+      pictures: { ...empty, urls: (mix.onlyMine && own.pictures.length > 0 ? own.pictures : [...own.pictures.slice(0, 2), ...images]).slice(0, 6).map(i => i.url), text: own.pictures.length > 0 ? `${own.pictures.length} of yours` : undefined },
       follow: { ...empty, avatars: creators.slice(0, SHOW).map(c => c.pubkey), text: creators.length > 0 ? `${creators.length} to follow` : undefined },
     } satisfies Record<string, PreviewData>;
-  }, [audio, video, images, own.rss, own.local, own.pictures, creators, last]);
+  }, [audio, video, images, own.rss, own.local, own.pictures, mix, creators, last]);
 }

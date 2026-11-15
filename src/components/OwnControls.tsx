@@ -1,5 +1,27 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
+import { setMix, shareOf, usePictureMix } from '../lib/pictureMix.ts';
 import { useOwn } from '../data/ownContext.ts';
+
+// How your pictures and the slideshow's share the screen: only yours, or mixed in, and how often yours come up.
+function PictureMixControls({ count }: { count: number }) {
+  const mix = usePictureMix();
+  const none = count === 0;
+  const inTen = Math.round(shareOf(mix.often) * 10);
+  return (
+    <div className="mix" role="group" aria-label="How your pictures show up">
+      <button type="button" className="chip-btn" data-nav aria-pressed={mix.onlyMine} disabled={none} onClick={() => setMix({ onlyMine: !mix.onlyMine })}>
+        {mix.onlyMine ? '\u2713 ' : ''}Only my pictures
+      </button>
+      <div className={`mix-row${mix.onlyMine || none ? ' off' : ''}`}>
+        <span className="mix-end">seldom</span>
+        <input type="range" className="seek" aria-label="How often my pictures come up" min={0} max={100} step={5} value={Math.round(mix.often * 100)}
+          style={{ '--p': mix.often } as CSSProperties} disabled={mix.onlyMine || none} onChange={e => setMix({ often: Number(e.target.value) / 100 })} />
+        <span className="mix-end">very often</span>
+      </div>
+      <p className="own-note">{none ? 'Add pictures to use these.' : mix.onlyMine ? 'The slideshow shows only your pictures.' : `About ${inTen} in 10 pictures are yours.`}</p>
+    </div>
+  );
+}
 
 // Adding your own sources, right where they show up: RSS feeds under Podcasts,
 // local folders under Local.
@@ -69,6 +91,7 @@ export function OwnControls({ kind }: { kind: 'feeds' | 'folders' | 'pictures' }
           <p className="own-note">This browser cannot remember folders, so picked files last until you reload.</p>
         </>
       )}
+      {kind === 'pictures' && <PictureMixControls count={own.pictures.length} />}
     </section>
   );
 }

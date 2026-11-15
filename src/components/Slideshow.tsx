@@ -1,59 +1,71 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MediaItem } from '../lib/media.ts';
-import { mergeOrder, wrapIndex } from '../lib/shuffle.ts';
+import { ensureAhead, pickNext, step, usePictureMix, type History } from '../lib/pictureMix.ts';
 
-// The picture show behind the music: pictures cross-fade every few seconds, in an order
-// that stays put while more pictures arrive. A picture that will not load is dropped.
 export interface SlideCommand { dir: 1 | -1; n: number }
 
-export function Slideshow({ images, intervalMs = 9000, onCurrent, command }: { images: MediaItem[]; intervalMs?: number; onCurrent?: (_item: MediaItem | null) => void; command?: SlideCommand | null }) {
-  const urls = useMemo(() => [...new Set(images.map(i => i.url))], [images]);
-  const urlKey = urls.join('\n');
-  const [order, setOrder] = useState<string[]>([]);
-  const [index, setIndex] = useState(0);
+// The picture show behind the music. Pictures cross-fade every few seconds. Each next picture is chosen at
+// random: yours or the slideshow's by your "only mine / how often" settings, never one of the last dozen
+// while there is something else. Previous goes back through what was shown. A picture that will not load
+// is dropped.
+export function Slideshow({ mine, others, intervalMs = 9000, onCurrent, command }: {
+  mine: MediaItem[]; others: MediaItem[]; intervalMs?: number; onCurrent?: (_item: MediaItem | null) => void; command?: SlideCommand | null;
+}) {
+  const mix = usePictureMix();
+  const bad = useRef(new Set<string>());
+  const [badVersion, setBadVersion] = useState(0);
+  const [history, setHistory] = useState<History>({ urls: [], cursor: 0 });
   const previous = useRef<string | null>(null);
   const shown = useRef<string | null>(null);
 
-  useEffect(() => {
-    setOrder(prev => mergeOrder(prev, urls));
-    // urls is represented by urlKey
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlKey]);
+  const byUrl = useMemo(() => {
+    const map = new Map<string, MediaItem>();
+    for (const item of [...others, ...mine]) map.set(item.url, item);
+    return map;
+  }, [mine, others]);
 
-  // The previous / next chevrons step the picture by hand; the show then carries on from there.
-  const orderLength = useRef(0);
-  orderLength.current = order.length;
+  const mineUrls = useMemo(() => mine.map(i => i.url).filter(u => !bad.current.has(u)),
+    // badVersion marks a picture dropped for not loading
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mine, badVersion]);
+  const otherUrls = useMemo(() => others.map(i => i.url).filter(u => !bad.current.has(u)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [others, badVersion]);
+
+  // Keep one picture queued after the one on screen, and warm it.
   useEffect(() => {
-    if (command) setIndex(i => wrapIndex(i + command.dir, orderLength.current));
+    if (history.cursor < history.urls.length - 1) return;
+    const next = pickNext(mineUrls, otherUrls, mix, history.urls.slice(-12));
+    if (next) setHistory(h => ensureAhead(h, next));
+  }, [history, mineUrls, otherUrls, mix]);
+
+  const ahead = history.urls[history.cursor + 1];
+  useEffect(() => {
+    if (!ahead) return;
+    const img = new Image();
+    img.referrerPolicy = 'no-referrer';
+    img.src = ahead;
+  }, [ahead]);
+
+  // The previous / next chevrons step by hand; the show carries on from there.
+  useEffect(() => {
+    if (command) setHistory(h => step(h, command.dir));
     // only a new command steps the show
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [command?.n]);
 
+  const playable = mineUrls.length + otherUrls.length >= 2;
   useEffect(() => {
-    if (order.length < 2) return;
-    const timer = window.setInterval(() => setIndex(i => wrapIndex(i + 1, order.length)), intervalMs);
+    if (!playable) return;
+    const timer = window.setInterval(() => setHistory(h => step(h, 1)), intervalMs);
     return () => window.clearInterval(timer);
-  }, [order.length, intervalMs, index]);
+  }, [playable, intervalMs, history.cursor]);
 
-  const current = order.length > 0 ? order[wrapIndex(index, order.length)] : null;
-
-  // Remember what was on screen before, so it can stay underneath while the next fades in.
-  if (current !== shown.current) {
-    previous.current = shown.current;
-    shown.current = current;
-  }
-
-  // Warm the next picture so it is ready when its turn comes.
-  useEffect(() => {
-    if (order.length < 2) return;
-    const img = new Image();
-    img.referrerPolicy = 'no-referrer';
-    img.src = order[wrapIndex(index + 1, order.length)];
-  }, [order, index]);
+  const current = history.urls[history.cursor] ?? null;
+  const currentItem = current ? byUrl.get(current) ?? null : null;
+  const currentId = currentItem?.id;
 
   // Tell the ticker which post the picture on screen came from.
-  const currentItem = current ? images.find(i => i.url === current) ?? null : null;
-  const currentId = currentItem?.id;
   useEffect(() => {
     onCurrent?.(currentItem);
     return () => onCurrent?.(null);
@@ -61,12 +73,22 @@ export function Slideshow({ images, intervalMs = 9000, onCurrent, command }: { i
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId]);
 
+  // Remember what was on screen before, so it can stay underneath while the next fades in.
+  if (current !== shown.current) {
+    previous.current = shown.current;
+    shown.current = current;
+  }
+
   if (!current) return null;
-  const drop = (url: string) => setOrder(o => o.filter(u => u !== url));
+  const drop = (url: string) => {
+    bad.current.add(url);
+    setBadVersion(v => v + 1);
+    setHistory(h => step(h, 1));
+  };
 
   return (
     <div className="slides" aria-hidden="true">
-      {previous.current && previous.current !== current && order.includes(previous.current) && (
+      {previous.current && previous.current !== current && !bad.current.has(previous.current) && (
         <img key={`p:${previous.current}`} className="slide" src={previous.current} alt="" referrerPolicy="no-referrer" />
       )}
       <img key={`c:${current}`} className="slide slide-in" src={current} alt="" referrerPolicy="no-referrer" onError={() => drop(current)} />
