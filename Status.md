@@ -24,7 +24,7 @@ Feat: RSS
 State: Incoming. The feed parser and proxy exist from the earlier own-audio work; tests come with the new RSS work.
 ────────────────────────────────────────
 Feat: Remote pass (final stage before deploy)
-State: Not built. Sliders and text boxes still cannot be reached with arrow keys.
+State: Built and machine-verified: every control on the board, People and the viewer is reachable with arrow keys alone. Needs zapa to try it with a keyboard or remote before deploy.
 ────────────────────────────────────────
 Feat: TV (Android) build
 State: Not built; parked.

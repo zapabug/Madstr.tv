@@ -89,3 +89,4 @@ Numbers:
 - 2026-11-15: bigger halo; coloured source / people cards and sticker chips.
 - 2026-11-15: autohide 25 s; video fills the screen when the panel hides (viewer no longer scrollable).
 - 2026-11-15: design pass (two HIGH, four MEDIUM fixed); "Logged in as" label to check the signer's key.
+- 2026-11-15: R8 remote pass built; arrows stay inside an area (picture, picker, controls) until nothing lies further.

@@ -218,7 +218,7 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       for the session where there is no folder picker).
 - [ ] RSS (incoming): RSS is still being worked on; the parser (`rssFeed.ts`) and the proxy's
       private-address guard (`server/rssProxy.ts`) get their tests with that work.
-- [ ] R8 remote pass, the **final stage before deploy**: every control, inputs and sliders
+- [ ] R8 remote pass (built + machine-verified; awaiting zapa's test), the **final stage before deploy**: every control, inputs and sliders
       included (seek bar, picture mix, feed URL, hashtag, bunker link), is `data-nav`, and arrow
       keys can leave a text input, so the whole app works from a remote. Key rules (2026-11-15): in a
       text box Up / Down move on, and Left / Right move the caret until it is at the start / end, then

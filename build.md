@@ -14,7 +14,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | R6 | Picture wall, live previews, hashtag discovery | built + machine-verified; preview gaps fixed in 9d821b3 |
 | R7 | Local media on the web | built; folder picker untested in a real browser |
 | RSS | RSS work (incoming) | in progress; parser and proxy tests come with it |
-| R8 | Remote pass (final stage before deploy) | planned |
+| R8 | Remote pass (final stage before deploy) | built + machine-verified; awaiting zapa's remote test |
 | later | TV (Android) build | parked |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
@@ -135,8 +135,15 @@ Spec: §Milestones RSS
 - Carried over from `feat/own-audio` (842ef1d): `rssFeed.ts`, `server/rssProxy.ts`, `api/rss.ts`.
 - To do with that work: tests for the parser and the private-address guard.
 
-## R8 — Remote pass [planned, final stage before deploy]
+## R8 — Remote pass [built + machine-verified, final stage before deploy]
+Commit: e6d1054
 Spec: §Milestones R8
 
-- `data-nav` on the seek bar, picture-mix slider, feed URL, hashtag and bunker inputs; arrow keys
-  leave text inputs (`useFocusNav.ts`).
+- `data-nav` on the seek bar, picture-mix slider, feed URL, hashtag and bunker inputs, with an ink
+  focus ring on the pastel cards.
+- Arrow rules for fields: pure `arrowLeavesField` (`focusNav.ts`, 4 tests); `useFocusNav.ts` reads the
+  caret. Areas (`data-nav-group`: picture area, picker, controls) keep arrows inside until nothing lies
+  further that way.
+- Headless with real key events: board stickers and all 7 source controls, People 17/17, viewer 51/51
+  (Long videos); text box Left mid-text stays, Down leaves; seek Right 0 → 1 stays, Up leaves.
+- Not checked: a real TV remote / Android TV (parked).
