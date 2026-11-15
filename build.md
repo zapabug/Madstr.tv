@@ -23,9 +23,9 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | N4 | Music is 2 to 9 minutes | built + machine-verified |
 | T1 | Bigger faces (feat-taste-cache) | built + machine-verified |
 | T2 | Votes and hiding | built + machine-verified (logged-in publish not run: no signing key here) |
-| T3 | Device cache | planned |
-| T4 | Reach back in time | planned |
-| T5 | More relays | planned |
+| T3 | Device cache | built + machine-verified |
+| T4 | Reach back in time | built + machine-verified |
+| T5 | More relays | built + probed |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -309,4 +309,39 @@ Spec: feat-taste-cache §T2
   Hide song / Hide artist moved the player on and dropped the items; the Hidden card listed both and Bring back
   worked; all of it in `madstr:taste` after reload.
 - Not run: a real published like (needs a signer). Undiscussed numbers in planning.md.
+
+## T3 — Device cache [built]
+Commit: 1cb1a8d
+Spec: feat-taste-cache §T3
+
+- `lib/eventCacheRules.ts` (which events, keys, caps, revive), `lib/eventCache.ts` (IndexedDB
+  `MadstrEventCache`: events + kv; restore into the store at start, writes every 3 s, caps applied at start),
+  started from `main.tsx` without waiting. Track lengths kept in the same database (`durations.ts`).
+- Lists now ask the store without the relay limits (`unlimited` in `data/nostr.ts`), so cached and older
+  events show; event to item conversion is remembered per event (WeakMap), so the larger lists stay cheap.
+- Tests: `eventCacheRules.test.ts` (4), `durations.test.ts` (2). Headless, as zapa's account (read-only):
+  online, the first 25 Music tiles took 3.5 s; reloaded with every WebSocket blocked, 60 tiles and 54 faces
+  showed in 0.53 s from the device. Logged out: 2 tiles in 0.29 s offline.
+
+## T4 — Reach back in time [built]
+Commits: 688cb2d, 95313fb
+Spec: feat-taste-cache §T4 (zapa: "refetch for every 30 we drop")
+
+- `lib/walk.ts` (batches wanted, walk state, one walk per follow list), `data/older.ts` (`useOlderMedia`),
+  counted in `data/views.ts`: dropped = hidden + played this session (live) + Music's under-2-minute tracks.
+- Tests: `walk.test.ts` (5). Headless as zapa: hiding 31 songs brought more batches (the walk moved further
+  back, 2 requests reached the start); on the next visit the walk carried on from where it stopped.
+- Fixed while checking (95313fb): the TV's follow list, used until a login lands, overwrote your saved walk;
+  now one walk per follow list. An empty answer no longer ends a walk for good, only for that visit.
+- Found: zapa's follows' dedicated track posts all fit in the first page, and older pages are mostly notes
+  without audio, so Music stayed at 80 cached tracks. More sources (relays, hashtags) are what adds music.
+
+## T5 — More relays [built]
+Commit: 57f665b
+Spec: feat-taste-cache §T5
+
+- relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net added to the content
+  relays; each held music posts in a probe (wavlake 40, theforest 30, bitcoiner 13, nostr.net 10 of 200).
+- `pnpm relays`: all four ok. nos.lol and nostr.mom do not answer from this machine (known before; they work
+  elsewhere), so they stay.
 

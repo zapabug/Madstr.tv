@@ -83,8 +83,8 @@ On the media controls, for what is playing:
 
 ## Milestones
 
-- [ ] T1 bigger faces
-- [ ] T2 votes and hiding
-- [ ] T3 device cache
-- [ ] T4 reach back in time
-- [ ] T5 more relays
+- [ ] T1 bigger faces (built + machine-verified)
+- [ ] T2 votes and hiding (built + machine-verified; a real published like not run here)
+- [ ] T3 device cache (built + machine-verified)
+- [ ] T4 reach back in time (built + machine-verified)
+- [ ] T5 more relays (built; probe passes for the new relays)
