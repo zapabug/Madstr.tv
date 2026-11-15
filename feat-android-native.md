@@ -71,6 +71,16 @@ zapa, 2026-11-15: "also add a slider for mixing local music with others".
 - Exit: with a folder added and the slider at the middle, about 4 in 10 Music tracks are yours, evenly spread;
   at none, Music has none.
 
+## N4: Music is 2 to 9 minutes (web and app)
+
+zapa, 2026-11-15: "some music files are under 30s, let's try min music length 2 mins".
+- Music leaves out tracks shorter than **2 minutes** (`MUSIC_MIN_SECONDS = 120`), next to the existing rule
+  that longer than 9 minutes is a podcast. It applies once a track's length is known (from the post, or
+  measured in the background as before); a track of unknown length stays until it is measured.
+- Short tracks are not moved to Podcasts; they are just not in Music. Your own local tracks mixed in (N3)
+  are not measured, so they all stay.
+- Exit: no Music track with a known length under 2:00.
+
 ## Release
 
 - `versionCode 3`, `versionName "1.2"`, built, signed and published on zapstore like 1.0 and 1.1.
@@ -80,3 +90,4 @@ zapa, 2026-11-15: "also add a slider for mixing local music with others".
 - [ ] N1 native controls (Android) and media controls (web)
 - [ ] N2 remembered folders (Android)
 - [ ] N3 local music mixed into Music
+- [ ] N4 Music is 2 to 9 minutes
