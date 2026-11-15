@@ -16,4 +16,5 @@ tags:
   - podcasts
   - video
 icon: ./public/icons/icon-512.png
-# release_source: the signed APK that `zsp check` verifies, set after `hotbox sign` (spec §P3).
+# The signed APK (scripts/sign-release.sh writes it); `zsp check` verifies it.
+release_source: ./android/app/build/outputs/apk/release/app-release-signed.apk
