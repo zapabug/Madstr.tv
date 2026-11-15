@@ -2,6 +2,12 @@
 // connect, the time to the end-of-stored-events marker, how many notes came back, and whether the relay asked
 // for NIP-42 auth first (such a relay silently ignores requests from an app that does not log in to it).
 // Run:  pnpm relays
+// 2026-11-15: each of these opened in under half a second and answered a request. Things to keep out:
+//  - relay.nsec.app: it needs NIP-42 auth; a request there silently gets nothing. Never for the signer.
+//  - relay.nostr.band: did not connect.
+//  - relay.damus.io: connects but never answered a request, so anything waiting on it waits for ever.
+// Re-run the probe before adding a relay; relays come and go.
+
 import { CONTENT_RELAYS, LOOKUP_RELAYS, SIGNER_RELAYS } from '../src/lib/relays.ts';
 
 const TIMEOUT_MS = 8000;
