@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nextIndex, prevAction, resumeTime, formatTime, nextRate } from './queue.ts';
+import { nextIndex, prevAction, resumeTime, formatTime, nextRate, rateKey, validRate } from './queue.ts';
 
 test('next stops at the end of the queue', () => {
   assert.equal(nextIndex(0, 3), 1);
@@ -35,4 +35,21 @@ test('playback rate cycles and recovers from an unknown value', () => {
   assert.equal(nextRate(1), 1.25);
   assert.equal(nextRate(0.75), 1);
   assert.equal(nextRate(3), 1, 'an unknown rate falls back to normal speed');
+});
+
+test('the saved speed lives under one key per queue label', () => {
+  assert.equal(rateKey('Music'), 'madstr:rate:music');
+  assert.equal(rateKey('Podcasts'), 'madstr:rate:podcasts');
+  assert.equal(rateKey('Short videos'), 'madstr:rate:short-videos');
+  assert.equal(rateKey('Keep watching'), 'madstr:rate:keep-watching');
+  assert.notEqual(rateKey('Music'), rateKey('Podcasts'), 'music and podcasts remember separately');
+});
+
+test('a saved speed must be one of the known rates', () => {
+  assert.equal(validRate(1.5), 1.5);
+  assert.equal(validRate(1), 1);
+  assert.equal(validRate(1.7), null, 'not a rate the button can show');
+  assert.equal(validRate(Number.NaN), null);
+  assert.equal(validRate('1.5'), null, 'localStorage strings come through Number() first');
+  assert.equal(validRate(null), null);
 });

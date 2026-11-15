@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { stripNostrRefs, type MediaItem } from './media.ts';
-import { nextIndex, nextRate, prevAction, resumeTime } from './queue.ts';
+import { nextIndex, nextRate, prevAction, rateKey, resumeTime, validRate } from './queue.ts';
 
 export type Status = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -132,7 +132,9 @@ export class PlayerStore {
     }
     const index = Math.min(Math.max(startIndex, 0), items.length - 1);
     this.failures = 0;
-    this.set({ queue: items, index, label, position: 0, duration: 0, error: null });
+    // Each queue label has its own saved speed (podcasts fast, music at 1×): switching modes restores it.
+    const rate = validRate(Number(read(rateKey(label)))) ?? 1;
+    this.set({ queue: items, index, label, rate, position: 0, duration: 0, error: null });
     this.loadCurrent(autoplay);
   }
 
@@ -263,6 +265,9 @@ export class PlayerStore {
     if (this.audioEl) this.audioEl.playbackRate = rate;
     if (this.videoEl) this.videoEl.playbackRate = rate;
     this.set({ rate });
+    // The speed belongs to the kind of queue that is playing (Music, Podcasts, …), so the next
+    // queue of the same kind starts at this speed again.
+    if (this.state.label) write(rateKey(this.state.label), String(rate));
   };
 
   // --- persistence ------------------------------------------------------------------------

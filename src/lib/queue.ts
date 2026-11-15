@@ -32,3 +32,13 @@ export function nextRate(rate: number): number {
   const i = RATES.findIndex(r => r === rate);
   return RATES[(i + 1) % RATES.length];
 }
+
+// Playback speed is remembered per queue label (Music, Podcasts, Short videos, …): people listen to
+// podcasts fast and music at 1×, and asking them to re-set it every time the mode changes is rude.
+export function rateKey(label: string): string {
+  return `madstr:rate:${label.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+}
+
+export function validRate(value: unknown): number | null {
+  return typeof value === 'number' && (RATES as readonly number[]).includes(value) ? value : null;
+}

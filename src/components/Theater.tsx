@@ -24,10 +24,12 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
   const p = usePlayer();
   const item = p.queue[p.index];
   const showingVideo = hasVideo && item?.kind === 'video';
-  const hidden = useAutoHide(p.queue.length > 0);
   const none = p.queue.length === 0;
   const mix = usePictureMix();
   const pictureCount = availableCount(pictures.mine.length, pictures.others.length, mix);
+  // Autohide when there is anything on screen: a queue (music, podcasts, videos) or pictures
+  // (the slideshow is not a queue, so queue.length alone never armed it in picture mode).
+  const hidden = useAutoHide(p.queue.length > 0 || pictureCount > 0);
   const [slide, setSlide] = useState<MediaItem | null>(null);
   const [command, setCommand] = useState<SlideCommand | null>(null);
   const stepPicture = (dir: 1 | -1) => setCommand(c => ({ dir, n: (c?.n ?? 0) + 1 }));
