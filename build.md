@@ -173,7 +173,7 @@ Spec: §Milestones R8
 | --- | --- | --- |
 | P1 | Service worker + manifest | built + machine-verified |
 | P2 | Capacitor Android app (phone + TV) | built + machine-verified; not run on a device yet |
-| P3 | Signed release + zapstore | NEXT: waiting on zapa's keystore / hotbox / first `zsp` run |
+| P3 | Signed release + zapstore | published 2026-11-15 (release 03d84ecc…); awaiting zapa's install test |
 
 ## P1 — Service worker and manifest [built + machine-verified]
 Commit: 094352a
@@ -192,11 +192,23 @@ Commit: a636e65
 - `assembleDebug` builds (4.6 MB); aapt2: package, label, banner, launchable + leanback-launchable.
 - Not run on a device or emulator (none here). Known limit: audio stops when the app leaves the foreground.
 
-## P3 — Signed release and zapstore [in progress]
+## P3 — Signed release and zapstore [published]
 Commit: d3ce3cd
 - Go 1.27.4 installed with mise; zsp v2.0.1 built with `go install` (in mise's Go bin, on PATH with mise).
 - `zapstore.yaml` written; unsigned release APK builds (3.5 MB).
 - Default signer on this machine: `zapstore` wrapper (`~/.local/bin/zapstore`) loads zapa's bunker from
   `~/.config/zsp/signer.env` (600). Bunker signer key `de26d9ce…`.
-- Waiting on zapa, by hand (zsp's rule): keystore + hotbox, `SIGN_WITH` in his shell, first `zsp` run (C1
-  proof). Then: `hotbox sign`, `release_source` in zapstore.yaml, `zsp publish -q`, approved in Amber.
+- zapa was remote, so at his request the agent did the by-hand part: release keystore (PKCS12, RSA 4096,
+  cert SHA-256 92aca110…d8c7) in `~/.android-keys/` (600) — **zapa to back it up**; APK signed with
+  `scripts/sign-release.sh` (apksigner, schemes v2 + v3).
+- Bunker timeout: zsp waits for EOSE from every bunker relay before sending `connect`; nos.lol and nostr.mom
+  are unreachable from this machine, so they were dropped from the local signer file (snippet
+  `zsp-bunker-timeout-one-unreachable-relay.md`).
+- C1 proof: zsp v2 makes it only in the wizard (TTY) or via hotbox (which needs the nsec). A local copy of
+  zsp v2.0.1 with one 19-line change (publish falls back to the wizard's own `keystoreProofSigner`) published
+  the proof with the first release. Signer confirmed as zapa (npub18weq…).
+- Published 2026-11-15: release `03d84ecc…`, status pending at first (zapstore holds a release until it has
+  read the APK); minutes later the relay served kind 32267 (app), 30063 (release 1.0), 3063 (asset) and
+  30509 (proof for cert 92aca110…), all by zapa.
+- Next releases: the proof is valid 2 years, so stock `zapstore publish -q` (after `assembleRelease` and
+  `scripts/sign-release.sh`, with a higher versionCode) is enough.

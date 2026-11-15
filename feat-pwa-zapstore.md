@@ -68,12 +68,11 @@ Tool: **zsp** (zapstore's publisher, `github.com/zapstore/zsp`). Its own rules d
 - **The agent:** installs zsp, writes `zapstore.yaml`, builds the unsigned release APK
   (`./gradlew assembleRelease`), and once zapa's setup is done runs the sign + publish steps
   (`hotbox sign <apk>`, `zsp publish -q`); every Nostr signature is approved on zapa's phone.
-- Open: which identity publishes (zapa `npub18weq…` as on pleb.world, or `d83b5ef1…` TugaJoe); a bunker
-  connection made for zapstore (not reusing another app's session).
+- Decided 2026-11-15: zapa (`npub18weq…`) publishes; zapa's bunker is this machine's default signer.
 - Exit: a signed release APK; the zapstore release published and the app visible on zapstore.
 
 ## Milestones
 
-- [ ] P1 service worker + manifest
-- [ ] P2 Capacitor Android app (phone + TV launcher)
-- [ ] P3 signed release + zapstore publish (needs zapa's bunker approval)
+- [x] P1 service worker + manifest (machine-verified; final tick after zapa's check)
+- [x] P2 Capacitor Android app (phone + TV launcher) (builds; not yet run on a device)
+- [x] P3 signed release + zapstore publish (published 2026-11-15, release 03d84ecc…)

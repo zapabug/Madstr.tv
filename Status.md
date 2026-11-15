@@ -12,7 +12,7 @@ last-worked: 2026-11-15
 
 ## Report
 Feat: Installable web app and Android app on zapstore
-State: Built on a feat branch: the web app installs and opens offline, and the Android app (phones and TV) builds. Not tried on a device yet. The zapstore release waits for zapa to create the signing key with hotbox and run zsp once by hand; then it is published and approved in Amber.
+State: Live. The web app installs and opens offline, and Mad⚡tr.tv 1.0 for Android phones and TV is published on zapstore under zapa. Needs zapa to install it from zapstore on a phone or TV and say it works, and to back up the release signing key.
 ────────────────────────────────────────
 Feat: Deploy
 State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker. The Android app and a zapstore release are not built; they need a spec first.
