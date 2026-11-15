@@ -320,6 +320,17 @@ Spec: feat-taste-cache §T2
 - c796a79, zapa after trying it on the dev server: thumbs further apart (44 px out from the face, 40 on phones);
   the speed post-it reads "SPEED ×1.5", tilts 7° and sits tucked under the right end of the seek bar, which is
   drawn over it. Tests, lint and build pass; no screenshots this time (zapa).
+- 15ac919, zapa: "use this card for current playing instead of the currently playing artist; animate this card as
+  replacing the previous music disc; it removes the card from the playlist into now playing". The now-playing
+  card (`NowCard` in Transport.tsx) is the playing tile, bigger: butter sticker, round disc (face, cover or
+  folder), title, ▶. On a track change the old card drops away and the new one slides in from the playlist's
+  side (above on phones) with the disc spinning in; nothing moves with reduced motion. The playlist leaves out
+  the playing song and what has played this session, and says so when nothing else is left.
+- Checked headless, DOM only: the panel does not scroll at 1920×1080, 1280×720, 960×540, 747×727, 400×860
+  (the compact size, disc 60 px and one title line, fixed a 5 px overflow under 1000 px tall); the playing song
+  is not among the tiles; right after Next the old card is there, 900 ms later it is gone.
+- Changed behaviour: played songs used to stay in the list until the view reopened (applesauce spec,
+  "inside one visit nothing disappears"); in the playlist tiles they now go at once, per zapa.
 
 ## T3 — Device cache [built]
 Commit: 1cb1a8d
