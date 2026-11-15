@@ -21,6 +21,11 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | N2 | Remembered folders in the app | built; not run on a device |
 | N3 | Local music mixed into Music (slider) | built + machine-verified |
 | N4 | Music is 2 to 9 minutes | built + machine-verified |
+| T1 | Bigger faces (feat-taste-cache) | built + machine-verified |
+| T2 | Votes and hiding | built + machine-verified (logged-in publish not run: no signing key here) |
+| T3 | Device cache | planned |
+| T4 | Reach back in time | planned |
+| T5 | More relays | planned |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -281,4 +286,27 @@ Commit: 1bf7fc0 · Spec: §N4
 
 ## Release 1.2
 - versionCode 3, signed with the same certificate (92aca110…). Published 2026-11-15 on zapstore: release `33ada0b0…`.
+
+## T1 — Bigger faces [built]
+Commit: 5292bfa, layout fix in 0a9b4a9
+Spec: feat-taste-cache §T1
+
+- Face of the picture's poster 56 px (was 32); face in the media controls 72 px (was 40), 52 px on phones.
+- The 72 px face overflowed the 263 px panel at 1280×900, so it now sits beside previous / play / next
+  (`.pc-row`; on phones the row dissolves into the existing grid).
+- Checked in headless Chromium at 1280×900, 1920×1080 and 400×860: the panel does not scroll, nothing is cut.
+
+## T2 — Votes and hiding [built]
+Commit: 0a9b4a9
+Spec: feat-taste-cache §T2
+
+- `lib/taste.ts` (device store `madstr:taste`, pure changes, `applyTaste`), `lib/reaction.ts` (kind 7 like,
+  kind 5 unlike templates), `data/votes.ts` (toggle up / down, hide song / artist, moving the player on),
+  `signAndPublish` in `accounts.ts`; signer asked for kinds 3, 7, 5. Buttons under the media controls;
+  Hidden card under Your sources with Bring back. Lists and board previews apply taste before played-hiding.
+- Tests: `taste.test.ts` (8). Headless as a logged-in account that cannot sign: down vote moved the playing
+  track to the end without stopping it; up vote cleared the down vote and showed "Liked on this device only";
+  Hide song / Hide artist moved the player on and dropped the items; the Hidden card listed both and Bring back
+  worked; all of it in `madstr:taste` after reload.
+- Not run: a real published like (needs a signer). Undiscussed numbers in planning.md.
 

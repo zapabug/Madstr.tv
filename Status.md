@@ -11,6 +11,9 @@ last-worked: 2026-11-15
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Bigger faces, up and down votes, hiding songs and artists, music and videos kept on the device
+State: In progress. Bigger faces and the vote and hide buttons are built and checked in a browser; an up vote publishes a like only when logged in, everything else stays on the device. Keeping music, videos and faces on the device, reaching back for older posts and four more relays are next. Needs zapa to try a like while logged in.
+────────────────────────────────────────
 Feat: Android app 1.2: lock-screen and notification controls, remembered folders, local music in Music, music 2 to 9 minutes
 State: Published on zapstore as 1.2, not yet run on a phone or TV. The web app gets the browser's media controls, the music mix slider and the 2-minute rule too. Needs zapa to install 1.2 and try the controls (lock screen, headphones, TV remote) and adding a folder, then closing and reopening the app.
 ────────────────────────────────────────
