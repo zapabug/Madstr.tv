@@ -28,6 +28,9 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | T5 | More relays | built + probed |
 | T6 | Double tap to seek; -10s / +30s buttons gone | built + machine-verified |
 | T7 | Phone turned sideways (Android app only) | built + machine-verified (emulated) |
+| D1-D3 | Web app at pleb.world/madstr, RSS proxy there | live 2026-11-15 |
+| D4 | Vercel project madstr-tv removed | waiting on zapa (dashboard) |
+| D5 | Android 1.3 on zapstore | published 2026-11-15 |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -396,3 +399,19 @@ Spec: feat-taste-cache §T7
   `data-native` (main.tsx); the CSS block and the auto-hide both need it. Checked headless at 860×400 touch:
   in a browser the normal layout stays; with the app's bridge present the full picture and transport only.
 
+
+## D1-D5 — Web app on pleb.world, Android 1.3 [live]
+Commits: f04e298, b681753; pleb.world 3648231
+Spec: feat-plebworld-deploy.md
+
+- feat-taste-cache merged into main (b39083b) first.
+- D1: `pnpm build:pleb` builds with base `/madstr/` into `dist-pleb/`; the service worker plugin, `swSource` and
+  `registerSw` follow the base; the manifest uses relative paths. `pnpm build` (the app) is unchanged.
+- D2: `scripts/build-pleb-api.mjs` turns `server/rssProxy.ts` into plain JS for pleb.world (`api/rss.js`,
+  `api/_lib/rssProxy.js`). Run in Node: a real feed 200, 127.0.0.1 refused 403.
+- D3: `scripts/deploy-pleb.sh` copies both into the pleb.world repo; the sticker links to `/madstr/`. Pushed,
+  Vercel deployed it. Live checks: `/madstr/` 200, `/madstr/sw.js` 200, `/api/rss` returns a feed; headless on
+  the live site the board shows, the service worker registers with scope `/madstr/`, fonts and icons load.
+- D4: `api/rss.ts` removed here. The Vercel project madstr-tv is still up until zapa removes it in the dashboard.
+- D5: versionCode 4, versionName 1.3, signed with the release key (cert 92aca110…), `zapstore publish`: event
+  `4ceb8db1…`, status pending at the time. zapstore.yaml website now pleb.world/madstr.
