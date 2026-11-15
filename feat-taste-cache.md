@@ -1,0 +1,84 @@
+# feat-taste-cache: bigger faces, votes and hiding, and a cache that fills the lists
+
+Branch: `feat/taste-cache`, off `main`.
+Status: spec from zapa's words on 2026-11-15, with a screenshot of the Music view: "the profile cards / the id
+from the image posted and the now playing id on the media controls are too small; also the ability to up/down
+vote music, and hide songs/artists; I'm also finding the lack of a refresh or restart data stream from nostr;
+how to get more media and use the cache better; also looking for performance improvements".
+Asked and answered the same day:
+- votes: **up votes public, down votes private**;
+- hiding songs and artists: **on this device**;
+- more media: **keep music and videos on the device**, **reach back in time**, **more relays** (a refresh
+  button was offered and not picked);
+- performance: "will be fixed by cache".
+Scope: web app and Android app (same code).
+
+## Rules
+
+- **No new dependency.** The device cache uses `idb`, already a dependency (own audio).
+- Cached events are read back as untrusted, exactly like relay events: same converters, same checks.
+- An up vote is published only when someone is logged in, and only on a press. Nothing else is published.
+- Nothing waits on the cache: the app renders at once, and the cache fills in as it loads.
+
+## T1: Bigger faces
+
+- The face of whoever posted the picture on screen (bottom left of the picture): **56 px** (was 32).
+- The face of whoever made what is playing (top of the media controls): **72 px** (was 40).
+- Exit: both read clearly at TV distance, and the media controls still fit their panel at a phone's width.
+
+## T2: Votes and hiding
+
+On the media controls, for what is playing:
+- **Up vote** (thumb up). Logged in, and the item is from Nostr: publishes a public like (NIP-25 reaction,
+  kind 7, content `+`, tags `e` (+ `a` for an addressable track), `p`, `k`) to the content relays. Logged
+  out, or not from Nostr: kept on this device only. The button stays lit while voted; pressing it again takes
+  the vote back (a published like is withdrawn with a NIP-09 deletion, kind 5).
+- **Down vote** (thumb down). Never published. Kept on this device. A down-voted item moves to the end of
+  every list it is in. Up and down exclude each other: one replaces the other.
+- **Hide song**: the item leaves every list on this device, and the player moves to the next item.
+- **Hide artist** (Nostr items only): everything that account posted leaves every list (Music, Podcasts,
+  videos) on this device, and the player moves on.
+- Hidden songs and artists are listed under **Your sources → Hidden**, each with **Bring back**.
+- Stored in `localStorage` (`madstr:taste`): at most 2000 votes and 2000 hidden songs, the oldest dropped
+  first; hidden artists are not capped.
+- The signer is asked for kinds 7 and 5 up front alongside 3, so Amber can remember them.
+- Exit: an up vote logged in shows as a kind 7 event on a relay; down vote, hide song and hide artist change
+  the lists and come back with Bring back; all of it survives a reload.
+
+## T3: Keep music, videos, profiles and follow lists on the device
+
+- Nostr events the app uses are kept on the device (IndexedDB, `MadstrEventCache`), and put back into the
+  app's event store at start, so lists, faces and names show straight away and the relays only add to them:
+  - music and podcast posts (what the audio converter accepts): newest **3000**;
+  - video posts (what the video converter accepts): newest **1500**;
+  - profiles (kind 0, newest per person): **3000** people;
+  - follow lists (kind 3) of the account whose follows feed the board (the TV's, or yours).
+  Pictures keep their own cache (2000, unchanged).
+- Lengths read from audio files (the music / podcast split) are kept too, newest **5000**.
+- A list shows everything in the store that matches it, not only the newest page the relays sent.
+- New events are written in batches every 3 s; the caps are applied when the app starts.
+- Exit: a reload with the network cut still shows Music, videos and faces from the last visit; the board
+  shows lists before the relays answer.
+
+## T4: Reach back in time for music and videos
+
+- Like pictures already do: in the background, one older batch every **20 s** each for music and for videos,
+  until the cached count reaches its cap (T3) or the relays have nothing older. Runs while the app is open.
+- Where each walk got to is remembered on the device, so the next visit carries on instead of starting again;
+  a change in who the board follows starts it over.
+- Exit: Music and videos grow past the newest page while the app is left open, and keep growing on the next
+  visit.
+
+## T5: More relays
+
+- Content relays added after a probe on 2026-11-15 (each answered, and each held music posts):
+  `relay.wavlake.com`, `theforest.nostr1.com`, `nostr.bitcoiner.social`, `relay.nostr.net`.
+- Exit: `pnpm relays` passes with the new relays.
+
+## Milestones
+
+- [ ] T1 bigger faces
+- [ ] T2 votes and hiding
+- [ ] T3 device cache
+- [ ] T4 reach back in time
+- [ ] T5 more relays

@@ -83,6 +83,15 @@ Android native (feat-android-native, 2026-11-15), numbers the agent wrote into t
 - Music mix: default none, at most 8 in 10 tracks, evenly spread, fixed order; when one side runs out the
   rest is the other. Music floor: a track of unknown length stays until measured.
 
+Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the spec:
+- Faces: picture poster 56 px, now-playing author 72 px.
+- Up vote takes a second press to withdraw (a kind 5 deletion of the like); logged out it stays on the device.
+  A down-voted item moves to the end of its list (it is not removed). Hide artist covers Music, Podcasts and
+  videos, not the picture show. Caps: 2000 votes, 2000 hidden songs, hidden artists uncapped.
+- Device cache: music 3000, videos 1500, profiles 3000, lengths 5000; written every 3 s, capped at start.
+- Walk back in time: music and videos every 20 s each while the app is open; the walk's place is remembered.
+- Relays added: relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net.
+
 ## Open questions
 
 - **Legacy files still tracked:** `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
@@ -108,3 +117,4 @@ Android native (feat-android-native, 2026-11-15), numbers the agent wrote into t
 - 2026-11-15: played items hide per session; slideshow avoids repeats per session; picture cache walks back in time.
 - 2026-11-15: feat-android-play: the app picks files instead of a folder; background play service (1.1).
 - 2026-11-15: feat-android-native: native media controls, remembered folders in the app, music mix slider, music 2-9 min (1.2).
+- 2026-11-15: feat-taste-cache spec: bigger faces, votes and hiding, device cache, walk back in time, more relays.
