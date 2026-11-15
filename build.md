@@ -27,7 +27,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | T4 | Reach back in time | built + machine-verified |
 | T5 | More relays | built + probed |
 | T6 | Double tap to seek; -10s / +30s buttons gone | built + machine-verified |
-| T7 | Phone turned sideways | built + machine-verified (emulated touch phone) |
+| T7 | Phone turned sideways (Android app only) | built + machine-verified (emulated) |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -366,7 +366,7 @@ Spec: feat-taste-cache §T6
 - Fixed while checking: a pending single tap was swallowed when a second, far-away tap arrived; it now runs.
 
 ## T7 — Phone turned sideways [built]
-Commits: 8d0cfef, 06277f8
+Commits: 8d0cfef, 06277f8, 87736c2
 Spec: feat-taste-cache §T7
 
 - One media query, `(orientation: landscape) and (max-height: 500px) and (pointer: coarse)`, in
@@ -377,6 +377,8 @@ Spec: feat-taste-cache §T7
   alone; it now needs a touch screen too, so desktops and TVs keep the full controls. (What zapa saw that
   time was also the folder left on main by an interrupted speed comparison; restored.)
 - Checked headless: a touch phone at 860×400 gets the full picture and the transport only; a desktop window
-  at 1280×450 keeps everything. Not run on a real phone. Applies to the web app on a phone as well as the
-  Android app; zapa asked whether it should be the app only (open).
+  at 1280×450 keeps everything. Not run on a real phone.
+- 87736c2: zapa: "keep that android only, and iOS when and if people ask". The app marks the page with
+  `data-native` (main.tsx); the CSS block and the auto-hide both need it. Checked headless at 860×400 touch:
+  in a browser the normal layout stays; with the app's bridge present the full picture and transport only.
 
