@@ -291,6 +291,9 @@ proposed, waiting for zapa's OK), and a profile picture is only shown when it is
     browser's broken-image mark.
   - Hovering the header's **Log out** shows who is logged in ("Logged in as <name or …npub>"), so a
     signer that answers with a different key than expected is visible at a glance.
+  - **Phones stack the bottom panel** (zapa, 2026-11-15; replaces "70/30 at any width" below 640 px):
+    the picker on top, the controls under it in two compact rows (author + seek bar; previous / play /
+    next with -10s / +30s / speed), and the bottom panel takes more of the screen height.
   - On narrow screens (under 640 px) the source and People cards do not tilt, so they keep their side
     margin. Disabled chips are flat (dashed outline, no shadow) instead of a muddy faded colour; chip
     links are not underlined.

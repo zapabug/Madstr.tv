@@ -1290,8 +1290,8 @@ h1 {
   object-fit: cover;
   background: #0006;
 }
-/* The bottom panel is always split left (picker) / right (controls), however small the window
-   or however far the browser is zoomed. */
+/* The bottom panel is split left (picker) / right (controls) at any desktop size or zoom; on a phone
+   (under 640 px) it stacks: see the phone block at the end of this file. */
 .player-panel {
   container-type: inline-size;
 }
@@ -2160,4 +2160,58 @@ a.chip-btn {
 /* sliders on the pastel cards: an ink ring (white would vanish on the pastel) */
 .own .seek:focus-visible {
   outline-color: var(--ink);
+}
+
+/* --- phones: the bottom panel stacks (zapa, 2026-11-15) ---------------------------------------------------
+   Picker on top, the controls under it in two compact rows: author + seek bar, then previous / play /
+   next with -10s / +30s / speed. The panel takes more of the height so the playlist still has room. */
+@media (max-width: 640px) {
+  :root {
+    --split-h: max(58vh, 380px);
+  }
+  .split {
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px 8px 8px;
+  }
+  .picker {
+    flex: 1 1 0;
+  }
+  .player-panel {
+    flex: none;
+    overflow: visible;
+    padding: 8px 10px;
+  }
+  .pc {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    grid-template-areas:
+      "author seek seek"
+      "main   main extra";
+    align-items: center;
+    gap: 8px 12px;
+  }
+  .pc .author-spot {
+    grid-area: author;
+    width: 36px;
+    height: 36px;
+  }
+  .pc .dock-seek {
+    grid-area: seek;
+    min-width: 0;
+  }
+  .pc-main {
+    grid-area: main;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .pc-extra .chip-btn {
+    padding-inline: 10px;
+  }
+  .pc-extra {
+    grid-area: extra;
+    justify-self: end;
+    flex-wrap: nowrap;
+  }
 }
