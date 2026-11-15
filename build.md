@@ -172,8 +172,8 @@ Spec: §Milestones R8
 | Milestone | Title | Status |
 | --- | --- | --- |
 | P1 | Service worker + manifest | built + machine-verified |
-| P2 | Capacitor Android app (phone + TV) | NEXT |
-| P3 | Signed release + zapstore | planned (needs zapa's bunker approval) |
+| P2 | Capacitor Android app (phone + TV) | built + machine-verified; not run on a device yet |
+| P3 | Signed release + zapstore | NEXT: waiting on zapa's keystore / hotbox / first `zsp` run |
 
 ## P1 — Service worker and manifest [built + machine-verified]
 Commit: 094352a
@@ -183,3 +183,18 @@ Commit: 094352a
 - `public/manifest.webmanifest`, icons 192 / 512 / maskable 512 / apple-touch from `favicon.svg`.
 - Headless on the production build: worker active, 17 files kept; offline reload opens the full board;
   `/api/rss` fails offline (never cached); `Page.getInstallabilityErrors` empty.
+
+## P2 — Capacitor Android app [built + machine-verified]
+Commit: a636e65
+- Capacitor 8.6.0 (pinned; 8.6.1/8.6.2 were 3 days old), app id `com.madstr.tvapp`, CapacitorHttp on (RSS
+  loads natively). TV: Leanback launcher entry + 320x180 banner; touchscreen / leanback not required.
+  Icons, round icons, adaptive background and splash screens from `favicon.svg`.
+- `assembleDebug` builds (4.6 MB); aapt2: package, label, banner, launchable + leanback-launchable.
+- Not run on a device or emulator (none here). Known limit: audio stops when the app leaves the foreground.
+
+## P3 — Signed release and zapstore [in progress]
+Commit: d3ce3cd
+- Go 1.27.4 installed with mise; zsp v2.0.1 built with `go install` (in mise's Go bin, on PATH with mise).
+- `zapstore.yaml` written; unsigned release APK builds (3.5 MB).
+- Waiting on zapa, by hand (zsp's rule): keystore + hotbox, `SIGN_WITH` in his shell, first `zsp` run (C1
+  proof). Then: `hotbox sign`, `release_source` in zapstore.yaml, `zsp publish -q`, approved in Amber.
