@@ -87,3 +87,38 @@ export function logout(): void {
   const active = accounts.active;
   if (active) accounts.removeAccount(active);
 }
+
+// Log in by scanning: the app shows a nostrconnect:// QR code, the signer app (Amber and others)
+// scans it and answers over the relays. `uri` is what goes in the QR (and in a tap-to-open link);
+// `connected` resolves once the signer has answered and the account is active; `cancel` stops waiting.
+const QR_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
+const QR_TIMEOUT_MS = 120_000;
+
+export interface QrLogin {
+  uri: string;
+  connected: Promise<void>;
+  cancel: () => void;
+}
+
+export function startQrLogin(): QrLogin {
+  const signer = new NostrConnectSigner({ relays: QR_RELAYS });
+  const uri = signer.getNostrConnectURI({ name: 'Mad\u26a1tr.tv', permissions: NostrConnectSigner.buildSigningPermissions([3]) });
+  const controller = new AbortController();
+  let cancelled = false;
+  const timer = window.setTimeout(() => controller.abort(), QR_TIMEOUT_MS);
+  const connected = (async () => {
+    try {
+      await signer.waitForSigner(controller.signal);
+      const account = new NostrConnectAccount(await signer.getPublicKey(), signer);
+      accounts.addAccount(account);
+      accounts.setActive(account);
+    } catch (error) {
+      void signer.close();
+      if (cancelled) return; // you pressed Cancel: not an error
+      throw controller.signal.aborted ? new Error('The signer did not answer in time') : error;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  })();
+  return { uri, connected, cancel: () => { cancelled = true; controller.abort(); } };
+}

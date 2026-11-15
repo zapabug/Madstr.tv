@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { hasExtension, loginWithBunker, loginWithExtension, logout } from '../lib/accounts.ts';
+import QRCode from 'react-qr-code';
+import { hasExtension, loginWithBunker, loginWithExtension, logout, startQrLogin, type QrLogin } from '../lib/accounts.ts';
 import { toggleLike, useLiked } from '../lib/liked.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
 import { HeartIcon } from './icons.tsx';
@@ -34,6 +35,15 @@ export function LoginPanel() {
   const [uri, setUri] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qr, setQr] = useState<QrLogin | null>(null);
+
+  const showQr = () => {
+    setError(null);
+    const login = startQrLogin();
+    setQr(login);
+    login.connected.then(() => setQr(null)).catch(e => { setQr(null); setError(e instanceof Error ? e.message : 'Could not log in'); });
+  };
+  const stopQr = () => { qr?.cancel(); setQr(null); };
 
   const attempt = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -71,6 +81,21 @@ export function LoginPanel() {
           {hasExtension() ? 'Use browser extension' : 'No browser extension found'}
         </button>
       </div>
+      {qr ? (
+        <div className="qr-login">
+          <div className="qr-box"><QRCode value={qr.uri} size={208} level="M" /></div>
+          <p className="own-note">Scan this with your signer app (Amber or another NIP-46 signer). Waiting for it to answer…</p>
+          <div className="own-add">
+            <a className="chip-btn solid" data-nav href={qr.uri}>Open in a signer on this device</a>
+            <button type="button" className="chip-btn" data-nav onClick={() => { void navigator.clipboard?.writeText(qr.uri); }}>Copy link</button>
+            <button type="button" className="chip-btn" data-nav onClick={stopQr}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="own-add">
+          <button type="button" className="chip-btn solid" data-nav disabled={busy} onClick={showQr}>Log in with a QR code</button>
+        </div>
+      )}
       <form className="own-add" onSubmit={e => { e.preventDefault(); void attempt(() => loginWithBunker(uri)); }}>
         <input type="text" value={uri} onChange={e => setUri(e.target.value)} placeholder="bunker://… (from Amber or another signer)" aria-label="Bunker link" autoComplete="off" spellCheck={false} />
         <button type="submit" className="chip-btn solid" data-nav disabled={busy || !uri.trim()}>{busy ? 'Connecting…' : 'Connect'}</button>

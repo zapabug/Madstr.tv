@@ -66,3 +66,20 @@ function Chevron({ d, size, stretch }: { d: string; size: number; stretch: boole
 }
 export const PrevChevron = ({ size = 24, stretch = false }: { size?: number; stretch?: boolean }) => <Chevron d="M15 5 L 13 12 L 15 19" size={size} stretch={stretch} />;
 export const NextChevron = ({ size = 24, stretch = false }: { size?: number; stretch?: boolean }) => <Chevron d="M9 5 L 11 12 L 9 19" size={size} stretch={stretch} />;
+
+// The placeholder for a local file's "author": a chunky sticker-style folder with a music note and
+// a couple of sparkles. It has its own colours and a hard shadow; it leans, bobs and twinkles slowly.
+export const FolderArt = () => (
+  <svg className="folder-art" viewBox="0 0 64 58" width="100%" height="100%" aria-hidden="true" focusable="false" strokeLinejoin="round" strokeLinecap="round">
+    <path d="M4 14 Q4 8 10 8 H24 L30 15 H54 Q60 15 60 21 V48 Q60 54 54 54 H10 Q4 54 4 48 Z" style={{ fill: 'var(--peach)', stroke: 'var(--ink)', strokeWidth: 3 }} />
+    <path d="M4 25 Q4 21 9 21 H55 Q60 21 60 25 V48 Q60 54 54 54 H10 Q4 54 4 48 Z" style={{ fill: 'var(--butter)', stroke: 'var(--ink)', strokeWidth: 3 }} />
+    <g style={{ stroke: 'var(--ink)', strokeWidth: 3, fill: 'none' }}>
+      <path d="M26 43 V31 L40 28.5 V40" />
+      <path d="M26 35 L40 32.5" />
+    </g>
+    <circle cx="23.5" cy="43.5" r="3.6" style={{ fill: 'var(--ink)' }} />
+    <circle cx="37.5" cy="41" r="3.6" style={{ fill: 'var(--ink)' }} />
+    <path className="folder-spark" d="M54 2 L55.8 7 L61 8.8 L55.8 10.6 L54 15.6 L52.2 10.6 L47 8.8 L52.2 7 Z" style={{ fill: 'var(--pink)', stroke: 'var(--ink)', strokeWidth: 1.6 }} />
+    <path className="folder-spark folder-spark-2" d="M9 1 L10.2 4.4 L13.6 5.6 L10.2 6.8 L9 10.2 L7.8 6.8 L4.4 5.6 L7.8 4.4 Z" style={{ fill: 'var(--mint)', stroke: 'var(--ink)', strokeWidth: 1.4 }} />
+  </svg>
+);

@@ -260,7 +260,7 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .theater[data-hidden="true"] .split { opacity: 0; translate: 0 100%; pointer-events: none; }
 .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; padding: 10px 12px; background: #ffffff0d; border: 2.5px solid var(--ink); border-radius: 18px; overflow: hidden; }
 .picker { flex: 7 1 0; }
-.player-panel { flex: 3 1 0; overflow-y: auto; justify-content: center; }
+.player-panel { flex: 3 1 0; overflow-y: auto; justify-content: center; scrollbar-width: thin; }
 .picker-side { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .picker-list { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .head-title { flex: 1 1 120px; min-width: 0; font: 800 1.05rem var(--display); letter-spacing: -0.03em; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -310,11 +310,20 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 
 /* --- the media controls panel -------------------------------------------------------------------------- */
 .player-panel { justify-content: center; }
-.pc { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.pc { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; }
 .pc .dock-seek { width: 100%; }
 .author-spot { width: 40px; height: 40px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: #ffffff14; color: var(--text); box-shadow: 0 0 10px 1px rgba(255, 255, 255, .22); }
 .author-spot img, .author-spot .avatar { width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: cover; }
-.author-spot-folder { background: transparent; box-shadow: none; overflow: visible; }
+.author-spot-folder { width: 76px; height: 68px; background: transparent; box-shadow: none; overflow: visible; }
+.folder-art { display: block; overflow: visible; filter: drop-shadow(3px 3px 0 #000); rotate: -6deg; transform-origin: 50% 90%; }
+.folder-spark { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .folder-art { animation: folder-bob 7s ease-in-out infinite; }
+  .folder-spark { animation: twinkle 5s ease-in-out infinite; }
+  .folder-spark-2 { animation-delay: -2.5s; }
+}
+@keyframes folder-bob { 0%, 100% { rotate: -6deg; translate: 0 0; } 50% { rotate: 4deg; translate: 0 -3px; } }
+@keyframes twinkle { 0%, 100% { scale: 1; rotate: 0deg; } 50% { scale: .55; rotate: 25deg; } }
 .author-initial { font: 800 1.1rem var(--display); }
 .pc-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
 .pc-extra { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
@@ -322,7 +331,7 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .pc .dock-play { width: 64px; height: 64px; }
 /* a narrow panel (small or zoomed window): smaller buttons so the row fits instead of clipping */
 @container (max-width: 240px) {
-  .pc { gap: 10px; }
+  .pc { gap: 7px; }
   .pc-main { gap: 6px; }
   .pc .dock-play { width: 52px; height: 52px; }
   .pc-main .dock-btn:not(.dock-play) { width: 40px; height: 40px; }
@@ -376,3 +385,7 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .ticker-text { display: inline-block; font: 700 .95rem/1 var(--body); letter-spacing: .01em; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 @media (prefers-reduced-motion: reduce) { .ticker-run { animation: none; padding-left: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; } }
+
+/* --- log in with a QR code --------------------------------------------------------------------------------- */
+.qr-login { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.qr-box { background: #fff; padding: 12px; border: 3px solid var(--ink); border-radius: 12px; box-shadow: 4px 4px 0 #000; line-height: 0; }

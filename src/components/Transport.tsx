@@ -4,7 +4,7 @@ import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
 import { toggleLike, useLiked } from '../lib/liked.ts';
 import { Avatar } from './People.tsx';
-import { FolderIcon, HeartIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
+import { FolderArt, HeartIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -71,7 +71,7 @@ function AuthorSpot() {
       {spot.kind === 'profile' ? <Avatar pubkey={spot.pubkey} />
         : spot.kind === 'cover' ? <img src={spot.image} alt="" referrerPolicy="no-referrer" />
         : spot.kind === 'initial' ? <span className="author-initial">{spot.letter}</span>
-        : <FolderIcon size={40} />}
+        : <FolderArt />}
     </div>
   );
 }
