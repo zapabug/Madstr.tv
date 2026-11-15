@@ -108,7 +108,7 @@ remote there are usually buttons for this".
 
 zapa, 2026-11-15: "on mobile tilting the screen hides the bottom panels, interacting only shows the seek bar and
 prev play next buttons; to manage the playlist they tilt portrait".
-- A phone in landscape (landscape and at most **500 px** tall): the picture (video or slideshow) takes the
+- A phone in landscape (a touch screen, landscape and at most **500 px** tall; never a desktop window or TV): the picture (video or slideshow) takes the
   whole screen; the playlist and the rest of the controls are not shown.
 - Turning the phone sideways hides the controls at once. A touch brings back only **previous / play / next and
   the seek bar**, over the bottom of the picture; they go again after the usual 25 s without input.

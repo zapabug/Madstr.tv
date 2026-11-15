@@ -2390,7 +2390,7 @@ a.chip-btn {
 /* --- phone turned sideways (feat-taste-cache §T7, zapa 2026-11-15) ---------------------------------------
    The picture takes the whole screen. A touch brings back only previous / play / next and the seek bar, over
    the bottom of the picture; the playlist is for holding the phone upright. */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
   .theater .media {
     bottom: 0;
   }

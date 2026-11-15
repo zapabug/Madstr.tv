@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 export const AUTOHIDE_MS = 25_000;
 
 /** A phone held sideways; must match the landscape block in styles.css (spec feat-taste-cache §T7). */
-export const SIDEWAYS_QUERY = '(orientation: landscape) and (max-height: 500px)';
+export const SIDEWAYS_QUERY = '(orientation: landscape) and (max-height: 500px) and (pointer: coarse)';
 
 /** Bring the controls back from code (a single tap on the picture). */
 export const WAKE_EVENT = 'madstr:wake';
