@@ -110,6 +110,7 @@ export function FollowView() {
   return (
     <div className="people">
       <LoginPanel />
+      <LikedPeople />
       <section className="own" aria-label="Creators to follow">
         <h2>Podcast and music creators</h2>
         <p className="own-note">People publishing audio on Nostr right now that you do not follow yet.</p>

@@ -52,22 +52,32 @@ export function ExtraButtons({ speed = true }: { speed?: boolean }) {
   );
 }
 
-// One compact line, as in the first Madstr's media panel: play, time, slider, time, speed.
-export function PlayerStrip() {
+// The right-hand control panel, laid out on purpose so it reads the same at any width:
+// the seek bar across the top, the main transport row under it (-10s, play, +30s), and the
+// two small extras (like, speed) below. Previous / next are the chevrons on the picture.
+export function PanelControls() {
   const p = usePlayer();
+  const liked = useLiked();
   const playing = p.status === 'playing' || p.status === 'loading';
   const has = p.queue.length > 0;
-  const max = Math.max(1, Math.floor(p.duration));
+  const author = p.queue[p.index]?.pubkey;
   return (
-    <div className="strip" role="group" aria-label="Player strip">
-      <button type="button" className="dock-btn" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-        {playing ? <PauseIcon size={26} /> : <PlayIcon size={26} />}
-      </button>
-      <span className="dock-time">{formatTime(p.position)}</span>
-      <input type="range" aria-label="Position" min={0} max={max} step={1} value={Math.min(Math.floor(p.position), max)}
-        disabled={!has || p.duration === 0} onChange={e => player.seek(Number(e.target.value))} />
-      <span className="dock-time">{p.duration > 0 ? formatTime(p.duration) : '--:--'}</span>
-      <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
+    <div className="pc" role="group" aria-label="Media controls">
+      <SeekBar />
+      <div className="pc-main">
+        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(-10)} aria-label="Back 10 seconds">−10s</button>
+        <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
+          {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
+        </button>
+        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={() => player.seekBy(30)} aria-label="Forward 30 seconds">+30s</button>
+      </div>
+      <div className="pc-extra">
+        {author && (
+          <button type="button" className="chip-btn heart" data-nav aria-pressed={liked.includes(author)} onClick={() => toggleLike(author)}
+            aria-label={liked.includes(author) ? 'Unlike this creator' : 'Like this creator'}><HeartIcon size={16} /></button>
+        )}
+        <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
+      </div>
     </div>
   );
 }

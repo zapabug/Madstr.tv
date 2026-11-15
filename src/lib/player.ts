@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { MediaItem } from './media.ts';
+import { stripNostrRefs, type MediaItem } from './media.ts';
 import { nextIndex, nextRate, prevAction, resumeTime } from './queue.ts';
 
 export type Status = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -40,7 +40,7 @@ export function loadLastVideo(): LastVideo | null {
     const parsed = JSON.parse(raw) as Partial<LastVideo>;
     const item = parsed.item;
     if (item && item.kind === 'video' && typeof item.url === 'string' && /^https?:/.test(item.url) && typeof item.id === 'string') {
-      return { item: { ...item, title: String(item.title ?? '').slice(0, 160) }, position: Number(parsed.position) || 0 };
+      return { item: { ...item, title: stripNostrRefs(String(item.title ?? '')).slice(0, 160) }, position: Number(parsed.position) || 0 };
     }
   } catch { /* fall through */ }
   return null;

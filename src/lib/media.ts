@@ -49,8 +49,17 @@ const VIDEO_URL = /https?:\/\/[^\s"'<>]+?\.(?:mp4|mov|webm|m3u8)(?:\?[^\s"'<>]*)
 const IMAGE_URL = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif)(?:\?[^\s"'<>]*)?/i;
 const ANY_URL = /https?:\/\/[^\s"'<>]+/gi;
 
+// Notes often end with a Nostr reference ("... - nostr:npub1...") that is noise in a title.
+const NOSTR_REF = /(?:nostr:)?(?:npub|nprofile|note|nevent|naddr)1[023456789acdefghjklmnpqrstuvwxyz]{20,}/gi;
+const TRAILING_SEPARATORS = /[\s\-\u2013\u2014:,|\u00b7]+$/;
+
+// Take Nostr references out of a title, and the dash or colon that led up to them.
+export function stripNostrRefs(text: string): string {
+  return text.replace(NOSTR_REF, '').replace(/\s+/g, ' ').replace(TRAILING_SEPARATORS, '').trim();
+}
+
 export function clip(text: string | undefined | null): string {
-  return (text ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
+  return stripNostrRefs(text ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
 }
 
 export function isHttpUrl(value: string | undefined | null): value is string {

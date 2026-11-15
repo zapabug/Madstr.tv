@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audioFromEvent, videoFromEvent, imageFromEvent, parseDuration, isPodcast, imetaEntries, dedupeByUrl, sortNewest, type NostrEventLike, type MediaItem } from './media.ts';
+import { audioFromEvent, videoFromEvent, imageFromEvent, parseDuration, isPodcast, imetaEntries, dedupeByUrl, sortNewest, stripNostrRefs, clip, type NostrEventLike, type MediaItem } from './media.ts';
 
 const ev = (kind: number, tags: string[][], content = '', id = 'e'.repeat(8)): NostrEventLike =>
   ({ id, pubkey: 'p'.repeat(8), kind, created_at: 1000, tags, content });
@@ -104,4 +104,21 @@ test('dedupe by url keeps the first; newest sorts first', () => {
   const out = dedupeByUrl([mk('a', 'u1', 1), mk('b', 'u1', 2), mk('c', 'u2', 3)]);
   assert.deepEqual(out.map(i => i.id), ['a', 'c']);
   assert.deepEqual(sortNewest(out).map(i => i.id), ['c', 'a']);
+});
+
+const NPUB = 'npub1dergggklka99wwrs92yz8wdjs952h2ux2ha2ed598ngwu9w7a6fsh9xzpc';
+
+test('nostr references are taken out of titles, with the dash before them', () => {
+  assert.equal(stripNostrRefs(`\u201cDaily active users would be a terrible metric.\u201d - nostr:${NPUB}`), '\u201cDaily active users would be a terrible metric.\u201d');
+  assert.equal(stripNostrRefs(`Great clip nostr:${NPUB}`), 'Great clip');
+  assert.equal(stripNostrRefs(`${NPUB}`), '');
+  assert.equal(stripNostrRefs('by nostr:nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p'), 'by');
+  assert.equal(stripNostrRefs('Plain title - with a dash inside'), 'Plain title - with a dash inside');
+  assert.equal(stripNostrRefs('npub is a word here'), 'npub is a word here', 'a bare word is not a reference');
+});
+
+test('a kind 1 note with a trailing reference gets a clean title', () => {
+  const note = audioFromEvent(ev(1, [], `Nice track\nhttps://cdn.example.com/a.mp3\n- nostr:${NPUB}`));
+  assert.equal(note?.title, 'Nice track');
+  assert.equal(clip(`Title - nostr:${NPUB}`), 'Title');
 });

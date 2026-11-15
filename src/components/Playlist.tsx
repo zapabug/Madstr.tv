@@ -1,33 +1,66 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { player, usePlayer } from '../lib/player.ts';
-import { formatTime } from '../lib/queue.ts';
+import { Avatar } from './People.tsx';
+import { FilmIcon, NoteIcon } from './icons.tsx';
 
-const MAX_ROWS = 300;
+const FIRST = 120;
+const MORE = 120;
 
-// The playlist rows (number, thumbnail, title, length). Pressing a row plays it.
+// The playlist as little sticker-like tiles: the account's picture (or the cover when there
+// is no account), a brief title, and the number. Hover or focus shows the full title.
 export function Playlist({ emptyText, waiting }: { emptyText: string; waiting: boolean }) {
   const p = usePlayer();
+  const [limit, setLimit] = useState(FIRST);
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const current = useRef<HTMLButtonElement>(null);
-  const rows = p.queue.slice(0, MAX_ROWS);
   const playing = p.status === 'playing' || p.status === 'loading';
 
-  useEffect(() => { current.current?.scrollIntoView({ block: 'nearest' }); }, [p.index, p.queue]);
+  // A different list starts from its first page again.
+  useEffect(() => { setLimit(FIRST); }, [p.label]);
+  useEffect(() => { if (p.index >= limit) setLimit(p.index + MORE); }, [p.index, limit]);
+  useEffect(() => { current.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [p.index, p.queue]);
 
   if (p.queue.length === 0) return <p className="panel-empty">{waiting ? 'Looking for content…' : emptyText}</p>;
 
+  const showTip = (el: HTMLElement, text: string) => {
+    const r = el.getBoundingClientRect();
+    setTip({ text, x: r.left + r.width / 2, y: r.top });
+  };
+
   return (
-    <ol className="list" aria-label={`Playlist: ${p.label}`}>
-      {rows.map((row, i) => (
-        <li key={row.id}>
-          <button type="button" className="row" data-nav aria-current={i === p.index ? 'true' : undefined} ref={i === p.index ? current : undefined} onClick={() => player.jump(i)}>
-            <span className="row-n" aria-hidden="true">{i === p.index && playing ? '▶' : i + 1}</span>
-            {row.image && <img className="row-thumb" src={row.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
-            <span className="row-t">{row.title}{row.subtitle && <span className="row-s"> · {row.subtitle}</span>}</span>
-            {row.duration !== undefined && <span className="row-d">{formatTime(row.duration)}</span>}
-          </button>
-        </li>
-      ))}
-      {p.queue.length > MAX_ROWS && <li className="row-more">Showing the first {MAX_ROWS} of {p.queue.length}</li>}
-    </ol>
+    <>
+      <ol className="tiles" aria-label={`Playlist: ${p.label}`}>
+        {p.queue.slice(0, limit).map((row, i) => (
+          <li key={row.id}>
+            <button
+              type="button"
+              className="tile"
+              data-nav
+              aria-current={i === p.index ? 'true' : undefined}
+              aria-label={row.title}
+              ref={i === p.index ? current : undefined}
+              onClick={() => player.jump(i)}
+              onMouseEnter={e => showTip(e.currentTarget, row.title)}
+              onFocus={e => showTip(e.currentTarget, row.title)}
+              onMouseLeave={() => setTip(null)}
+              onBlur={() => setTip(null)}
+            >
+              <span className="tile-art">
+                {row.pubkey ? <Avatar pubkey={row.pubkey} />
+                  : row.image ? <img src={row.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                  : row.kind === 'video' ? <FilmIcon size={26} /> : <NoteIcon size={26} />}
+              </span>
+              <span className="tile-title">{row.title}</span>
+              <span className="tile-n" aria-hidden="true">{i === p.index && playing ? '▶' : i + 1}</span>
+            </button>
+          </li>
+        ))}
+        {p.queue.length > limit && (
+          <li><button type="button" className="tile tile-more" data-nav onClick={() => setLimit(l => l + MORE)}>+{p.queue.length - limit} more</button></li>
+        )}
+      </ol>
+      {tip && createPortal(<div className="tile-tip" role="tooltip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div>, document.body)}
+    </>
   );
 }

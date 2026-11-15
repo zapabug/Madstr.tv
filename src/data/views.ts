@@ -46,9 +46,9 @@ export function useViewItems(route: ViewerRoute): ViewData {
       }
       if (route.filter === 'podcasts') {
         const items = sortNewest(dedupeByUrl([...own.rss, ...audio.filter(isPodcast)]));
-        return { items, label: 'Podcasts', waiting: waiting && own.rss.length === 0, emptyText: 'No podcasts yet. Add an RSS feed below.' };
+        return { items, label: 'Podcasts', waiting: waiting && own.rss.length === 0, emptyText: 'No podcasts yet. Add an RSS feed under Your sources on the home screen.' };
       }
-      return { items: own.local, label: 'Local', waiting: false, emptyText: 'No local files yet. Add a folder below.' };
+      return { items: own.local, label: 'Local', waiting: false, emptyText: 'No local files yet. Add a music folder under Your sources on the home screen.' };
     }
     if (route.mode === 'watch') {
       if (route.filter === 'short') {
@@ -62,7 +62,7 @@ export function useViewItems(route: ViewerRoute): ViewData {
       return { items: last ? [last.item, ...rest] : video, label: 'Keep watching', waiting: waiting && !last, emptyText: 'Nothing watched yet.' };
     }
     if (route.mode === 'pictures') {
-      return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Add a folder of pictures on the left; they play as a slideshow.' };
+      return { items: NO_ITEMS, label: 'My pictures', waiting: false, emptyText: 'Add a folder of pictures under Your sources on the home screen; they play as a slideshow.' };
     }
     if (route.filter === 'liked') {
       const items = sortNewest(dedupeByUrl([...likedAudio, ...likedVideo]));

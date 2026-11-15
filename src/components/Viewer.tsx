@@ -3,9 +3,7 @@ import { usePictures } from '../data/pictures.ts';
 import { useViewItems } from '../data/views.ts';
 import { player } from '../lib/player.ts';
 import type { Route } from '../lib/route.ts';
-import { OwnControls } from './OwnControls.tsx';
-import { TagControls } from './TagControls.tsx';
-import { FollowView, LikedPeople } from './People.tsx';
+import { FollowView } from './People.tsx';
 import { Theater } from './Theater.tsx';
 
 type ViewerRoute = Extract<Route, { page: 'viewer' }>;
@@ -43,16 +41,8 @@ export function Viewer({ route }: { route: ViewerRoute }) {
 
   const isLiked = route.mode === 'people' && route.filter === 'liked';
   const hasVideo = route.mode === 'watch' || isLiked;
-  const extras = route.mode === 'listen' && route.filter === 'podcasts' ? <><OwnControls kind="feeds" /><TagControls kind="audio" /></>
-    : route.mode === 'listen' && route.filter === 'local' ? <OwnControls kind="folders" />
-    : route.mode === 'listen' ? <><TagControls kind="audio" /><TagControls kind="image" /></>
-    : route.mode === 'watch' ? <TagControls kind="video" />
-    : route.mode === 'pictures' ? <OwnControls kind="pictures" />
-    : isLiked ? <LikedPeople />
-    : undefined;
-
   // The chip that hops to the other side, as the old "VIDEOS" toggle did.
   const sibling = route.mode === 'watch' ? { label: 'MUSIC', href: '#/listen/music' } : route.mode === 'listen' ? { label: 'VIDEOS', href: '#/watch/continue' } : undefined;
 
-  return <Theater data={data} pictures={pictures} hasVideo={hasVideo} extras={extras} modeLabel={sibling?.label} modeHref={sibling?.href} />;
+  return <Theater data={data} pictures={pictures} hasVideo={hasVideo} modeLabel={sibling?.label} modeHref={sibling?.href} />;
 }
