@@ -212,7 +212,17 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .dock-title { margin: 0; font: 800 1.05rem var(--display); letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dock-sub { margin: 2px 0 4px; color: var(--muted); font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dock-seek { display: flex; align-items: center; gap: 10px; }
-.dock-seek input { flex: 1; min-width: 0; accent-color: var(--orange); }
+.dock-seek input { flex: 1; min-width: 0; }
+/* A tall seek bar: easy to hit with a mouse or a finger, and clear from across the room. */
+.seek { -webkit-appearance: none; appearance: none; height: 34px; margin: 0; padding: 0; background: transparent; cursor: pointer; }
+.seek:disabled { cursor: default; opacity: .5; }
+.seek::-webkit-slider-runnable-track { box-sizing: border-box; height: 20px; border: 2.5px solid var(--ink); border-radius: 999px; box-shadow: 2px 2px 0 #000;
+  background: linear-gradient(to right, var(--orange) var(--fill, 0%), #ffffff33 var(--fill, 0%)); }
+.seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 28px; height: 28px; margin-top: -4px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 2px 2px 0 #000; }
+.seek::-moz-range-track { box-sizing: border-box; height: 20px; border: 2.5px solid var(--ink); border-radius: 999px; background: #ffffff33; }
+.seek::-moz-range-progress { height: 15px; border-radius: 999px; background: var(--orange); }
+.seek::-moz-range-thumb { box-sizing: border-box; width: 28px; height: 28px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 2px 2px 0 #000; }
+.seek:focus-visible { outline: 3px solid #fff; outline-offset: 3px; border-radius: 999px; }
 .dock-time { font: 400 .78rem var(--mono); color: var(--muted); min-width: 4.2ch; }
 .dock-extra { display: flex; gap: 8px; flex: none; }
 .dock-extra .chip-btn { background: var(--sky); }
