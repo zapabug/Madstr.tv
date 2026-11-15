@@ -317,6 +317,9 @@ Spec: feat-taste-cache §T2
   pink post-it with a red diagonal on its bottom-right corner, previous / play / next, a SPEED post-it, and
   the seek bar across the full width. Checked headless at 1920×1080, 1280×720, 960×540 and 747×727: all of
   it shows and nothing is cut.
+- c796a79, zapa after trying it on the dev server: thumbs further apart (44 px out from the face, 40 on phones);
+  the speed post-it reads "SPEED ×1.5", tilts 7° and sits tucked under the right end of the seek bar, which is
+  drawn over it. Tests, lint and build pass; no screenshots this time (zapa).
 
 ## T3 — Device cache [built]
 Commit: 1cb1a8d
