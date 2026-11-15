@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { dedupeByUrl, isPodcast, sortNewest, type MediaItem } from '../lib/media.ts';
-import { loadLastVideo } from '../lib/player.ts';
+import { loadLastVideo, player } from '../lib/player.ts';
+import { ALL_PLAYED_TEXT, hidePlayed, played } from '../lib/played.ts';
 import type { Route } from '../lib/route.ts';
 import { useOwn } from './ownContext.ts';
 import { useContacts, useNostrItems } from './nostr.ts';
@@ -32,8 +33,13 @@ export function useViewItems(route: ViewerRoute): ViewData {
   const audio = useProbedDurations(useNostrItems('audio', wantsAudio ? contacts : undefined, wantsAudio ? tags.audio : []));
   const video = useNostrItems('video', wantsVideo ? contacts : undefined, wantsVideo ? tags.video : []);
   const last = useMemo(() => loadLastVideo(), []);
+  // What has played this session, as it was when this view opened: inside one visit nothing disappears.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const playedAtOpen = useMemo(() => played.snapshot(), [route.mode, route.filter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const playingAtOpen = useMemo(() => player.current?.id, [route.mode, route.filter]);
 
-  return useMemo((): ViewData => {
+  const raw = useMemo((): ViewData => {
     const waiting = contacts === undefined;
     if (route.mode === 'listen') {
       if (route.filter === 'music') {
@@ -63,4 +69,9 @@ export function useViewItems(route: ViewerRoute): ViewData {
     }
     return { items: NO_ITEMS, label: 'Follow more creators', waiting: false, emptyText: '' };
   }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last]);
+
+  return useMemo((): ViewData => {
+    const { items, allPlayed } = hidePlayed(raw.items, playedAtOpen, [playingAtOpen, last?.item.id]);
+    return { ...raw, items, emptyText: allPlayed ? ALL_PLAYED_TEXT : raw.emptyText };
+  }, [raw, playedAtOpen, playingAtOpen, last]);
 }

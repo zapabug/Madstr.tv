@@ -87,3 +87,10 @@ test('the history is capped and the cursor follows', () => {
   assert.equal(h.urls[h.cursor], 'u59');
   assert.equal(h.urls[h.urls.length - 1], 'new');
 });
+
+test('with everything shown this session as "recent", an unseen picture always comes first', () => {
+  const others = Array.from({ length: 50 }, (_, i) => `other${i}`);
+  const seen = new Set(others.slice(0, 49));
+  for (let i = 0; i < 100; i++) assert.equal(pickNext([], others, DEFAULT_MIX, seen), 'other49');
+  assert.ok(others.includes(pickNext([], others, DEFAULT_MIX, new Set(others)) as string), 'all seen: any picture (a new round)');
+});

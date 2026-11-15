@@ -36,9 +36,10 @@ export function availableCount(mine: number, others: number, mix: PictureMix): n
   return mix.onlyMine && mine > 0 ? mine : mine + others;
 }
 
-// The next picture: yours or the slideshow's, by the settings, never one of the `recent` ones while
-// there is something else in that pool. Null when there is nothing to show.
-export function pickNext(mine: readonly string[], others: readonly string[], mix: PictureMix, recent: readonly string[], rand: () => number = Math.random): string | null {
+// The next picture: yours or the slideshow's, by the settings, never one of the `recent` ones (everything
+// shown this session) while there is something else in that pool. Null when there is nothing to show.
+export function pickNext(mine: readonly string[], others: readonly string[], mix: PictureMix, recent: readonly string[] | ReadonlySet<string>, rand: () => number = Math.random): string | null {
+  const seen: ReadonlySet<string> = recent instanceof Set ? recent : new Set(recent as readonly string[]);
   if (mine.length === 0 && others.length === 0) return null;
   let useMine: boolean;
   if (mix.onlyMine && mine.length > 0) useMine = true;
@@ -46,7 +47,7 @@ export function pickNext(mine: readonly string[], others: readonly string[], mix
   else if (others.length === 0) useMine = true;
   else useMine = rand() < shareOf(mix.often);
   const pool = useMine ? mine : others;
-  const fresh = pool.filter(url => !recent.includes(url));
+  const fresh = pool.filter(url => !seen.has(url));
   const from = fresh.length > 0 ? fresh : pool;
   return from[Math.floor(rand() * from.length)] ?? null;
 }

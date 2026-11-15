@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { isHttpUrl, stripNostrRefs, type MediaItem } from './media.ts';
+import { played } from './played.ts';
 import { mergeShuffled, nextIndex, nextRate, prevAction, rateKey, resumeTime, shuffleAround, unshuffle, validRate } from './queue.ts';
 
 export type Status = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -67,6 +68,8 @@ export class PlayerStore {
   private cleanups: Array<() => void> = [];
   private natural: MediaItem[] = []; // the playlist in its normal order, for turning shuffle off
   private pendingSeek: number | null = null; // where to start once the element has loaded (a hand-over)
+  private loadedId: string | null = null; // the item last loaded, to mark it played when you move on
+  private startedLoaded = false; // whether that item actually played
 
   subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
@@ -140,7 +143,7 @@ export class PlayerStore {
       this.set({ position: el.currentTime });
       if (el.currentTime - this.lastSavedAt >= SAVE_EVERY_SECONDS || el.currentTime < this.lastSavedAt) this.savePosition(el.currentTime);
     });
-    on('playing', () => { if (mine()) { this.failures = 0; this.set({ status: 'playing', error: null }); } });
+    on('playing', () => { if (mine()) { this.failures = 0; this.startedLoaded = true; this.set({ status: 'playing', error: null }); } });
     on('pause', () => { if (mine() && !el.ended) { this.savePosition(el.currentTime); this.set({ status: this.state.status === 'error' ? 'error' : 'paused' }); } });
     on('waiting', () => { if (mine() && this.wantPlay) this.set({ status: 'loading' }); });
     on('ended', () => { if (mine()) this.onEnded(); });
@@ -194,6 +197,13 @@ export class PlayerStore {
     const el = this.elementFor(item);
     this.wantPlay = play;
     this.pendingSeek = at !== undefined && Number.isFinite(at) && at > 0 ? at : null;
+    // Moving on from an item that played marks it played for this session (spec §Added later). A hand-over
+    // between the video and the hidden audio reloads the same item, which is not moving on.
+    if (this.loadedId !== (item?.id ?? null)) {
+      if (this.loadedId && this.startedLoaded) played.add(this.loadedId);
+      this.loadedId = item?.id ?? null;
+      this.startedLoaded = false;
+    }
     for (const other of [this.audioEl, this.videoEl]) {
       if (other && other !== el) { other.pause(); }
     }
@@ -226,6 +236,7 @@ export class PlayerStore {
 
   private onEnded(): void {
     const item = this.current;
+    if (item) played.add(item.id);
     if (item) drop(POS_PREFIX + item.url);
     if (item?.kind === 'video') drop(LAST_VIDEO);
     const next = nextIndex(this.state.index, this.state.queue.length);

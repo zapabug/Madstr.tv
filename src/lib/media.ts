@@ -232,6 +232,7 @@ export function imageFromEvent(e: NostrEventLike): MediaItem | null {
     title: clip(tagValue(e.tags, 'title')) || firstLine(e.content),
     pubkey: e.pubkey,
     createdAt: e.created_at,
+    hashtags: hashtagsOf(e.tags),
   };
 }
 

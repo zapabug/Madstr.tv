@@ -8,28 +8,21 @@ import {
   AUDIO_KINDS, IMAGE_KINDS, VIDEO_KINDS, audioFromEvent, dedupeByUrl, imageFromEvent, sortNewest, videoFromEvent,
   type MediaItem, type MediaKind,
 } from '../lib/media.ts';
+import { chunk, mediaFilters } from '../lib/mediaFilters.ts';
 
 // The TV's own account (npub1a5ve7g6q…). Until someone logs in, the people it
 // follows are who the board shows content from.
 export const TV_PUBKEY = 'ed199f23408d7f90ec7387b1a9607d5962eae1baf8ba421cb864a09109d3262b';
 
-const PER_CHUNK_LIMIT = 300;
-const AUTHORS_PER_FILTER = 100;
 const HEX64 = /^[0-9a-f]{64}$/;
 
-// Plain notes (kind 1) are most of what anyone posts, so they would crowd the rare media
-// kinds out of a shared limit. Ask for the media kinds on their own, and notes separately.
-const ALL_KINDS: Record<MediaKind, number[]> = { audio: AUDIO_KINDS, video: VIDEO_KINDS, image: IMAGE_KINDS };
-const NOTES_LIMIT = 200;
-const CONVERT: Record<MediaKind, (_e: NostrEvent) => MediaItem | null> = {
+// Which event kinds each kind of media comes in; the filters are built by lib/mediaFilters.ts.
+export const ALL_KINDS: Record<MediaKind, number[]> = { audio: AUDIO_KINDS, video: VIDEO_KINDS, image: IMAGE_KINDS };
+export const CONVERT: Record<MediaKind, (_e: NostrEvent) => MediaItem | null> = {
   audio: audioFromEvent, video: videoFromEvent, image: imageFromEvent,
 };
 
-export function chunk<T>(list: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
-  return out;
-}
+export { chunk };
 
 // Open a live subscription on the relays and pour what arrives into the event store.
 // Nothing here waits for a relay: items appear in the store as they come.
@@ -60,18 +53,11 @@ export function useContacts(pubkey: string | undefined): string[] | undefined {
 // Playable items of one kind from a set of authors and/or hashtags, newest first.
 export function useNostrItems(kind: MediaKind, authors: string[] | undefined, hashtags: string[] = []): MediaItem[] {
   const kinds = ALL_KINDS[kind];
-  const rare = kinds.filter(k => k !== 1);
   const authorKey = authors ? authors.join(',') : '';
   const tagKey = hashtags.join(',');
 
   const filters = useMemo<Filter[]>(() => {
-    const out: Filter[] = [];
-    for (const group of chunk(authors ?? [], AUTHORS_PER_FILTER)) {
-      out.push({ kinds: rare, authors: group, limit: PER_CHUNK_LIMIT });
-      if (kinds.includes(1)) out.push({ kinds: [1], authors: group, limit: NOTES_LIMIT });
-    }
-    if (hashtags.length > 0) out.push({ kinds, '#t': hashtags, limit: PER_CHUNK_LIMIT });
-    return out;
+    return mediaFilters(kinds, authors ?? [], hashtags);
     // authors / hashtags are represented by their joined keys
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, authorKey, tagKey]);

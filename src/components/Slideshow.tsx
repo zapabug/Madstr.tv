@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MediaItem } from '../lib/media.ts';
 import { ensureAhead, pickNext, step, usePictureMix, type History } from '../lib/pictureMix.ts';
+import { createSessionSet } from '../lib/sessionSet.ts';
+
+// Every picture on screen this session (spec §Added later): all of a pool is shown once before any repeats.
+const seenPictures = createSessionSet('madstr:seenPictures', 6000);
 
 export interface SlideCommand { dir: 1 | -1; n: number }
 
 // The picture show behind the music. Pictures cross-fade every few seconds. Each next picture is chosen at
-// random: yours or the slideshow's by your "only mine / how often" settings, never one of the last dozen
-// while there is something else. Previous goes back through what was shown. A picture that will not load
-// is dropped.
+// random: yours or the slideshow's by your "only mine / how often" settings, never one already shown this
+// session while an unseen one remains (then that pool starts a new round). Previous goes back through what
+// was shown. A picture that will not load is dropped.
 export function Slideshow({ mine, others, intervalMs = 9000, onCurrent, command }: {
   mine: MediaItem[]; others: MediaItem[]; intervalMs?: number; onCurrent?: (_item: MediaItem | null) => void; command?: SlideCommand | null;
 }) {
@@ -35,7 +39,11 @@ export function Slideshow({ mine, others, intervalMs = 9000, onCurrent, command 
   // Keep one picture queued after the one on screen, and warm it.
   useEffect(() => {
     if (history.cursor < history.urls.length - 1) return;
-    const next = pickNext(mineUrls, otherUrls, mix, history.urls.slice(-12));
+    const recent = seenPictures.snapshot() as Set<string>;
+    for (const u of history.urls.slice(-12)) recent.add(u);
+    const next = pickNext(mineUrls, otherUrls, mix, recent);
+    // A pool where everything has been seen: start its next round.
+    if (next && seenPictures.has(next)) seenPictures.removeAll(mineUrls.includes(next) ? mineUrls : otherUrls);
     if (next) setHistory(h => ensureAhead(h, next));
   }, [history, mineUrls, otherUrls, mix]);
 
@@ -62,6 +70,7 @@ export function Slideshow({ mine, others, intervalMs = 9000, onCurrent, command 
   }, [playable, intervalMs, history.cursor]);
 
   const current = history.urls[history.cursor] ?? null;
+  useEffect(() => { if (current) seenPictures.add(current); }, [current]);
   const currentItem = current ? byUrl.get(current) ?? null : null;
   const currentId = currentItem?.id;
 

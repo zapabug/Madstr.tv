@@ -295,6 +295,20 @@ proposed, waiting for zapa's OK), and a profile picture is only shown when it is
     margin. Disabled chips are flat (dashed outline, no shadow) instead of a muddy faded colour; chip
     links are not underlined.
 
+- **Played items hide for the session** (zapa, 2026-11-15): an item counts as played once it has played
+  and you move on from it, or it ends. Each playlist (and its sticker preview) leaves out what has
+  played in this session when you open it; inside one visit nothing disappears, so Previous still
+  works. Keep watching always keeps its resume video. A session is the browser tab: closing it starts
+  fresh. With everything played, the list says "Everything here has played this session."
+- **Pictures repeat far less** (zapa, 2026-11-15):
+  - The slideshow shows **every picture once before any repeats** (a picture shown this session is
+    skipped while unseen ones remain), instead of only avoiding the last dozen.
+  - A **picture cache on the device** keeps up to **2000** Nostr pictures across sessions, so a new
+    session starts with the whole pool, not only the newest.
+  - In the background the app **reaches back in time** for older pictures from the same people and
+    hashtags: **300 at a time, one batch every 20 s**, until the cache holds 2000 or the relays have
+    nothing older. (2000 / 300 / 20 s proposed, waiting for zapa's OK.)
+
 ## Decided after the audit (zapa, 2026-11-15)
 
 The audit of 2026-11-15 (`audits/audit-2026-11-15.md`) flagged these; zapa kept them as built:
