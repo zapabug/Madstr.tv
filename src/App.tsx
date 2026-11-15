@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Board } from './components/Board.tsx';
 import { Dock } from './components/Dock.tsx';
+import { Engine } from './components/Engine.tsx';
 import { Sky } from './components/Sky.tsx';
 import { Viewer } from './components/Viewer.tsx';
 import { BOARD } from './lib/route.ts';
@@ -35,7 +36,8 @@ export function App() {
         <a className="logo" href="#/" aria-label="Madstr.tv home">Mad<span className="bolt-mark" aria-hidden="true">⚡</span>tr.tv</a>
       </header>
       {route.page === 'board' ? <Board /> : <Viewer key={`${route.mode}/${route.filter}`} route={route} />}
-      <Dock />
+      <Dock open={route.page === 'viewer'} />
+      <Engine />
     </>
   );
 }

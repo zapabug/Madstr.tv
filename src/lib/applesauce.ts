@@ -10,8 +10,10 @@ export const RELAYS = [
   'wss://relay.primal.net',
   'wss://nos.lol',
   'wss://nostr.wine',
+  'wss://relay.olas.app',
 ];
 
+// Follow lists and profiles of small accounts often live only on the index relay.
 export const LOOKUP_RELAYS = ['wss://purplepag.es', 'wss://relay.damus.io'];
 
 export const eventStore = new EventStore();

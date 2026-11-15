@@ -121,6 +121,22 @@ common 7.1.1, react 7.1.0. The old NDK/Tailwind app and its `bun.lock` are gone
 from the tree (still in git history). `AGENTS.md` and `README.md` still describe
 the old app and need a rewrite.
 
+## Rules settled from real relay data (2026-11-15)
+
+- **Short vs long video**: NIP-71 kinds 22 and 34236 are short, 21 and 34235 are normal
+  (seen on relays, `duration` 6-28 s on the short ones). A kind 1063 video under 60 s
+  counts as short. YouTube-only events are dropped.
+- **Audio**: kind 1063 with `m audio/*` (minus the soundtracks of short videos, which
+  carry an `a 3423x:` tag), kind 31337 tracks that have a `url` (their `duration` is
+  milliseconds), and kind 1 notes linking an audio file. Encrypted audio is dropped.
+- **Music vs podcast**: under 6 minutes or unknown length is music; 6 minutes or more is a
+  podcast; RSS episodes are always podcasts; local files are their own list.
+- **Where the content comes from**: the TV account "Madstr_tv" follows 33 accounts, but
+  its follow list is only on `purplepag.es`, so follows are read from the index relays
+  too. Media kinds are queried apart from plain notes (notes would crowd them out).
+  Those 33 mostly post short videos and notes; there is little audio, so music will
+  stay thin until hashtag discovery (R6) or more follows.
+
 ## Applesauce pieces (checked against the Applesauce docs)
 
 - Store and loading: `EventStore`, `RelayPool`, loaders (unified/timeline).
@@ -168,9 +184,11 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       bundled fonts, pleb.world sky and sticker board, arrow-key focus,
       stickers routing to the (empty) viewer with a mode + filter, dock shell
       with SVG prev / play / next (off until R2). No relay gate.
-- [ ] R2 viewer + bottom panel: audio element, SVG prev/next, queue, resume position.
-- [ ] R3 Listen mode (Music / Podcasts): Nostr audio plus local folders and RSS.
-- [ ] R4 Watch mode: continue-last, short, long, sequential playlist.
+- [x] R2 viewer + bottom panel: one player store (hidden audio + video in the viewer), queue,
+      SVG prev / play / next, seek, -10s/+30s, speed, resume position, playlist drawer.
+- [x] R3 Listen mode (Music / Podcasts / Local): Nostr audio from the TV's follows, RSS feeds
+      and local folders (add them right in the viewer).
+- [x] R4 Watch mode: short, long, keep-watching (last video first, then newest).
 - [ ] R5 People: login (NIP-46 / NIP-07), liked npubs, follow more creators.
 - [ ] R6 picture wall (Nostr pictures), polish.
 - [ ] R7 local media on the web: Local playlist and My pictures (folder picker).
