@@ -70,6 +70,12 @@ Numbers:
 - Signer: QR 240 s, sign 90 s, connect 20 s, key re-ask 5 s, publish 8 s, subscription retry 3 s,
   extension wait 1.5 s. Clock refresh 10 s. The relay lists in `relays.ts`.
 
+Android play (feat-android-play, 2026-11-15), written into the spec by the agent from zapa's report:
+- Background service stops 3 s after the player stops playing; notification title clipped to 80 characters.
+- Notification permission asked once, on the first play (Android 13+); partial wake lock and Wi-Fi lock while
+  playing; no play / pause buttons in the notification yet.
+- The Android app always picks files, never a folder (even if a later WebView could open folders).
+
 ## Open questions
 
 - **Legacy files still tracked:** `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
@@ -93,3 +99,4 @@ Numbers:
 - 2026-11-15: design pass (two HIGH, four MEDIUM fixed); "Logged in as" label to check the signer's key.
 - 2026-11-15: R8 remote pass built; arrows stay inside an area (picture, picker, controls) until nothing lies further.
 - 2026-11-15: played items hide per session; slideshow avoids repeats per session; picture cache walks back in time.
+- 2026-11-15: feat-android-play: the app picks files instead of a folder; background play service (1.1).

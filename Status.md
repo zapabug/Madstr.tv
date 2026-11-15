@@ -14,8 +14,11 @@ last-worked: 2026-11-15
 Feat: Installable web app and Android app on zapstore
 State: Live. The web app installs and opens offline, and Mad⚡tr.tv 1.0 for Android phones and TV is published on zapstore under zapa. Needs zapa to install it from zapstore on a phone or TV and say it works, and to back up the release signing key.
 ────────────────────────────────────────
+Feat: Android app: picking files and playing in the background (1.1)
+State: Built and machine-checked, not yet run on a phone or TV. In the app the music and picture buttons now pick several files instead of a folder, and a playing notification keeps music going in the background. Needs zapa to install 1.1 and try both with the screen off.
+────────────────────────────────────────
 Feat: Deploy
-State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker. The Android app and a zapstore release are not built; they need a spec first.
+State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker.
 ────────────────────────────────────────
 Feat: Applesauce revamp: board, viewer, player, listen, watch, people, pictures, local media
 State: Built and merged into main and passing tests, lint and build. Ticked in the spec, but no confirmation from zapa is recorded yet. The sticker previews now follow the spec, and a list of choices made in code, including a 40-character limit on names, is waiting for zapa's review.
@@ -34,6 +37,3 @@ State: Incoming. The feed parser and proxy exist from the earlier own-audio work
 ────────────────────────────────────────
 Feat: Remote pass (final stage before deploy)
 State: Built and machine-verified: every control on the board, People and the viewer is reachable with arrow keys alone. Needs zapa to try it with a keyboard or remote before deploy.
-────────────────────────────────────────
-Feat: TV (Android) build
-State: Not built; parked.
