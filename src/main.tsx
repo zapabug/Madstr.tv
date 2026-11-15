@@ -5,12 +5,14 @@ import { App } from './App.tsx';
 import { OwnProvider } from './data/own.tsx';
 import { restoreAccounts } from './lib/accounts.ts';
 import { eventStore } from './lib/applesauce.ts';
+import { registerServiceWorker } from './pwa/registerSw.ts';
 import './styles.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root is missing from index.html');
 
 void restoreAccounts();
+registerServiceWorker();
 
 createRoot(root).render(
   <StrictMode>
