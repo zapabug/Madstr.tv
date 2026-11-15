@@ -74,18 +74,24 @@ room of its own.
 - **Focus is first-class**: every sticker and button is reachable with arrow
   keys and Enter, with a clear focus ring. Hover tilt is a bonus on top.
 
-## The split screen (updated 2026-11-15 from zapa: "my layout from before")
+## The split screen (zapa, 2026-11-15: "my layout from before", then "70 / 30")
 
-Out of the home view the screen is split exactly as the first Madstr was (`docs/Untitled.png`):
+Out of the home view the screen is split as the first Madstr was (`docs/Untitled.png`):
 the **picture on top** (the slideshow behind music and podcasts, the video itself for video)
-with the thin **⟨ ⟩ previous / next chevrons on its left and right edges**, the brand top
-right and the **VIDEOS / MUSIC chip bottom right**; and a **bottom split panel, about a
-quarter of the height, left two thirds and right one third**: the **media picker on the
-left, the player on the right**. After 45 s without input the bottom panel slides away and
-the picture takes the whole screen; any mouse move or key brings it back. Arrow keys still
-work while it is hidden. Following creators is a plain page, and the board keeps a slim
-player bar at the bottom. Colours and styling come later (the Winamp-style colours of the
-old panel are deliberately not applied yet).
+with the thin **⟨ ⟩ previous / next chevrons on its edges**, the brand top right and the
+**VIDEOS / MUSIC chip bottom right**; and a **bottom panel split left / right, 70% / 30%**:
+
+- **Left 70%, the media picker** (where the old message board was): everything you pick from.
+  On one side the same shortcuts as the home stickers and the current source's own controls
+  (RSS feeds, folders, hashtags, liked people); beside it the playlist.
+- **Right 30%, the media controls**: what is playing, play, seek bar, speed, and the small
+  buttons (like, -10s, +30s).
+
+After 45 s without input the bottom panel slides away and the picture takes the whole
+screen; any mouse move or key brings it back, and arrow keys work while it is hidden.
+Following creators is a plain page; the board keeps a slim player bar. Colours and styling
+come later (the Winamp-style colours of the old panel are deliberately not applied yet).
+Below 1100 px wide the picker drops its sources column and shows the playlist alone.
 
 ## The viewer (one screen, two modes)
 
@@ -206,8 +212,10 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       AccountManager, saved across reloads), follow / unfollow through Applesauce's FollowUser
       action, device-local Liked npubs with a heart in the player, and a creator picker built
       from audio actually found on relays. No QR codes.
-- [ ] R6 picture wall (Nostr pictures), polish.
-- [ ] R7 local media on the web: Local playlist and My pictures (folder picker).
+- [x] R6 picture wall (Nostr pictures, slideshow with cross-fade), live sticker previews, and
+      hashtag discovery per kind (music/podcast, video, pictures) as the first Madstr had.
+- [x] R7 local media on the web: Local playlist and My pictures (folder picker, or picked files
+      for the session where there is no folder picker).
 - [ ] later: TV (Android) build and native permission, see Parked.
 
 ## Not in this feat

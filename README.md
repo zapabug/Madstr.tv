@@ -1,100 +1,44 @@
-# Nostr TV App Interface
+# Mad⚡tr.tv
 
-[![React](https://img.shields.io/badge/React-^18-blue?logo=react)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-^5-blue?logo=vite)](https://vitejs.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-^5-blue?logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-^3-blue?logo=tailwindcss)](https://tailwindcss.com/)
-[![Nostr](https://img.shields.io/badge/Nostr-purple?logo=nostr)](https://nostr.com/)
+Music, podcasts, videos and pictures from Nostr, RSS feeds and your own files, on one screen
+that works from a remote: a board of sticker shortcuts, and a split screen to play.
 
-A web-based TV interface for browsing and playing media content (podcasts, videos) shared on the Nostr network. Designed with TV navigation and usability in mind.
+Built on [Applesauce](https://applesauce.build) (React 19, Vite, TypeScript).
 
-## Features
+## What it does
 
-*   **Media Feeds:** Displays feeds of video and podcast content fetched from specified Nostr authors.
-*   **Podcast Player (`Podcastr`):**
-    *   Fetches Kind 1 notes with podcast audio URLs (`.mp3`, `.m4a`, `.wav`).
-    *   Scrollable list of podcasts with author profile pictures and names.
-    *   Keyboard/Remote navigation (Up/Down/Enter/Space).
-    *   Custom playback controls (Play/Pause, Progress Bar, Time Display).
-    *   Playback speed adjustment.
-    *   Playback position saving (resumes from last position via localStorage).
-    *   Inactivity fade-out for controls.
-*   **Video Player (`VideoPlayer`):**
-    *   Plays video URLs found in Nostr notes.
-    *   Basic Play/Pause controls.
-    *   Displays QR code for the poster's `npub`.
-    *   Inactivity fade-out for controls.
-*   **Nostr Integration:**
-    *   Uses `@nostr-dev-kit/ndk` and `nostr-hooks` for interaction with relays.
-    *   Fetches Kind 0 profile data.
-    *   Fetches Kind 1 notes based on authors.
-    *   Robust profile and note caching using IndexedDB and utility functions.
-*   **TV-Friendly UI:**
-    *   Focus management for keyboard/remote navigation.
-    *   Layouts suitable for larger screens.
-    *   Tailwind CSS for styling.
+- **Board**: nine stickers, each a shortcut that opens the player already set up (Music,
+  Podcasts, Local, Keep watching, Short videos, Long videos, My pictures, Liked npubs, Follow
+  more creators). Each shows a live preview of what it would open.
+- **Split screen** (anything but the board): the picture on top, a bottom panel with the media
+  picker on the left (70%) and the controls on the right (30%). The bottom panel hides after
+  45 s without input.
+- **Sources**: the people the TV account (or you, once logged in) follow on Nostr, hashtags you
+  add, RSS feeds, folders on your device, and your own pictures as slides.
+- **People**: log in with a browser extension or a `bunker://` link, follow creators, like
+  people for the Liked sticker.
 
-## Tech Stack
+## Run it
 
-*   **Framework:** React 18+
-*   **Build Tool:** Vite
-*   **Language:** TypeScript
-*   **Styling:** Tailwind CSS
-*   **Nostr:** `@nostr-dev-kit/ndk`, `nostr-hooks`, `nostr-tools`
-*   **State Management:** React Hooks (`useState`, `useEffect`, `useRef`, `useCallback`), Custom Hooks
-*   **Other:** `react-qr-code`
+```bash
+pnpm install
+pnpm dev        # http://localhost:3000
+pnpm test       # node --test over src/**/*.test.ts
+pnpm build      # typecheck + production build
+pnpm lint
+```
 
-## Getting Started
+`/api/rss?url=...` is a same-origin proxy for RSS feeds that block browsers (a Vite middleware
+in development and preview, `api/rss.ts` as a Vercel function; see `server/rssProxy.ts`).
 
-### Prerequisites
+## Layout
 
-*   Node.js (v18 or later recommended)
-*   npm, yarn, or pnpm
+```
+src/lib/        plain logic with tests (routes, focus, queue, media rules, tags, liked, shuffle)
+                and the app singletons (applesauce store + relay pool, accounts, player)
+src/data/       hooks that turn relays, RSS and local files into lists
+src/components/ the board, split screen, panels, controls
+feat-applesauce-revamp.md   the spec this was built from
+```
 
-### Installation
-
-1.  Clone the repository:
-    ```bash
-    git clone <your-repository-url>
-    cd <repository-directory>
-    ```
-2.  Install dependencies:
-    ```bash
-    npm install
-    # or
-    yarn install
-    # or
-    pnpm install
-    ```
-
-### Running the Development Server
-
-1.  Start the Vite development server:
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    # or
-    pnpm dev
-    ```
-2.  Open your browser and navigate to the URL provided (usually `http://localhost:5173` or similar).
-
-## Usage
-
-Once the app is running, you can typically:
-
-*   Select authors or feeds (depending on the main App component's implementation).
-*   Use keyboard arrow keys (Up/Down) to navigate lists like the podcast player.
-*   Use Enter or Spacebar to select items or activate focused buttons (Play/Pause, Speed).
-*   Use the mouse to click on interactive elements.
-*   The controls will fade out after 45 seconds of inactivity and reappear on interaction.
-
-*(Adjust the Usage section based on how the main App component orchestrates the different views).*
-
-## Contributing
-
-Contributions are welcome! Please feel free to open an issue or submit a pull request.
-
-todo list
-
-lets add a setting page to add a feature to query the relays for hastag data
+Specs live in `feat-*.md`; `docs/` holds notes from the first (NDK) version of the app.

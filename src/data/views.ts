@@ -6,6 +6,7 @@ import { useOwn } from './ownContext.ts';
 import { useContacts, useNostrItems } from './nostr.ts';
 import { useFeedPubkey } from './people.ts';
 import { useLiked } from '../lib/liked.ts';
+import { useTagSet } from '../lib/tags.ts';
 
 type ViewerRoute = Extract<Route, { page: 'viewer' }>;
 
@@ -25,6 +26,7 @@ export function useViewItems(route: ViewerRoute): ViewData {
   const feed = useFeedPubkey();
   const contacts = useContacts(feed);
   const liked = useLiked();
+  const tags = useTagSet();
   const isLiked = route.mode === 'people' && route.filter === 'liked';
 
   const wantsAudio = route.mode === 'listen' && route.filter !== 'local';
@@ -32,8 +34,8 @@ export function useViewItems(route: ViewerRoute): ViewData {
   // Liked: everything the liked people posted, audio and video together.
   const likedAudio = useNostrItems('audio', isLiked ? liked : undefined);
   const likedVideo = useNostrItems('video', isLiked ? liked : undefined);
-  const audio = useNostrItems('audio', wantsAudio ? contacts : undefined);
-  const video = useNostrItems('video', wantsVideo ? contacts : undefined);
+  const audio = useNostrItems('audio', wantsAudio ? contacts : undefined, wantsAudio ? tags.audio : []);
+  const video = useNostrItems('video', wantsVideo ? contacts : undefined, wantsVideo ? tags.video : []);
   const last = useMemo(() => loadLastVideo(), []);
 
   return useMemo((): ViewData => {

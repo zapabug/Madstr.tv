@@ -2,11 +2,12 @@ import type { ReactNode } from 'react';
 import { usePlayer } from '../lib/player.ts';
 import { STICKERS, hrefOf } from '../lib/stickers.ts';
 import { toHash, type Route } from '../lib/route.ts';
+import { Playlist } from './Playlist.tsx';
 
-// The media picker, on the left (where the first Madstr had its message board): choose what
-// to play. The same shortcuts as the home stickers, so you can switch without going back,
-// plus whatever belongs to the current source (feeds, folders, liked people, ...).
-export function PickerPanel({ route, label, extras }: { route: Extract<Route, { page: 'viewer' }>; label: string; extras?: ReactNode }) {
+// The media picker: the left 70% of the bottom panel, where the first Madstr had its message
+// board. Everything you pick from is here: the same shortcuts as the home stickers and the
+// current source's own controls on one side, the playlist on the other.
+export function PickerPanel({ route, label, extras, emptyText, waiting }: { route: Extract<Route, { page: 'viewer' }>; label: string; extras?: ReactNode; emptyText: string; waiting: boolean }) {
   const p = usePlayer();
   const here = toHash(route);
   return (
@@ -16,12 +17,19 @@ export function PickerPanel({ route, label, extras }: { route: Extract<Route, { 
         <h1>{label}</h1>
         {p.queue.length > 0 && <span className="count">{p.queue.length} in the playlist</span>}
       </header>
-      <nav className="pick-chips" aria-label="Pick something to play">
-        {STICKERS.map(s => (
-          <a key={s.id} className="pick-chip" href={hrefOf(s)} data-nav aria-current={hrefOf(s) === here ? 'page' : undefined}>{s.title}</a>
-        ))}
-      </nav>
-      {extras}
+      <div className="picker-body">
+        <div className="picker-side">
+          <nav className="pick-chips" aria-label="Pick something to play">
+            {STICKERS.map(s => (
+              <a key={s.id} className="pick-chip" href={hrefOf(s)} data-nav aria-current={hrefOf(s) === here ? 'page' : undefined}>{s.title}</a>
+            ))}
+          </nav>
+          {extras}
+        </div>
+        <div className="picker-list">
+          <Playlist emptyText={emptyText} waiting={waiting} />
+        </div>
+      </div>
     </aside>
   );
 }

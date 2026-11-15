@@ -4,6 +4,7 @@ import { useViewItems } from '../data/views.ts';
 import { player } from '../lib/player.ts';
 import type { Route } from '../lib/route.ts';
 import { OwnControls } from './OwnControls.tsx';
+import { TagControls } from './TagControls.tsx';
 import { FollowView, LikedPeople } from './People.tsx';
 import { Theater } from './Theater.tsx';
 
@@ -42,8 +43,10 @@ export function Viewer({ route }: { route: ViewerRoute }) {
 
   const isLiked = route.mode === 'people' && route.filter === 'liked';
   const hasVideo = route.mode === 'watch' || isLiked;
-  const extras = route.mode === 'listen' && route.filter === 'podcasts' ? <OwnControls kind="feeds" />
+  const extras = route.mode === 'listen' && route.filter === 'podcasts' ? <><OwnControls kind="feeds" /><TagControls kind="audio" /></>
     : route.mode === 'listen' && route.filter === 'local' ? <OwnControls kind="folders" />
+    : route.mode === 'listen' ? <><TagControls kind="audio" /><TagControls kind="image" /></>
+    : route.mode === 'watch' ? <TagControls kind="video" />
     : route.mode === 'pictures' ? <OwnControls kind="pictures" />
     : isLiked ? <LikedPeople />
     : undefined;

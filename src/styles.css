@@ -25,7 +25,7 @@
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dock-h: 96px;
-  --split-h: max(28vh, 250px); /* the old bottom split was a quarter of the height; the playlist now shares it */
+  --split-h: max(32vh, 270px);
 }
 * { box-sizing: border-box; }
 html { background: var(--space); }
@@ -158,6 +158,8 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .own-note { margin: 8px 0 0; font-size: .85rem; }
 .own-add { display: flex; gap: 8px; flex-wrap: wrap; }
 .own-add input { flex: 1 1 240px; min-width: 0; padding: 9px 12px; border: 2.5px solid var(--ink); border-radius: 12px; background: #fff; color: var(--ink); font: 500 .95rem var(--body); }
+.tag-list { display: flex !important; flex-wrap: wrap; gap: 6px; }
+.tag-chip { font: 700 .85rem var(--mono); background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: 3px 10px; }
 .chip-btn { font: 800 .8rem var(--body); color: var(--ink); background: var(--lilac); border: 2.5px solid var(--ink); border-radius: 999px; padding: 6px 14px; min-height: 36px; cursor: pointer;
   box-shadow: 2px 2px 0 #000; transition: translate 140ms ease-out, box-shadow 140ms ease-out; }
 .chip-btn.solid { background: var(--mint); }
@@ -248,12 +250,20 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
   background: #0b0716f0; border-top: 3px solid var(--ink); transition: opacity 450ms ease-out, translate 450ms var(--ease); }
 .theater[data-hidden="true"] .split { opacity: 0; translate: 0 100%; pointer-events: none; }
 .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; padding: 10px 12px; background: #ffffff0d; border: 2.5px solid var(--ink); border-radius: 18px; overflow: hidden; }
-.picker { flex: 2 1 0; overflow-y: auto; }
-.player-panel { flex: 1 1 0; }
+.picker { flex: 7 1 0; }
+.player-panel { flex: 3 1 0; overflow-y: auto; justify-content: center; }
+.picker-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(230px, 2fr) 3fr; gap: 12px; }
+.picker-side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.picker-list { min-height: 0; display: flex; flex-direction: column; }
+.pp-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pp-text { min-width: 0; }
+.player-panel .cover { width: 48px; margin: 0; flex: none; border-radius: 12px; box-shadow: 3px 3px 0 #000; }
+.player-panel .now-title { font-size: .98rem; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-panel .now-sub { margin: 2px 0 0; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: none; }
 .panel-head h1 { font-size: 1.05rem; margin: 0; letter-spacing: -0.03em; }
 .panel-empty { margin: 8px 4px; color: var(--muted); font-weight: 600; }
-.picker .own { margin-top: 0; flex: none; max-height: 45%; overflow-y: auto; }
+.picker .own { margin-top: 0; flex: none; }
 .list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; }
 .now-line { margin: 0; flex: none; font-size: .85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-line b { color: var(--text); }
@@ -266,8 +276,12 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .strip .dock-btn { width: 44px; height: 44px; flex: none; }
 .player-panel .dock-extra { flex-wrap: wrap; }
 .row-thumb { width: 32px; height: 32px; flex: none; border-radius: 50%; object-fit: cover; background: #0006; }
+@media (max-width: 1100px) {
+  .picker-body { grid-template-columns: 1fr; }
+  .picker-side { display: none; }
+}
 @media (max-width: 760px) {
-  :root { --split-h: min(52vh, 460px); }
+  :root { --split-h: min(56vh, 480px); }
   .split { flex-direction: column; }
   .picker { flex: 3 1 0; } .player-panel { flex: 2 1 0; }
 }

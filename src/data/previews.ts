@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { isPodcast, type MediaItem } from '../lib/media.ts';
 import { useLiked } from '../lib/liked.ts';
+import { useTagSet } from '../lib/tags.ts';
 import { loadLastVideo } from '../lib/player.ts';
 import { useOwn } from './ownContext.ts';
 import { useContacts, useNostrItems } from './nostr.ts';
@@ -25,9 +26,10 @@ export function usePreviews(): Record<string, PreviewData> {
   const own = useOwn();
   const feed = useFeedPubkey();
   const contacts = useContacts(feed);
-  const audio = useNostrItems('audio', contacts);
-  const video = useNostrItems('video', contacts);
-  const images = useNostrItems('image', contacts);
+  const tags = useTagSet();
+  const audio = useNostrItems('audio', contacts, tags.audio);
+  const video = useNostrItems('video', contacts, tags.video);
+  const images = useNostrItems('image', contacts, tags.image);
   const liked = useLiked();
   const { creators } = useCreatorSuggestions();
   const last = useMemo(() => loadLastVideo(), []);
