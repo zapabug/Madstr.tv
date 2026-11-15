@@ -73,13 +73,41 @@ test('pictures come from kind 20 imeta, 1063 images and linked images', () => {
   assert.equal(imageFromEvent(ev(1, [], 'no picture here')), null);
 });
 
-test('music vs podcast by origin and length', () => {
+test('a note with an audio attachment is audio even without a file extension', () => {
+  const note = audioFromEvent(ev(1, [['imeta', 'url https://blossom.example/738d52854e8dae0b91c4', 'm audio/mpeg', 'size 123']], 'New track out now'));
+  assert.equal(note?.url, 'https://blossom.example/738d52854e8dae0b91c4');
+  assert.equal(note?.title, 'New track out now');
+  assert.equal(audioFromEvent(ev(1, [['imeta', 'url https://blossom.example/abc', 'm image/png']], 'a picture')), null, 'a picture attachment is not audio');
+  assert.equal(audioFromEvent(ev(1, [], 'https://x.com/a.oga is a file')) ?.url, 'https://x.com/a.oga');
+});
+
+test('podcasts among plain notes are told apart by their hashtags and words', () => {
+  const song = audioFromEvent(ev(1, [['t', 'music']], 'My new song\nhttps://cdn.example/s.mp3'));
+  const tagged = audioFromEvent(ev(1, [['t', 'Podcast'], ['t', 'bitcoin']], 'Talking sats\nhttps://cdn.example/t.mp3'));
+  const worded = audioFromEvent(ev(1, [], 'Episode 12 is up\nhttps://cdn.example/e.mp3'));
+  assert.deepEqual(song?.hashtags, ['music']);
+  assert.deepEqual(tagged?.hashtags, ['podcast', 'bitcoin']);
+  assert.equal(isPodcast(song!), false);
+  assert.equal(isPodcast(tagged!), true);
+  assert.equal(isPodcast(worded!), true);
+});
+
+test('music vs podcast: longer than 9 minutes is a podcast', () => {
   const base: MediaItem = { id: 'a', kind: 'audio', origin: 'nostr', url: 'u', title: 't', createdAt: 1 };
   assert.equal(isPodcast({ ...base, duration: 200 }), false);
-  assert.equal(isPodcast({ ...base, duration: 360 }), true);
-  assert.equal(isPodcast({ ...base }), false, 'unknown length is music');
+  assert.equal(isPodcast({ ...base, duration: 540 }), false, 'exactly 9 minutes is not more than 9 minutes');
+  assert.equal(isPodcast({ ...base, duration: 541 }), true);
+  assert.equal(isPodcast({ ...base, duration: 3600 }), true);
+  assert.equal(isPodcast({ ...base }), false, 'unknown length with no hint is music');
   assert.equal(isPodcast({ ...base, origin: 'rss', duration: 30 }), true);
   assert.equal(isPodcast({ ...base, origin: 'local', duration: 4000 }), false);
+});
+
+test('a known length beats a podcast hint; the hint only counts while the length is unknown', () => {
+  const tagged: MediaItem = { id: 'a', kind: 'audio', origin: 'nostr', url: 'u', title: 'Episode 3', createdAt: 1, hashtags: ['podcast'] };
+  assert.equal(isPodcast(tagged), true, 'length unknown: the hashtag and the word say podcast');
+  assert.equal(isPodcast({ ...tagged, duration: 180 }), false, 'a 3 minute clip is music, whatever it is tagged');
+  assert.equal(isPodcast({ ...tagged, duration: 1200 }), true);
 });
 
 test('durations: seconds, mm:ss, hh:mm:ss, junk', () => {

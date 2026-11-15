@@ -5,10 +5,12 @@
 // The rules below come from real events on relays (checked 2026-11-15):
 //  - video: NIP-71 kinds 21 / 34235 are normal videos, 22 / 34236 are short videos;
 //    the playable URL lives in an `imeta` tag, and some are only YouTube links.
-//  - audio: kind 1063 with `m audio/*` (skip those that are the soundtrack of a
-//    short video, tagged `a 3423x:`), kind 31337 tracks that carry a `url` tag
-//    (its `duration` is in milliseconds), and kind 1 notes linking an audio file.
-//    Encrypted (`encrypted` tag) audio cannot be played and is skipped.
+//  - audio: in practice most music and podcasts are plain kind 1 notes: a link to an audio file
+//    in the text, or an `imeta` attachment whose `m` is `audio/*` (uploads often have no file
+//    extension). The dedicated kinds are rare but still read: kind 1063 with `m audio/*` (skip
+//    the soundtracks of short videos, tagged `a 3423x:`) and kind 31337 tracks that carry a
+//    `url` tag (their `duration` is in milliseconds). Encrypted audio (`encrypted` tag) cannot
+//    be played and is skipped.
 
 export interface NostrEventLike {
   id: string;
@@ -34,17 +36,18 @@ export interface MediaItem {
   pubkey?: string;
   createdAt: number;
   short?: boolean; // videos only
+  hashtags?: string[]; // the post's #tags, lower case
 }
 
 export const AUDIO_KINDS = [1, 1063, 31337];
 export const VIDEO_KINDS = [1, 21, 22, 34235, 34236, 1063];
 export const IMAGE_KINDS = [1, 20, 1063];
 
-export const MUSIC_MAX_SECONDS = 360; // old app's rule: under 6 minutes is music
+export const MUSIC_MAX_SECONDS = 9 * 60; // zapa's rule: longer than 9 minutes is a podcast
 export const SHORT_VIDEO_SECONDS = 60;
 
 const MAX_TEXT = 160;
-const AUDIO_URL = /https?:\/\/[^\s"'<>]+?\.(?:mp3|m4a|ogg|opus|aac|wav|flac)(?:\?[^\s"'<>]*)?/i;
+const AUDIO_URL = /https?:\/\/[^\s"'<>]+?\.(?:mp3|m4a|ogg|oga|opus|aac|wav|flac)(?:\?[^\s"'<>]*)?/i;
 const VIDEO_URL = /https?:\/\/[^\s"'<>]+?\.(?:mp4|mov|webm|m3u8)(?:\?[^\s"'<>]*)?/i;
 const IMAGE_URL = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif)(?:\?[^\s"'<>]*)?/i;
 const ANY_URL = /https?:\/\/[^\s"'<>]+/gi;
@@ -134,6 +137,10 @@ function httpOrUndefined(value: string | undefined): string | undefined {
   return isHttpUrl(value) ? value : undefined;
 }
 
+export function hashtagsOf(tags: string[][]): string[] {
+  return [...new Set(tags.filter(t => t[0] === 't' && t[1]).map(t => t[1].toLowerCase().slice(0, 30)))].slice(0, 8);
+}
+
 export function audioFromEvent(e: NostrEventLike): MediaItem | null {
   if (!AUDIO_KINDS.includes(e.kind)) return null;
   if (e.tags.some(t => t[0] === 'encrypted')) return null;
@@ -147,13 +154,15 @@ export function audioFromEvent(e: NostrEventLike): MediaItem | null {
   } else if (e.kind === 31337) {
     url = tagValue(e.tags, 'url') ?? tagValue(e.tags, 'media') ?? meta?.url;
   } else {
-    url = e.content.match(AUDIO_URL)?.[0];
+    // A note: an audio attachment (any file name), or a link to an audio file in the text.
+    url = imetaEntries(e.tags).find(m => isHttpUrl(m.url) && m.m?.toLowerCase().startsWith('audio/'))?.url ?? e.content.match(AUDIO_URL)?.[0];
   }
   if (!isHttpUrl(url)) return null;
 
   return {
     id: `nostr:${e.id}`,
     kind: 'audio',
+    hashtags: hashtagsOf(e.tags),
     origin: 'nostr',
     url,
     title: clip(tagValue(e.tags, 'title')) || (e.kind === 1 ? firstLine(e.content) : '') || nameFromUrl(url) || 'Untitled',
@@ -236,12 +245,18 @@ export function firstSentence(text: string | undefined | null): string {
   return sentence.length > TICKER_MAX ? `${sentence.slice(0, TICKER_MAX - 1).trimEnd()}\u2026` : sentence;
 }
 
-// Music vs podcast. RSS episodes are podcasts; a Nostr track is a podcast once it
-// runs past six minutes. No known length counts as music.
+// Music vs podcast. RSS episodes are podcasts. Otherwise zapa's rule: longer than 9 minutes is a
+// podcast, anything shorter is music. Plain notes carry no length, so the length is read from the
+// audio file in the background (lib/durations.ts); until it is known, a post counts as a podcast only
+// if it says so: a #podcast hashtag, or the word "podcast" or "episode" in its text.
+const PODCAST_TAG = /^(podcasts?|podcasting|podcastindex|podcastsonnostr)$/;
+const PODCAST_WORD = /\b(podcast|episode)\b/i;
+
 export function isPodcast(item: MediaItem): boolean {
   if (item.origin === 'rss') return true;
   if (item.origin === 'local') return false;
-  return item.duration !== undefined && item.duration >= MUSIC_MAX_SECONDS;
+  if (item.duration !== undefined) return item.duration > MUSIC_MAX_SECONDS;
+  return (item.hashtags ?? []).some(t => PODCAST_TAG.test(t)) || PODCAST_WORD.test(item.title);
 }
 
 export function sortNewest(items: MediaItem[]): MediaItem[] {
