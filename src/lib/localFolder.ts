@@ -8,7 +8,9 @@ const MAX_DEPTH = 6;
 export interface LocalTrack {
   id: string; // stable per folder + relative path
   title: string;
-  file: File;
+  file?: File; // web: a picked file or a file from a folder handle
+  url?: string; // Android app: the file's local address (nativeFolder.ts)
+  modified?: number; // ms, when there is no File
   kind: LocalKind;
 }
 

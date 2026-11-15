@@ -8,7 +8,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlaybackPlugin.class); // media controls (spec feat-android-native §N1)
+        registerPlugin(LocalFoldersPlugin.class); // remembered folders (§N2)
         super.onCreate(savedInstanceState);
+        bridge.setWebViewClient(new LocalFilesWebViewClient(bridge)); // serves /_madstr_local/ (§N2)
     }
 
     /** Media keys from TV remotes and keyboards while the app is open go to the page's player. */

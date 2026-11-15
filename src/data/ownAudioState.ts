@@ -9,6 +9,8 @@ import {
 import {
   canPickFolder, pickFolder, hasReadPermission, scanFolder, tracksFromFiles, type LocalTrack,
 } from '../lib/localFolder.ts';
+import { nativeErrorText } from '../lib/nativeFolder.ts';
+import { isNativeApp } from '../lib/platform.ts';
 
 export type SourceStatus = 'loading' | 'ready' | 'needs-permission' | 'error';
 
@@ -40,6 +42,7 @@ export interface OwnAudio {
   folders: OwnFolder[];
   feeds: OwnFeed[];
   canPickFolder: boolean;
+  folderNote: string; // why the last folder pick failed, '' when it did not
   addFolder: (_kind?: LocalKind) => Promise<void>;
   addFiles: (_files: File[], _kind?: LocalKind) => void;
   reconnectFolder: (_id: string) => Promise<void>;
@@ -60,16 +63,33 @@ export function useOwnAudioState(): OwnAudio {
 
   // One object URL per local file, created on demand and kept until the track goes away.
   const urlFor = useCallback((track: LocalTrack): string => {
+    if (track.url) return track.url; // the app's own file address
     let url = objectUrls.current.get(track.id);
-    if (!url) {
+    if (!url && track.file) {
       url = URL.createObjectURL(track.file);
       objectUrls.current.set(track.id, url);
     }
-    return url;
+    return url ?? '';
   }, []);
 
   const loadFolderTracks = useCallback(async (folder: StoredFolder, request: boolean) => {
     setFolderState(prev => ({ ...prev, [folder.id]: { status: 'loading' } }));
+    if (folder.uri) {
+      try {
+        const { listNativeFolder } = await import('../native/localFolders.ts');
+        const tracks = await listNativeFolder(folder.id, folder.uri, folder.kind ?? 'audio');
+        setTracksByFolder(prev => ({ ...prev, [folder.id]: tracks }));
+        setFolderState(prev => ({ ...prev, [folder.id]: { status: 'ready' } }));
+      } catch (error) {
+        console.error('[ownAudio] Folder scan failed:', error);
+        setFolderState(prev => ({ ...prev, [folder.id]: { status: 'error', error: nativeErrorText(error, 'Could not read this folder') } }));
+      }
+      return;
+    }
+    if (!folder.handle) {
+      setFolderState(prev => ({ ...prev, [folder.id]: { status: 'error', error: 'Could not read this folder' } }));
+      return;
+    }
     try {
       if (!(await hasReadPermission(folder.handle, request))) {
         setFolderState(prev => ({ ...prev, [folder.id]: { status: 'needs-permission' } }));
@@ -124,10 +144,36 @@ export function useOwnAudioState(): OwnAudio {
     };
   }, []);
 
+  const [folderNote, setFolderNote] = useState('');
+
   const addFolder = useCallback(async (kind: LocalKind = 'audio') => {
-    const handle: FsDirHandle | null = await pickFolder();
-    if (!handle) return;
-    const folder: StoredFolder = { id: `dir-${Date.now().toString(36)}`, name: handle.name.slice(0, 80), handle, kind };
+    setFolderNote('');
+    let folder: StoredFolder;
+    const id = `dir-${Date.now().toString(36)}`;
+    if (isNativeApp()) {
+      let picked: { uri: string; name: string } | null;
+      try {
+        const { pickNativeFolder } = await import('../native/localFolders.ts');
+        picked = await pickNativeFolder();
+      } catch (error) {
+        console.error('[ownAudio] Folder pick failed:', error);
+        setFolderNote(nativeErrorText(error, 'Could not open the folder picker'));
+        return;
+      }
+      if (!picked) return;
+      folder = { id, name: (picked.name || 'Folder').slice(0, 80), uri: picked.uri, kind };
+    } else {
+      let handle: FsDirHandle | null;
+      try {
+        handle = await pickFolder();
+      } catch (error) {
+        console.error('[ownAudio] Folder pick failed:', error);
+        setFolderNote('Could not open the folder picker');
+        return;
+      }
+      if (!handle) return;
+      folder = { id, name: handle.name.slice(0, 80), handle, kind };
+    }
     await saveFolder(folder);
     setStoredFolders(prev => [...prev, folder]);
     await loadFolderTracks(folder, true);
@@ -161,10 +207,12 @@ export function useOwnAudioState(): OwnAudio {
     setTracksByFolder(prev => { const next = { ...prev }; delete next[id]; return next; });
     setFolderState(prev => { const next = { ...prev }; delete next[id]; return next; });
     if (!isSession(id)) {
+      const uri = storedFolders.find(f => f.id === id)?.uri;
+      if (uri) void import('../native/localFolders.ts').then(m => m.releaseNativeFolder(uri)).catch((error: unknown) => console.error('[ownAudio] release failed:', error));
       setStoredFolders(prev => prev.filter(f => f.id !== id));
       void deleteFolder(id);
     }
-  }, [tracksByFolder, dropTrackUrls]);
+  }, [tracksByFolder, dropTrackUrls, storedFolders]);
 
   const addFeed = useCallback(async (rawUrl: string) => {
     const url = rawUrl.trim();
@@ -218,7 +266,7 @@ export function useOwnAudioState(): OwnAudio {
           origin: 'local',
           url: urlFor(track),
           title: track.title,
-          createdAt: Math.floor(track.file.lastModified / 1000),
+          createdAt: Math.floor((track.file?.lastModified ?? track.modified ?? 0) / 1000),
         };
         (track.kind === 'image' ? images : audio).push(item);
       });
@@ -249,7 +297,8 @@ export function useOwnAudioState(): OwnAudio {
 
   return {
     local, pictures, rss, folders, feeds,
-    canPickFolder: canPickFolder(),
+    canPickFolder: canPickFolder() || isNativeApp(),
+    folderNote,
     addFolder, addFiles, reconnectFolder, removeFolder, addFeed, refreshFeed, removeFeed,
   };
 }
