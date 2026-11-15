@@ -2149,3 +2149,15 @@ a.chip-btn {
   color: var(--muted);
   border-color: #ffffff4d;
 }
+
+/* --- remote pass (R8): text boxes and sliders show a clear focus ring like the buttons ----------------- */
+.own-add input:focus-visible,
+.own input:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+/* sliders on the pastel cards: an ink ring (white would vanish on the pastel) */
+.own .seek:focus-visible {
+  outline-color: var(--ink);
+}

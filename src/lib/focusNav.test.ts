@@ -96,3 +96,34 @@ test('Left and Right stay in the current row', () => {
   assert.equal(pickNext([music, chip], 0, 'right'), null, 'nothing in this row to the right');
   assert.equal(pickNext([music, podcasts], 1, 'left'), 0);
 });
+
+// --- leaving form fields (R8) ----------------------------------------------------------------------
+import { arrowLeavesField } from './focusNav.ts';
+
+test('outside a form field every arrow moves focus', () => {
+  for (const d of ['up', 'down', 'left', 'right'] as const) assert.equal(arrowLeavesField(d, { kind: 'none' }), true);
+});
+
+test('a text box: Up / Down move on; Left / Right only from the matching end of the text', () => {
+  const at = (start: number, end = start) => ({ kind: 'text' as const, start, end, length: 5 });
+  assert.equal(arrowLeavesField('up', at(2)), true);
+  assert.equal(arrowLeavesField('down', at(2)), true);
+  assert.equal(arrowLeavesField('left', at(2)), false, 'mid-text Left moves the caret');
+  assert.equal(arrowLeavesField('right', at(2)), false);
+  assert.equal(arrowLeavesField('left', at(0)), true, 'at the start Left moves on');
+  assert.equal(arrowLeavesField('right', at(5)), true, 'at the end Right moves on');
+  assert.equal(arrowLeavesField('left', at(0, 3)), false, 'a selection collapses first');
+  assert.equal(arrowLeavesField('right', { kind: 'text', start: 0, end: 0, length: 0 }), true, 'an empty box lets go both ways');
+  assert.equal(arrowLeavesField('left', { kind: 'text', start: null, end: null, length: 3 }), true, 'no caret info: never trap');
+});
+
+test('a slider keeps Left / Right for its value; Up / Down move on', () => {
+  assert.equal(arrowLeavesField('left', { kind: 'range' }), false);
+  assert.equal(arrowLeavesField('right', { kind: 'range' }), false);
+  assert.equal(arrowLeavesField('up', { kind: 'range' }), true);
+  assert.equal(arrowLeavesField('down', { kind: 'range' }), true);
+});
+
+test('textareas and selects keep their arrows', () => {
+  assert.equal(arrowLeavesField('down', { kind: 'other' }), false);
+});

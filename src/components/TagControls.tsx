@@ -20,7 +20,7 @@ export function TagControls({ kind }: { kind: TagKind }) {
         {tags.length === 0 && <li className="own-note">None yet: only the people you follow.</li>}
       </ul>
       <form className="own-add" onSubmit={e => { e.preventDefault(); addTagTo(kind, text); setText(''); }}>
-        <input type="text" value={text} onChange={e => setText(e.target.value)} placeholder="#music" aria-label="Add a hashtag" autoComplete="off" />
+        <input type="text" data-nav value={text} onChange={e => setText(e.target.value)} placeholder="#music" aria-label="Add a hashtag" autoComplete="off" />
         <button type="submit" className="chip-btn solid" data-nav disabled={!text.trim()}>Add</button>
       </form>
     </section>

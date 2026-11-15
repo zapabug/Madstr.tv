@@ -87,7 +87,7 @@ export function LoginPanel() {
         </div>
       )}
       <form className="own-add" onSubmit={e => { e.preventDefault(); void attempt(() => loginWithBunker(uri)); }}>
-        <input type="text" value={uri} onChange={e => setUri(e.target.value)} placeholder="bunker:// or nbunksec… (from Amber or another signer)" aria-label="Bunker link" autoComplete="off" spellCheck={false} />
+        <input type="text" data-nav value={uri} onChange={e => setUri(e.target.value)} placeholder="bunker:// or nbunksec… (from Amber or another signer)" aria-label="Bunker link" autoComplete="off" spellCheck={false} />
         <button type="submit" className="chip-btn solid" data-nav disabled={busy || !uri.trim()}>{busy ? 'Connecting…' : 'Connect'}</button>
       </form>
       {error && <p className="own-status bad" role="alert">{error}</p>}

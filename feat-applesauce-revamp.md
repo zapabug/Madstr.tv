@@ -220,7 +220,12 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       private-address guard (`server/rssProxy.ts`) get their tests with that work.
 - [ ] R8 remote pass, the **final stage before deploy**: every control, inputs and sliders
       included (seek bar, picture mix, feed URL, hashtag, bunker link), is `data-nav`, and arrow
-      keys can leave a text input, so the whole app works from a remote.
+      keys can leave a text input, so the whole app works from a remote. Key rules (2026-11-15): in a
+      text box Up / Down move on, and Left / Right move the caret until it is at the start / end, then
+      move on; on a slider Left / Right change the value and Up / Down move on; every one of them shows
+      the same clear focus ring as the buttons. Arrows stay inside the area you are in (the picture
+      area, the picker, the controls) and only cross to the next area when nothing lies further that
+      way, so Down from "← Board" goes to the playlist, not to the seek bar beside it.
 - [ ] later: TV (Android) build and native permission, see Parked.
 
 ## Rules added later (zapa, 2026-11-15)

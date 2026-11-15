@@ -61,3 +61,28 @@ export function directionForKey(key: string): Direction | null {
     default: return null;
   }
 }
+
+// --- leaving a form field with the arrows (spec R8, the remote pass) ------------------------------
+// A remote has no Tab key, so arrows must also get out of text boxes and sliders, without taking
+// away the keys those fields need: a text box keeps Left / Right for its caret until the caret is at
+// that end; a slider keeps Left / Right for its value. Up / Down always move on from either.
+export type Field =
+  | { kind: 'none' } // not a form field: arrows always move focus
+  | { kind: 'text'; start: number | null; end: number | null; length: number }
+  | { kind: 'range' }
+  | { kind: 'other' }; // a textarea, select or editable area: arrows stay inside
+
+export function arrowLeavesField(direction: Direction, field: Field): boolean {
+  switch (field.kind) {
+    case 'none': return true;
+    case 'range': return direction === 'up' || direction === 'down';
+    case 'other': return false;
+    case 'text': {
+      if (direction === 'up' || direction === 'down') return true;
+      // No caret information (some input types): leave, rather than trap the remote.
+      if (field.start === null || field.end === null) return true;
+      if (field.start !== field.end) return false; // text is selected: arrows collapse it first
+      return direction === 'left' ? field.start === 0 : field.end === field.length;
+    }
+  }
+}

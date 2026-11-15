@@ -4,7 +4,7 @@ import { PanelControls } from './Transport.tsx';
 // is shown in the picker's header.
 export function PlayerPanel() {
   return (
-    <aside className="panel player-panel" aria-label="Media controls">
+    <aside className="panel player-panel" aria-label="Media controls" data-nav-group>
       <PanelControls />
     </aside>
   );

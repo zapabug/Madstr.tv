@@ -14,7 +14,7 @@ function PictureMixControls({ count }: { count: number }) {
       </button>
       <div className={`mix-row${mix.onlyMine || none ? ' off' : ''}`}>
         <span className="mix-end">seldom</span>
-        <input type="range" className="seek" aria-label="How often my pictures come up" min={0} max={100} step={5} value={Math.round(mix.often * 100)}
+        <input type="range" className="seek" data-nav aria-label="How often my pictures come up" min={0} max={100} step={5} value={Math.round(mix.often * 100)}
           style={{ '--p': mix.often } as CSSProperties} disabled={mix.onlyMine || none} onChange={e => setMix({ often: Number(e.target.value) / 100 })} />
         <span className="mix-end">very often</span>
       </div>
@@ -55,7 +55,7 @@ export function OwnControls({ kind }: { kind: 'feeds' | 'folders' | 'pictures' }
           ))}
         </ul>
         <form className="own-add" onSubmit={e => { e.preventDefault(); void add(); }}>
-          <input type="url" value={text} onChange={e => setText(e.target.value)} placeholder="https://example.com/feed.xml" aria-label="Feed address" />
+          <input type="url" data-nav value={text} onChange={e => setText(e.target.value)} placeholder="https://example.com/feed.xml" aria-label="Feed address" />
           <button type="submit" className="chip-btn solid" data-nav disabled={adding}>{adding ? 'Adding…' : 'Add feed'}</button>
         </form>
       </section>

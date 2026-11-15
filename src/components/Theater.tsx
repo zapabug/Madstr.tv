@@ -41,7 +41,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
 
   return (
     <main className="theater" data-hidden={hidden ? 'true' : undefined}>
-      <div className="media">
+      <div className="media" data-nav-group>
         <div className="stage-full">
           {hasVideo && <video ref={player.registerVideo} playsInline onClick={player.toggle} hidden={!showingVideo} />}
           {!showingVideo && <Slideshow mine={pictures.mine} others={pictures.others} onCurrent={setSlide} command={command} />}

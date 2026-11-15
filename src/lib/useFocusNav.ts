@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { directionForKey, pickNext, type Box } from './focusNav.ts';
+import { arrowLeavesField, directionForKey, pickNext, type Box, type Field } from './focusNav.ts';
 
 const NAV = '[data-nav]';
 
@@ -16,17 +16,34 @@ function visibleTargets(): HTMLElement[] {
   });
 }
 
-function isTyping(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+const TEXT_TYPES = new Set(['text', 'url', 'search', 'email', 'tel', 'password']);
+
+// What kind of form field the key came from, for arrowLeavesField (spec R8).
+function fieldOf(target: EventTarget | null): Field {
+  if (!(target instanceof HTMLElement)) return { kind: 'none' };
+  if (target instanceof HTMLInputElement) {
+    if (target.type === 'range') return { kind: 'range' };
+    if (TEXT_TYPES.has(target.type)) {
+      let start: number | null = null;
+      let end: number | null = null;
+      try { start = target.selectionStart; end = target.selectionEnd; } catch { /* type without a caret */ }
+      return { kind: 'text', start, end, length: target.value.length };
+    }
+    return { kind: 'none' };
+  }
+  if (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return { kind: 'other' };
+  return { kind: 'none' };
 }
 
 // Up / Down / Left / Right move focus between anything marked data-nav, like a
-// remote. Enter and Space keep doing what the focused link or button does.
+// remote. Enter and Space keep doing what the focused link or button does. Text boxes and
+// sliders keep the arrows they need and let go of the rest (spec R8).
 export function useFocusNav(): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const direction = directionForKey(event.key);
-      if (!direction || event.altKey || event.ctrlKey || event.metaKey || isTyping(event.target)) return;
+      if (!direction || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (!arrowLeavesField(direction, fieldOf(event.target))) return;
 
       const targets = visibleTargets();
       if (targets.length === 0) return;
@@ -37,7 +54,16 @@ export function useFocusNav(): void {
         targets[0].focus();
         return;
       }
-      const next = pickNext(targets.map(boxOf), current, direction);
+      // Stay inside the area you are in (picture area, picker, controls: data-nav-group); cross to
+      // another area only when nothing lies further that way inside this one (spec R8).
+      const group = targets[current].closest('[data-nav-group]');
+      let next: number | null = null;
+      if (group) {
+        const inGroup = targets.flatMap((el, i) => (el.closest('[data-nav-group]') === group ? [i] : []));
+        const local = pickNext(inGroup.map(i => boxOf(targets[i])), inGroup.indexOf(current), direction);
+        if (local !== null) next = inGroup[local];
+      }
+      if (next === null) next = pickNext(targets.map(boxOf), current, direction);
       if (next === null) return;
       targets[next].focus();
       targets[next].scrollIntoView({ block: 'nearest', inline: 'nearest' });

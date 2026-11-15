@@ -10,7 +10,7 @@ export function PickerPanel({ label, emptyText, waiting }: { label: string; empt
   const mine = p.label === label; // the player holds this view's playlist (not one left playing from before)
   const item = mine ? p.queue[p.index] : undefined;
   return (
-    <aside className="panel picker" aria-label="Media picker">
+    <aside className="panel picker" aria-label="Media picker" data-nav-group>
       <header className="panel-head">
         <a className="back" href="#/" data-nav><span aria-hidden="true">←</span> Board</a>
         <h1 className="head-title" title={item?.title}>{item ? item.title : label}</h1>
