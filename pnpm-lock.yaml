@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      applesauce-accounts:
-        specifier: 7.1.0
-        version: 7.1.0(@capacitor/core@8.6.2)(typescript@5.9.3)
       applesauce-actions:
         specifier: 7.1.1
         version: 7.1.1(typescript@5.9.3)
@@ -2039,6 +2036,7 @@ snapshots:
       - '@capacitor/core'
       - nostr-wasm
       - typescript
+    optional: true
 
   applesauce-actions@7.1.1(typescript@5.9.3):
     dependencies:

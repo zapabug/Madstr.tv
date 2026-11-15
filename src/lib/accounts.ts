@@ -1,97 +1,182 @@
-import { AccountManager } from 'applesauce-accounts';
-import { ExtensionAccount, NostrConnectAccount, registerCommonAccountTypes } from 'applesauce-accounts/accounts';
+import { useSyncExternalStore } from 'react';
 import { ActionRunner } from 'applesauce-actions';
-import { NostrConnectSigner } from 'applesauce-signers';
+import { ExtensionSigner, NostrConnectSigner, PrivateKeySigner, type ISigner } from 'applesauce-signers';
+import type { EventTemplate, NostrEvent } from 'applesauce-core/helpers';
 import { RELAYS, eventStore, pool } from './applesauce.ts';
+import { reconnect, withTimeout } from './reconnect.ts';
+import { clearSession, loadSession, parseCredential, saveSession } from './session.ts';
 
-// Logging in, and the one thing a login is for here: following people. Both ways in
-// are Applesauce's own: a NIP-07 browser extension, or a NIP-46 `bunker://` link (Amber
-// and other remote signers). No QR codes: paste the link.
-//
-// Saved logins are stored by Applesauce in localStorage. For a bunker login that holds
-// the session's client key, which is a credential: this page's scripts can read it.
+// Logging in, and the one thing a login is for here: following people. Ways in: a NIP-07 browser extension,
+// a NIP-46 `bunker://` link or `nbunksec` (Amber and other remote signers), or scanning a nostrconnect:// QR code.
+// The app never holds a private key. Built on the pattern that works in the Madeira Livre app
+// (madeira-app/src/lib/signer.ts + account.ts): the signer is built directly, the stored session is kept by
+// this app, and Amber's "already connected" reply on a reconnect is treated as success.
 
-const ACCOUNTS_KEY = 'madstr:accounts';
-const ACTIVE_KEY = 'madstr:active';
-const BUNKER_TIMEOUT_MS = 30_000;
+export const APP_NAME = 'Mad⚡tr.tv';
+// NIP-46 relays for the signer connection. Not relay.nsec.app: it needs NIP-42 auth, and the connect
+// subscription there silently gets nothing.
+export const NIP46_RELAYS = ['wss://nos.lol', 'wss://nostr.mom', 'wss://relay.primal.net'];
+// Kinds the app asks a signer for up front, so Amber can remember them: 3 = the contact list (follow).
+export const SIGN_KINDS = [3];
+const PERMISSIONS = [...new Set(['get_public_key', ...NostrConnectSigner.buildSigningPermissions(SIGN_KINDS)])];
 
+// The explicit method bindings are what actually works (setting `NostrConnectSigner.pool` alone does not).
 NostrConnectSigner.subscriptionMethod = pool.subscription.bind(pool);
 NostrConnectSigner.publishMethod = pool.publish.bind(pool);
 
-export const accounts = new AccountManager();
-registerCommonAccountTypes(accounts);
-
-// Actions (follow, unfollow) are signed by whichever account is active and published to
-// the relays; they fail loudly if no relay accepts the event.
-export const actions = new ActionRunner(eventStore, accounts.signer, async (event, relays) => {
-  const responses = await pool.publish(relays?.length ? relays : RELAYS, event);
-  if (!responses.some(r => r.ok)) throw new Error('No relay accepted the update');
-});
-
-function read(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function write(key: string, value: string | null): void {
-  try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* login still works for this session */ }
+export interface Signer {
+  getPublicKey(): Promise<string>;
+  signEvent(_template: EventTemplate): Promise<NostrEvent>;
+  close(): Promise<void>;
 }
 
-let restored = false;
+const hexToBytes = (hex: string): Uint8Array => Uint8Array.from(hex.match(/../g) ?? [], pair => parseInt(pair, 16));
 
-// Bring back saved logins, then keep saving changes. Safe to call more than once.
-export async function restoreAccounts(): Promise<void> {
-  if (restored) return;
-  restored = true;
-  try {
-    const saved: unknown = JSON.parse(read(ACCOUNTS_KEY) || '[]');
-    if (Array.isArray(saved)) await accounts.fromJSON(saved);
-  } catch (error) {
-    console.error('[accounts] Could not restore saved logins:', error);
-  }
-  const active = read(ACTIVE_KEY);
-  if (active && accounts.getAccount(active)) accounts.setActive(active);
-  accounts.accounts$.subscribe(() => write(ACCOUNTS_KEY, JSON.stringify(accounts.toJSON())));
-  accounts.active$.subscribe(account => write(ACTIVE_KEY, account ? account.id : null));
-}
+// --- NIP-07 ------------------------------------------------------------------------------
 
 export function hasExtension(): boolean {
   return typeof window !== 'undefined' && 'nostr' in window;
 }
 
-export async function loginWithExtension(): Promise<void> {
-  const account = await ExtensionAccount.fromExtension();
-  accounts.addAccount(account);
-  accounts.setActive(account);
+/** Extensions can inject `window.nostr` a moment after the page loads: wait briefly before giving up. */
+async function waitForExtension(ms = 1500): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (hasExtension()) return true;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return hasExtension();
 }
 
-export function isBunkerUri(text: string): boolean {
-  return /^bunker:\/\/[0-9a-f]{64}\?/i.test(text.trim());
+function wrapExtension(extension: ExtensionSigner): Signer {
+  return { getPublicKey: () => extension.getPublicKey(), signEvent: t => extension.signEvent(t), close: async () => {} };
 }
 
-export async function loginWithBunker(uri: string): Promise<void> {
-  const text = uri.trim();
-  if (!isBunkerUri(text)) throw new Error('That is not a bunker:// link');
-  const connect = async () => {
-    // Only ask the signer for what this app does: sign contact-list updates.
-    const signer = await NostrConnectSigner.fromBunkerURI(text, { permissions: NostrConnectSigner.buildSigningPermissions([3]) });
-    return new NostrConnectAccount(await signer.getPublicKey(), signer);
+async function connectExtension(): Promise<Signer> {
+  const signer = wrapExtension(new ExtensionSigner());
+  await signer.getPublicKey();
+  saveSession({ type: 'extension' });
+  return signer;
+}
+
+// --- NIP-46 ------------------------------------------------------------------------------
+
+function wrapRemote(remote: NostrConnectSigner): Signer {
+  return {
+    getPublicKey: () => remote.getPublicKey(),
+    // A reply can get lost while this app is in the background (you are in Amber): do not wait forever.
+    signEvent: t => withTimeout(remote.signEvent(t), 90_000, 'Signer').catch((e: unknown) => {
+      throw new Error(`${e instanceof Error ? e.message : String(e)}. Open your signer, approve the request, then try again.`);
+    }),
+    close: async () => {
+      try { await withTimeout(remote.logout(), 3000, 'logout'); } catch { await remote.close(); }
+    },
   };
-  const account = await Promise.race([
-    connect(),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('The signer did not answer in time')), BUNKER_TIMEOUT_MS)),
-  ]);
-  accounts.addAccount(account);
-  accounts.setActive(account);
 }
 
-export function logout(): void {
-  const active = accounts.active;
-  if (active) accounts.removeAccount(active);
+/** Paste path (and restore): a `bunker://` URI or an `nbunksec` session. */
+async function connectBunker(credential: string): Promise<Signer> {
+  const parsed = parseCredential(credential);
+  if (!parsed) throw new Error('Paste a bunker:// link or an nbunksec.');
+  let remote: NostrConnectSigner;
+  if (parsed.kind === 'nbunksec') {
+    const p = NostrConnectSigner.parseNbunksec(parsed.value);
+    remote = new NostrConnectSigner({
+      relays: p.relays.length ? p.relays : NIP46_RELAYS,
+      remote: p.remote,
+      signer: new PrivateKeySigner(hexToBytes(p.clientKey)),
+      bunkerSecret: p.bunkerSecret,
+    });
+  } else {
+    const p = NostrConnectSigner.parseBunkerURI(parsed.value);
+    remote = new NostrConnectSigner({ relays: p.relays.length ? p.relays : NIP46_RELAYS, remote: p.remote, bunkerSecret: p.bunkerSecret });
+  }
+  await reconnect(remote, PERMISSIONS);
+  await remote.getPublicKey();
+  saveSession({ type: 'nip46', nbunksec: remote.getNbunksec() });
+  return wrapRemote(remote);
 }
 
-// Log in by scanning: the app shows a nostrconnect:// QR code, the signer app (Amber and others)
-// scans it and answers over the relays. `uri` is what goes in the QR (and in a tap-to-open link);
-// `connected` resolves once the signer has answered and the account is active; `cancel` stops waiting.
-const QR_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
+// --- the account: who is signed in, and the one place that signs ---------------------------------
+
+export type AccountStatus = 'restoring' | 'out' | 'in';
+interface AccountState { status: AccountStatus; pubkey?: string; signer?: Signer }
+
+let state: AccountState = { status: 'restoring' };
+const listeners = new Set<() => void>();
+
+function set(next: AccountState): void {
+  state = next;
+  listeners.forEach(fn => fn());
+}
+
+export function useAccountState(): AccountState {
+  return useSyncExternalStore(fn => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => state, () => state);
+}
+
+async function complete(signer: Signer): Promise<void> {
+  const pubkey = await signer.getPublicKey();
+  set({ status: 'in', pubkey, signer });
+}
+
+function currentSigner(): Signer {
+  if (!state.signer) throw new Error('Log in first');
+  return state.signer;
+}
+
+// Actions (follow, unfollow) are signed by whoever is logged in and published to the relays; they fail loudly
+// if no relay accepts the event.
+const signerProxy: ISigner = { getPublicKey: () => currentSigner().getPublicKey(), signEvent: t => currentSigner().signEvent(t) };
+export const actions = new ActionRunner(eventStore, signerProxy, async (event, relays) => {
+  const responses = await pool.publish(relays?.length ? relays : RELAYS, event);
+  if (!responses.some(r => r.ok)) throw new Error('No relay accepted the update');
+});
+
+export async function loginWithExtension(): Promise<void> {
+  await complete(await connectExtension());
+}
+
+export async function loginWithBunker(credential: string): Promise<void> {
+  await complete(await connectBunker(credential));
+}
+
+export async function logout(): Promise<void> {
+  const signer = state.signer;
+  set({ status: 'out' });
+  clearSession();
+  try { await signer?.close(); } catch { /* the session is gone either way */ }
+}
+
+let restoring: Promise<void> | null = null;
+
+/** Bring back a saved login in the background. Safe to call more than once. A failure keeps the saved session
+ *  (only Log out clears it), so the next launch tries again. */
+export function restoreAccounts(): Promise<void> {
+  if (restoring) return restoring;
+  restoring = (async () => {
+    try {
+      // Logins saved by the earlier version of this app (a different format) cannot be restored.
+      try { localStorage.removeItem('madstr:accounts'); localStorage.removeItem('madstr:active'); } catch { /* fine */ }
+      const session = loadSession();
+      if (!session) { set({ status: 'out' }); return; }
+      if (session.type === 'extension') {
+        if (!(await waitForExtension())) { set({ status: 'out' }); return; }
+        await complete(wrapExtension(new ExtensionSigner()));
+      } else {
+        await complete(await connectBunker(session.nbunksec));
+      }
+    } catch (error) {
+      console.error('[accounts] Could not restore the saved login:', error);
+      set({ status: 'out' });
+    }
+  })();
+  return restoring;
+}
+
+// --- log in by scanning -----------------------------------------------------------------------
+// The app shows a nostrconnect:// QR code, the signer app (Amber and others) scans it and answers over the relays.
+// `uri` goes in the QR (and in a tap-to-open link); `connected` resolves once the signer has answered and the
+// account is active; `cancel` stops waiting (an approval that arrives later is ignored).
 const QR_TIMEOUT_MS = 120_000;
 
 export interface QrLogin {
@@ -101,19 +186,20 @@ export interface QrLogin {
 }
 
 export function startQrLogin(): QrLogin {
-  const signer = new NostrConnectSigner({ relays: QR_RELAYS });
-  const uri = signer.getNostrConnectURI({ name: 'Mad\u26a1tr.tv', permissions: NostrConnectSigner.buildSigningPermissions([3]) });
+  const remote = new NostrConnectSigner({ relays: NIP46_RELAYS });
+  const uri = remote.getNostrConnectURI({ name: APP_NAME, permissions: PERMISSIONS });
   const controller = new AbortController();
   let cancelled = false;
   const timer = window.setTimeout(() => controller.abort(), QR_TIMEOUT_MS);
   const connected = (async () => {
     try {
-      await signer.waitForSigner(controller.signal);
-      const account = new NostrConnectAccount(await signer.getPublicKey(), signer);
-      accounts.addAccount(account);
-      accounts.setActive(account);
+      await remote.waitForSigner(controller.signal);
+      await remote.getPublicKey();
+      saveSession({ type: 'nip46', nbunksec: remote.getNbunksec() });
+      if (cancelled) { void remote.close(); return; }
+      await complete(wrapRemote(remote));
     } catch (error) {
-      void signer.close();
+      void remote.close();
       if (cancelled) return; // you pressed Cancel: not an error
       throw controller.signal.aborted ? new Error('The signer did not answer in time') : error;
     } finally {

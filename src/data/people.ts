@@ -3,7 +3,7 @@ import { castUser } from 'applesauce-common/casts';
 import { FollowUser, UnfollowUser } from 'applesauce-actions/actions';
 import type { Filter } from 'applesauce-core/helpers';
 import { use$ } from 'applesauce-react/hooks';
-import { accounts, actions } from '../lib/accounts.ts';
+import { actions, useAccountState } from '../lib/accounts.ts';
 import { friendsOfFollows, rankCreators, type Category, type Creator } from '../lib/creators.ts';
 import { useProbedDurations } from '../lib/durations.ts';
 import { eventStore } from '../lib/applesauce.ts';
@@ -11,8 +11,9 @@ import { audioFromEvent, imageFromEvent, videoFromEvent, type MediaItem } from '
 import { CONTACT_RELAYS, TV_PUBKEY, chunk, useContacts, useNostrItems, useRelayFeed } from './nostr.ts';
 
 // The logged-in account, if any.
-export function useAccount() {
-  return use$(accounts.active$);
+export function useAccount(): { pubkey: string } | undefined {
+  const state = useAccountState();
+  return useMemo(() => (state.status === 'in' && state.pubkey ? { pubkey: state.pubkey } : undefined), [state.status, state.pubkey]);
 }
 
 // Whose follows feed the board: yours once you log in, the TV's until then.

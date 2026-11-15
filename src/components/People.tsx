@@ -64,7 +64,7 @@ export function LoginPanel() {
         <ul><li>
           <Avatar pubkey={account.pubkey} />
           <span className="own-name">{shortName(account.pubkey, profile?.displayName)}</span>
-          <button type="button" className="chip-btn" data-nav onClick={logout}>Log out</button>
+          <button type="button" className="chip-btn" data-nav onClick={() => { void logout(); }}>Log out</button>
         </li></ul>
         <p className="own-note">The board now shows what the people <b>you</b> follow post.</p>
       </section>
@@ -96,7 +96,7 @@ export function LoginPanel() {
         </div>
       )}
       <form className="own-add" onSubmit={e => { e.preventDefault(); void attempt(() => loginWithBunker(uri)); }}>
-        <input type="text" value={uri} onChange={e => setUri(e.target.value)} placeholder="bunker://… (from Amber or another signer)" aria-label="Bunker link" autoComplete="off" spellCheck={false} />
+        <input type="text" value={uri} onChange={e => setUri(e.target.value)} placeholder="bunker:// or nbunksec… (from Amber or another signer)" aria-label="Bunker link" autoComplete="off" spellCheck={false} />
         <button type="submit" className="chip-btn solid" data-nav disabled={busy || !uri.trim()}>{busy ? 'Connecting…' : 'Connect'}</button>
       </form>
       {error && <p className="own-status bad" role="alert">{error}</p>}

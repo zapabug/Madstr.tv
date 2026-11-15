@@ -11,7 +11,6 @@
     "test": "node --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "applesauce-accounts": "7.1.0",
     "applesauce-actions": "7.1.1",
     "applesauce-common": "7.1.1",
     "applesauce-core": "7.1.3",
