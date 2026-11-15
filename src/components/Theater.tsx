@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { firstSentence } from '../lib/media.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import type { MediaItem } from '../lib/media.ts';
+import { useClock } from '../lib/clock.ts';
 import { useAutoHide } from '../lib/useAutoHide.ts';
 import { NextChevron, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
 import { Slideshow, type SlideCommand } from './Slideshow.tsx';
+import { Avatar } from './People.tsx';
 import { Ticker } from './Ticker.tsx';
 import { TrackToast } from './TrackToast.tsx';
 
@@ -26,6 +28,9 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
   const [command, setCommand] = useState<SlideCommand | null>(null);
   const stepPicture = (dir: 1 | -1) => setCommand(c => ({ dir, n: (c?.n ?? 0) + 1 }));
   // Only pictures that came from a Nostr post have words to show; your own pictures have none.
+  const clock = useClock();
+  // Whose post is on screen: the picture's poster over a slideshow, the video's over a video.
+  const author = showingVideo ? item?.pubkey : slide?.origin === 'nostr' ? slide.pubkey : undefined;
   const tickerText = !showingVideo && slide?.origin === 'nostr' ? firstSentence(slide.title) : '';
 
   return (
@@ -35,10 +40,14 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref }: { dat
           {hasVideo && <video ref={player.registerVideo} playsInline onClick={player.toggle} hidden={!showingVideo} />}
           {!showingVideo && <Slideshow images={pictures} onCurrent={setSlide} command={command} />}
         </div>
-        <TrackToast item={item?.kind === 'audio' ? item : undefined} />
         <div className="topline">
+          <span className="clock">{clock}</span>
           <Ticker text={tickerText} />
           <span className="brand" aria-hidden="true">Mad<span className="bolt-mark">⚡</span>tr.tv</span>
+        </div>
+        <div className="bottomline">
+          {author && <Avatar pubkey={author} />}
+          <TrackToast item={item?.kind === 'audio' ? item : undefined} />
         </div>
         {/* As in the first Madstr: previous / next item of what fills the picture area. Over a
             slideshow that is the pictures; over a video it is the videos. The songs have their own

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MediaItem } from '../lib/media.ts';
-import { NoteIcon } from './icons.tsx';
 
-// How long the track name stays on screen after the music changes: 20 seconds.
+// How long the song name stays on screen after the music changes: 20 seconds.
 export const TRACK_TOAST_MS = 20_000;
 
 function toastMs(): number {
@@ -15,7 +14,7 @@ function toastMs(): number {
   }
 }
 
-// The name of the music that just started, shown for 20 s each time the track changes.
+// "🎵 Song name", shown for 20 s each time the music changes, in the bottom-left bar of the picture.
 export function TrackToast({ item }: { item: MediaItem | undefined }) {
   const id = item?.id;
   const [shownId, setShownId] = useState<string | undefined>(undefined);
@@ -28,10 +27,5 @@ export function TrackToast({ item }: { item: MediaItem | undefined }) {
   }, [id]);
 
   if (!item || shownId !== item.id) return null;
-  return (
-    <p className="track-toast" role="status">
-      <NoteIcon size={18} />
-      <span className="track-toast-text">{item.title}{item.subtitle ? ` · ${item.subtitle}` : ''}</span>
-    </p>
-  );
+  return <span className="track-text" role="status">{'\u{1F3B5}'} {item.title}</span>;
 }
