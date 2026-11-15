@@ -1661,6 +1661,133 @@ h1 {
   position: relative;
   z-index: 1;
 }
+/* the now-playing card (feat-taste-cache §T2): the playlist's playing tile, bigger; its round disc is the face */
+.now-card {
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px 9px;
+  border: 2.5px solid var(--ink);
+  border-radius: 18px;
+  background: var(--butter);
+  color: var(--ink);
+  box-shadow: 4px 4px 0 #000;
+  rotate: -2deg;
+}
+.now-out {
+  /* the card being replaced, on top of the place the new one takes; gone at once without motion */
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  pointer-events: none;
+}
+.now-disc {
+  width: 84px;
+  height: 84px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+}
+.now-disc img,
+.now-disc .avatar {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  object-fit: cover;
+}
+.now-disc .folder-art {
+  rotate: 0deg;
+}
+.now-title {
+  max-width: 100%;
+  font: 800 0.82rem/1.2 var(--body);
+  text-align: center;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.now-n {
+  position: absolute;
+  top: 6px;
+  left: 11px;
+  font: 800 0.7rem var(--mono);
+  opacity: 0.65;
+}
+.now-card {
+  position: relative;
+}
+.now-out {
+  position: absolute;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .now-in {
+    animation: now-in 550ms var(--ease) both;
+  }
+  .now-in .now-disc {
+    animation: now-spin 700ms var(--ease) both;
+  }
+  .now-out {
+    display: flex;
+    z-index: 0;
+    animation: now-out 450ms cubic-bezier(0.5, 0, 0.75, 0) both;
+  }
+}
+/* the new card comes in from the playlist's side (left of the panel; above it on phones) */
+@keyframes now-in {
+  from {
+    opacity: 0;
+    translate: var(--now-from, -90px 10px);
+    rotate: -12deg;
+  }
+}
+.tiles-empty {
+  grid-column: 1 / -1;
+  padding: 8px 4px;
+  color: var(--muted, #b9b3c9);
+  font: 600 0.85rem var(--body);
+}
+@keyframes now-spin {
+  from {
+    rotate: -270deg;
+  }
+}
+@keyframes now-out {
+  to {
+    opacity: 0;
+    translate: -80px 60px;
+    rotate: -24deg;
+  }
+}
+/* shorter screens: a smaller disc and one line of title, so the panel never scrolls */
+@media (max-height: 999px) {
+  .now-card {
+    width: 130px;
+    gap: 4px;
+    padding: 8px 7px 5px;
+  }
+  .now-disc {
+    width: 60px;
+    height: 60px;
+  }
+  .now-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+  .pc {
+    gap: 5px;
+  }
+}
 .author-spot {
   /* 96 px: readable at TV distance (feat-taste-cache §T1; zapa: bigger again) */
   width: 96px;
@@ -2369,10 +2496,20 @@ a.chip-btn {
   .pc {
     gap: 6px;
   }
-  .pc .author-spot {
-    /* phones: 64 px, so the panel still fits (feat-taste-cache §T1) */
-    width: 64px;
-    height: 64px;
+  .pc .now-card {
+    --now-from: 0 -70px;
+    width: 118px;
+    gap: 4px;
+    padding: 9px 6px 6px;
+  }
+  .pc .now-disc {
+    /* phones: 56 px and one line of title, so the panel still fits (feat-taste-cache §T2) */
+    width: 56px;
+    height: 56px;
+  }
+  .pc .now-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
   /* smaller thumbs that only overlap the face's edges */
   .pc-face .taste-btn {

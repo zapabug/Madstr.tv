@@ -94,6 +94,7 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   session, hidden, or (Music) under 2 minutes; one batch on opening the list; only while a list is open; 4 walks
   kept (one per follow list); "reached the start" lasts one visit.
 - Relays added: relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net.
+- Now-playing card (§T2): disc 84 px / 60 px under 1000 px tall / 56 px on phones; title 2 lines, 1 when small; card 150 / 130 / 118 px wide; swap animation 450 ms out, 550 ms in, disc spins 270°.
 
 ## Open questions
 

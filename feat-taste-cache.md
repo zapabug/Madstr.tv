@@ -24,7 +24,7 @@ Scope: web app and Android app (same code).
 
 - The face of whoever posted the picture on screen (bottom left of the picture): **56 px** (was 32).
 - The face of whoever made what is playing (top of the media controls): **96 px** (was 40; zapa asked for it
-  bigger again after 72), 64 px on phones.
+  bigger again after 72), 64 px on phones. Later replaced by the now-playing card (T2): the face is its disc.
 - Exit: both read clearly at TV distance, and the media controls still fit their panel at a phone's width.
 
 ## T2: Votes and hiding
@@ -32,12 +32,23 @@ Scope: web app and Android app (same code).
 zapa, 2026-11-15, after trying the first version: "hide song and downvote do the same job, no need for
 duplicate buttons". So a down vote **is** hiding the song.
 
-The media controls, top to bottom (zapa, 2026-11-15): the **author's face, bigger (96 px, 64 on phones), with
+The media controls, top to bottom (zapa, 2026-11-15): the **now-playing card** (below), **with
 the thumbs either side overlapping its edges** (up vote left, down vote right; moved further apart after
 zapa's try) and **Hide artist** as a small post-it (28 px) stuck on its bottom-right corner, crossed with a
 red diagonal line; **previous / play / next**; a little **speed** post-it reading "SPEED ×1.5", just bigger
 than the number and made oversized with the word (fast stickers add horse power), tilted a bit more, its
 bottom edge tucked under the right end of the **seek bar**, which runs the full width and is never covered.
+
+**Now-playing card** (zapa, 2026-11-15, with a screenshot of the playing tile in the playlist: "use this card for
+current playing instead of the currently playing artist; animate this card as replacing the previous music
+disc"). It is the playlist's playing tile, bigger: a butter sticker card (ink outline, hard shadow, slight tilt)
+with the round **disc** (the author's face, a podcast's cover, or the folder for a local file), the title under
+it, and ▶ in its corner. zapa: "it removes the card from the playlist into now playing": the playing song is
+**not in the playlist**; its tile moves up into the card, and once it has played it is gone from the playlist
+for the session (it was kept until the view reopened). When the track changes, the old card drops away while
+the new one slides in from the playlist's side (left; from above on phones) with its disc spinning into place,
+like a record swapped on a player (no movement with reduced motion). A playlist with nothing else left says so. Sizes: disc **84 px** with a two-line title; on screens under **1000 px** tall disc **60 px** with one
+line, so the panel never scrolls; on phones disc **56 px** with one line.
 - **Up vote** (thumb up). Logged in, and the item is from Nostr: publishes a public like (NIP-25 reaction,
   kind 7, content `+`, tags `e` (+ `a` for an addressable track), `p`, `k`) to the content relays. Logged
   out, or not from Nostr: kept on this device only. The button stays lit while voted; pressing it again takes

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { played } from '../lib/played.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import { Avatar } from './People.tsx';
 import { FilmIcon, NoteIcon } from './icons.tsx';
@@ -9,6 +10,8 @@ const MORE = 120;
 
 // The playlist as little sticker-like tiles: the account's picture (or the cover when there
 // is no account), a brief title, and the number. Hover or focus shows the full title.
+// What is playing is not here: it moved up into the now-playing card, and what has played this session
+// is gone (zapa, spec feat-taste-cache §T2).
 // `label` is the view's own playlist name: until the player holds that playlist, the view shows its own
 // waiting / empty text, and what is still playing from before (spec §Design pass fixes).
 export function Playlist({ label, emptyText, waiting }: { label: string; emptyText: string; waiting: boolean }) {
@@ -16,7 +19,6 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
   const [limit, setLimit] = useState(FIRST);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const current = useRef<HTMLButtonElement>(null);
-  const playing = p.status === 'playing' || p.status === 'loading';
 
   // A different list starts from its first page again.
   useEffect(() => { setLimit(FIRST); }, [p.label]);
@@ -33,6 +35,11 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
     );
   }
 
+  const gone = (id: string, i: number) => i === p.index || played.has(id);
+  let next = -1;
+  for (let i = p.index + 1; i < Math.min(p.queue.length, limit); i++) if (!gone(p.queue[i].id, i)) { next = i; break; }
+  const left = p.queue.slice(0, limit).filter((row, i) => !gone(row.id, i)).length;
+
   const showTip = (el: HTMLElement, text: string) => {
     const r = el.getBoundingClientRect();
     setTip({ text, x: r.left + r.width / 2, y: r.top });
@@ -41,15 +48,14 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
   return (
     <>
       <ol className="tiles" aria-label={`Playlist: ${p.label}`}>
-        {p.queue.slice(0, limit).map((row, i) => (
+        {p.queue.slice(0, limit).map((row, i) => gone(row.id, i) ? null : (
           <li key={row.id}>
             <button
               type="button"
               className="tile"
               data-nav
-              aria-current={i === p.index ? 'true' : undefined}
               aria-label={row.title}
-              ref={i === p.index ? current : undefined}
+              ref={i === next ? current : undefined}
               onClick={() => player.jump(i)}
               onMouseEnter={e => showTip(e.currentTarget, row.title)}
               onFocus={e => showTip(e.currentTarget, row.title)}
@@ -61,10 +67,11 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
                   : <TileArt image={row.image} video={row.kind === 'video'} />}
               </span>
               <span className="tile-title">{row.title}</span>
-              <span className="tile-n" aria-hidden="true">{i === p.index && playing ? '▶' : i + 1}</span>
+              <span className="tile-n" aria-hidden="true">{i + 1}</span>
             </button>
           </li>
         ))}
+        {left === 0 && p.queue.length <= limit && <li className="tiles-empty">Nothing else in this playlist.</li>}
         {p.queue.length > limit && (
           <li><button type="button" className="tile tile-more" data-nav onClick={() => setLimit(l => l + MORE)}>+{p.queue.length - limit} more</button></li>
         )}
