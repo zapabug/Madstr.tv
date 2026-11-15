@@ -26,12 +26,12 @@ export function SeekBar() {
   const p = usePlayer();
   const max = Math.max(1, Math.floor(p.duration));
   const value = Math.min(Math.floor(p.position), max);
-  const fill = Math.round((value / max) * 100);
+  const fraction = value / max;
   return (
     <div className="dock-seek">
       <span className="dock-time">{formatTime(p.position)}</span>
       <input type="range" className="seek" aria-label="Position" min={0} max={max} step={1} value={value}
-        style={{ '--fill': `${fill}%` } as CSSProperties}
+        style={{ '--p': fraction } as CSSProperties}
         disabled={p.queue.length === 0 || p.duration === 0} onChange={e => player.seek(Number(e.target.value))} />
       <span className="dock-time">{p.duration > 0 ? formatTime(p.duration) : '--:--'}</span>
     </div>

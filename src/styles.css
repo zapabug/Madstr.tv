@@ -216,12 +216,13 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 /* A tall seek bar: easy to hit with a mouse or a finger, and clear from across the room. */
 .seek { -webkit-appearance: none; appearance: none; height: 34px; margin: 0; padding: 0; background: transparent; cursor: pointer; }
 .seek:disabled { cursor: default; opacity: .5; }
-.seek::-webkit-slider-runnable-track { box-sizing: border-box; height: 20px; border: 2.5px solid var(--ink); border-radius: 999px; box-shadow: 2px 2px 0 #000;
-  background: linear-gradient(to right, var(--orange) var(--fill, 0%), #ffffff33 var(--fill, 0%)); }
-.seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 28px; height: 28px; margin-top: -4px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 2px 2px 0 #000; }
+.seek::-webkit-slider-runnable-track { box-sizing: border-box; height: 20px; border: 2.5px solid var(--ink); border-radius: 999px;
+  /* the orange ends at the centre of the thumb: it travels from 14px to (width - 14px) */
+  background: linear-gradient(to right, var(--orange) calc(14px + (100% - 28px) * var(--p, 0)), #ffffff33 0); }
+.seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 28px; height: 28px; margin-top: -4px; border: 0; border-radius: 50%; background: #fff; box-shadow: none; }
 .seek::-moz-range-track { box-sizing: border-box; height: 20px; border: 2.5px solid var(--ink); border-radius: 999px; background: #ffffff33; }
 .seek::-moz-range-progress { height: 15px; border-radius: 999px; background: var(--orange); }
-.seek::-moz-range-thumb { box-sizing: border-box; width: 28px; height: 28px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 2px 2px 0 #000; }
+.seek::-moz-range-thumb { box-sizing: border-box; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fff; }
 .seek:focus-visible { outline: 3px solid #fff; outline-offset: 3px; border-radius: 999px; }
 .dock-time { font: 400 .78rem var(--mono); color: var(--muted); min-width: 4.2ch; }
 .dock-extra { display: flex; gap: 8px; flex: none; }
@@ -315,9 +316,18 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .player-panel { justify-content: center; }
 .pc { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .pc .dock-seek { width: 100%; }
-.pc-main { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.pc-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
 .pc-extra { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .pc .dock-play { width: 64px; height: 64px; }
+/* a narrow panel (small or zoomed window): smaller buttons so the row fits instead of clipping */
+@container (max-width: 240px) {
+  .pc { gap: 10px; }
+  .pc-main { gap: 6px; }
+  .pc .dock-play { width: 52px; height: 52px; }
+  .pc .chip-btn { padding: 6px 8px; font-size: .72rem; min-height: 32px; }
+  .pc .dock-seek { gap: 6px; }
+  .pc .dock-time { min-width: 0; font-size: .7rem; }
+}
 --------------------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: no-preference) {
   .s1 { animation: drift 160s linear infinite; }
