@@ -8,6 +8,9 @@ test('the clock shows hours and minutes, padded', () => {
   assert.equal(formatClock(new Date(2026, 10, 15, 0, 0), 'en-GB'), '00:00');
 });
 
-test('12-hour systems keep their own format', () => {
-  assert.match(formatClock(new Date(2026, 10, 15, 14, 32), 'en-US'), /^0?2:32\s?PM$/i);
+test('12-hour systems keep their hours but lose the AM / PM label', () => {
+  assert.match(formatClock(new Date(2026, 10, 15, 14, 32), 'en-US'), /^0?2:32$/);
+  assert.match(formatClock(new Date(2026, 10, 15, 2, 40), 'en-US'), /^0?2:40$/);
+  assert.doesNotMatch(formatClock(new Date(2026, 10, 15, 9, 5), 'en-US'), /am|pm/i);
+  assert.doesNotMatch(formatClock(new Date(2026, 10, 15, 9, 5), 'en-GB'), /am|pm/i);
 });
