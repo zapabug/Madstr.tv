@@ -52,9 +52,11 @@ Mechanics:
 - Kind 31337 `duration` treated as milliseconds only when above 10000 (`media.ts`).
 - localStorage overrides `madstr:hideMs` and `madstr:toastMs` for the hide and toast timers.
 
+- "Played" = played and moved on from, or ended; lists hide played items when they open (not mid-visit).
 - Shuffle resets when another playlist opens; the Shuffle button sits in the picker header.
 
 Numbers:
+- Picture cache 2000; older pictures 300 per batch, one batch every 20 s; session sets capped at 5000 played / 6000 seen pictures (proposed 2026-11-15).
 - Planet picture retry: every 15 s, up to 4 times (`Sky.tsx`); proposed 2026-11-15.
 - Names clipped to 40 characters (`MAX_NAME`, `names.ts`); proposed 2026-11-15.
 - Player: prev restarts after 5 s; resume skips < 5 s and the last 10 s; rates 1, 1.25, 1.5, 2,
@@ -90,3 +92,4 @@ Numbers:
 - 2026-11-15: autohide 25 s; video fills the screen when the panel hides (viewer no longer scrollable).
 - 2026-11-15: design pass (two HIGH, four MEDIUM fixed); "Logged in as" label to check the signer's key.
 - 2026-11-15: R8 remote pass built; arrows stay inside an area (picture, picker, controls) until nothing lies further.
+- 2026-11-15: played items hide per session; slideshow avoids repeats per session; picture cache walks back in time.

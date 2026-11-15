@@ -20,6 +20,9 @@ State: Built, machine-verified and committed; needs zapa to check it, logged in 
 Feat: Shuffle in the media picker, and video sound that keeps playing off the viewer
 State: Built, machine-verified against real relays and committed; needs zapa to try both.
 ────────────────────────────────────────
+Feat: Played items hidden per session, and pictures that repeat far less
+State: Built, machine-verified against real relays and committed; needs zapa to use it for a while and say if the numbers (2000 pictures, a batch every 20 s) feel right.
+────────────────────────────────────────
 Feat: RSS
 State: Incoming. The feed parser and proxy exist from the earlier own-audio work; tests come with the new RSS work.
 ────────────────────────────────────────

@@ -129,6 +129,10 @@ network back); checked headless with the first request forced to fail, shown 15 
   empty state; person icon for unnamed people; image fallbacks; "Logged in as" on Log out; no tilt on
   phones; flat dashed disabled chips. Checked with screenshots (Podcasts, My pictures, People phone).
 
+- f7f944c: played items hide for the session (lists and previews, snapshot when a list opens); slideshow shows
+  every picture once before repeats; picture cache (2000) on the device, walking back in time 300 per
+  20 s per request. Headless: played video gone on reopen; cache 629 -> 929 in under 2 minutes.
+
 ## RSS [incoming]
 Spec: §Milestones RSS
 
