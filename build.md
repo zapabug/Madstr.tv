@@ -240,3 +240,4 @@ Commit: 48fb782 · Spec: `feat-android-play.md` §A2
   element playing once the app is kept alive is the open question; if it does not, the next step is a native
   player (snippet `capacitor-webview-audio-stops-in-background.md`).
 
+- Published 2026-11-15 on zapstore: release `dbc6dcbb…` (1.1, versionCode 2), status pending at first, like 1.0.

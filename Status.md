@@ -15,7 +15,7 @@ Feat: Installable web app and Android app on zapstore
 State: Live. The web app installs and opens offline, and Mad⚡tr.tv 1.0 for Android phones and TV is published on zapstore under zapa. Needs zapa to install it from zapstore on a phone or TV and say it works, and to back up the release signing key.
 ────────────────────────────────────────
 Feat: Android app: picking files and playing in the background (1.1)
-State: Built and machine-checked, not yet run on a phone or TV. In the app the music and picture buttons now pick several files instead of a folder, and a playing notification keeps music going in the background. Needs zapa to install 1.1 and try both with the screen off.
+State: Built and published on zapstore as 1.1, not yet run on a phone or TV. In the app the music and picture buttons now pick several files instead of a folder, and a playing notification keeps music going in the background. Needs zapa to install 1.1 and try both with the screen off.
 ────────────────────────────────────────
 Feat: Deploy
 State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker.

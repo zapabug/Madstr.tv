@@ -57,4 +57,4 @@ Scope: the Android app (phones and Android TV) only. The web app does not change
 ## Milestones
 
 - [ ] A1 pick files in the app (built + machine-verified; awaiting zapa on a device)
-- [ ] A2 keep playing in the background (built; not run on a device)
+- [ ] A2 keep playing in the background (built; published in 1.1, release dbc6dcbb…; not run on a device)
