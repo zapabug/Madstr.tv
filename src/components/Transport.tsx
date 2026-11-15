@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react';
 import { player, usePlayer } from '../lib/player.ts';
 import { formatTime } from '../lib/queue.ts';
+import { authorSpot } from '../lib/author.ts';
 import { toggleLike, useLiked } from '../lib/liked.ts';
-import { HeartIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
+import { Avatar } from './People.tsx';
+import { FolderIcon, HeartIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -59,6 +61,21 @@ export function ExtraButtons({ speed = true }: { speed?: boolean }) {
 // The right-hand control panel, laid out on purpose so it reads the same at any width:
 // the seek bar across the top, the main transport row under it (-10s, play, +30s), and the
 // two small extras (like, speed) below. Previous / next are the chevrons on the picture.
+// A small square for the author of what is playing (see lib/author.ts for what goes in it).
+function AuthorSpot() {
+  const p = usePlayer();
+  const spot = authorSpot(p.queue[p.index]);
+  if (spot.kind === 'none') return null;
+  return (
+    <div className="author-spot" title={spot.label} aria-label={`Author: ${spot.label}`} role="img">
+      {spot.kind === 'profile' ? <Avatar pubkey={spot.pubkey} />
+        : spot.kind === 'cover' ? <img src={spot.image} alt="" referrerPolicy="no-referrer" />
+        : spot.kind === 'initial' ? <span className="author-initial">{spot.letter}</span>
+        : <FolderIcon size={22} />}
+    </div>
+  );
+}
+
 export function PanelControls() {
   const p = usePlayer();
   const liked = useLiked();
@@ -69,6 +86,7 @@ export function PanelControls() {
   const noun = item?.kind === 'video' ? 'video' : 'song';
   return (
     <div className="pc" role="group" aria-label="Media controls">
+      <AuthorSpot />
       <SeekBar />
       <div className="pc-main">
         <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>

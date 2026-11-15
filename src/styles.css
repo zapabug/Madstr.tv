@@ -312,6 +312,9 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .player-panel { justify-content: center; }
 .pc { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .pc .dock-seek { width: 100%; }
+.author-spot { width: 40px; height: 40px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: #ffffff14; color: var(--text); box-shadow: 0 0 10px 1px rgba(255, 255, 255, .22); }
+.author-spot img, .author-spot .avatar { width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: cover; }
+.author-initial { font: 800 1.1rem var(--display); }
 .pc-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
 .pc-extra { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 .pc-main .dock-btn:not(.dock-play) { width: 46px; height: 46px; }
@@ -353,11 +356,11 @@ h1 { font: 800 clamp(2.2rem, 1.2rem + 4.6vw, 4.4rem)/0.98 var(--display); letter
 .topline { position: absolute; top: 0; left: 0; right: 0; z-index: 2; height: 26px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #0b0716e6; pointer-events: none; }
 .clock { flex: none; font: 700 .95rem/1 var(--mono); letter-spacing: .02em; }
 .brand { flex: none; margin-left: auto; padding-left: 6px; font: 700 1rem/1 var(--display); letter-spacing: -0.03em; }
-.bottomline { position: absolute; left: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 200px); padding: 8px; background: #0b0716e6; pointer-events: none; }
+.bottomline { position: absolute; left: 0; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 200px); padding: 10px; pointer-events: none; }
 .bottomline:empty { display: none; }
 .bottomline .avatar { width: 32px; height: 32px; flex: none; border: 0; outline: 0; border-radius: 8px; object-fit: cover;
   /* no outline: a faint soft halo instead */ box-shadow: 0 0 10px 1px rgba(255, 255, 255, .28); }
-.track-text { min-width: 0; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 .95rem/1.2 var(--body); animation: slidein 500ms ease-out both; }
+.track-text { min-width: 0; padding: 5px 12px; background: #0b0716e6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 .95rem/1.2 var(--body); animation: slidein 500ms ease-out both; }
 .ticker { flex: 1 1 auto; min-width: 0; height: 100%; overflow: hidden; display: flex; align-items: center; }
 .ticker-run { display: inline-block; white-space: nowrap; padding-left: 100%; animation: ticker linear infinite; }
 .ticker-text { display: inline-block; font: 700 .95rem/1 var(--body); letter-spacing: .01em; }
