@@ -14,3 +14,8 @@ test('the generated worker parses as a script', () => {
   const src = swSource('madstr-x', ['/'], 'function swRoute() { return "pass"; }');
   assert.doesNotThrow(() => new Function('self', 'caches', 'fetch', 'Response', src));
 });
+
+test('under a base path the kept page is that folder\'s index.html (feat-plebworld-deploy §D1)', () => {
+  assert.match(swSource('madstr-x', ['/madstr/'], 'function swRoute() { return "pass"; }', '/madstr/'), /cache\.put\("\/madstr\/index\.html"/);
+  assert.match(swSource('madstr-x', ['/'], 'function swRoute() { return "pass"; }'), /caches\.match\("\/index\.html"\)/);
+});

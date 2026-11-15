@@ -1,9 +1,10 @@
 // The service worker's source, put together at build time by the plugin in vite.config.ts (spec
 // feat-pwa-zapstore §P1). `routeJs` is lib/swRoute.ts with its types stripped; `files` is the app shell of
-// this build. The cache name carries the build's id, so a new deploy installs fresh files and the old cache
+// this build, under `base` ('/', or '/madstr/' on pleb.world). The cache name carries the build's id, so a new deploy installs fresh files and the old cache
 // is dropped once the new version takes over.
 
-export function swSource(cacheName: string, files: readonly string[], routeJs: string): string {
+export function swSource(cacheName: string, files: readonly string[], routeJs: string, base = '/'): string {
+  const page = JSON.stringify(`${base}index.html`);
   return `// Mad⚡tr.tv service worker, generated at build time (see src/pwa/swSource.ts). Do not edit.
 ${routeJs}
 const CACHE = ${JSON.stringify(cacheName)};
@@ -30,10 +31,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((cache) => cache.put('/index.html', copy)); }
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((cache) => cache.put(${page}, copy)); }
           return res;
         })
-        .catch(() => caches.match('/index.html').then((hit) => hit || Response.error())),
+        .catch(() => caches.match(${page}).then((hit) => hit || Response.error())),
     );
   } else if (route === 'shell') {
     event.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req)));

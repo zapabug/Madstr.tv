@@ -11,8 +11,11 @@ last-worked: 2026-11-15
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Web app moves to pleb.world/madstr, Android 1.3
+State: Live. The web app (the TV and desktop version) is at www.pleb.world/madstr with its RSS proxy, and the pleb.world sticker links there; Android 1.3 with everything below is published on zapstore. Needs zapa to delete the old madstr-tv project in the Vercel dashboard, to install 1.3 and try the sideways view on a phone, and to say whether to push this repo to GitHub.
+────────────────────────────────────────
 Feat: Bigger faces, up and down votes, hiding artists, music and videos kept on the device, double tap to seek, phone turned sideways
-State: Built and checked in a browser, on its own branch, not merged or pushed, so neither the web app nor the Android app has it yet; only the dev server shows it. The media controls follow zapa's layout (a now-playing card that swaps like a record as the song moves out of the playlist, thumbs either side, Hide artist and SPEED post-its, full-width seek); a down vote hides the song; double tap on the picture seeks; in the Android app, a phone held sideways shows the full picture with only the transport and seek bar. Needs zapa to try it and say whether to merge, push and ship it as Android 1.3.
+State: Built, checked in a browser and merged; live on pleb.world/madstr and in Android 1.3. The media controls follow zapa's layout (a now-playing card that swaps like a record as the song moves out of the playlist, thumbs either side, Hide artist and SPEED post-its, full-width seek); a down vote hides the song; double tap on the picture seeks; in the Android app, a phone held sideways shows the full picture with only the transport and seek bar. Needs zapa to try it on the live site and the app and confirm each part.
 ────────────────────────────────────────
 Feat: Android app 1.2: lock-screen and notification controls, remembered folders, local music in Music, music 2 to 9 minutes
 State: Published on zapstore as 1.2, not yet run on a phone or TV. The web app gets the browser's media controls, the music mix slider and the 2-minute rule too. Needs zapa to install 1.2 and try the controls (lock screen, headphones, TV remote) and adding a folder, then closing and reopening the app.

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:pleb": "tsc -p tsconfig.json --noEmit && vite build --base /madstr/ --outDir dist-pleb && node scripts/build-pleb-api.mjs",
     "preview": "vite preview --port 3000",
     "lint": "eslint .",
     "test": "node --test \"src/**/*.test.ts\"",

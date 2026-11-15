@@ -39,20 +39,22 @@ function serviceWorker(): Plugin {
       const path = join(dir, name)
       return statSync(path).isDirectory() ? publicFiles(path) : ['/' + relative('public', path).split('\\').join('/')]
     })
+  let base = '/' // the build's base path: '/' for the app, '/madstr/' for pleb.world (feat-plebworld-deploy §D1)
   return {
     name: 'madstr-service-worker',
     apply: 'build',
     enforce: 'post', // after Vite has written index.html into the bundle, so the page is in the list
+    configResolved(config) { base = config.base },
     async generateBundle(_options, bundle) {
       const built = Object.keys(bundle).filter(name => !name.endsWith('.map')).map(name => '/' + name)
-      const files = [...new Set(['/', ...built, ...publicFiles('public')])].sort()
+      const files = [...new Set(['/', ...built, ...publicFiles('public')])].map(f => base + f.slice(1)).sort()
       const hash = createHash('sha256')
       for (const name of files) hash.update(name)
       const page = bundle['index.html']
       if (page && page.type === 'asset') hash.update(String(page.source))
       const route = await transformWithEsbuild(readFileSync('src/lib/swRoute.ts', 'utf8'), 'swRoute.ts', { loader: 'ts', format: 'esm' })
       const routeJs = route.code.replace(/^export /gm, '')
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source: swSource(`madstr-${hash.digest('hex').slice(0, 12)}`, files, routeJs) })
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: swSource(`madstr-${hash.digest('hex').slice(0, 12)}`, files, routeJs, base) })
     },
   }
 }
