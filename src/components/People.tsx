@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
+import { CATEGORIES, type Category } from '../lib/creators.ts';
 import { hasExtension, loginWithBunker, loginWithExtension, logout, startQrLogin, type QrLogin } from '../lib/accounts.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
 
@@ -105,7 +106,8 @@ export function LoginPanel() {
 
 export function FollowView() {
   const account = useAccount();
-  const { creators, following } = useCreatorSuggestions();
+  const [category, setCategory] = useState<Category | 'all'>('all');
+  const { creators, following } = useCreatorSuggestions(category);
   const [pending, setPending] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -125,10 +127,16 @@ export function FollowView() {
     <div className="people">
       <LoginPanel />
       <section className="own" aria-label="Creators to follow">
-        <h2>Podcast and music creators</h2>
-        <p className="own-note">People publishing audio on Nostr: friends of the people you follow first, then others.</p>
+        <h2>Creators to follow</h2>
+        <p className="own-note">People you do not follow yet, ranked by what they publish: friends of the people you follow first, then others.</p>
+        <div className="chips creator-chips" role="group" aria-label="Rank by">
+          <button type="button" data-nav aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Everything</button>
+          {CATEGORIES.map(c => (
+            <button key={c.id} type="button" data-nav aria-pressed={category === c.id} title={c.hint} onClick={() => setCategory(c.id)}>{c.emoji} {c.label}</button>
+          ))}
+        </div>
         {message && <p className="own-status bad" role="alert">{message}</p>}
-        {creators.length === 0 && <p className="own-note">Looking for creators…</p>}
+        {creators.length === 0 && <p className="own-note">{category === 'all' ? 'Looking for creators…' : 'Nobody found yet who publishes this. More may arrive.'}</p>}
         <ul className="creators">
           {creators.map(c => {
             const isFollowing = following?.has(c.pubkey) ?? false;
@@ -137,7 +145,10 @@ export function FollowView() {
                 {c.mutual > 0 && <span className="note">{c.mutual} of your follows</span>}
                 <Avatar pubkey={c.pubkey} />
                 <h3 className="card-name"><PersonName pubkey={c.pubkey} /></h3>
-                <p className="card-sub">{c.count} {c.count === 1 ? 'item' : 'items'} · {c.latest}</p>
+                <p className="card-counts" aria-label="What they publish">
+                  {CATEGORIES.filter(k => c.counts[k.id] > 0).map(k => <span key={k.id} title={`${k.label}: ${k.hint}`}>{k.emoji} {c.counts[k.id]}</span>)}
+                </p>
+                <p className="card-sub">{c.latest}</p>
                 <div className="card-actions">
                   <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
                     onClick={() => { void run(c.pubkey, isFollowing); }}>

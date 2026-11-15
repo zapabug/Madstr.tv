@@ -45,7 +45,7 @@ test('kind 1063 audio keeps its seconds and a kind 1 note can link a file', () =
   assert.equal(note?.title, 'Listen to this');
 });
 
-test('short and long videos follow the NIP-71 kinds', () => {
+test('a short video is under 30 seconds; the NIP-71 kinds only decide when the length is unknown', () => {
   assert.equal(videoFromEvent(short34236)?.short, true);
   assert.equal(videoFromEvent(short22)?.short, true);
   assert.equal(videoFromEvent(long21)?.short, false);
@@ -59,9 +59,13 @@ test('YouTube-only and url-less videos are dropped', () => {
   assert.equal(videoFromEvent(ev(22, [['title', 'no media']])), null);
 });
 
-test('a 1063 video under a minute counts as short', () => {
+test('the 30 second line, whatever the kind', () => {
   const clip = ev(1063, [['url', 'https://x/v.mp4'], ['m', 'video/mp4'], ['duration', '12']]);
   assert.equal(videoFromEvent(clip)?.short, true);
+  assert.equal(videoFromEvent(ev(22, [['imeta', 'url https://x/a.mp4'], ['duration', '29.9']]))?.short, true);
+  assert.equal(videoFromEvent(ev(22, [['imeta', 'url https://x/a.mp4'], ['duration', '45']]))?.short, false, 'a 45 second "short" kind is a normal video now');
+  assert.equal(videoFromEvent(ev(34236, [['imeta', 'url https://x/b.mp4']]))?.short, true, 'no length: the short kind says short');
+  assert.equal(videoFromEvent(ev(21, [['imeta', 'url https://x/c.mp4'], ['duration', '20']]))?.short, true, 'a 20 second normal-kind video is short');
   const movie = ev(1063, [['url', 'https://x/v.mp4'], ['m', 'video/mp4'], ['duration', '900']]);
   assert.equal(videoFromEvent(movie)?.short, false);
 });

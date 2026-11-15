@@ -218,6 +218,15 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       for the session where there is no folder picker).
 - [ ] later: TV (Android) build and native permission, see Parked.
 
+## Rules added later (zapa, 2026-11-15)
+
+- **Short video** = under 30 seconds (a known length decides; the NIP-71 short kinds only when it is not known).
+- **Podcast** = audio longer than 9 minutes (lengths are read from the audio in the background; a #podcast
+  hashtag or the word episode stands in until then). **Music** = audio of 9 minutes or less.
+- **Creators to follow** are ranked by what they publish: images, videos, podcasts, music, short videos.
+  Friends of your follows come first as a group; inside a group, whoever publishes most of the chosen
+  category leads; chips pick the category.
+
 ## Dropped later (zapa, 2026-11-15)
 
 **Liked npubs** is not needed: the sticker, its view, the heart buttons and the saved list are gone.

@@ -16,7 +16,8 @@ Built on [Applesauce](https://applesauce.build) (React 19, Vite, TypeScript).
 - **Sources**: the people the TV account (or you, once logged in) follow on Nostr, hashtags you
   add, RSS feeds, folders on your device, and your own pictures as slides.
 - **People**: log in with a browser extension, a `bunker://` link or a QR code, and follow creators
-  (friends of the people you follow first).
+  (friends of the people you follow first), ranked by what they publish: pictures, videos, podcasts,
+  music and short videos (under 30 s).
 
 ## Run it
 

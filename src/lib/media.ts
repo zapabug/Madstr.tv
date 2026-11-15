@@ -3,8 +3,9 @@
 // event with no playable URL is dropped instead of guessed at.
 //
 // The rules below come from real events on relays (checked 2026-11-15):
-//  - video: NIP-71 kinds 21 / 34235 are normal videos, 22 / 34236 are short videos;
-//    the playable URL lives in an `imeta` tag, and some are only YouTube links.
+//  - video: NIP-71 kinds 21 / 34235 are normal videos, 22 / 34236 are short videos; the playable
+//    URL lives in an `imeta` tag, and some are only YouTube links. By zapa's rule a short video is
+//    one under 30 seconds, so a known length decides and the kinds only matter without one.
 //  - audio: in practice most music and podcasts are plain kind 1 notes: a link to an audio file
 //    in the text, or an `imeta` attachment whose `m` is `audio/*` (uploads often have no file
 //    extension). The dedicated kinds are rare but still read: kind 1063 with `m audio/*` (skip
@@ -44,7 +45,7 @@ export const VIDEO_KINDS = [1, 21, 22, 34235, 34236, 1063];
 export const IMAGE_KINDS = [1, 20, 1063];
 
 export const MUSIC_MAX_SECONDS = 9 * 60; // zapa's rule: longer than 9 minutes is a podcast
-export const SHORT_VIDEO_SECONDS = 60;
+export const SHORT_VIDEO_SECONDS = 30; // zapa's rule: a short video is under 30 seconds
 
 const MAX_TEXT = 160;
 const AUDIO_URL = /https?:\/\/[^\s"'<>]+?\.(?:mp3|m4a|ogg|oga|opus|aac|wav|flac)(?:\?[^\s"'<>]*)?/i;
@@ -194,7 +195,8 @@ export function videoFromEvent(e: NostrEventLike): MediaItem | null {
   if (!isHttpUrl(url) || isYouTube(url)) return null;
 
   const duration = parseDuration(tagValue(e.tags, 'duration') ?? imetaEntries(e.tags)[0]?.duration);
-  const short = e.kind === 22 || e.kind === 34236 || (e.kind === 1063 && duration !== undefined && duration < SHORT_VIDEO_SECONDS);
+  // Under 30 seconds when the length is known; if it is not, the NIP-71 short kinds (22, 34236) say so.
+  const short = duration !== undefined ? duration < SHORT_VIDEO_SECONDS : e.kind === 22 || e.kind === 34236;
 
   return {
     id: `nostr:${e.id}`,

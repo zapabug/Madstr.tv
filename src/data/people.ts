@@ -4,9 +4,10 @@ import { FollowUser, UnfollowUser } from 'applesauce-actions/actions';
 import type { Filter } from 'applesauce-core/helpers';
 import { use$ } from 'applesauce-react/hooks';
 import { accounts, actions } from '../lib/accounts.ts';
-import { friendsOfFollows, rankCreators, type Creator } from '../lib/creators.ts';
+import { friendsOfFollows, rankCreators, type Category, type Creator } from '../lib/creators.ts';
+import { useProbedDurations } from '../lib/durations.ts';
 import { eventStore } from '../lib/applesauce.ts';
-import { audioFromEvent, type MediaItem } from '../lib/media.ts';
+import { audioFromEvent, imageFromEvent, videoFromEvent, type MediaItem } from '../lib/media.ts';
 import { CONTACT_RELAYS, TV_PUBKEY, chunk, useContacts, useNostrItems, useRelayFeed } from './nostr.ts';
 
 // The logged-in account, if any.
@@ -36,9 +37,12 @@ export async function unfollow(pubkey: string): Promise<void> {
   await actions.run(UnfollowUser, { pubkey });
 }
 
+// What anyone is publishing right now, for the people who are not friends of your follows yet.
 const CREATOR_FILTERS: Filter[] = [
   { kinds: [1063, 31337], limit: 300 },
   { kinds: [1], '#t': ['podcast', 'podcasts'], limit: 200 },
+  { kinds: [21, 22, 34235, 34236], limit: 200 },
+  { kinds: [20], limit: 200 },
 ];
 
 // The people your follows follow (fetching each follow's contact list), with how many of your follows
@@ -57,29 +61,32 @@ function useFriendsOfFollows(contacts: string[] | undefined, exclude: ReadonlySe
   }, [events, exclude]);
 }
 
-// Who to follow next: people publishing audio, friends of your follows first (the more of your follows
-// follow them, the higher), then others publishing audio on the relays.
-export function useCreatorSuggestions(): { creators: Creator[]; following: Set<string> | undefined } {
+// Who to follow next, ranked by what they publish: pictures, videos, podcasts, music and short videos
+// (under 30 seconds). Friends of your follows come first (the more of your follows follow them, the
+// higher), then others. Pick a category to see only people who publish it.
+export function useCreatorSuggestions(category: Category | 'all' = 'all'): { creators: Creator[]; following: Set<string> | undefined } {
   const feed = useFeedPubkey();
   const contacts = useContacts(feed);
   const following = useMemo(() => (contacts ? new Set(contacts) : undefined), [contacts]);
   const exclude = useMemo(() => new Set([...(contacts ?? []), feed]), [contacts, feed]);
 
   const mutual = useFriendsOfFollows(contacts, exclude);
-  const friendAuthors = useMemo(() => [...mutual.keys()], [mutual]);
-  const friendItems = useNostrItems('audio', friendAuthors.length > 0 ? friendAuthors : undefined);
+  const friendAuthors = useMemo(() => (mutual.size > 0 ? [...mutual.keys()] : undefined), [mutual]);
+  const friendAudio = useProbedDurations(useNostrItems('audio', friendAuthors));
+  const friendVideo = useNostrItems('video', friendAuthors);
+  const friendImages = useNostrItems('image', friendAuthors);
 
   useRelayFeed(CREATOR_FILTERS, 'creators');
   const events = use$(() => eventStore.timeline(CREATOR_FILTERS), []);
 
   const creators = useMemo(() => {
-    const items: MediaItem[] = [...friendItems];
+    const items: MediaItem[] = [...friendAudio, ...friendVideo, ...friendImages];
     for (const event of events ?? []) {
-      const item = audioFromEvent(event);
+      const item = audioFromEvent(event) ?? videoFromEvent(event) ?? imageFromEvent(event);
       if (item) items.push(item);
     }
-    return rankCreators(items, exclude, 30, mutual);
-  }, [friendItems, events, exclude, mutual]);
+    return rankCreators(items, exclude, 30, mutual, category);
+  }, [friendAudio, friendVideo, friendImages, events, exclude, mutual, category]);
 
   return { creators, following };
 }
