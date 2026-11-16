@@ -22,6 +22,8 @@ export interface ViewData {
   label: string;
   waiting: boolean; // still looking for who to follow / first results
   emptyText: string;
+  listKey?: string; // changes when the same view opens another list (Radio's stickers and country)
+  startAt?: number; // where that list starts playing; -1 = not here yet (keep playing what plays)
 }
 
 // The item playing, by id only (re-renders when the track changes, not on every position tick).
@@ -78,7 +80,11 @@ export function useViewItems(route: ViewerRoute): ViewData {
         const emptyText = genre ? `No ${genre} stations${where} yet.`
           : saved.length > 0 && where ? `None of your stations is${where}.`
           : 'No stations saved yet. Pick a genre sticker and up vote the stations you like.';
-        return { items, label: 'Radio', waiting: genre !== undefined && genreStations.length === 0, emptyText };
+        // A sticker you press plays its own first station (Live now stays at the top of the list).
+        const own = new Set((genre ? genreStations : saved).map(s => s.id));
+        const first = items.findIndex(i => own.has(i.id));
+        const startAt = first >= 0 ? first : genre ? -1 : 0;
+        return { items, label: 'Radio', waiting: genre !== undefined && genreStations.length === 0, emptyText, listKey: `${radioPrefs.sticker}|${radioPrefs.country}`, startAt };
       }
       if (route.filter === 'podcasts') {
         const items = sortNewest(dedupeByUrl([...own.rss, ...audio.filter(isPodcast)]));
@@ -103,7 +109,7 @@ export function useViewItems(route: ViewerRoute): ViewData {
         emptyText: n > 0 ? `${n} of your pictures, playing as a slideshow above.` : 'Add a folder of pictures under Make it yours; they play as a slideshow.' };
     }
     return { items: NO_ITEMS, label: route.filter === 'sources' ? 'Make it yours' : 'Follow more creators', waiting: false, emptyText: '' };
-  }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last, musicOften, liveNow, followedStations, genre, genreStations, saved, radioPrefs.country]);
+  }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last, musicOften, liveNow, followedStations, genre, genreStations, saved, radioPrefs.country, radioPrefs.sticker]);
 
   const view = useMemo((): ViewData => {
     // Your taste first (hidden songs and artists out, down votes last; spec feat-taste-cache §T2), then played.

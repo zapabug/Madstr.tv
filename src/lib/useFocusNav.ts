@@ -8,8 +8,10 @@ function boxOf(el: Element): Box {
   return { left: r.left, top: r.top, width: r.width, height: r.height };
 }
 
+// While a dialog marked data-nav-modal is open (Radio's genre picker), the arrows stay inside it.
 function visibleTargets(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>(NAV)).filter(el => {
+  const root: ParentNode = document.querySelector('[data-nav-modal]') ?? document;
+  return Array.from(root.querySelectorAll<HTMLElement>(NAV)).filter(el => {
     if (el.hasAttribute('disabled') || el.getAttribute('aria-hidden') === 'true') return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;

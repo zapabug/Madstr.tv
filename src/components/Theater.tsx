@@ -1,5 +1,5 @@
 import type { ViewData } from '../data/views.ts';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createTapper, seekForSide } from '../lib/doubleTap.ts';
 import { firstSentence } from '../lib/media.ts';
 import { player, usePlayer } from '../lib/player.ts';
@@ -22,7 +22,7 @@ import { TrackToast } from './TrackToast.tsx';
 // on the left 70% (where the message board was), the media controls on the right 30%. After a while without input the bottom panel
 // slides away and the picture takes the whole screen.
 // emptyStage: what the picture area says when it has nothing to show (My pictures with no pictures yet).
-export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptyStage }: { data: ViewData; hasVideo: boolean; pictures: PictureSources; modeLabel?: string; modeHref?: string; emptyStage?: string }) {
+export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptyStage, pickerExtra }: { data: ViewData; hasVideo: boolean; pictures: PictureSources; modeLabel?: string; modeHref?: string; emptyStage?: string; pickerExtra?: ReactNode }) {
   const p = usePlayer();
   const item = p.queue[p.index];
   const showingVideo = hasVideo && item?.kind === 'video';
@@ -111,7 +111,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
         {modeLabel && modeHref && <a className="mode-chip" href={modeHref} data-nav>{modeLabel}</a>}
       </div>
       <div className="split">
-        <PickerPanel label={data.label} emptyText={data.emptyText} waiting={data.waiting} />
+        <PickerPanel label={data.label} emptyText={data.emptyText} waiting={data.waiting} extra={pickerExtra} />
         <PlayerPanel />
       </div>
     </main>
