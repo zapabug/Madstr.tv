@@ -16,6 +16,7 @@ import {
   MicIcon,
   NoteIcon,
   PlusPersonIcon,
+  RadioIcon,
   ResumeIcon,
 } from "./icons.tsx";
 
@@ -25,6 +26,7 @@ const GLYPHS: Record<
 > = {
   music: NoteIcon,
   podcasts: MicIcon,
+  radio: RadioIcon,
   local: FolderIcon,
   continue: ResumeIcon,
   short: BoltIcon,

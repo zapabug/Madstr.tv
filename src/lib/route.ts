@@ -4,7 +4,7 @@
 
 export type ViewerMode = 'listen' | 'watch' | 'pictures' | 'people';
 
-export type ListenFilter = 'music' | 'podcasts' | 'local';
+export type ListenFilter = 'music' | 'podcasts' | 'radio' | 'local';
 export type WatchFilter = 'continue' | 'short' | 'long';
 export type PeopleFilter = 'follow' | 'sources';
 
@@ -15,7 +15,7 @@ export type Route =
   | { page: 'viewer'; mode: 'pictures'; filter: 'mine' }
   | { page: 'viewer'; mode: 'people'; filter: PeopleFilter };
 
-const LISTEN: readonly string[] = ['music', 'podcasts', 'local'];
+const LISTEN: readonly string[] = ['music', 'podcasts', 'radio', 'local'];
 const WATCH: readonly string[] = ['continue', 'short', 'long'];
 const PEOPLE: readonly string[] = ['follow', 'sources'];
 

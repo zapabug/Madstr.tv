@@ -1,15 +1,17 @@
-import { audioFromEvent, videoFromEvent, type NostrEventLike } from './media.ts';
+import { audioFromEvent, tagValue, videoFromEvent, type NostrEventLike } from './media.ts';
+import { STATION_KIND, stationFromEvent } from './radio.ts';
 
 // Which Nostr events are kept on this device, and how many (spec feat-taste-cache §T3). Metadata only: the
 // events' text and tags, never the media files. Pure; the IndexedDB side is eventCache.ts.
 
-export type CacheGroup = 'audio' | 'video' | 'profile' | 'contacts';
+export type CacheGroup = 'audio' | 'video' | 'profile' | 'contacts' | 'station';
 
 export const CACHE_CAPS: Record<CacheGroup, number> = {
   audio: 3000,
   video: 1500,
   profile: 3000,
   contacts: 20, // the board's follow list (the TV's and yours); a handful at most
+  station: 2000, // radio stations (feat-radio: the device cache also keeps stations)
 };
 
 export interface StoredEvent extends NostrEventLike {
@@ -33,12 +35,16 @@ export function cacheGroup(event: NostrEventLike, contactOwners: ReadonlySet<str
   if (event.kind === 3) return contactOwners.has(event.pubkey) ? 'contacts' : null;
   if (audioFromEvent(event)) return 'audio';
   if (videoFromEvent(event)) return 'video';
+  if (stationFromEvent(event)) return 'station';
   return null;
 }
 
 // Profiles and follow lists are replaceable: one entry per person, the newest wins.
 export function cacheKey(event: NostrEventLike): string {
-  return event.kind === 0 || event.kind === 3 ? `${event.kind}:${event.pubkey}` : event.id;
+  if (event.kind === 0 || event.kind === 3) return `${event.kind}:${event.pubkey}`;
+  // A station is addressable: one entry per station, the newest wins.
+  if (event.kind === STATION_KIND) return `${event.kind}:${event.pubkey}:${tagValue(event.tags, 'd') ?? ''}`;
+  return event.id;
 }
 
 // A plain copy (the store adds its own symbols to events).
@@ -57,7 +63,7 @@ export function reviveCacheEntry(raw: unknown): CacheEntry | null {
   if (!Number.isInteger(e.kind) || !Number.isFinite(e.created_at)) return null;
   if (!Array.isArray(e.tags) || !e.tags.every(t => Array.isArray(t) && t.every(v => typeof v === 'string'))) return null;
   const group = r.group;
-  if (group !== 'audio' && group !== 'video' && group !== 'profile' && group !== 'contacts') return null;
+  if (group !== 'audio' && group !== 'video' && group !== 'profile' && group !== 'contacts' && group !== 'station') return null;
   const event = plainEvent(e as unknown as StoredEvent);
   return { key: cacheKey(event), group, created_at: event.created_at, seen: Number.isFinite(r.seen) ? (r.seen as number) : 0, event };
 }

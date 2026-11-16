@@ -1,6 +1,6 @@
 # feat-radio: internet radio, Nostr first
 
-Status: **PROPOSED** (2026-11-16), waiting for zapa's go. Not built.
+Status: **GO** (zapa, 2026-11-16: "how about the other tasks i acept the new dependncy"): being built on `feat/radio`; hls.js accepted.
 From zapa: "yes radio would be really cool"; asked how to find stations: **genre stickers** and **country**;
 thumbs: **up saves, down hides**; screen: **the picture show**, the station's logo as the disc; sources: "what
 would a Nostr-first approach be" (answered below: stations from Nostr). 2026-11-16: "the exact stickers genre
@@ -84,6 +84,36 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
 ## Later, not in this feat
 
 - Making your own station event (kind 31237) from Madstr.
+
+## Found while building (2026-11-16, probed again)
+
+- `relay.wavefunc.live` refuses any request with `limit` over **500**. One ask (a genre, the newest stations, the
+  stations of people you follow) is one page of at most 500.
+- Station events come in two shapes: the importer's (`countryCode`, `location`, `l` language, streams only in the
+  content JSON) and hand-made ones (a `stream` tag with the url, sometimes `country` instead of `countryCode`). Both
+  are read; the content JSON first, then `stream` tags. The primary stream wins, then the first https one.
+- In 500 stations, about half have only `http://` streams (left out, as the rules say), and about 5 % are HLS
+  (`.m3u8`): those also go through hls.js on the web.
+- The genre list: the genres of the newest 500 stations (one ask, made when Radio opens), commonest first, less the
+  words that say nothing; the picker's search box also takes any genre typed in, asked of the relay as it is
+  (lower case).
+- Live events (kind 30311): the `streaming` url (https), the `title`, the `image`, `t` tags. Some say `live` for days
+  with no stream; NIP-53 treats a live event not updated for an hour as ended, so Live now keeps only those updated
+  in the last **hour** with an https stream. "Tagged music or radio" counts a `t` tag of `music` or `radio` (also
+  written `internal:music`).
+
+## How it plays (decided during build, for zapa's review)
+
+- A station or live show is a **live** item: the player keeps no resume position for it, does not mark it played
+  (it stays in the list after you listen), and plays at 1×.
+- "Does not start within 10 s, or stops": 10 s from asking it to play without sound, or 10 s stuck waiting once it
+  played, or the stream ends. Then "Station not answering" and the next one. If every station in the list fails,
+  the player stops with that text.
+- The playlist's order: Live now, then stations from people you follow, then the sticker's stations. The country
+  filter applies to stations, not to Live now (live events carry no country).
+- Your stations (up votes) are kept on this device as the station's name, logo, stream and genres (at most 500), so
+  the sticker works before any relay answers.
+- More than one page per genre ("more as you scroll") is left for later; one ask brings up to 500.
 
 ## Milestones
 

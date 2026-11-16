@@ -2,7 +2,7 @@ import { toHash, type Route } from './route.ts';
 
 export type Lane = 'listen' | 'watch' | 'people';
 export type Tone = 'mint' | 'pink' | 'sky' | 'butter' | 'lilac' | 'peach';
-export type GlyphName = 'music' | 'podcasts' | 'local' | 'continue' | 'short' | 'long' | 'pictures' | 'follow';
+export type GlyphName = 'music' | 'podcasts' | 'radio' | 'local' | 'continue' | 'short' | 'long' | 'pictures' | 'follow';
 
 // A sticker is a shortcut: where it goes is just a Route.
 export interface Sticker {
@@ -22,6 +22,9 @@ export const STICKERS: readonly Sticker[] = [
     title: 'Music', blurb: 'Open straight to music.', tag: 'Listen', tone: 'mint', glyph: 'music' },
   { id: 'podcasts', lane: 'listen', route: { page: 'viewer', mode: 'listen', filter: 'podcasts' },
     title: 'Podcasts', blurb: 'Open to podcasts and episodes.', tag: 'Listen', tone: 'pink', glyph: 'podcasts' },
+  // feat-radio §RA1: the third Listen card, next to Music and Podcasts
+  { id: 'radio', lane: 'listen', route: { page: 'viewer', mode: 'listen', filter: 'radio' },
+    title: 'Radio', blurb: 'Stations from Nostr, and live shows.', tag: 'Listen', tone: 'lilac', glyph: 'radio', note: 'live' },
   { id: 'local', lane: 'listen', route: { page: 'viewer', mode: 'listen', filter: 'local' },
     title: 'Local', blurb: 'The files on this device, as their own playlist.', tag: 'Listen', tone: 'butter', glyph: 'local', note: 'your files' },
   { id: 'continue', lane: 'watch', route: { page: 'viewer', mode: 'watch', filter: 'continue' },

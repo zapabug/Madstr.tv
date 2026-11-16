@@ -1,0 +1,405 @@
+[
+ {
+  "content": "",
+  "created_at": 1794866808,
+  "id": "ba357ea808a86ecf968bd2e20b223ef7acbc27c7cb1fd4ec6792d047a64c7050",
+  "kind": 30311,
+  "pubkey": "b4f3df07887ebd0cb2042612c6dc05d851cd43845751c1ef10eb0b9313b49e1b",
+  "sig": "54c5422e54d90c9de9126f50d7a06cb84ad9edf263eef71d34b73eab85f1df036db4dac2b309e7aef741b5068f135e4329bda92f1ba8a2b219858f78be307aa7",
+  "tags": [
+   [
+    "d",
+    "thelotradio-live"
+   ],
+   [
+    "title",
+    "The Lot Radio: Bliss Point with Evita"
+   ],
+   [
+    "summary",
+    "Bliss Point welcomes Evita, raconteur of the Montréal underground, for a two hour mix.  Electronica\n\nUnofficial pass-through of thelotradio.com."
+   ],
+   [
+    "streaming",
+    "https://livepeercdn.studio/hls/85c28sa2o8wppm58/index.m3u8"
+   ],
+   [
+    "status",
+    "live"
+   ],
+   [
+    "starts",
+    "1794862800"
+   ],
+   [
+    "t",
+    "music"
+   ],
+   [
+    "t",
+    "radio"
+   ],
+   [
+    "t",
+    "thelotradio"
+   ],
+   [
+    "r",
+    "https://www.thelotradio.com"
+   ],
+   [
+    "alt",
+    "Live stream: The Lot Radio: Bliss Point with Evita"
+   ],
+   [
+    "image",
+    "https://recordings-cdn-s.lp-playback.studio/hls/85c28sa2o8wppm58/fcbb4ac7-c924-4a11-b540-5794a0ce225d/source/latest.png"
+   ]
+  ]
+ },
+ {
+  "content": "",
+  "created_at": 1794866805,
+  "id": "f4345df3f34100efc8dac152b832aec2406d23f684b9afe0f5189b4334de3580",
+  "kind": 30311,
+  "pubkey": "cf45a6ba1363ad7ed213a078e710d24115ae721c9b47bd1ebf4458eaefb4c2a5",
+  "sig": "95733fcec0b8d7fa13131acab1ec58556a6a6768e0a89d2412dd3342ad99ab3c2fe2e47d2e5d6539d1a00637202175dcc3be0d78fd141d40d358fcf28ccc7019",
+  "tags": [
+   [
+    "d",
+    "537a365c-f1ec-44ac-af10-22d14a7319fb"
+   ],
+   [
+    "status",
+    "live"
+   ],
+   [
+    "starts",
+    "1794828137"
+   ],
+   [
+    "title",
+    "NoGood Radio"
+   ],
+   [
+    "summary",
+    "NoGood Radio is a 24/7 pirate radio station running on scrap parts and broadcasting from a basement somewhere."
+   ],
+   [
+    "image",
+    "https://blossom.nogood.studio/6d5bb489e87c2f2db2a0fa61fd2bfca9f6d4f50e05b7caf1784644886c0e4ff6"
+   ],
+   [
+    "thumb",
+    "https://api-uk.zap.stream/537a365c-f1ec-44ac-af10-22d14a7319fb/thumb.webp?n=1794866551"
+   ],
+   [
+    "goal",
+    "854bac46f638e93f9cdb6aa0f415cbcfb8041e5383571aa5c538ba354145e584"
+   ],
+   [
+    "t",
+    "Art"
+   ],
+   [
+    "t",
+    "internal:music"
+   ],
+   [
+    "current_participants",
+    "11"
+   ],
+   [
+    "p",
+    "55f04590674f3648f4cdc9dc8ce32da2a282074cd0b020596ee033d12d385185",
+    "",
+    "host"
+   ],
+   [
+    "service",
+    "https://api-uk.zap.stream/api/v1"
+   ],
+   [
+    "streaming",
+    "https://api-uk.zap.stream/537a365c-f1ec-44ac-af10-22d14a7319fb/hls/live.m3u8"
+   ],
+   [
+    "streaming",
+    "moq://api-uk.zap.stream:1443/"
+   ]
+  ]
+ },
+ {
+  "content": "",
+  "created_at": 1794866777,
+  "id": "1ad81b75538232db0d81b885f82bfbee72a986b7ed90aa1d49b982945f154806",
+  "kind": 30311,
+  "pubkey": "f6a25b87f7e7bec9a691e37851b1b57a7b49fa00bb431280303002a3ebca4891",
+  "sig": "ab7625bd157fe587c4b3b7d9230a589f7cacce97bd42646610dfa7cacfaef6b6c72109a5a26b7c096b2836659fda3f9fe70ac9e0a96e917202f5fa84ef041c7b",
+  "tags": [
+   [
+    "d",
+    "7402c0a9-bf17-4afc-b2ff-18f79756f75d"
+   ],
+   [
+    "status",
+    "live"
+   ],
+   [
+    "starts",
+    "1794857424"
+   ],
+   [
+    "title",
+    "New week, new challenges... 🔞"
+   ],
+   [
+    "summary",
+    "Chilling, chatting and playing games with the plebs. We're here to have fun and make friends."
+   ],
+   [
+    "image",
+    "https://i.nostr.build/6Sv5pAbe5TTVrZV1o6iyBs.png"
+   ],
+   [
+    "thumb",
+    "https://streamstr.net/7402c0a9-bf17-4afc-b2ff-18f79756f75d/thumb.webp?n=1794866726"
+   ],
+   [
+    "t",
+    "chatting"
+   ],
+   [
+    "t",
+    "gaming"
+   ],
+   [
+    "t",
+    "nostr"
+   ],
+   [
+    "t",
+    "igdb:internal:gaming"
+   ],
+   [
+    "current_participants",
+    "20"
+   ],
+   [
+    "p",
+    "6e75f7972397ca3295e0f4ca0fbc6eb9cc79be85bafdd56bd378220ca8eee74e",
+    "",
+    "host"
+   ],
+   [
+    "service",
+    "https://streamstr.net/api/v1"
+   ],
+   [
+    "streaming",
+    "https://streamstr.net/7402c0a9-bf17-4afc-b2ff-18f79756f75d/hls/live.m3u8"
+   ],
+   [
+    "streaming",
+    "moq://streamstr.net:1443/"
+   ]
+  ]
+ },
+ {
+  "content": "{\"name\":\"Host test\",\"game\":\"blockpaint\",\"mode\":\"crew\",\"code\":\"YU3KB\",\"rid\":\"pYU3KB\",\"gen\":0,\"open\":0,\"n\":1,\"max\":6,\"pc\":1,\"ph\":0,\"ts\":1794711191881,\"v\":2}",
+  "created_at": 1794711191,
+  "id": "5dd1ead21071a0b3b274b3d523b10476b7280df250e21759310b0c67954b22f4",
+  "kind": 30311,
+  "pubkey": "a7ed787055a25a9eed3f18557252f0c48dfa1b4d62cb6faefc3d5a2923a920ef",
+  "sig": "b0a00835be44f92ae6a159b8ad982c121bd361d7081cb6593f400f75c180bdcdc5d01fbd9065a79060d89be4d1b40a081d606dd723285f46c95a30fa1dde4313",
+  "tags": [
+   [
+    "d",
+    "room"
+   ],
+   [
+    "t",
+    "blockpaint-crew-v1"
+   ],
+   [
+    "title",
+    "Host test"
+   ],
+   [
+    "status",
+    "live"
+   ],
+   [
+    "mode",
+    "crew"
+   ],
+   [
+    "r",
+    "pYU3KB"
+   ],
+   [
+    "code",
+    "YU3KB"
+   ]
+  ]
+ },
+ {
+  "content": "Noderunners Radio — the listeners pick the music, paid in sats. Listen and request a song: https://noderunnersradio.com",
+  "created_at": 1794866762,
+  "id": "21b4f17b7048708ebc4bacf2c21d570e7f16b161dcdc5f6a05aad4bbc189ca4d",
+  "kind": 30311,
+  "pubkey": "358225a7c2f03c1a0f096f15f5c48cd080e8e328b14389db01516d226838352f",
+  "sig": "7b108da01cf296a306d5eb3aea0bfe577c3a4179e33471c52a35409321d9ab9080ea3cdad2e378cd1b6c9525ec1fc787d1e7ebaa23fffe743d53052974219ee2",
+  "tags": [
+   [
+    "d",
+    "noderunners-radio"
+   ],
+   [
+    "title",
+    "Noderunners Radio"
+   ],
+   [
+    "summary",
+    "Now playing: Nero — Innocence"
+   ],
+   [
+    "image",
+    "https://noderunnersradio.com/assets/avatar.webp"
+   ],
+   [
+    "streaming",
+    "https://video.noderunnersradio.com/hls/stream.m3u8"
+   ],
+   [
+    "status",
+    "live"
+   ],
+   [
+    "p",
+    "358225a7c2f03c1a0f096f15f5c48cd080e8e328b14389db01516d226838352f",
+    "",
+    "Host"
+   ],
+   [
+    "r",
+    "https://noderunnersradio.com"
+   ],
+   [
+    "starts",
+    "1793772025"
+   ],
+   [
+    "current_participants",
+    "3"
+   ],
+   [
+    "t",
+    "noderunnersradio"
+   ],
+   [
+    "t",
+    "music"
+   ],
+   [
+    "t",
+    "radio"
+   ],
+   [
+    "t",
+    "bitcoin"
+   ],
+   [
+    "relays",
+    "wss://relay.damus.io",
+    "wss://nos.lol",
+    "wss://relay.primal.net",
+    "wss://relay.snort.social",
+    "ws://127.0.0.1:7777"
+   ]
+  ]
+ },
+ {
+  "content": "",
+  "created_at": 1794859619,
+  "id": "e4bef217093b64f4784da79a5681ae066fc8287c4cdc10ba1e39cc1943215cb4",
+  "kind": 30311,
+  "pubkey": "849317bd734111b02d36091af6611ffb55b85a12364a9849bc14d41c6012f95d",
+  "sig": "fd34f6a8757c3180c1e2c7c34a1a3636cc6f86dabd4e471a7e1d4a1e05fa3b311cc9d6b06c7f41e675e7030637ab2dbb914229a96a8c0e1ceee72a47e5aaeba0",
+  "tags": [
+   [
+    "d",
+    "b33f56aa-2f9c-4dfb-95a7-238c9d1c00e3"
+   ],
+   [
+    "status",
+    "ended"
+   ],
+   [
+    "starts",
+    "1794798935"
+   ],
+   [
+    "ends",
+    "1794859499"
+   ],
+   [
+    "title",
+    "The Road to ZamRock"
+   ],
+   [
+    "summary",
+    "ZamRock Radio is an ambitious independent online radio and digital culture project that goes far beyond traditional music broadcasting. Built around the preservation and discovery of Zamrock, the psychedelic rock movement that emerged in Zambia during the 1970s, it brings together rare African music, funk, psychedelic rock and global underground sounds through an online streaming platform. \n     Beyond radio, the project aims to create a wider ecosystem combining music preservation and archiving, community participation, open-source software and decentralised technologies such as Nostr. \n     Its initiatives include music streaming, digital archives, applications, community relays and opportunities for volunteers, DJs and developers to contribute. In essence, ZamRock Radio combines independent broadcasting, cultural preservation and open-internet infrastructure, positioning itself as both a music platform and a broader community-driven technology experiment.\n\nZamRock.net"
+   ],
+   [
+    "image",
+    "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse4.mm.bing.net%2Fth%2Fid%2FOIP.bdYiyRKpvvmGGvSAuKI9nAHaEK%3Fr%3D0%26pid%3DApi&f=1&ipt=943a2f8bd943b20a4e1efd29e41e68cb3d2ac4d9d2f805f873cc050c5da9eef8&ipo=images"
+   ],
+   [
+    "thumb",
+    "https://api.streamroad.money/b33f56aa-2f9c-4dfb-95a7-238c9d1c00e3/thumb.webp?n=1794859358"
+   ],
+   [
+    "t",
+    "music"
+   ],
+   [
+    "t",
+    "radio"
+   ],
+   [
+    "t",
+    "rock"
+   ],
+   [
+    "alt",
+    "Watch live on https://streamroad.money/naddr1qqjxyvenvc6nvctp95exvwtr956xgenz95un2cfh95erxwrr89jrzcesxpjnxq3qsjf300tngygmqtfkpyd0vcglld2msksjxe9fsjduzn2pccqjl9wsxpqqqpmxwrs0xn5"
+   ],
+   [
+    "p",
+    "67f240a3e069a7b0645e89052aac94c440292a5461e81b9c980821a1d7111b85",
+    "",
+    "Host"
+   ],
+   [
+    "service",
+    "https://api.streamroad.money/api/v1"
+   ],
+   [
+    "zap",
+    "67f240a3e069a7b0645e89052aac94c440292a5461e81b9c980821a1d7111b85",
+    "",
+    "1"
+   ],
+   [
+    "relays",
+    "wss://relay.primal.net",
+    "wss://relay.nostr.net",
+    "wss://relay.fountain.fm",
+    "wss://nos.lol",
+    "wss://relay.ditto.pub",
+    "wss://relay.damus.io"
+   ]
+  ]
+ }
+]
