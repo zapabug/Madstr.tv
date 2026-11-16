@@ -36,6 +36,10 @@ export const PauseIcon = (p: IconProps) => (
 export const ShuffleIcon = (p: IconProps) => (
   <Svg {...p}><path d="M16 4l4 3.5-4 3.5V8.5h-1.6l-3 3.5 3 3.5H16V13l4 3.5-4 3.5v-2.5h-2.5L10 13.5 6.5 17.5H3v-2h2.6l3.1-3.5L5.6 8.5H3v-2h3.5L10 10.5 13.5 6.5H16z" /></Svg>
 );
+// A radio with its aerial (feat-radio §RA1).
+export const RadioIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M17.6 2.2 4.9 7.1A2 2 0 0 0 3.6 9v10a2 2 0 0 0 2 2h12.8a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H9.9l8.4-3.2zM8 11a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm6 1h4v1.6h-4zm0 3h4v1.6h-4z" /></Svg>
+);
 export const NoteIcon = (p: IconProps) => (
   <Svg {...p}><path d="M9 3v11.6A3.5 3.5 0 1 0 11 18V8h7V3z" /></Svg>
 );

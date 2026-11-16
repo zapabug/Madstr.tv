@@ -1,0 +1,415 @@
+[
+ {
+  "kind": 31237,
+  "id": "93918cfbc8f3d218234e5d6e08b99a1bb059770164cc0aca9ae7f127752f85ca",
+  "pubkey": "06639a386c9c1014217622ccbcf40908c4f1a0c33e23f8d6d68f4abf655f8f71",
+  "created_at": 1788439040,
+  "tags": [
+   [
+    "d",
+    "285be424-743b-461c-a128-8b33319af2d0"
+   ],
+   [
+    "name",
+    "Omarchy Radio"
+   ],
+   [
+    "description",
+    "Omarchy Radio station"
+   ],
+   [
+    "c",
+    "punk",
+    "genre"
+   ],
+   [
+    "c",
+    "rock",
+    "genre"
+   ],
+   [
+    "stream",
+    "https://radio.cliamp.stream/omarchy/stream",
+    "",
+    "{\"bitrate\":128,\"codec\":\"audio/mpeg\",\"sampleRate\":44100}",
+    "primary"
+   ],
+   [
+    "thumbnail",
+    "https://radio.cliamp.stream/logo.svg"
+   ],
+   [
+    "website",
+    "https://radio.omarchy.org/"
+   ]
+  ],
+  "content": "{\"description\":\"Omarchy Radio station\",\"streams\":[{\"url\":\"https://radio.cliamp.stream/omarchy/stream\",\"format\":\"\",\"quality\":{\"bitrate\":128,\"codec\":\"audio/mpeg\",\"sampleRate\":44100},\"primary\":true}]}",
+  "sig": "353743704f6bad2966099bffbfac299393f52f62c42343bc35cb14251458bae2b3b6a0f3adbecaf18606d4edba940a7d6a7c8e973862621515ba894d495acf15"
+ },
+ {
+  "kind": 31237,
+  "id": "2548032f749bdf90f24b3c868c32cbffca9c6cab9d5601d10e45bee1120a3269",
+  "pubkey": "9c6907de72e59daf5272103a34649bf7ca01050a68f402955520fc53dba9730d",
+  "created_at": 1787079447,
+  "tags": [
+   [
+    "d",
+    "2d0ae595-ae5b-48d2-9007-b9e2e95cca73"
+   ],
+   [
+    "name",
+    "Good Morning Bitcoin"
+   ],
+   [
+    "description",
+    "The #1 24/7 Bitcoin radio station. Stream live Bitcoin podcasts, breaking Bitcoin news, and community discussions 24/7. Listen free on any device."
+   ],
+   [
+    "stream",
+    "https://radio.goodmorningbitcoin.com/listen/goodmorningbitcoin/radio.mp3",
+    "mp3",
+    "{\"bitrate\":192,\"codec\":\"mp3\",\"sampleRate\":44100}",
+    "primary"
+   ],
+   [
+    "thumbnail",
+    "https://pbs.twimg.com/profile_images/1765855662163083264/hBYVn-VR_400x400.jpg"
+   ],
+   [
+    "website",
+    "https://goodmorningbitcoin.com/"
+   ],
+   [
+    "location",
+    "Lexington, KY"
+   ],
+   [
+    "country",
+    "US"
+   ]
+  ],
+  "content": "{\"description\":\"The #1 24/7 Bitcoin radio station. Stream live Bitcoin podcasts, breaking Bitcoin news, and community discussions 24/7. Listen free on any device.\",\"streams\":[{\"url\":\"https://radio.goodmorningbitcoin.com/listen/goodmorningbitcoin/radio.mp3\",\"format\":\"mp3\",\"quality\":{\"bitrate\":192,\"codec\":\"mp3\",\"sampleRate\":44100},\"primary\":true}]}",
+  "sig": "7be8a1e21b2f0785e89e6f0a89f6b480b21f50adb89ea3bcb89bc4849c3e6b08e69f4150d66f0ace2f4eed5f789c763110c1e06033a071de2c54fe6d43212399"
+ },
+ {
+  "kind": 31237,
+  "id": "7ea9a34cb1b1de93c8a731cfafa7d6bf54f2963f10af7d2b87f0fd2cb1f52b42",
+  "pubkey": "210f31b6019f5ae13c995c8d83faa41a129f1296842e4c3313ab8a4abb09d1a2",
+  "created_at": 1774192350,
+  "tags": [
+   [
+    "d",
+    "d32d0cec-7ca5-41eb-8807-999bc19c3012"
+   ],
+   [
+    "name",
+    "Mega FM (Villahermosa) - 94.9 FM - XHTVH-FM - CORAT (Comisión de Radio y Televisión de Tabasco) - Villahermosa,  Tabasco"
+   ],
+   [
+    "countryCode",
+    "MX"
+   ],
+   [
+    "location",
+    "MX"
+   ],
+   [
+    "website",
+    "https://corat.mx/radio-tabasco-mega-ponle-play/"
+   ],
+   [
+    "thumbnail",
+    "https://corat.mx/favicon.ico"
+   ],
+   [
+    "l",
+    "es"
+   ],
+   [
+    "c",
+    "94.9 fm",
+    "genre"
+   ],
+   [
+    "c",
+    "comisión de radio y televisión de tabasco",
+    "genre"
+   ],
+   [
+    "c",
+    "entretenimiento",
+    "genre"
+   ],
+   [
+    "c",
+    "estación",
+    "genre"
+   ],
+   [
+    "c",
+    "fm",
+    "genre"
+   ],
+   [
+    "c",
+    "gobierno del estado de tabasco",
+    "genre"
+   ],
+   [
+    "c",
+    "latinoamerica",
+    "genre"
+   ],
+   [
+    "c",
+    "mega fm",
+    "genre"
+   ],
+   [
+    "c",
+    "moi merino",
+    "genre"
+   ],
+   [
+    "c",
+    "music",
+    "genre"
+   ],
+   [
+    "c",
+    "music 70s 80s 90s",
+    "genre"
+   ],
+   [
+    "c",
+    "méxico",
+    "genre"
+   ],
+   [
+    "c",
+    "música",
+    "genre"
+   ],
+   [
+    "c",
+    "música en inglés",
+    "genre"
+   ],
+   [
+    "c",
+    "música pop",
+    "genre"
+   ],
+   [
+    "c",
+    "norteamérica",
+    "genre"
+   ],
+   [
+    "c",
+    "pop music",
+    "genre"
+   ],
+   [
+    "c",
+    "public",
+    "genre"
+   ],
+   [
+    "c",
+    "public radio",
+    "genre"
+   ],
+   [
+    "c",
+    "public service",
+    "genre"
+   ],
+   [
+    "c",
+    "pública",
+    "genre"
+   ],
+   [
+    "c",
+    "radio",
+    "genre"
+   ],
+   [
+    "c",
+    "radio pública",
+    "genre"
+   ],
+   [
+    "c",
+    "rock en inglés",
+    "genre"
+   ],
+   [
+    "c",
+    "sureste",
+    "genre"
+   ],
+   [
+    "c",
+    "tabasco",
+    "genre"
+   ],
+   [
+    "c",
+    "tenosique",
+    "genre"
+   ],
+   [
+    "c",
+    "villahermosa",
+    "genre"
+   ],
+   [
+    "g",
+    "9gjykuk"
+   ]
+  ],
+  "content": "{\"description\":\"94.9 fm,comisión de radio y televisión de tabasco,entretenimiento,estación,fm,gobierno del estado de tabasco,latinoamerica,mega fm,moi merino,music,music 70s 80s 90s,méxico,música,música en inglés,música pop,norteamérica,pop music,public,public radio,public service,pública,radio,radio pública,rock en inglés,sureste,tabasco,tenosique,villahermosa\",\"streams\":[{\"url\":\"https://streamingcwsradio30.com/8262/stream\",\"format\":\"audio/mpeg\",\"quality\":{\"bitrate\":0,\"codec\":\"mp3\",\"sampleRate\":44100},\"primary\":true}]}",
+  "sig": "0ee90c9984c5751acb121999d0aa4e444867a5e6909a395fd6bb9d9195146ffbf3027aed063fc7f347184ab50041a5a0952d583b7e21a588777b7c694ae18dc8"
+ },
+ {
+  "kind": 31237,
+  "id": "e13b2aceba329a3c4fae271ebba856532b5a9340e9e988f6e32fb9c031fe5712",
+  "pubkey": "210f31b6019f5ae13c995c8d83faa41a129f1296842e4c3313ab8a4abb09d1a2",
+  "created_at": 1774192350,
+  "tags": [
+   [
+    "d",
+    "da1d224d-e643-49f1-9f5e-50ee5923ce14"
+   ],
+   [
+    "name",
+    "Australian Digital Radio Network - Eminem (MP3)"
+   ],
+   [
+    "countryCode",
+    "AU"
+   ],
+   [
+    "location",
+    "AU"
+   ],
+   [
+    "website",
+    "http://www.australiandigitalradio.com/"
+   ],
+   [
+    "thumbnail",
+    "http://www.australiandigitalradio.com/favicon.ico"
+   ],
+   [
+    "l",
+    "en"
+   ],
+   [
+    "c",
+    "eminem",
+    "genre"
+   ]
+  ],
+  "content": "{\"description\":\"eminem\",\"streams\":[{\"url\":\"http://abm21.com.au:8000/CONTAINER158\",\"format\":\"audio/mpeg\",\"quality\":{\"bitrate\":0,\"codec\":\"mp3\",\"sampleRate\":44100},\"primary\":true}]}",
+  "sig": "316f40c401985242c3d9a8804009af0f54cf2ebe1c3266f524f66c9502bf47529f3014986f80d5aa79b74fa2e85ba1b3b4d915a1d36f8a99a8c8e570fe4a6635"
+ },
+ {
+  "kind": 31237,
+  "id": "6a3eec5598ea04e91a2c7c618178b6956f00bc8fb9e48ceb8bdd20198e8ae376",
+  "pubkey": "210f31b6019f5ae13c995c8d83faa41a129f1296842e4c3313ab8a4abb09d1a2",
+  "created_at": 1774192350,
+  "tags": [
+   [
+    "d",
+    "d45994e0-136c-459a-a0ad-84cb4d46a8c3"
+   ],
+   [
+    "name",
+    "Dance Hits"
+   ],
+   [
+    "countryCode",
+    "AU"
+   ],
+   [
+    "location",
+    "AU"
+   ],
+   [
+    "website",
+    "https://www.hit.com.au/dance"
+   ],
+   [
+    "thumbnail",
+    "https://images.ctfassets.net/yxg7lydfj6tc/8ed4cc58-1dba-4aa3-99b2-42f68df3665d/54c3be5e0554e81638fc2b297c3e9cf9/dance.png"
+   ],
+   [
+    "l",
+    "en"
+   ],
+   [
+    "c",
+    "dance",
+    "genre"
+   ],
+   [
+    "c",
+    "dance music",
+    "genre"
+   ]
+  ],
+  "content": "{\"description\":\"dance,dance music\",\"streams\":[{\"url\":\"https://wz2liw.scahw.com.au/live/2dance_128.stream/playlist.m3u8\",\"format\":\"application/x-mpegURL\",\"quality\":{\"bitrate\":0,\"codec\":\"mp3\",\"sampleRate\":44100},\"primary\":true}]}",
+  "sig": "2d5203052efbd623095537125c590afc6aea4a29e95ffc673fa65d325262386f758c72d15850f0fbc6cf7ded90496fdf74935d49b1fc79ba1cae99facd4f3ed1"
+ },
+ {
+  "kind": 31237,
+  "id": "bd9f547416653b050ae11a8acd6ff8a5def728b684ea7f29888f202e4f386aa8",
+  "pubkey": "210f31b6019f5ae13c995c8d83faa41a129f1296842e4c3313ab8a4abb09d1a2",
+  "created_at": 1774192348,
+  "tags": [
+   [
+    "d",
+    "ca2a757b-a36c-4300-834a-8b8320531772"
+   ],
+   [
+    "name",
+    "4YOU - Rockhampton - 98.5 FM (AAC+)"
+   ],
+   [
+    "countryCode",
+    "AU"
+   ],
+   [
+    "location",
+    "AU"
+   ],
+   [
+    "website",
+    "https://www.4you.org.au/"
+   ],
+   [
+    "thumbnail",
+    "https://i.ibb.co/myFcpPp/630881174b5e3218503383ec.webp"
+   ],
+   [
+    "l",
+    "en"
+   ],
+   [
+    "c",
+    "community radio",
+    "genre"
+   ],
+   [
+    "c",
+    "easy listening",
+    "genre"
+   ]
+  ],
+  "content": "{\"description\":\"community radio,easy listening\",\"streams\":[{\"url\":\"http://playerservices.streamtheworld.com/api/livestream-redirect/4YOUAAC.aac\",\"format\":\"audio/mpeg\",\"quality\":{\"bitrate\":0,\"codec\":\"mp3\",\"sampleRate\":44100},\"primary\":true},{\"url\":\"http://playerservices.streamtheworld.com/api/livestream-redirect/4YOU.mp3\",\"format\":\"audio/mpeg\",\"quality\":{\"bitrate\":0,\"codec\":\"mp3\",\"sampleRate\":44100},\"primary\":false}]}",
+  "sig": "73be0a1a63566012bf121eb1c9535c0fa2bbda979e44648fe0c3c48ed906df603cd5386c8f90cdf046758ad37d0ed11ded374e2fac3af751c4175e55117dad87"
+ }
+]

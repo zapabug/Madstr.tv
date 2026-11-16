@@ -20,7 +20,7 @@ export function HiddenControls() {
           {rows.slice(0, SHOWN).map(row => (
             <li key={`${row.artist ? 'a' : 's'}:${row.key}`}>
               <span className="own-name" title={row.name}>{row.name}</span>
-              <span className="own-status">{row.artist ? 'Artist' : 'Song'}</span>
+              <span className="own-status">{row.artist ? 'Artist' : 'station' in row && row.station ? 'Station' : 'Song'}</span>
               <button type="button" className="chip-btn" data-nav aria-label={`Bring back ${row.name}`}
                 onClick={() => setTaste(t => (row.artist ? withArtistBack(t, row.key) : withSongBack(t, row.key)))}>Bring back</button>
             </li>

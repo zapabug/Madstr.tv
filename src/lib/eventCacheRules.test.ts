@@ -38,6 +38,17 @@ test('reviveCacheEntry: only well-formed events, copied plain', () => {
 test('overCap: media keep the newest posts, profiles the most recently seen', () => {
   const entry = (key: string, group: CacheEntry['group'], created_at: number, seen: number): CacheEntry => ({ key, group, created_at, seen, event: ev({}) });
   const entries = [entry('a1', 'audio', 1, 9), entry('a2', 'audio', 3, 1), entry('a3', 'audio', 2, 5), entry('p1', 'profile', 9, 1), entry('p2', 'profile', 1, 9)];
-  const drop = overCap(entries, { audio: 2, video: 1, profile: 1, contacts: 1 });
+  const drop = overCap(entries, { audio: 2, video: 1, profile: 1, contacts: 1, station: 1 });
   assert.deepEqual(drop.sort(), ['a1', 'p1']);
+});
+
+test('radio stations are kept, one entry per station address; http-only stations are not', async () => {
+  const { readFileSync } = await import('node:fs');
+  const stations = JSON.parse(readFileSync(new URL('./fixtures/station-events.json', import.meta.url), 'utf8')) as StoredEvent[];
+  const omarchy = stations.find(e => e.tags.some(t => t[0] === 'name' && t[1] === 'Omarchy Radio'))!;
+  const httpOnly = stations.find(e => e.tags.some(t => t[0] === 'name' && t[1].startsWith('Australian Digital')))!;
+  assert.equal(cacheGroup(omarchy, new Set()), 'station');
+  assert.equal(cacheKey(omarchy), '31237:06639a386c9c1014217622ccbcf40908c4f1a0c33e23f8d6d68f4abf655f8f71:285be424-743b-461c-a128-8b33319af2d0');
+  assert.equal(cacheGroup(httpOnly, new Set()), null);
+  assert.equal(reviveCacheEntry({ group: 'station', seen: 1, event: omarchy })?.group, 'station');
 });

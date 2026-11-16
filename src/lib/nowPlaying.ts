@@ -40,8 +40,9 @@ export function nowPlayingFrom(state: PlayerState): NowPlaying | null {
     subtitle: clipText(item.subtitle) || clipText(state.label),
     image: item.image && isHttpUrl(item.image) ? item.image : '',
     status: state.status,
-    position: finite(state.position),
-    duration: finite(state.duration) || finite(item.duration ?? 0),
+    // A live station or show (feat-radio §RA3) has no length and nothing to seek: no progress on the controls.
+    position: item.live ? 0 : finite(state.position),
+    duration: item.live ? 0 : finite(state.duration) || finite(item.duration ?? 0),
     rate: finite(state.rate) || 1,
   };
 }

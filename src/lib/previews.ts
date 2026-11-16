@@ -15,6 +15,7 @@ export interface PreviewData {
 export interface PreviewInput {
   music: MediaItem[];
   podcasts: MediaItem[];
+  radio: MediaItem[]; // the stations Radio plays next (feat-radio §RA1)
   localCount: number;
   video: MediaItem[]; // every video, newest first (what Continue opens when there is no last video)
   short: MediaItem[];
@@ -58,6 +59,7 @@ export function buildPreviews(input: PreviewInput): Record<string, PreviewData> 
   return {
     music: nextCover(input.music),
     podcasts: nextCover(input.podcasts),
+    radio: nextCover(input.radio),
     local: { ...empty(), text: input.localCount > 0 ? `${input.localCount} tracks` : undefined },
     continue: keepWatching(input.last, input.video),
     short: nextPosters(input.short),

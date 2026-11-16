@@ -14,6 +14,11 @@ export type AuthorSpot =
 export function authorSpot(item: MediaItem | undefined): AuthorSpot {
   if (!item) return { kind: 'none' };
   if (item.origin === 'local') return { kind: 'folder', label: 'Local file' };
+  // A station or live show (feat-radio §RA3): its logo is the disc, not the importer's face.
+  if (item.live) {
+    const label = item.subtitle || 'Radio';
+    return item.image ? { kind: 'cover', image: item.image, label } : { kind: 'initial', letter: item.title.slice(0, 1).toUpperCase(), label };
+  }
   if (item.origin === 'rss') {
     const label = item.subtitle || 'Podcast';
     return item.image ? { kind: 'cover', image: item.image, label } : { kind: 'initial', letter: label.slice(0, 1).toUpperCase(), label };

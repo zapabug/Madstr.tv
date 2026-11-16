@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { played } from '../lib/played.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import { Avatar } from './People.tsx';
-import { FilmIcon, NoteIcon } from './icons.tsx';
+import { FilmIcon, NoteIcon, RadioIcon } from './icons.tsx';
 
 const FIRST = 120;
 const MORE = 120;
@@ -63,8 +63,8 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
               onBlur={() => setTip(null)}
             >
               <span className="tile-art">
-                {row.pubkey ? <Avatar pubkey={row.pubkey} />
-                  : <TileArt image={row.image} video={row.kind === 'video'} />}
+                {row.pubkey && !row.live ? <Avatar pubkey={row.pubkey} />
+                  : <TileArt image={row.image} video={row.kind === 'video'} live={row.live} />}
               </span>
               <span className="tile-title">{row.title}</span>
               <span className="tile-n" aria-hidden="true">{i + 1}</span>
@@ -82,9 +82,9 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
 }
 
 // A tile's cover, or the drawn icon when there is none or it fails to load.
-function TileArt({ image, video }: { image?: string; video: boolean }) {
+function TileArt({ image, video, live }: { image?: string; video: boolean; live?: boolean }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [image]);
   if (image && !failed) return <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
-  return video ? <FilmIcon size={26} /> : <NoteIcon size={26} />;
+  return live ? <RadioIcon size={26} /> : video ? <FilmIcon size={26} /> : <NoteIcon size={26} />;
 }

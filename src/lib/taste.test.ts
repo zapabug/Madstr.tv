@@ -73,3 +73,10 @@ test('likeTemplate: NIP-25 tags, plus an address for addressable tracks; unlike 
   assert.deepEqual(track.tags.at(-1), ['a', `31337:${B}:song-1`]);
   assert.deepEqual(unlikeTemplate(A, 5), { kind: 5, content: '', tags: [['e', A], ['k', '7']], created_at: 5 });
 });
+
+test('a down-voted station is remembered as a station, and stays one after a reload', () => {
+  const t = withDownVote(EMPTY_TASTE, { id: 'nostr:s', title: 'Omarchy Radio', live: true }, 5);
+  assert.deepEqual(t.songs['nostr:s'], { name: 'Omarchy Radio', at: 5, station: true });
+  assert.deepEqual(parseTaste(JSON.parse(JSON.stringify(t))).songs['nostr:s'], { name: 'Omarchy Radio', at: 5, station: true });
+  assert.equal(parseTaste({ songs: { a: { name: 'x', at: 1, station: 'yes' } } }).songs.a.station, undefined);
+});

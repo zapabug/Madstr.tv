@@ -38,6 +38,12 @@ export interface MediaItem {
   createdAt: number;
   short?: boolean; // videos only
   hashtags?: string[]; // the post's #tags, lower case
+  // Radio (feat-radio.md): a station or live show is live (no seek, no speed, no resume); addressable events
+  // carry their address (kind:pubkey:d); stations their genres and country (ISO 3166 two letters).
+  live?: boolean;
+  address?: string;
+  genres?: string[];
+  country?: string;
 }
 
 export const AUDIO_KINDS = [1, 1063, 31337];

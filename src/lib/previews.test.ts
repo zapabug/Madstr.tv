@@ -9,7 +9,7 @@ const item = (id: string, over: Partial<MediaItem> = {}): MediaItem => ({
 const video = (id: string, over: Partial<MediaItem> = {}): MediaItem => item(id, { kind: 'video', url: `https://cdn.example/${id}.mp4`, ...over });
 
 const base = (over: Partial<PreviewInput> = {}): PreviewInput => ({
-  music: [], podcasts: [], localCount: 0, video: [], short: [], long: [], last: null, ownPictures: [], creators: [], ...over,
+  music: [], podcasts: [], radio: [], localCount: 0, video: [], short: [], long: [], last: null, ownPictures: [], creators: [], ...over,
 });
 
 test('Music shows the cover of the next track itself, not a later one', () => {
