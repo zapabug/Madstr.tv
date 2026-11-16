@@ -1,6 +1,9 @@
 // RSS / Atom podcast and music feeds. Everything in a feed is untrusted: sizes,
 // counts and string lengths are capped, only http(s) enclosure URLs are kept,
-// and titles are plain text (React escapes them on render).
+// and titles are plain text (React escapes them on render). The XML is read by xmlLite (no DTD, no
+// entity expansion), so this file is pure and tested under node (rssFeed.test.ts).
+
+import { descendants, firstDescendant, parseXml, textOf, XmlError, type XmlElement } from './xmlLite.ts';
 
 export interface FeedItem {
   guid: string;
@@ -36,8 +39,8 @@ function isHttpUrl(value: string | null | undefined): value is string {
   }
 }
 
-function childText(parent: Element, tag: string): string {
-  return clip(parent.getElementsByTagName(tag)[0]?.textContent);
+function childText(parent: XmlElement, tag: string): string {
+  return clip(textOf(firstDescendant(parent, tag)));
 }
 
 function looksLikeAudio(url: string, mime: string | null): boolean {
@@ -55,29 +58,35 @@ function parseDate(value: string): number {
 }
 
 export function parseFeed(xml: string): ParsedFeed {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  if (doc.getElementsByTagName('parsererror').length > 0) throw new Error('Not a valid feed');
+  let doc: XmlElement;
+  try {
+    doc = parseXml(xml);
+  } catch (error) {
+    if (error instanceof XmlError) throw new Error('Not a valid feed');
+    throw error;
+  }
 
-  const channel = doc.getElementsByTagName('channel')[0] ?? doc.documentElement;
+  const channel = doc.name === 'channel' ? doc : firstDescendant(doc, 'channel') ?? doc;
   const feedTitle = childText(channel, 'title');
-  const feedImage = channel.getElementsByTagName('itunes:image')[0]?.getAttribute('href');
+  const feedImage = firstDescendant(channel, 'itunes:image')?.attrs.href;
   const items: FeedItem[] = [];
 
-  const entries = Array.from(doc.getElementsByTagName('item')).concat(Array.from(doc.getElementsByTagName('entry')));
+  const entries = [doc, ...descendants(doc, 'item')].filter(e => e.name === 'item')
+    .concat([doc, ...descendants(doc, 'entry')].filter(e => e.name === 'entry'));
   for (const entry of entries) {
     let url: string | null = null;
     let mime: string | null = null;
 
-    const enclosure = entry.getElementsByTagName('enclosure')[0];
+    const enclosure = firstDescendant(entry, 'enclosure');
     if (enclosure) {
-      url = enclosure.getAttribute('url');
-      mime = enclosure.getAttribute('type');
+      url = enclosure.attrs.url ?? null;
+      mime = enclosure.attrs.type ?? null;
     } else {
       // Atom: <link rel="enclosure" href="..." type="audio/mpeg"/>
-      for (const link of Array.from(entry.getElementsByTagName('link'))) {
-        if (link.getAttribute('rel') === 'enclosure') {
-          url = link.getAttribute('href');
-          mime = link.getAttribute('type');
+      for (const link of descendants(entry, 'link')) {
+        if (link.attrs.rel === 'enclosure') {
+          url = link.attrs.href ?? null;
+          mime = link.attrs.type ?? null;
           break;
         }
       }
@@ -85,7 +94,7 @@ export function parseFeed(xml: string): ParsedFeed {
 
     if (!isHttpUrl(url) || !looksLikeAudio(url, mime)) continue;
 
-    const imageHref = entry.getElementsByTagName('itunes:image')[0]?.getAttribute('href');
+    const imageHref = firstDescendant(entry, 'itunes:image')?.attrs.href;
     const dateText = childText(entry, 'pubDate') || childText(entry, 'published') || childText(entry, 'updated');
     items.push({
       guid: clip(childText(entry, 'guid') || childText(entry, 'id') || url),

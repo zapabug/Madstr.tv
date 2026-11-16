@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:podcast="https://podcastindex.org/namespace/1.0" version="2.0">
+  <channel>
+    <title>Darknet Diaries</title>
+    <link>https://darknetdiaries.com/</link>
+    <pubDate>Tue, 03 Nov 2026 08:00:00 -0000</pubDate>
+    <lastBuildDate>Mon, 09 Nov 2026 21:16:37 -0000</lastBuildDate>
+    <ttl>60</ttl>
+    <language>en-us</language>
+    <copyright>Jack Rhysider</copyright>
+    <webMaster>help@prx.org (PRX)</webMaster>
+    <description>
+      <![CDATA[<p>Explore true stories of the dark side of the Internet with host Jack Rhysider as he takes you on a journey through the chilling world of hacking, data breaches, and cyber crime.</p><p>¿Hablas español? Escucha en español aquí ➔ <a href="https://darknetdiaries.com/es/">https://darknetdiaries.com/es/</a></p>]]>
+    </description>
+    <generator>PRX Feeder v1.0.0</generator>
+    <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+    <image>
+      <url>https://f.prxu.org/7057/images/18744d5d-8091-4bb8-b41a-1ed06efcd508/uploads_2F1562951997273-pdd2keiryql-99f75240ab90a579e25720d85d3057b2_2Fdarknet-diaries-rss.jpg</url>
+      <title>Darknet Diaries</title>
+      <link>https://darknetdiaries.com/</link>
+      <width>1400</width>
+      <height>1400</height>
+      <description>True stories from the dark side of the Internet</description>
+    </image>
+    <atom:link href="https://podcast.darknetdiaries.com" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
+    <itunes:new-feed-url>https://podcast.darknetdiaries.com</itunes:new-feed-url>
+    <itunes:author>Jack Rhysider</itunes:author>
+    <itunes:type>episodic</itunes:type>
+    <itunes:category text="Technology"/>
+    <itunes:image href="https://f.prxu.org/7057/images/68ff605a-20f3-437f-9ba9-2d17316724b1/uploads_2F1562951997273-pdd2keiryql-99f75240ab90a579e25720d85d3057b2_2Fdarknet-diaries-rss.jpg"/>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:owner>
+      <itunes:email>podcast@darknetdiaries.com</itunes:email>
+      <itunes:name>Jack Rhysider</itunes:name>
+    </itunes:owner>
+    <itunes:subtitle>True stories from the dark side of the Internet</itunes:subtitle>
+    <itunes:summary>
+      <![CDATA[Explore true stories of the dark side of the Internet with host Jack Rhysider as he takes you on a journey through the chilling world of hacking, data breaches, and cyber crime.
+
+¿Hablas español? Escucha en español aquí ➔ <a href="https://darknetdiaries.com/es/">https://darknetdiaries.com/es/</a>]]>
+    </itunes:summary>
+    <media:copyright>Jack Rhysider</media:copyright>
+    <media:thumbnail url="https://f.prxu.org/7057/images/18744d5d-8091-4bb8-b41a-1ed06efcd508/uploads_2F1562951997273-pdd2keiryql-99f75240ab90a579e25720d85d3057b2_2Fdarknet-diaries-rss.jpg"/>
+    <media:category scheme="http://www.itunes.com/dtds/podcast-1.0.dtd">Technology</media:category>
+    <podcast:guid>ac631a54-a629-5367-a1a5-c2e2f7c25054</podcast:guid>
+    <podcast:podping usesPodping="true"/>
+    <podcast:locked>yes</podcast:locked>
+    <item>
+      <guid isPermaLink="false">prx_7057_c0abbff3-ae98-4e23-a389-5ee0fd824f51</guid>
+      <title>182: Blackshades</title>
+      <pubDate>Tue, 03 Nov 2026 08:00:00 -0000</pubDate>
+      <link>https://darknetdiaries.com/episode/182/</link>
+      <description>
+        <![CDATA[<p>What if you got infected by a friend who wanted to spy on you? This is the story of how BlackShades spread to more than half a million machines, and 97 people got arrested.<br><br></p><h3>Sponsors</h3><p>Support for this show comes from <a href="https://drata.com/darknetdiaries"><strong>Drata</strong></a>. Drata is the trust management platform that uses AI-driven automation to modernize governance, risk, and compliance, helping thousands of businesses stay audit-ready and scale securely. Learn more at <a href="https://drata.com/darknetdiaries"><strong>drata.com/darknetdiaries</strong></a>.<br><br>Support for this show comes from <a href="https://ramp.com/darknet"><strong>Ramp</strong></a>. Ramp is a financial operations platform bringing spending visibility and control to AI. With Ramp, you can see spending across AI providers and set real-time controls and guardrails by team and model. Stop guessing where your AI spend is going. Get started with Ramp. Learn more at <a href="https://ramp.com/darknet"><strong>ramp.com/darknet</strong></a>.<br><br>Support for this show comes from <a href="https://threatlocker.com/Darknet"><strong>ThreatLocker</strong></a>. ThreatLocker is a Zero Trust Platform that gives organizations control over what can run and what users and devices can access. It combines prevention with real time detection and automated response, helping security teams stop unauthorized activity and quickly contain compromised machines. Learn how ThreatLocker can strengthen your defenses at <a href="https://threatlocker.com/Darknet"><strong>threatlocker.com/Darknet</strong></a><br><br><a href="https://darknetdiaries.com/sponsors/"><strong>View all active sponsors.</strong></a><br><br></p><h3>Sources</h3><p>Full list of sources on the show page: <a href="https://darknetdiaries.com/episode/182/"><strong>https://darknetdiaries.com/episode/182/</strong></a></p>]]>
+      </description>
+      <enclosure url="https://www.podtrac.com/pts/redirect.mp3/dovetail.prxu.org/7057/c0abbff3-ae98-4e23-a389-5ee0fd824f51/darknet-diaries-ep182-blackshades.mp3" type="audio/mpeg" length="39000166"/>
+      <itunes:title>Blackshades</itunes:title>
+      <itunes:explicit>true</itunes:explicit>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:season>1</itunes:season>
+      <itunes:episode>182</itunes:episode>
+      <itunes:duration>39:17</itunes:duration>
+      <itunes:author>Jack Rhysider</itunes:author>
+      <itunes:summary>
+        <![CDATA[What if you got infected by a friend who wanted to spy on you? This is the story of how BlackShades spread to more than half a million machines, and 97 people got arrested.
+
+Sponsors
+Support for this show comes from <a href="https://drata.com/darknetdiaries">Drata</a>. Drata is the trust management platform that uses AI-driven automation to modernize governance, risk, and compliance, helping thousands of businesses stay audit-ready and scale securely. Learn more at <a href="https://drata.com/darknetdiaries">drata.com/darknetdiaries</a>.
+
+Support for this show comes from <a href="https://ramp.com/darknet">Ramp</a>. Ramp is a financial operations platform bringing spending visibility and control to AI. With Ramp, you can see spending across AI providers and set real-time controls and guardrails by team and model. Stop guessing where your AI spend is going. Get started with Ramp. Learn more at <a href="https://ramp.com/darknet">ramp.com/darknet</a>.
+
+Support for this show comes from <a href="https://threatlocker.com/Darknet">ThreatLocker</a>. ThreatLocker is a Zero Trust Platform that gives organizations control over what can run and what users and devices can access. It combines prevention with real time detection and automated response, helping security teams stop unauthorized activity and quickly contain compromised machines. Learn how ThreatLocker can strengthen your defenses at <a href="https://threatlocker.com/Darknet">threatlocker.com/Darknet</a>
+
+<a href="https://darknetdiaries.com/sponsors/">View all active sponsors.</a>
+
+Sources
+Full list of sources on the show page: <a href="https://darknetdiaries.com/episode/182/">https://darknetdiaries.com/episode/182/</a>]]>
+      </itunes:summary>
+      <itunes:image href="https://f.prxu.org/7057/c0abbff3-ae98-4e23-a389-5ee0fd824f51/images/2a7a8a4b-7f32-4d33-8c82-f624ac181eeb/Ep182_BlackshadesSquare.jpg"/>
+      <media:content fileSize="39000166" type="audio/mpeg" url="https://www.podtrac.com/pts/redirect.mp3/dovetail.prxu.org/7057/c0abbff3-ae98-4e23-a389-5ee0fd824f51/darknet-diaries-ep182-blackshades.mp3"/>
+      <podcast:transcript type="text/vtt" url="https://f.prxu.org/7057/c0abbff3-ae98-4e23-a389-5ee0fd824f51/transcripts/673ef6c8-d8e1-4f97-8c6a-d7ac2ca2401a/darknet-diaries-ep182-blackshades.vtt"/>
+      <content:encoded>
+        <![CDATA[<p>What if you got infected by a friend who wanted to spy on you? This is the story of how BlackShades spread to more than half a million machines, and 97 people got arrested.<br><br></p><h3>Sponsors</h3><p>Support for this show comes from <a href="https://drata.com/darknetdiaries"><strong>Drata</strong></a>. Drata is the trust management platform that uses AI-driven automation to modernize governance, risk, and compliance, helping thousands of businesses stay audit-ready and scale securely. Learn more at <a href="https://drata.com/darknetdiaries"><strong>drata.com/darknetdiaries</strong></a>.<br><br>Support for this show comes from <a href="https://ramp.com/darknet"><strong>Ramp</strong></a>. Ramp is a financial operations platform bringing spending visibility and control to AI. With Ramp, you can see spending across AI providers and set real-time controls and guardrails by team and model. Stop guessing where your AI spend is going. Get started with Ramp. Learn more at <a href="https://ramp.com/darknet"><strong>ramp.com/darknet</strong></a>.<br><br>Support for this show comes from <a href="https://threatlocker.com/Darknet"><strong>ThreatLocker</strong></a>. ThreatLocker is a Zero Trust Platform that gives organizations control over what can run and what users and devices can access. It combines prevention with real time detection and automated response, helping security teams stop unauthorized activity and quickly contain compromised machines. Learn how ThreatLocker can strengthen your defenses at <a href="https://threatlocker.com/Darknet"><strong>threatlocker.com/Darknet</strong></a><br><br><a href="https://darknetdiaries.com/sponsors/"><strong>View all active sponsors.</strong></a><br><br></p><h3>Sources</h3><p>Full list of sources on the show page: <a href="https://darknetdiaries.com/episode/182/"><strong>https://darknetdiaries.com/episode/182/</strong></a></p>]]>
+      </content:encoded>
+    </item>
+    <item>
+      <guid isPermaLink="false">prx_7057_88c4d72a-2377-4fef-9dac-3cd23529b881</guid>
+      <title>181: Ricky</title>
+      <pubDate>Tue, 20 Oct 2026 07:00:00 -0000</pubDate>
+      <link>https://darknetdiaries.com/episode/181/</link>
+      <description>
+        <![CDATA[<p>Imagine driving down the road and your phone loses signal. Not just a lost signal, but it starts displaying SOS. Meaning no service configured at all. You can't make any calls, no data, no service. What goes through your head?<br><br>In this episode we hear from <a href="https://www.linkedin.com/in/ricky-handschumacher-903b43379"><strong>Ricky Handschumacher</strong></a> who learned how to slip inside a stranger’s phone, and would rummage through it looking for things he thought were valuable.</p><p>We also hear a story from <a href="https://www.linkedin.com/in/kreitzman"><strong>Mark Kreitzman</strong></a> who started <a href="https://www.efani.com/"><strong>Efani</strong></a> because of people like Ricky.</p><h3>Sponsors</h3><p>Support for this show comes from <a href="https://JoinDeleteMe.com/DarknetDiaries"><strong>DeleteMe</strong></a>. DeleteMe is a hands-free subscription service that will remove your personal information that’s being sold online to data brokers. Our mission is to provide everyone with the power to control their digital identity. We empower individuals and organizations to reclaim their privacy by removing personal data from online sources. For 20% off our privacy plans, please visit <a href="https://JoinDeleteMe.com/DarknetDiaries"><strong>JoinDeleteMe.com/DarknetDiaries</strong></a> and use code: “darknet” at checkout.</p><p>This show is brought to you by <a href="https://doppel.com/"><strong>Doppel</strong></a>. Doppel stops AI attacks with digital risk protection, human risk management, and email security on a unified social engineering defense platform. <a href="http://doppel.com/"><strong>doppel.com</strong></a></p><p>Support for this show comes from <a href="https://threatlocker.com/Darknet"><strong>ThreatLocker</strong></a>. ThreatLocker is a Zero Trust Platform that gives organizations control over what can run and what users and devices can access. It combines prevention with real time detection and automated response, helping security teams stop unauthorized activity and quickly contain compromised machines. Learn how ThreatLocker can strengthen your defenses at <a href="https://threatlocker.com/Darknet"><strong>threatlocker.com/Darknet</strong></a>.</p><p><a href="https://darknetdiaries.com/sponsors/"><strong>View all active sponsors.</strong></a></p><h3>Sources</h3><ul>
+<li><a href="https://www.youtube.com/watch?v=J7yLKVnQcNg&amp;t=7s"><strong>https://www.youtube.com/watch?v=J7yLKVnQcNg&amp;t=7s</strong></a></li>
+<li><a href="https://www.wsj.com/tech/cybersecurity/getting-cheated-in-a-videogame-led-him-to-a-world-of-online-crime-874392e7"><strong>https://www.wsj.com/tech/cybersecurity/getting-cheated-in-a-videogame-led-him-to-a-world-of-online-crime-874392e7</strong></a></li>
+<li><a href="https://darknetdiaries.com/transcript/118/"><strong>https://darknetdiaries.com/transcript/118/</strong></a></li>
+<li><a href="https://whatismyipaddress.com/mobile-security-sim-swapping"><strong>https://whatismyipaddress.com/mobile-security-sim-swapping</strong></a></li>
+</ul>]]>
+      </description>
+      <enclosure url="https://www.podtrac.com/pts/redirect.mp3/dovetail.prxu.org/7057/88c4d72a-2377-4fef-9dac-3cd23529b881/darknet-diaries-ep181-ricky.mp3" type="audio/mpeg" length="82508573"/>
+      <itunes:title>Ricky</itunes:title>
+      <itunes:explicit>true</itunes:explicit>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:season>1</itunes:season>
+      <itunes:episode>181</itunes:episode>
+      <itunes:duration>01:20:15</itunes:duration>
+      <itunes:author>Jack Rhysider</itunes:author>
+      <itunes:summary>
+        <![CDATA[Imagine driving down the road and your phone loses signal. Not just a lost signal, but it starts displaying SOS. Meaning no service configured at all. You can't make any calls, no data, no service. What goes through your head?
+
+In this episode we hear from <a href="https://www.linkedin.com/in/ricky-handschumacher-903b43379">Ricky Handschumacher</a> who learned how to slip inside a stranger’s phone, and would rummage through it looking for things he thought were valuable.
+
+We also hear a story from <a href="https://www.linkedin.com/in/kreitzman">Mark Kreitzman</a> who started <a href="https://www.efani.com/">Efani</a> because of people like Ricky.
+Sponsors
+Support for this show comes from <a href="https://JoinDeleteMe.com/DarknetDiaries">DeleteMe</a>. DeleteMe is a hands-free subscription service that will remove your personal information that’s being sold online to data brokers. Our mission is to provide everyone with the power to control their digital identity. We empower individuals and organizations to reclaim their privacy by removing personal data from online sources. For 20% off our privacy plans, please visit <a href="https://JoinDeleteMe.com/DarknetDiaries">JoinDeleteMe.com/DarknetDiaries</a> and use code: “darknet” at checkout.
+
+This show is brought to you by <a href="https://doppel.com/">Doppel</a>. Doppel stops AI attacks with digital risk protection, human risk management, and email security on a unified social engineering defense platform. <a href="http://doppel.com/">doppel.com</a>
+
+Support for this show comes from <a href="https://threatlocker.com/Darknet">ThreatLocker</a>. ThreatLocker is a Zero Trust Platform that gives organizations control over what can run and what users and devices can access. It combines prevention with real time detection and automated response, helping security teams stop unauthorized activity and quickly contain compromised machines. Learn how ThreatLocker can strengthen your defenses at <a href="https://threatlocker.com/Darknet">threatlocker.com/Darknet</a>.
+
+<a href="https://darknetdiaries.com/sponsors/">View all active sponsors.</a>
+Sources
+<a href="https://www.youtube.com/watch?v=J7yLKVnQcNg&amp;t=7s">https://www.youtube.com/watch?v=J7yLKVnQcNg&amp;t=7s</a>
+<a href="https://www.wsj.com/tech/cybersecurity/getting-cheated-in-a-videogame-led-him-to-a-world-of-online-crime-874392e7">https://www.wsj.com/tech/cybersecurity/getting-cheated-in-a-videogame-led-him-to-a-world-of-online-crime-874392e7</a>
+<a href="https://darknetdiaries.com/transcript/118/">https://darknetdiaries.com/transcript/118/</a>
+<a href="https://whatismyipaddress.com/mobile-security-sim-swapping">https://whatismyipaddress.com/mobile-security-sim-swapping</a>]]>
+      </itunes:summary>
+      <itunes:image href="https://f.prxu.org/7057/88c4d72a-2377-4fef-9dac-3cd23529b881/images/2e54d4f4-a6c2-4981-a0f0-610547e4fcbd/Ep181_Square.jpg"/>
+      <media:content fileSize="82508573" type="audio/mpeg" url="https://www.podtrac.com/pts/redirect.mp3/dovetail.prxu.org/7057/88c4d72a-2377-4fef-9dac-3cd23529b881/darknet-diaries-ep181-ricky.mp3"/>
+      <podcast:transcript type="text/plain" url="https://f.prxu.org/7057/88c4d72a-2377-4fef-9dac-3cd23529b881/transcripts/76181a27-1652-44c0-b992-27015ff89469/darknet-diaries-ep181-ricky.vtt"/>
+      <content:encoded>
+        <![CDATA[<p>Imagine driving down the road and your phone loses signal. Not just a lost signal, but it starts displaying SOS. Meaning no service configured at all. You can't make any calls, no data, no service. What goes through your head?<br><br>In this episode we hear from <a href="https://www.linkedin.com/in/ricky-handschumacher-903b43379"><strong>Ricky Handschumacher</strong></a> who learned how to slip inside a stranger’s phone, and would rummage through it looking for things he thought were valuable.</p><p>We also hear a story from <a href="https://www.linkedin.com/in/kreitzman"><strong>Mark Kreitzman</strong></a> who started <a href="https://www.efani.com/"><strong>Efani</strong></a> because of people like Ricky.</p><h3>Sponsors</h3><p>Support for this show comes from <a href="https://JoinDeleteMe.com/DarknetDiaries"><strong>DeleteMe</strong></a>. DeleteMe is a hands-free subscription service that will remove your personal information that’s being sold online to data brokers. Our mission is to provide everyone with the power to control their digital identity. We empower individuals and organizations to reclaim their privacy by removing personal data from online sources. For 20% off our privacy plans, please visit <a href="https://JoinDeleteMe.com/DarknetDiaries"><strong>JoinDeleteMe.com/DarknetDiaries</strong></a> and use code: “darknet” at checkout.</p><p>This show is brought to you by <a href="https://doppel.com/"><strong>Doppel</strong></a>. Doppel stops AI attacks with digital risk protection, human risk management, and email security on a unified social engineering defense platform. <a href="http://doppel.com/"><strong>doppel.com</strong></a></p><p>Support for this show comes from <a href="https://threatlocker.com/Darknet"><strong>ThreatLocker</strong></a>. ThreatLocker is a Zero Trust Platform that gives organizations control over what can run and what users and devices can access. It combines prevention with real time detection and automated response, helping security teams stop unauthorized activity and quickly contain compromised machines. Learn how ThreatLocker can strengthen your defenses at <a href="https://threatlocker.com/Darknet"><strong>threatlocker.com/Darknet</strong></a>.</p><p><a href="https://darknetdiaries.com/sponsors/"><strong>View all active sponsors.</strong></a></p><h3>Sources</h3><ul>
+<li><a href="https://www.youtube.com/watch?v=J7yLKVnQcNg&amp;t=7s"><strong>https://www.youtube.com/watch?v=J7yLKVnQcNg&amp;t=7s</strong></a></li>
+<li><a href="https://www.wsj.com/tech/cybersecurity/getting-cheated-in-a-videogame-led-him-to-a-world-of-online-crime-874392e7"><strong>https://www.wsj.com/tech/cybersecurity/getting-cheated-in-a-videogame-led-him-to-a-world-of-online-crime-874392e7</strong></a></li>
+<li><a href="https://darknetdiaries.com/transcript/118/"><strong>https://darknetdiaries.com/transcript/118/</strong></a></li>
+<li><a href="https://whatismyipaddress.com/mobile-security-sim-swapping"><strong>https://whatismyipaddress.com/mobile-security-sim-swapping</strong></a></li>
+</ul>]]>
+      </content:encoded>
+    </item>
+</channel>
+</rss>

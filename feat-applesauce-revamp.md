@@ -216,8 +216,14 @@ unless a real need appears, the old 6-minute music/podcast duration hack.
       hashtag discovery per kind (music/podcast, video, pictures) as the first Madstr had.
 - [x] R7 local media on the web: Local playlist and My pictures (folder picker, or picked files
       for the session where there is no folder picker).
-- [ ] RSS (incoming): RSS is still being worked on; the parser (`rssFeed.ts`) and the proxy's
-      private-address guard (`server/rssProxy.ts`) get their tests with that work.
+- [ ] RSS (built + machine-verified; awaiting zapa): the parser (`rssFeed.ts`) and the proxy's private-address guard (`server/rssProxy.ts`) get
+      their tests (zapa, 2026-11-16: "how about the other tasks"). The parser reads feeds with a small XML
+      reader of its own (`src/lib/xmlLite.ts`) instead of the browser's DOMParser, so `node --test` can run
+      it. The reader does not expand DTD entities (only the five XML ones and numeric ones), so a hostile feed
+      cannot blow up in size. Tests use feeds cut from real ones (podcast RSS from PRX and NPR, a YouTube Atom feed, a Wavlake
+      music feed) and real bad input; the proxy's tests cover private, loopback, link-local and mapped IPv6
+      addresses, names that resolve to them (localhost), non-http(s) links and a missing URL, without the
+      internet.
 - [ ] R8 remote pass (built + machine-verified; awaiting zapa's test), the **final stage before deploy**: every control, inputs and sliders
       included (seek bar, picture mix, feed URL, hashtag, bunker link), is `data-nav`, and arrow
       keys can leave a text input, so the whole app works from a remote. Key rules (2026-11-15): in a
