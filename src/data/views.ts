@@ -59,9 +59,9 @@ export function useViewItems(route: ViewerRoute): ViewData {
       }
       if (route.filter === 'podcasts') {
         const items = sortNewest(dedupeByUrl([...own.rss, ...audio.filter(isPodcast)]));
-        return { items, label: 'Podcasts', waiting: waiting && own.rss.length === 0, emptyText: 'No podcasts yet. Add an RSS feed under Your sources on the home screen.' };
+        return { items, label: 'Podcasts', waiting: waiting && own.rss.length === 0, emptyText: 'No podcasts yet. Add an RSS feed under Make it yours.' };
       }
-      return { items: own.local, label: 'Local', waiting: false, emptyText: 'No local files yet. Add a music folder under Your sources on the home screen.' };
+      return { items: own.local, label: 'Local', waiting: false, emptyText: 'No local files yet. Add a music folder under Make it yours.' };
     }
     if (route.mode === 'watch') {
       if (route.filter === 'short') {
@@ -77,9 +77,9 @@ export function useViewItems(route: ViewerRoute): ViewData {
     if (route.mode === 'pictures') {
       const n = own.pictures.length;
       return { items: NO_ITEMS, label: 'My pictures', waiting: false,
-        emptyText: n > 0 ? `${n} of your pictures, playing as a slideshow above.` : 'Add a folder of pictures under Your sources on the home screen; they play as a slideshow.' };
+        emptyText: n > 0 ? `${n} of your pictures, playing as a slideshow above.` : 'Add a folder of pictures under Make it yours; they play as a slideshow.' };
     }
-    return { items: NO_ITEMS, label: 'Follow more creators', waiting: false, emptyText: '' };
+    return { items: NO_ITEMS, label: route.filter === 'sources' ? 'Make it yours' : 'Follow more creators', waiting: false, emptyText: '' };
   }, [route, contacts, audio, video, own.rss, own.local, own.pictures, last, musicOften]);
 
   const view = useMemo((): ViewData => {

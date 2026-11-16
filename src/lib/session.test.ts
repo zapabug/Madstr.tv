@@ -48,3 +48,29 @@ test('pasted credentials: bunker:// and nbunksec only', () => {
   assert.equal(parseCredential('nsec1secretkey'), null, 'a private key is never accepted');
   assert.equal(parseCredential(''), null);
 });
+
+test('a phone signer (NIP-55) and Amber on the web keep only the app and the public key', () => {
+  const kv = memory();
+  const pubkey = 'a'.repeat(64);
+  saveSession({ type: 'nip55', packageName: 'com.greenart7c3.nostrsigner', pubkey }, kv);
+  assert.deepEqual(loadSession(kv), { type: 'nip55', packageName: 'com.greenart7c3.nostrsigner', pubkey });
+  saveSession({ type: 'amber-web', pubkey }, kv);
+  assert.deepEqual(loadSession(kv), { type: 'amber-web', pubkey });
+});
+
+test('a saved phone signer with a bad package or key is ignored', () => {
+  const kv = memory();
+  const pubkey = 'b'.repeat(64);
+  for (const bad of [
+    { type: 'nip55', packageName: 'com.greenart7c3.nostrsigner', pubkey: 'npub1xyz' },
+    { type: 'nip55', packageName: 'not a package', pubkey },
+    { type: 'nip55', packageName: 'nodots', pubkey },
+    { type: 'nip55', packageName: `com.${'x'.repeat(300)}`, pubkey },
+    { type: 'nip55', pubkey },
+    { type: 'amber-web', pubkey: 'B'.repeat(64) },
+    { type: 'amber-web' },
+  ]) {
+    kv.setItem(SESSION_KEY, JSON.stringify(bad));
+    assert.equal(loadSession(kv), null, JSON.stringify(bad).slice(0, 80));
+  }
+});

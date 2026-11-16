@@ -5,7 +5,7 @@ import { Engine } from './components/Engine.tsx';
 import { AccountChip } from './components/People.tsx';
 import { Sky } from './components/Sky.tsx';
 import { Viewer } from './components/Viewer.tsx';
-import { BOARD, isTheater } from './lib/route.ts';
+import { BOARD, isTheater, toHash } from './lib/route.ts';
 import { useFocusNav } from './lib/useFocusNav.ts';
 import { useRoute } from './lib/useRoute.ts';
 
@@ -29,6 +29,14 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [route.page, go]);
+
+  // A page opened from the board starts at its top, not at the board's scroll position (zapa, feat-phone-inline §P19).
+  const hash = toHash(route);
+  useEffect(() => {
+    if (route.page !== 'board') window.scrollTo(0, 0);
+    // `hash` stands for the route
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hash]);
 
   const theater = isTheater(route);
 

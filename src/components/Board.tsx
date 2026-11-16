@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePreviews, type PreviewData } from "../data/previews.ts";
 import { Avatar } from "./People.tsx";
-import { OwnControls } from "./OwnControls.tsx";
-import { HiddenControls } from "./HiddenControls.tsx";
-import { TagControls } from "./TagControls.tsx";
 import {
   LANES,
   STICKERS,
@@ -177,24 +174,6 @@ export function Board() {
         ))}
       </div>
 
-      <section className="sources" aria-labelledby="sources-h">
-        <h2 id="sources-h" className="sources-h">
-          Your sources
-        </h2>
-        <p className="sub">
-          Where the stickers get their music, podcasts, videos and pictures,
-          besides the people you follow.
-        </p>
-        <div className="sources-grid">
-          <OwnControls kind="feeds" />
-          <OwnControls kind="folders" />
-          <OwnControls kind="pictures" />
-          <TagControls kind="audio" />
-          <TagControls kind="video" />
-          <TagControls kind="image" />
-          <HiddenControls />
-        </div>
-      </section>
     </main>
   );
 }

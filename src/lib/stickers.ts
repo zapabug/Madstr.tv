@@ -33,13 +33,14 @@ export const STICKERS: readonly Sticker[] = [
   { id: 'pictures', lane: 'watch', route: { page: 'viewer', mode: 'pictures', filter: 'mine' },
     title: 'My pictures', blurb: 'Your own pictures, as slides.', tag: 'Watch', tone: 'mint', glyph: 'pictures', note: 'epic' },
   { id: 'follow', lane: 'people', route: { page: 'viewer', mode: 'people', filter: 'follow' },
-    title: 'Follow more creators', blurb: 'Find podcast creators and follow in one press.', tag: 'People', tone: 'sky', glyph: 'follow', note: 'one press' },
+    // zapa (feat-phone-inline §P19): the card hints at Make it yours, which sits on the page it opens
+    title: 'Follow more creators', blurb: 'Follow creators, and make it yours: your feeds, folders and hashtags.', tag: 'People', tone: 'sky', glyph: 'follow', note: 'make it yours' },
 ];
 
 export const LANES: readonly { id: Lane; label: string; sub: string }[] = [
   { id: 'listen', label: 'Listen', sub: 'player + podcasts' },
   { id: 'watch', label: 'Watch', sub: 'videos + pictures' },
-  { id: 'people', label: 'People', sub: 'who you follow' },
+  { id: 'people', label: 'People', sub: 'who you follow + your sources' },
 ];
 
 export const hrefOf = (sticker: Sticker): string => toHash(sticker.route);

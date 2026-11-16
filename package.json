@@ -22,6 +22,7 @@
     "applesauce-react": "7.1.0",
     "applesauce-relay": "7.1.1",
     "applesauce-signers": "7.1.0",
+    "capacitor-plugin-nostr-signer": "0.2.0",
     "idb": "8.0.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",

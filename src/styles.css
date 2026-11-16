@@ -52,6 +52,9 @@
    of shortcuts plus a bottom player dock. Fonts are bundled (SIL OFL, public/fonts/LICENSES.txt). */
 
 :root {
+  /* buttons are rounded rectangles, not pills; the player's round buttons and the stickers keep their shapes
+     (zapa, feat-phone-inline §P18) */
+  --btn-r: 12px;
   color-scheme: dark;
   --space: #0b0716;
   --space-2: #2a1450;
@@ -138,6 +141,7 @@ a {
   opacity: 0.8;
 }
 .planet {
+  --face: 400px; /* the profile picture's circle (§P23) */
   position: fixed;
   top: -180px;
   right: -80px;
@@ -162,11 +166,34 @@ a {
 /* logged in: the planet is the user's own profile picture, same glow, no ring */
 .planet-face {
   position: absolute;
-  inset: 14%;
+  /* oversized on purpose (zapa): a 400 px circle from the planet's corner, bigger than the plain planet. An <img>
+     is not stretched by `inset` (it kept the file's own pixel size, about 400 px for zapa's), so it is sized
+     outright, and the planet behind it is the same circle (§P23) */
+  top: 14%;
+  left: 14%;
+  width: var(--face);
+  height: var(--face);
   border-radius: 50%;
-  opacity: 0.8;
+  /* fully opaque, over a planet of the same size that gives the halo (zapa, feat-phone-inline §P23) */
   object-fit: cover;
-  box-shadow: 0 0 140px 20px color-mix(in oklch, var(--orange), transparent 75%);
+  /* a bigger, brighter halo than the plain planet's (zapa, §P23) */
+  box-shadow: 0 0 200px 45px color-mix(in oklch, var(--orange), transparent 55%);
+}
+
+/* behind a picture the planet is exactly the picture's size: only its orange halo shows, no rim (zapa, §P23) */
+.planet:has(.planet-face) .ball {
+  inset: auto;
+  top: 14%;
+  left: 14%;
+  width: var(--face);
+  height: var(--face);
+}
+/* a phone held sideways: 40 px lower and further in than the TV / desktop place (zapa, feat-phone-inline §P23) */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .planet {
+    top: -140px;
+    right: -40px;
+  }
 }
 
 /* --- header ------------------------------------------------------------------------ */
@@ -253,7 +280,7 @@ h1 {
   color: var(--text);
   background: transparent;
   border: 2.5px solid var(--text);
-  border-radius: 999px;
+  border-radius: var(--btn-r);
   padding: 9px 18px;
   min-height: 44px;
   cursor: pointer;
@@ -487,7 +514,7 @@ h1 {
   background: var(--ink);
   color: #fff;
   padding: 8px 15px;
-  border-radius: 999px;
+  border-radius: var(--btn-r);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -531,7 +558,19 @@ h1 {
   border: 2.5px solid var(--ink);
   box-shadow: 3px 3px 0 #000;
   padding: 9px 16px;
-  border-radius: 999px;
+  border-radius: var(--btn-r);
+}
+/* a house, then "Home" (feat-phone-inline §P17) */
+.home-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.home-word svg {
+  width: 1.5em;
+  height: 1.5em;
+  margin-block: -0.2em;
+  translate: 0 -0.05em;
 }
 .stage {
   min-height: min(46vh, 480px);
@@ -699,7 +738,7 @@ h1 {
   color: var(--ink);
   background: var(--lilac);
   border: 2.5px solid var(--ink);
-  border-radius: 999px;
+  border-radius: var(--btn-r);
   padding: 6px 14px;
   min-height: 36px;
   cursor: pointer;
@@ -709,7 +748,16 @@ h1 {
     box-shadow 140ms ease-out;
 }
 .chip-btn.solid {
-  background: var(--mint);
+  background-color: var(--mint);
+}
+/* zapa's colours (feat-phone-inline §P20), from the palette: Home mint (the green-teal), Make it yours pink;
+   Log in / out stay lilac */
+a.back[href="#/"] {
+  background-color: var(--mint);
+}
+.back.yours-btn,
+.chip-btn.yours-btn {
+  background-color: var(--pinkp);
 }
 .chip-btn:disabled {
   opacity: 0.45;
@@ -774,7 +822,7 @@ h1 {
   color: var(--ink);
   background: var(--lilac);
   border: 2.5px solid var(--ink);
-  border-radius: 999px;
+  border-radius: var(--btn-r);
   padding: 8px 14px;
   box-shadow: 3px 3px 0 #000;
   max-width: 40vw;
@@ -1152,6 +1200,13 @@ h1 {
     scale: 1.06;
   }
 }
+/* phones, upright or sideways: the whole picture fits the screen, on black, nothing cut off (zapa,
+   feat-phone-inline §P11). TV and desktop keep the full-bleed crop. */
+@media (max-width: 640px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .slide {
+    object-fit: contain;
+  }
+}
 .edge {
   position: absolute;
   top: 50%;
@@ -1202,7 +1257,7 @@ h1 {
   color: var(--ink);
   background: var(--lilac);
   border: 2.5px solid var(--ink);
-  border-radius: 999px;
+  border-radius: var(--btn-r);
   padding: 7px 16px;
   box-shadow: 3px 3px 0 #000;
   transition: opacity 450ms ease-out;
@@ -1276,6 +1331,29 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* a title too long for its space runs leftward to its end, waits, and starts again from the front; it never
+   runs back left to right (feat-phone-inline §P7, zapa). One that fits stands still. */
+.head-title-run {
+  display: inline-block;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .head-title.is-long {
+    text-overflow: clip;
+  }
+  .head-title.is-long .head-title-run {
+    animation: head-title-run linear infinite;
+  }
+}
+@keyframes head-title-run {
+  0%,
+  12% {
+    translate: 0;
+  }
+  88%,
+  100% {
+    translate: calc(-1 * var(--shift, 0px));
+  }
 }
 .head-sources {
   flex: none;
@@ -1588,7 +1666,7 @@ h1 {
 
 /* --- Your sources, on the board ------------------------------------------------------------------------ */
 .sources {
-  margin-top: 64px;
+  margin-top: 8px;
 }
 .sources-h {
   font: 800 clamp(1.4rem, 1.1rem + 1.4vw, 2.2rem)/1.05 var(--display);
@@ -2055,11 +2133,15 @@ h1 {
   }
 }
 @media (max-width: 640px) {
+  /* 40 px lower and further in than before (zapa, §P23) */
   .planet {
-    top: -50px;
-    right: -110px;
+    top: -10px;
+    right: -70px;
     width: 300px;
-    opacity: 0.5;
+  }
+  /* only the plain planet is dimmed on phones; a profile picture never is (zapa, §P23) */
+  .ball {
+    opacity: 0.4;
   }
   .dock {
     gap: 12px;
@@ -2474,11 +2556,11 @@ a.chip-btn {
 }
 
 /* --- phones: the bottom panel stacks (zapa, 2026-11-15) ---------------------------------------------------
-   Picker on top, the controls under it in two compact rows (feat-phone-inline §P1). The panel takes more of
-   the height so the playlist still has room. */
+   Picker on top, the controls under it in two compact rows (feat-phone-inline §P1). The playlist and the
+   controls together take 40 % of the screen; the picture has the rest (zapa, feat-phone-inline §P4). */
 @media (max-width: 640px) {
   :root {
-    --split-h: max(58vh, 380px);
+    --split-h: 40vh;
   }
   .split {
     flex-direction: column;
@@ -2496,6 +2578,60 @@ a.chip-btn {
   .tiles {
     gap: 10px 12px;
   }
+  /* smaller, square tiles so two rows fit (zapa, feat-phone-inline §P8): four across, and the title may cover
+     the bottom of the picture */
+  .tiles {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  }
+  .tile {
+    gap: 0;
+    padding: 6px 5px 5px;
+  }
+  .tile-art {
+    width: 46px;
+    height: 46px;
+  }
+  .tile-title {
+    position: relative;
+    margin-top: -10px;
+    padding: 1px 5px;
+    border-radius: 7px;
+    background: var(--tile, var(--lilac));
+    font-size: 0.68rem;
+  }
+  .tile-n {
+    top: 3px;
+    left: 7px;
+  }
+  /* the post ticker on its own line under the clock and Mad⚡tr.tv (zapa, §P14) */
+  .topline {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 26px;
+    row-gap: 2px;
+    padding-bottom: 4px;
+  }
+  .topline .ticker {
+    order: 3;
+    flex: 1 0 100%;
+    height: 20px;
+  }
+  /* the mode chip (VIDEOS) near the screen's edge (zapa, §P10); the picture arrows end above it */
+  .mode-chip {
+    right: 12px;
+  }
+  /* one row of tiles or fewer (four across): the panel loses the empty second row and the picture has it (zapa,
+     §P9). The panel takes the row's real height (tiles grow with the phone's text size), so nothing is cut off;
+     the picture's box assumes about one row. */
+  .theater:not(:has(.tiles > :nth-child(5))) {
+    --split-h: calc(40vh - 80px);
+  }
+  .theater:not(:has(.tiles > :nth-child(5))) .split {
+    height: auto;
+  }
+  .theater:not(:has(.tiles > :nth-child(5))) .picker {
+    flex: none;
+  }
   /* the playlist header on one line: Board, the title (cut short), Shuffle; the count is left out */
   .panel-head {
     flex-wrap: nowrap;
@@ -2508,18 +2644,50 @@ a.chip-btn {
     flex: 1 1 0;
     font-size: 0.95rem;
   }
-  /* zapa (feat-phone-inline §P1): two compact rows beside the disc card, so the playlist keeps two rows of
-     tiles. Left: the disc card over both rows, Hide artist on its corner. Right: the seek bar (SPEED tucked
-     onto its right end), then previous / play / next and the thumbs. */
+  /* zapa (feat-phone-inline §P7): Board the same size as Shuffle, Shuffle only its icon, so the title has room */
+  .panel-head .back {
+    font: 800 0.8rem var(--body);
+    padding: 6px 14px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 2px 2px 0 #000;
+  }
+  .panel-head .shuffle {
+    padding: 3px 3.5px;
+  }
+  /* the icons just fit their buttons (zapa, §P18) */
+  .panel-head .shuffle svg {
+    width: 24px;
+    height: 24px;
+  }
+  .panel-head .back .home-word svg {
+    width: 22px;
+    height: 22px;
+  }
+  .panel-head .shuffle-word {
+    display: none;
+  }
+}
+
+/* zapa (feat-phone-inline §P1): two compact rows beside the disc card, so the playlist keeps two rows of
+   tiles. Left: the disc card over both rows, Hide artist on its corner. Right: the seek bar, then previous /
+   play / next, the thumbs and SPEED. On a phone upright, and the same bar on a phone held sideways (§P3). */
+@media (max-width: 640px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
   .player-panel {
     padding: 5px 12px 5px 10px;
   }
+  /* sizes (feat-phone-inline §P2) are counted in --u: 1 px on a 393 px wide phone, smaller on narrower
+     ones, at most 1.1 px on wider ones, so the bottom row always fits the width */
   .pc {
+    --u: min(calc(100vw / 393), 1.1px);
     display: grid;
-    grid-template-columns: auto auto 1fr auto auto auto;
+    /* the thumbs sit centred between previous / play / next and SPEED, clear of both (zapa, §P3) */
+    grid-template-columns: auto auto 1fr auto auto 1fr auto;
     grid-template-areas:
-      "disc seek seek seek seek  seek"
-      "disc main .    up   down  speed";
+      "disc seek seek seek seek seek seek"
+      "disc main .    up   down .    speed";
     align-items: center;
     gap: 4px 3px;
   }
@@ -2547,8 +2715,8 @@ a.chip-btn {
     display: none;
   }
   .pc .now-disc {
-    width: 46px;
-    height: 46px;
+    width: calc(var(--u) * 60);
+    height: calc(var(--u) * 60);
     border-width: 2px;
   }
   .pc-face .postit-hide {
@@ -2558,13 +2726,9 @@ a.chip-btn {
     justify-self: end;
     right: auto;
     bottom: auto;
-    width: 22px;
-    height: 22px;
+    width: calc(var(--u) * 26);
+    height: calc(var(--u) * 26);
     margin: 0 0 -8px 0;
-  }
-  .pc-seek {
-    grid-area: seek;
-    min-width: 0;
   }
   .pc-main {
     grid-area: main;
@@ -2573,17 +2737,17 @@ a.chip-btn {
     gap: 4px;
   }
   .pc .dock-play {
-    width: 42px;
-    height: 42px;
+    width: calc(var(--u) * 50);
+    height: calc(var(--u) * 50);
   }
   .pc-main .dock-btn:not(.dock-play) {
-    width: 34px;
-    height: 34px;
+    width: calc(var(--u) * 40);
+    height: calc(var(--u) * 40);
   }
   .pc-face .taste-btn {
     position: static;
-    width: 32px;
-    height: 32px;
+    width: calc(var(--u) * 36);
+    height: calc(var(--u) * 36);
   }
   .taste-up {
     grid-area: up;
@@ -2597,6 +2761,9 @@ a.chip-btn {
   .pc .dock-seek {
     grid-area: seek;
   }
+  .pc .seek {
+    height: calc(var(--u) * 40);
+  }
   .pc .postit-speed {
     grid-area: speed;
     margin: 0 0 0 2px;
@@ -2605,12 +2772,286 @@ a.chip-btn {
     rotate: -5deg;
   }
   .pc .postit-speed span {
-    font-size: 0.7rem;
+    font-size: calc(var(--u) * 12.5);
   }
   .pc .postit-speed b {
-    font-size: 0.75rem;
+    font-size: calc(var(--u) * 14);
   }
   .pc .pc-taste-note {
     grid-column: 1 / -1;
   }
 }
+
+/* Phone upright only (feat-phone-inline §P5, zapa 2026-11-16): no times; the thumbs take their place either
+   side of the seek bar, and the bottom row is previous / play / next, then SPEED. Sideways keeps the bar above. */
+@media (max-width: 640px) {
+  .pc {
+    grid-template-columns: auto auto 1fr auto auto;
+    grid-template-areas:
+      "disc up   seek seek  down"
+      "disc main main speed speed";
+  }
+  .pc .dock-time {
+    display: none;
+  }
+  /* previous / play / next centred in their row (zapa) */
+  .pc-main {
+    justify-content: center;
+  }
+  /* the speed note: just the number, no "SPEED", a sticker in line with previous / play / next (zapa) */
+  .pc .postit-speed span {
+    display: none;
+  }
+}
+
+/* touch screens: no title tip and no lifted tile; a tap counts as hover and focus and left them stuck
+   (zapa, feat-phone-inline §P16). A remote's focus and a mouse keep them. */
+@media (pointer: coarse) {
+  .tile-tip {
+    display: none;
+  }
+  .tile:hover:not(:focus-visible) {
+    rotate: var(--tilt, 0deg);
+    translate: none;
+    box-shadow: 3px 3px 0 #000;
+  }
+}
+
+/* --- phone held sideways (feat-phone-inline §P3, zapa 2026-11-16) -----------------------------------------
+   No playlist: the picture fills the screen and the portrait view's bar (above) sits across the bottom, over
+   the picture, looking the same. It fades with the rest of the controls; a touch brings it back. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .theater .media {
+    bottom: 0;
+  }
+  .theater .split {
+    top: auto;
+    height: auto;
+    padding: 6px 8px max(8px, env(safe-area-inset-bottom, 0px));
+  }
+  .theater .picker,
+  .theater .mode-chip,
+  .theater .bottomline {
+    display: none;
+  }
+  .theater .player-panel {
+    flex: 1 1 auto;
+    overflow: visible;
+  }
+  /* no Hide artist sideways: it sat next to previous and got pressed by mistake (zapa, §P15) */
+  .theater .pc-face .postit-hide {
+    display: none;
+  }
+}
+
+/* phones: a touch on the picture arrows changes the picture without bringing the panel back (zapa,
+   feat-phone-inline §P13). Sideways they stay, dimmed, when the controls fade; upright they fade with the
+   controls but can still be tapped where they were. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .theater[data-hidden="true"] .edge:not(:disabled) {
+    opacity: 0.55;
+  }
+}
+
+/* --- Jukestr 3000: the player's look (zapa, feat-phone-inline §P24, from the "Player Bezels" mock-ups) ----------
+   The toy ray-gun bezel and its rainbow seek bar, with the chrome jukebox's domed matte buttons. Sizes and layout
+   are the app's own; only the surfaces change. */
+
+/* the bezel: an orange plastic frame (the border, its own gradient) in a black outline with a hard shadow, around
+   a purple window with a soft shine at the top. The board's bar wears it on its own (§P25); on the player screen
+   the playlist and the player share one (below). */
+.dock {
+  border: 6px solid transparent;
+  border-radius: 28px;
+  outline: 2.5px solid var(--ink);
+  background:
+    radial-gradient(55% 16px at 30% 8px, #ffffff30 0 55%, #ffffff00 60%) padding-box,
+    radial-gradient(circle at 30% 12%, #7a4bbd 0%, #2a1450 72%) padding-box,
+    linear-gradient(180deg, #ffab73 0%, #ff7a3d 45%, #e2551b 100%) border-box;
+  box-shadow:
+    inset 0 0 0 2.5px var(--ink),
+    inset 0 4px 10px #00000099,
+    5px 5px 0 2.5px #000;
+}
+/* the player screen: the playlist and the player are ONE machine (zapa, §P26). The bottom area is the orange
+   plastic body (black outline, hard shadow); the two panels are purple windows set into it, divided by a strip of
+   the same plastic. */
+.theater .split {
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  padding: 6px;
+  gap: 6px;
+  border: 2.5px solid var(--ink);
+  /* tighter at the bottom, as every bezel (zapa) */
+  border-radius: 28px 28px 12px 12px;
+  background: linear-gradient(180deg, #ffab73 0%, #ff7a3d 45%, #e2551b 100%);
+  box-shadow:
+    inset 0 3px 0 #ffd6b8,
+    inset 0 -4px 0 #b3400e,
+    5px 5px 0 #000;
+}
+.theater[data-hidden="true"] .split {
+  translate: 0 calc(100% + 20px);
+}
+.theater .picker,
+.theater .player-panel {
+  border: 0;
+  border-radius: 22px 22px 8px 8px;
+  background:
+    radial-gradient(55% 16px at 30% 8px, #ffffff30 0 55%, #ffffff00 60%),
+    radial-gradient(circle at 30% 12%, #7a4bbd 0%, #2a1450 72%);
+  box-shadow:
+    inset 0 0 0 2.5px var(--ink),
+    inset 0 4px 10px #00000099;
+}
+@media (max-width: 640px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  /* the body takes the room the panels' own padding had, so the bar keeps its size */
+  .theater .split {
+    padding: 5px;
+    gap: 5px;
+  }
+  /* phones: the plastic runs off the screen's sides and bottom, so it fills to the edges (zapa, §P26); the
+     padding keeps what is inside on screen */
+  .theater .split {
+    left: -4px;
+    right: -4px;
+    bottom: -16px;
+    padding: 5px 9px 21px;
+  }
+  .dock {
+    left: -4px;
+    right: -4px;
+    bottom: -16px;
+    padding-inline: 4px;
+  }
+  .dock-bar {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  .theater .player-panel {
+    padding: 4px 10px 4px 8px;
+  }
+  .theater .picker {
+    padding: 8px 10px;
+  }
+}
+/* the board's bar: a framed unit just above the bottom edge, its bottom corners tighter (zapa, §P25) */
+.dock {
+  left: 8px;
+  right: 8px;
+  bottom: 2px;
+  border-radius: 28px 28px 12px 12px;
+  border-top: 6px solid transparent;
+  backdrop-filter: none;
+}
+.dock-bar {
+  padding-block: 4px calc(4px + env(safe-area-inset-bottom, 0px));
+}
+
+/* domed, matte buttons, lit from the top left (the jukebox's, not the toy's glossy ones); still round */
+.dock-btn,
+.taste-btn {
+  --dome: #e6dcff;
+  --dome-dark: #a98cf0;
+  background: radial-gradient(circle at 35% 28%, #ffffff 0%, var(--dome) 32%, var(--dome-dark) 100%);
+  box-shadow: 0 3px 0 #000, inset 0 -3px 4px #00000033;
+}
+.dock-play {
+  --dome: #ffe6a6;
+  --dome-dark: #f2b84b;
+}
+.taste-up {
+  --dome: #c9f5dc;
+  --dome-dark: #6fd39d;
+}
+.taste-down {
+  --dome: #ffd6e6;
+  --dome-dark: #f283b0;
+}
+.taste-btn.on {
+  --dome: #ffe6a6;
+  --dome-dark: #f2b84b;
+}
+.dock-btn:disabled {
+  box-shadow: 0 2px 0 #000, inset 0 -3px 4px #00000033;
+}
+@media (hover: hover) {
+  .dock-btn:not(:disabled):hover,
+  .taste-btn:not(:disabled):hover {
+    translate: 0 -1px;
+    box-shadow: 0 4px 0 #000, inset 0 -3px 4px #00000033;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dock-btn:not(:disabled):active,
+  .taste-btn:active:not(:disabled) {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 #000, inset 0 -2px 3px #00000033;
+  }
+}
+
+/* the player's seek bar: candy stripes up to where the song is, lilac after; the knob is a little ringed Saturn,
+   as on the toy ray-gun (zapa, §P27). It is 40 px wide, so the stripes end at its centre: 20 px in at the start. */
+.pc .seek::-webkit-slider-runnable-track {
+  background:
+    linear-gradient(to right, #dccbff00 calc(20px + (100% - 40px) * var(--p, 0)), #dccbff 0),
+    repeating-linear-gradient(45deg, #ff8fbf 0 6px, #ffe6a6 6px 12px, #b8f0cf 12px 18px, #bfd5ff 18px 24px);
+}
+.pc .seek::-moz-range-track {
+  background: #dccbff;
+}
+.pc .seek::-moz-range-progress {
+  background: repeating-linear-gradient(45deg, #ff8fbf 0 6px, #ffe6a6 6px 12px, #b8f0cf 12px 18px, #bfd5ff 18px 24px);
+}
+.pc .seek::-webkit-slider-thumb {
+  width: 40px;
+  height: 28px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 28'%3E%3Cellipse cx='20' cy='15' rx='17.5' ry='6' fill='none' stroke='%23141414' stroke-width='5'/%3E%3Cellipse cx='20' cy='15' rx='17.5' ry='6' fill='none' stroke='%23ffe6a6' stroke-width='2'/%3E%3Ccircle cx='20' cy='13' r='9.5' fill='%23ff7a3d' stroke='%23141414' stroke-width='2.5'/%3E%3Ccircle cx='17' cy='10' r='3' fill='%23ffd0b0'/%3E%3Cpath d='M2.5 15A17.5 6 0 0 0 37.5 15' fill='none' stroke='%23141414' stroke-width='5'/%3E%3Cpath d='M2.5 15A17.5 6 0 0 0 37.5 15' fill='none' stroke='%23ffe6a6' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 0 #000);
+}
+.pc .seek::-moz-range-thumb {
+  width: 40px;
+  height: 28px;
+  border: 0;
+  border-radius: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 28'%3E%3Cellipse cx='20' cy='15' rx='17.5' ry='6' fill='none' stroke='%23141414' stroke-width='5'/%3E%3Cellipse cx='20' cy='15' rx='17.5' ry='6' fill='none' stroke='%23ffe6a6' stroke-width='2'/%3E%3Ccircle cx='20' cy='13' r='9.5' fill='%23ff7a3d' stroke='%23141414' stroke-width='2.5'/%3E%3Ccircle cx='17' cy='10' r='3' fill='%23ffd0b0'/%3E%3Cpath d='M2.5 15A17.5 6 0 0 0 37.5 15' fill='none' stroke='%23141414' stroke-width='5'/%3E%3Cpath d='M2.5 15A17.5 6 0 0 0 37.5 15' fill='none' stroke='%23ffe6a6' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 0 #000);
+}
+
+/* every other button gets the player buttons' feel (zapa, §P25): the same shape and colour as before, with a
+   domed, matte light from the top and the same drop-under shadow; they sink when pressed */
+.chip-btn,
+.back,
+.chip-link,
+.mode-chip {
+  background-image: linear-gradient(180deg, #ffffff8c 0%, #ffffff00 50%, #00000014 100%);
+  box-shadow: 0 3px 0 #000, inset 0 -3px 4px #00000026;
+}
+.chip-btn:disabled {
+  background-image: none;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .chip-btn:not(:disabled):hover,
+  .back:hover,
+  .chip-link:hover,
+  .mode-chip:hover {
+    translate: 0 -1px;
+    box-shadow: 0 4px 0 #000, inset 0 -3px 4px #00000026;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chip-btn:not(:disabled):active,
+  .back:active,
+  .chip-link:active,
+  .mode-chip:active {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 #000, inset 0 -2px 3px #00000026;
+  }
+}
+

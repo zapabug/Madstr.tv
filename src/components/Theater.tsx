@@ -7,7 +7,7 @@ import type { MediaItem } from '../lib/media.ts';
 import type { PictureSources } from '../data/pictures.ts';
 import { availableCount, usePictureMix } from '../lib/pictureMix.ts';
 import { useAutoHide, wakeControls } from '../lib/useAutoHide.ts';
-import { ImageIcon, NextChevron, PrevChevron } from './icons.tsx';
+import { ImageIcon, NextChevron, PersonIcon, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
 import { Slideshow, type SlideCommand } from './Slideshow.tsx';
@@ -83,7 +83,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
             <div className="stage-empty">
               <ImageIcon size={56} />
               <p>{emptyStage}</p>
-              <a className="chip-btn solid" href="#/" data-nav>← Board · Your sources</a>
+              <a className="chip-btn solid yours-btn" href="#/people/sources" data-nav aria-label="Make it yours"><PersonIcon size={18} /> Make it yours</a>
             </div>
           )}
         </div>
@@ -104,9 +104,9 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
         {/* As in the first Madstr: previous / next item of what fills the picture area. Over a
             slideshow that is the pictures; over a video it is the videos. The songs have their own
             previous / next in the controls. */}
-        <button type="button" className="edge edge-prev" aria-label={showingVideo ? 'Previous video' : 'Previous picture'} data-nav
+        <button type="button" className="edge edge-prev" data-no-wake aria-label={showingVideo ? 'Previous video' : 'Previous picture'} data-nav
           disabled={showingVideo ? none : pictureCount < 2} onClick={() => (showingVideo ? player.prev() : stepPicture(-1))}><PrevChevron stretch /></button>
-        <button type="button" className="edge edge-next" aria-label={showingVideo ? 'Next video' : 'Next picture'} data-nav
+        <button type="button" className="edge edge-next" data-no-wake aria-label={showingVideo ? 'Next video' : 'Next picture'} data-nav
           disabled={showingVideo ? none : pictureCount < 2} onClick={() => (showingVideo ? player.next() : stepPicture(1))}><NextChevron stretch /></button>
         {modeLabel && modeHref && <a className="mode-chip" href={modeHref} data-nav>{modeLabel}</a>}
       </div>
