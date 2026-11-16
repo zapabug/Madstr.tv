@@ -27,7 +27,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | T4 | Reach back in time | built + machine-verified |
 | T5 | More relays | built + probed |
 | T6 | Double tap to seek; -10s / +30s buttons gone | built + machine-verified |
-| T7 | Phone turned sideways (Android app only) | built + machine-verified (emulated) |
+| T7 | Phone turned sideways | withdrawn 2026-11-16 (sideways = TV layout) |
 | D1-D3 | Web app at pleb.world/madstr, RSS proxy there | live 2026-11-15 |
 | D4 | Vercel project madstr-tv removed | waiting on zapa (dashboard) |
 | D5 | Android 1.3 on zapstore | published 2026-11-15 |
@@ -426,3 +426,11 @@ Spec: feat-phone-inline.md
 - Measured headless: controls panel 244 → 94 px; full tile rows 0 / 1 / 1 → 2 / 2 / 2 at 360×780, 393×852,
   412×915; nothing overlaps or leaves the panel. 1280×720 and 1920×1080 as before; sideways view as before.
 - Shaped with zapa live on the dev server (disc card over both rows; smaller; SPEED back on the bottom row).
+
+## T7 withdrawn — sideways is the TV layout
+Commit: 9eb6470
+
+- zapa, 2026-11-16: "the compact two rows [upright]; sideways same as TV". The picture-only sideways view, its
+  auto-hide on turning and the app's `data-native` marker are removed. Checked headless: a touch phone at
+  860×400 (browser, and with the app's bridge) shows the TV layout; upright 393×852 the compact two rows;
+  1280×720 unchanged.
