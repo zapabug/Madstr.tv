@@ -117,8 +117,9 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
 
 ## Milestones
 
-- [ ] RA1 Radio card on the board
-- [ ] RA2 genre stickers, country, follows first, Your stations
-- [ ] RA3 playing a live station (LIVE sticker, no seek, skip when silent, picture show)
-- [ ] RA3b Live now: zap.stream live events (HLS; hls.js on the web if zapa agrees)
-- [ ] RA4 up saves (+ like when logged in), down hides
+Built and machine-verified on 2026-11-16, awaiting zapa's test (the final [x] is his):
+- [ ] RA1 Radio card on the board (built: 2b6a1d4)
+- [ ] RA2 genre stickers, country, follows first, Your stations (built: 54fb93d)
+- [ ] RA3 playing a live station (LIVE sticker, no seek, skip when silent, picture show) (built: 8120aef)
+- [ ] RA3b Live now: zap.stream live events (HLS; hls.js 1.7.4, zapa OK'd) (built: 8120aef)
+- [ ] RA4 up saves (+ like when logged in), down hides (built: 594a9f7)

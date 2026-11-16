@@ -14,6 +14,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | R6 | Picture wall, live previews, hashtag discovery | built + machine-verified; preview gaps fixed in 9d821b3 |
 | R7 | Local media on the web | built; folder picker untested in a real browser |
 | RSS | Feed parser and proxy tests | built + machine-verified (faa4288); awaiting zapa |
+| RA1-RA4 | Radio, Nostr first: stations, Live now, genre stickers, votes | built + machine-verified on feat/radio; awaiting zapa |
 | R8 | Remote pass (final stage before deploy) | built + machine-verified; awaiting zapa's remote test |
 | A1 | Android app picks files (feat-android-play) | built + machine-verified; awaiting zapa on a device |
 | A2 | Android app keeps playing in the background (1.1) | zapa: works (2026-11-15) |
@@ -498,3 +499,27 @@ Spec: feat-phone-inline.md P28
   build: title and logo Juke⚡tr, manifest Juke⚡tr / Jukestr, service worker scope /jukestr/, cache jukestr-….
 - Not renamed (not in the spec): the board's headline "Mad Player Media".
 
+
+## RA1-RA4 — Radio, Nostr first [built + machine-verified, awaiting zapa]
+Commits: 2b6a1d4 (RA1), 8120aef (RA3 + RA3b), 54fb93d (RA2), 594a9f7 (RA4)
+Spec: feat-radio.md
+
+- Probed first: relay.wavefunc.live caps `limit` at 500; half the stations are http-only (left out); ~5 % HLS;
+  25 live NIP-53 events, 13 of them real music / radio streams, the rest stale for days (hence the one-hour rule).
+- `src/lib/radio.ts` (pure): stations (content JSON and `stream` tags, primary https stream, genres, country),
+  live shows, Radio's order, genre and country counts, prefs and Your stations read back as untrusted. 11 tests on
+  real events in `src/lib/fixtures/` (6 stations, 6 live events). Stations join the device cache (one per address).
+- `src/data/radio.ts`, `radioStore.ts`: one ask per genre / follows / newest 500, Live now from relay.zap.stream and
+  the content relays, re-read every minute; your stickers, country and Your stations in localStorage.
+- Player: live items have no seek, speed, resume or "played"; LIVE sticker + listening time; 10 s silence check
+  ("Station not answering", next); HLS natively, else hls.js 1.7.4 (pinned, zapa OK'd). Logos are the disc and
+  tiles; no Hide artist on stations; no progress on the lock screen. `attach()` now runs once per element: in dev,
+  StrictMode had attached the listeners twice and one failure skipped two items.
+- UI: Radio card (lilac, "live"); stickers row under the picker's header; genre / country picker as a dialog
+  (arrows stay inside `data-nav-modal`); up saves + likes, down hides, Hidden says Station.
+- Checked in headless Chromium against live relays: Live now fills (8 shows) and NoGood Radio plays natively and
+  through forced hls.js (blob source, LIVE 0:02 → 0:22); a station that never sends sound is dropped at 10 s, a
+  refused one at once, then a real one plays; jazz → 298 entries, jazz in Germany → 57; up vote saves, Your
+  stations lists it, down vote hides it and the Hidden card shows it; phone width (412 px) lays out.
+- Tests 224/224, lint clean, `pnpm build` passes. Not run on the Android app (HLS in the WebView unconfirmed).
+- 10 choices the spec did not fix are listed in planning.md (Undiscussed decisions → Radio).

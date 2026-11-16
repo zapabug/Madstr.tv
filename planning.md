@@ -96,6 +96,21 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - Relays added: relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net.
 - Now-playing card (§T2): disc 84 px / 60 px under 1000 px tall / 56 px on phones; title 2 lines, 1 when small; card 150 / 130 / 118 px wide; swap animation 450 ms out, 550 ms in, disc spins 270°.
 - Phone controls (feat-phone-inline): disc 46 px in a small card; buttons 34 / 42 px (play), thumbs 32 px, Hide artist 22 px; tile row gap 10 px on phones; the playlist header's "N in the playlist" count is left out on phones (to keep the header on one line).
+- Radio (feat-radio, built 2026-11-16), choices the spec did not fix:
+  - Words left out of the genre picker: music, música, musica, musique, musik, radio, fm, am, estación, estacion,
+    station, emisora, internet radio, online radio, web radio, webradio, radio station, live, stream, streaming
+    (`DULL_GENRES` in lib/radio.ts). The picker shows 60 genres at a time and 40 countries.
+  - The picker opens by itself each time Radio opens while you have no genre stickers (not only the first time).
+  - Live now is the top of Radio's playlist (the same tiles), not a separate row.
+  - A pressed sticker starts at its own first station, below Live now; the station playing keeps going until that
+    genre's stations arrive.
+  - Live shows count only if updated within the hour (NIP-53) and tagged music or radio (`internal:music` too),
+    unless someone you follow hosts them. The host is the `p` tag marked host, else the signer.
+  - Caps: stations in the device cache 2000, Your stations 500, 12 genres per station, 40 genre stickers.
+  - A station's error text stays until the next one plays; when all fail, the player stops with it.
+  - Up vote on a live show likes it but does not save it (Your stations keeps stations only).
+  - hls.js is a separate 600 kB file (187 kB gzipped) loaded only for HLS where the browser cannot play it; the
+    service worker still pre-caches it with the app.
 
 ## Open questions
 
