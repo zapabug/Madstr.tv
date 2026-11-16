@@ -11,8 +11,8 @@ last-worked: 2026-11-16
 - AGENTS.md: rules and verify commands
 
 ## Report
-Feat: Phone layouts, Open signer, Make it yours, the Jukestr 3000 look
-State: Built and shaped with zapa on his phone, step by step; committed on the phone-inline branch, not merged, released or deployed yet. Phones get their own upright and sideways layouts, the Android app is full screen with a back swipe that goes back, logging in with Amber works directly in the app and from the web, your sources have their own Make it yours page, and the player, playlist and board bar wear the orange toy bezel with domed buttons and a rainbow seek bar. Next is zapa's new name (JUKESTR) and logo, then a release.
+Feat: Phone layouts, Open signer, Make it yours, the Jukestr 3000 look, and the new name Juke⚡tr
+State: Built and shaped with zapa on his phone, step by step; committed on the phone-inline branch, not merged, released or deployed yet. The app is now called Juke⚡tr everywhere (the bolt stays for the S), and pleb.world is ready to serve it at pleb.world/jukestr with the old madstr address removed, waiting for zapa's go to put it live. Phones get their own upright and sideways layouts, the Android app is full screen with a back swipe that goes back, logging in with Amber works directly in the app and from the web, your sources have their own Make it yours page, and the player, playlist and board bar wear the orange toy bezel with domed buttons and a rainbow seek bar. Next is the logo, then a release. Needs zapa to say whether the board's headline "Mad Player Media" changes too.
 ────────────────────────────────────────
 Feat: Phone controls in two compact rows; sideways shows the TV layout
 State: Live on pleb.world/madstr and in Android 1.4 on zapstore. Being replaced by the phone layouts above.
@@ -36,7 +36,7 @@ Feat: Android app: picking files and playing in the background (1.1)
 State: Published. zapa confirmed music keeps playing in the background; file picking was replaced by remembered folders in 1.2.
 ────────────────────────────────────────
 Feat: Deploy
-State: Live at madstr-tv.vercel.app, built by Vercel from main on GitHub (pushes deploy). The RSS feed proxy works there, and pleb.world links to it with a sticker.
+State: Replaced by the pleb.world move below. The old Vercel project madstr-tv no longer runs the feed proxy and waits for zapa to delete it.
 ────────────────────────────────────────
 Feat: Applesauce revamp: board, viewer, player, listen, watch, people, pictures, local media
 State: Built and merged into main and passing tests, lint and build. Ticked in the spec, but no confirmation from zapa is recorded yet. The sticker previews now follow the spec, and a list of choices made in code, including a 40-character limit on names, is waiting for zapa's review.

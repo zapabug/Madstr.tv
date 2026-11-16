@@ -33,6 +33,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | D5 | Android 1.3 on zapstore | published 2026-11-15 |
 | P1 | Phone controls in two compact rows (feat-phone-inline) | built; released in 1.4 |
 | P2-P27 | Phone layouts, Open signer, Make it yours, Jukestr 3000 look | built + machine-verified; shaped live with zapa on his phone (test builds); not released |
+| P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; pleb.world committed, not pushed |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -471,7 +472,20 @@ over wifi adb, release-signed, still versionName 1.4). Each change was shown to 
   (P26), domed matte buttons everywhere (P24, P25), rainbow seek bar with a Saturn knob (P27), bezels off the
   screen's edges on phones.
 - Tests 195/195 (new: Amber callback, saved signer sessions), lint clean, build passes (old `*/` CSS warning).
-- Open: the name (zapa picked JUKESTR, spelled with E; the app id stays com.madstr.tvapp) and the logo (bolt-play
-  mark in an upside-down pyramid with the sun behind, no bird) are next; the Make it yours page's boxes are still
-  sticker cards; no release or pleb.world deploy yet.
+- Open: the logo (bolt-play mark in an upside-down pyramid with the sun behind, no bird) is next; the Make it
+  yours page's boxes are still sticker cards; no release yet.
+
+## P28 — The name is Juke⚡tr; the web app at pleb.world/jukestr [built + machine-verified, not pushed]
+Commit: d71afb1 (plebworld a688402, not pushed)
+Spec: feat-phone-inline.md P28
+
+- The bolt stays for the S (zapa): header logo, player brand, page title and preview, both manifests, Android
+  launcher name, the NIP-46 app name and the zapstore listing say Juke⚡tr; the short name is Jukestr.
+- `build:pleb` builds under /jukestr/; `deploy-pleb.sh` copies into pleb.world's `public/jukestr/`. In
+  pleb.world, `public/madstr/` is removed with no redirect (zapa: nobody uses it yet), the sticker says Juke⚡tr
+  and opens /jukestr/.
+- The web cache is `jukestr-<id>` and clears old `madstr-` caches. App id and saved keys unchanged.
+- Checked: tests 195/195, lint, build; pleb.world build and its tests 6/6. Headless Chromium on the /jukestr/
+  build: title and logo Juke⚡tr, manifest Juke⚡tr / Jukestr, service worker scope /jukestr/, cache jukestr-….
+- Not renamed (not in the spec): the board's headline "Mad Player Media".
 
