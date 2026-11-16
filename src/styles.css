@@ -2091,10 +2091,8 @@ a.back[href="#/"] {
     font-size: 0.7rem;
   }
 }
----------------------------------------------------------------------------------------
-  */
-  @media
-  (prefers-reduced-motion: no-preference) {
+/* --- motion ------------------------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: no-preference) {
   .s1 {
     animation: drift 160s linear infinite;
   }

@@ -523,3 +523,17 @@ Spec: feat-radio.md
   stations lists it, down vote hides it and the Hidden card shows it; phone width (412 px) lays out.
 - Tests 224/224, lint clean, `pnpm build` passes. Not run on the Android app (HLS in the WebView unconfirmed).
 - 10 choices the spec did not fix are listed in planning.md (Undiscussed decisions → Radio).
+
+## Cleanup — legacy files, the broken motion comment, chunk sizes [done]
+Spec: planning.md open questions (from audits/audit-2026-11-15.md)
+
+- Deleted the old NDK / Cursor-era files: `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
+  `.cursor-tools.env.example`, `NIP46_QR_FLOW.md`, `madstr-tv.npk`. Nothing referred to them.
+- `styles.css`: the `/* --- motion --- */` comment had lost its start in 5948541, so the browser dropped the
+  reduced-motion block after it: the stars' drift and the post-it wiggle had been off since. Fixed; in headless
+  Chromium `.s1` / `.s2` went from `animation: none` to `drift`. The css-syntax-error warning is gone.
+- Build: `manualChunks` puts React (223 kB) and the Nostr libraries (371 kB) in their own files; the app is
+  152 kB. Same bytes, cached across deploys. hls.js (599 kB, loaded only when needed) is the one file left over
+  500 kB: its light build failed 4 of 8 live shows (separate audio tracks), checked against the full build, which
+  played all 8. The `@scure/base` annotation note is from that library and predates this.
+- Tests 224/224, lint clean, build passes.

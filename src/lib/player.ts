@@ -26,7 +26,9 @@ const LAST_VIDEO = 'madstr:lastvideo';
 const SAVE_EVERY_SECONDS = 5;
 export const NOT_ANSWERING = 'Station not answering';
 
-// hls.js, loaded only when an HLS stream starts in a browser that cannot play HLS itself (feat-radio §RA3b).
+// hls.js, loaded only when an HLS stream starts in a browser that cannot play HLS itself (feat-radio §RA3b). The full
+// build, not hls.js/light: zap.stream and Cloudflare Stream shows carry their sound as a separate audio track
+// (EXT-X-MEDIA TYPE=AUDIO), which the light build cannot play (4 of 8 live shows were silent, 2026-11-16).
 type HlsLike = { loadSource(_url: string): void; attachMedia(_el: HTMLMediaElement): void; destroy(): void; on(_event: string, _fn: (_e: unknown, _data: { fatal?: boolean }) => void): void };
 type HlsClass = { new (_config?: object): HlsLike; isSupported(): boolean; Events: { ERROR: string } };
 let hlsClass: Promise<HlsClass | null> | null = null;
