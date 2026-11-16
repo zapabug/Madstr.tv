@@ -11,6 +11,9 @@ last-worked: 2026-11-15
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Phone controls in two compact rows
+State: Built and checked in a browser at three phone sizes, on its own branch, not merged. The controls take about a third of the height they did, so two rows of playlist cards show. Needs zapa to look at it on the dev server and say whether to merge and ship it (web and Android 1.4).
+────────────────────────────────────────
 Feat: Radio, Nostr first
 State: Proposed, not built. Stations come from Nostr (more than 11,000 radio station posts on the WaveFunc relay, about 7,000 playable on the web), found by genre stickers and country, with the stations of people you follow first; up saves, down hides; the picture show plays behind. Needs zapa's go on the spec.
 ────────────────────────────────────────

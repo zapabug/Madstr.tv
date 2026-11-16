@@ -415,3 +415,14 @@ Spec: feat-plebworld-deploy.md
 - D4: `api/rss.ts` removed here. The Vercel project madstr-tv is still up until zapa removes it in the dashboard.
 - D5: versionCode 4, versionName 1.3, signed with the release key (cert 92aca110…), `zapstore publish`: event
   `4ceb8db1…`, status pending at the time. zapstore.yaml website now pleb.world/madstr.
+
+## P1 — Phone controls in two compact rows [built]
+Commit: b966316
+Spec: feat-phone-inline.md
+
+- Phones (up to 640 px wide): a small disc card (46 px disc, Hide artist on its corner) over two rows; row 1
+  the seek bar, row 2 previous / play / next, thumbs, SPEED. The playlist header stays on one line (count left
+  out). Desktop, TV and the app's sideways view are unchanged.
+- Measured headless: controls panel 244 → 94 px; full tile rows 0 / 1 / 1 → 2 / 2 / 2 at 360×780, 393×852,
+  412×915; nothing overlaps or leaves the panel. 1280×720 and 1920×1080 as before; sideways view as before.
+- Shaped with zapa live on the dev server (disc card over both rows; smaller; SPEED back on the bottom row).
