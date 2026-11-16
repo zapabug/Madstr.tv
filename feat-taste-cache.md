@@ -116,7 +116,12 @@ remote there are usually buttons for this".
 - Exit: in the full picture, a double tap on either side seeks and the panel stays away; a single tap on a
   video pauses it and the panel comes back.
 
-## T7: Phone turned sideways
+## T7: Phone turned sideways — WITHDRAWN 2026-11-16
+
+zapa, 2026-11-16: "the compact two rows [for phones upright]; sideways same as TV". The picture-only sideways
+view is gone: a phone held sideways shows the TV / desktop layout, in the browser and the app alike. What follows
+is what was built before and removed.
+
 
 zapa, 2026-11-15: "on mobile tilting the screen hides the bottom panels, interacting only shows the seek bar and
 prev play next buttons; to manage the playlist they tilt portrait".
