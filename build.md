@@ -434,3 +434,8 @@ Commit: 9eb6470
   auto-hide on turning and the app's `data-native` marker are removed. Checked headless: a touch phone at
   860×400 (browser, and with the app's bridge) shows the TV layout; upright 393×852 the compact two rows;
   1280×720 unchanged.
+
+## Release 1.4 + pleb.world update (2026-11-16)
+- Web: compact phone controls and the sideways change deployed to www.pleb.world/madstr (pleb.world 7f22fa1);
+  the live stylesheet carries the two-row phone grid.
+- Android 1.4, versionCode 5, same release key (92aca110…), published on zapstore: event `2dc3dfcc…`, pending.
