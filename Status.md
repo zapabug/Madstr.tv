@@ -11,6 +11,9 @@ last-worked: 2026-11-15
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Radio, Nostr first
+State: Proposed, not built. Stations come from Nostr (more than 11,000 radio station posts on the WaveFunc relay, about 7,000 playable on the web), found by genre stickers and country, with the stations of people you follow first; up saves, down hides; the picture show plays behind. Needs zapa's go on the spec.
+────────────────────────────────────────
 Feat: Web app moves to pleb.world/madstr, Android 1.3
 State: Live. The web app (the TV and desktop version) is at www.pleb.world/madstr with its RSS proxy, and the pleb.world sticker links there; Android 1.3 with everything below is published on zapstore. Needs zapa to delete the old madstr-tv project in the Vercel dashboard, to install 1.3 and try the sideways view on a phone, and to say whether to push this repo to GitHub.
 ────────────────────────────────────────
