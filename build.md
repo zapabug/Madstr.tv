@@ -31,6 +31,8 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | D1-D3 | Web app at pleb.world/madstr, RSS proxy there | live 2026-11-15 |
 | D4 | Vercel project madstr-tv removed | waiting on zapa (dashboard) |
 | D5 | Android 1.3 on zapstore | published 2026-11-15 |
+| P1 | Phone controls in two compact rows (feat-phone-inline) | built; released in 1.4 |
+| P2-P27 | Phone layouts, Open signer, Make it yours, Jukestr 3000 look | built + machine-verified; shaped live with zapa on his phone (test builds); not released |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -439,3 +441,37 @@ Commit: 9eb6470
 - Web: compact phone controls and the sideways change deployed to www.pleb.world/madstr (pleb.world 7f22fa1);
   the live stylesheet carries the two-row phone grid.
 - Android 1.4, versionCode 5, same release key (92aca110…), published on zapstore: event `2dc3dfcc…`, pending.
+
+## P2-P27 — Phone layouts, Open signer, Make it yours, the Jukestr 3000 look [built, shaped with zapa]
+Commit: f6697c8
+Spec: feat-phone-inline.md P2-P27
+
+Built in one session with zapa watching a headed Chromium window and test builds on his Pixel 8 Pro (installed
+over wifi adb, release-signed, still versionName 1.4). Each change was shown to him before the next.
+- Phone layouts: upright bar sized to the width (P2), thumbs beside the seek bar and no times (P5), prev / play
+  / next centred and a plain ×1 sticker (P5); playlist + bar in 40 % of the height (P4), one row less for a
+  short playlist (P9, the panel takes the row's real height); smaller near-square tiles, four across, title over
+  the picture (P8); header Home = Shuffle size, Shuffle icon only, scrolling title right to left only (P7);
+  post ticker on its own line (P14); VIDEOS near the edge (P10); pictures fit the screen on phones (P11).
+- Sideways phones: no playlist, the same bar as upright (P3); no Hide artist there (P15).
+- Arrows on the picture: a tap changes the picture without waking the panel (P13; upright they fade, sideways
+  they stay dimmed). No hover tips or lifted tiles on touch screens (P16).
+- Android app: status bar and gesture handle hidden, two swipes to leave (P6); back swipe goes back a page, on the
+  board it sends the app to the background (P12). Checked with adb (the back key went to the board).
+- Make it yours (P19): your sources moved off the board to `#/people/sources`, reached from the follow page next
+  to Home; the People sticker hints at it; pages open at their top. Board → Home with a house icon (P17).
+- Open signer (P21): window.nostr, else NIP-55 to the phone's signer app (applesauce AndroidNativeSigner +
+  `capacitor-plugin-nostr-signer` 0.2.0, zapa OK'd; its Android code read: intents and the content provider, no
+  network), else NIP-55's web callback in a phone browser / PWA (`src/lib/signerCallback.ts`, tested; signing
+  after login on the clipboard). zapa: "working great" with real Amber.
+- Looks: buttons rounded rectangles, player buttons round (P18); Home mint, Make it yours pink (P20; a colour
+  rotation was tried and withdrawn); no seek bar on the board's bar (P22); profile picture opaque, a fixed 400 px
+  circle on a matching planet with a bigger halo (P23: the `<img>` used to keep the file's pixel size); the
+  Jukestr 3000 look from the "Player Bezels" artifact: orange plastic bezel, one body for playlist + player
+  (P26), domed matte buttons everywhere (P24, P25), rainbow seek bar with a Saturn knob (P27), bezels off the
+  screen's edges on phones.
+- Tests 195/195 (new: Amber callback, saved signer sessions), lint clean, build passes (old `*/` CSS warning).
+- Open: the name (zapa picked JUKESTR, spelled with E; the app id stays com.madstr.tvapp) and the logo (bolt-play
+  mark in an upside-down pyramid with the sun behind, no bird) are next; the Make it yours page's boxes are still
+  sticker cards; no release or pleb.world deploy yet.
+
