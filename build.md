@@ -13,7 +13,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | R5 | People (login, follow, creator picker) | built + machine-verified; Log out chip in 9d821b3 |
 | R6 | Picture wall, live previews, hashtag discovery | built + machine-verified; preview gaps fixed in 9d821b3 |
 | R7 | Local media on the web | built; folder picker untested in a real browser |
-| RSS | RSS work (incoming) | in progress; parser and proxy tests come with it |
+| RSS | Feed parser and proxy tests | built + machine-verified (faa4288); awaiting zapa |
 | R8 | Remote pass (final stage before deploy) | built + machine-verified; awaiting zapa's remote test |
 | A1 | Android app picks files (feat-android-play) | built + machine-verified; awaiting zapa on a device |
 | A2 | Android app keeps playing in the background (1.1) | zapa: works (2026-11-15) |
@@ -166,11 +166,20 @@ network back); checked headless with the first request forced to fail, shown 15 
   feed, private addresses get 403.
 - pleb.world: Mad⚡tr.tv sticker added (plebworld 98f862b), pushed; live on www.pleb.world in ~30 s.
 
-## RSS [incoming]
+## RSS [built + machine-verified, awaiting zapa]
+Commit: faa4288
 Spec: §Milestones RSS
 
-- Carried over from `feat/own-audio` (842ef1d): `rssFeed.ts`, `server/rssProxy.ts`, `api/rss.ts`.
-- To do with that work: tests for the parser and the private-address guard.
+- Carried over from `feat/own-audio` (842ef1d): `rssFeed.ts`, `server/rssProxy.ts` (the function is now pleb.world's
+  `/api/rss`).
+- `src/lib/xmlLite.ts`: a pure XML reader replacing DOMParser in `rssFeed.ts` (no DTD, no entity expansion, depth
+  cap 256, no recursion). Compared with the browser's DOMParser in headless Chromium on six real feeds (Darknet
+  Diaries, Planet Money, a Wavlake album, Lex Fridman, Linux Unplugged at 9 MB, an Anchor feed at 5 MB): identical
+  output. The one difference is on purpose: an entity bomb stays `&b;` instead of growing.
+- Tests: `rssFeed.test.ts` (7, fixtures in `src/lib/fixtures/feeds/` cut from real feeds), `xmlLite.test.ts` (5),
+  `server/rssProxy.test.ts` (3, no internet: private ranges, localhost, schemes, safe headers). `pnpm test` now
+  also runs `server/`. 210/210, lint, both builds.
+- In the dev app (headless Chromium), `loadFeed` on three live feeds went through `/api/rss` and parsed.
 
 ## R8 — Remote pass [built + machine-verified, final stage before deploy]
 Commit: e6d1054

@@ -18,7 +18,7 @@ Feat: Phone controls in two compact rows; sideways shows the TV layout
 State: Live on pleb.world/madstr and in Android 1.4 on zapstore. Being replaced by the phone layouts above.
 ────────────────────────────────────────
 Feat: Radio, Nostr first
-State: Proposed, not built. Stations come from Nostr (more than 11,000 radio station posts on the WaveFunc relay, about 7,000 playable on the web), found by genre stickers and country, with the stations of people you follow first; up saves, down hides; the picture show plays behind. Needs zapa's go on the spec.
+State: Being built (zapa gave the go and accepted hls.js on 2026-11-16). Stations come from Nostr (more than 11,000 radio station posts on the WaveFunc relay, about 7,000 playable on the web), found by genre stickers and country, with the stations of people you follow first; up saves, down hides; the picture show plays behind. Needs zapa's go on the spec.
 ────────────────────────────────────────
 Feat: Web app moves to pleb.world/madstr, Android 1.3
 State: Live. The web app (the TV and desktop version) is at www.pleb.world/madstr with its RSS proxy, and the pleb.world sticker links there; Android 1.3 with everything below is published on zapstore. Needs zapa to delete the old madstr-tv project in the Vercel dashboard, to install 1.3 and try the sideways view on a phone, and to say whether to push this repo to GitHub.
@@ -51,7 +51,7 @@ Feat: Played items hidden per session, and pictures that repeat far less
 State: Built, machine-verified against real relays and committed; needs zapa to use it for a while and say if the numbers (2000 pictures, a batch every 20 s) feel right.
 ────────────────────────────────────────
 Feat: RSS
-State: Incoming. The feed parser and proxy exist from the earlier own-audio work; tests come with the new RSS work.
+State: Built and machine-verified. Feeds are now read by the app's own small XML reader, which gives the same episodes as the browser did on six real feeds and cannot be blown up by a hostile feed; the reader and the feed proxy's guard against private addresses have tests. Needs zapa to add a feed or two and say they play.
 ────────────────────────────────────────
 Feat: Remote pass (final stage before deploy)
 State: Built and machine-verified: every control on the board, People and the viewer is reachable with arrow keys alone. Needs zapa to try it with a keyboard or remote before deploy.

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:psc="http://podlove.org/simple-chapters" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+	<channel>
+		<title><![CDATA[The Prayer of St. Francis]]></title>
+		<description><![CDATA[Written and produced by Kevin Embleton
+Strings by Joel Negus
+Mix by Jason Bennett
+Master by John Merkel]]></description>
+		<link>https://wavlake.com/kevin-embleton</link>
+		<generator>Wavlake</generator>
+		<lastBuildDate>Mon, 16 Nov 2026 22:00:04 GMT</lastBuildDate>
+		<atom:link href="https://wavlake.com/feed/music/3d9e23b0-e723-45b9-9ec1-aa65873afdcf" rel="self" type="application/rss+xml"/>
+		<author><![CDATA[Kevin Embleton]]></author>
+		<podcast:medium>music</podcast:medium>
+		<podcast:remoteItem medium="publisher" feedGuid="8f939f54-7eab-4e77-a394-bc9a25242c64" feedUrl="https://wavlake.com/feed/artist/8f939f54-7eab-4e77-a394-bc9a25242c64">
+		</podcast:remoteItem>
+		<podcast:category text="Singer/Songwriter">
+			<podcast:category text="Alternative Folk"/>
+		</podcast:category>
+		<podcast:guid>37844ae6-7303-53d2-a733-aed9585d253f</podcast:guid>
+		<podcast:value type="lightning" method="keysend">
+			<podcast:valueRecipient name="The Prayer of St. Francis via Wavlake" type="node" address="02682b7c86f474d082fa9d274c3751291225448468691784c6f112187de975a8c2" customKey="16180339" customValue="3d9e23b0-e723-45b9-9ec1-aa65873afdcf" split="100"/>
+		</podcast:value>
+		<itunes:author>Kevin Embleton</itunes:author>
+		<itunes:summary>Written and produced by Kevin Embleton
+Strings by Joel Negus
+Mix by Jason Bennett
+Master by John Merkel</itunes:summary>
+		<itunes:owner>
+			<itunes:name>Wavlake</itunes:name>
+			<itunes:email>contact@wavlake.com</itunes:email>
+		</itunes:owner>
+		<itunes:explicit>false</itunes:explicit>
+		<itunes:image href="https://d12wklypp119aj.cloudfront.net/image/3d9e23b0-e723-45b9-9ec1-aa65873afdcf.jpg"/>
+		<item>
+			<title><![CDATA[The Prayer of St. Francis]]></title>
+			<link>https://www.wavlake.com/album/3d9e23b0-e723-45b9-9ec1-aa65873afdcf</link>
+			<guid isPermaLink="false">6baa5e31-8fc4-4960-b0d0-98303d6a6ad5</guid>
+			<dc:creator><![CDATA[Kevin Embleton]]></dc:creator>
+			<pubDate>Sat, 02 Nov 2024 16:21:38 GMT</pubDate>
+			<enclosure url="https://op3.dev/e,pg=37844ae6-7303-53d2-a733-aed9585d253f/https://d12wklypp119aj.cloudfront.net/track/6baa5e31-8fc4-4960-b0d0-98303d6a6ad5.mp3" length="5037504" type="audio/mpeg"/>
+			<podcast:episode>1</podcast:episode>
+			<podcast:season>1</podcast:season>
+			<podcast:value type="lightning" method="keysend">
+				<podcast:valueRecipient name="Kevin Embleton via Wavlake" type="node" address="02682b7c86f474d082fa9d274c3751291225448468691784c6f112187de975a8c2" customKey="16180339" customValue="6baa5e31-8fc4-4960-b0d0-98303d6a6ad5" split="100"/>
+			</podcast:value>
+			<itunes:explicit>false</itunes:explicit>
+			<itunes:duration>00:03:24</itunes:duration>
+		</item>
+	</channel>
+</rss>
