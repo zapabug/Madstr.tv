@@ -3,7 +3,9 @@ import { usePictures } from '../data/pictures.ts';
 import { useViewItems } from '../data/views.ts';
 import { player } from '../lib/player.ts';
 import type { Route } from '../lib/route.ts';
+import { HomeWord, PersonIcon } from './icons.tsx';
 import { FollowView } from './People.tsx';
+import { SourcesView } from './Sources.tsx';
 import { Theater } from './Theater.tsx';
 
 type ViewerRoute = Extract<Route, { page: 'viewer' }>;
@@ -26,14 +28,17 @@ export function Viewer({ route }: { route: ViewerRoute }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, data.label]);
 
-  if (route.mode === 'people' && route.filter === 'follow') {
+  // Following creators, and Make it yours (your sources) behind the button beside Home (feat-phone-inline §P19).
+  if (route.mode === 'people') {
+    const sources = route.filter === 'sources';
     return (
       <main className="viewer" data-mode={route.mode} data-filter={route.filter}>
         <header className="viewer-head">
-          <a className="back" href="#/" data-nav><span aria-hidden="true">←</span> Board</a>
+          <a className="back" href="#/" data-nav aria-label="Home"><HomeWord /></a>
+          {!sources && <a className="back yours-btn" href="#/people/sources" data-nav aria-label="Make it yours"><span className="home-word" aria-hidden="true"><PersonIcon size={16} />Make it yours</span></a>}
           <h1>{data.label}</h1>
         </header>
-        <FollowView />
+        {sources ? <SourcesView /> : <FollowView />}
         <p className="stage-hint">Esc or Backspace goes back to the board.</p>
       </main>
     );
@@ -43,6 +48,6 @@ export function Viewer({ route }: { route: ViewerRoute }) {
   // The chip that hops to the other side, as the old "VIDEOS" toggle did.
   const sibling = route.mode === 'watch' ? { label: 'MUSIC', href: '#/listen/music' } : route.mode === 'listen' ? { label: 'VIDEOS', href: '#/watch/continue' } : undefined;
 
-  const emptyStage = route.mode === 'pictures' ? 'No pictures yet. Add a picture folder under Your sources on the board.' : undefined;
+  const emptyStage = route.mode === 'pictures' ? 'No pictures yet. Add a picture folder under Make it yours.' : undefined;
   return <Theater data={data} pictures={pictures} hasVideo={hasVideo} modeLabel={sibling?.label} modeHref={sibling?.href} emptyStage={emptyStage} />;
 }

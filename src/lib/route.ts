@@ -6,7 +6,7 @@ export type ViewerMode = 'listen' | 'watch' | 'pictures' | 'people';
 
 export type ListenFilter = 'music' | 'podcasts' | 'local';
 export type WatchFilter = 'continue' | 'short' | 'long';
-export type PeopleFilter = 'follow';
+export type PeopleFilter = 'follow' | 'sources';
 
 export type Route =
   | { page: 'board' }
@@ -17,7 +17,7 @@ export type Route =
 
 const LISTEN: readonly string[] = ['music', 'podcasts', 'local'];
 const WATCH: readonly string[] = ['continue', 'short', 'long'];
-const PEOPLE: readonly string[] = ['follow'];
+const PEOPLE: readonly string[] = ['follow', 'sources'];
 
 export const BOARD: Route = { page: 'board' };
 
@@ -39,7 +39,7 @@ export function parseHash(hash: string): Route {
 }
 
 // Most views are the theatre: the picture (slideshow or video) fills the screen with the
-// picker on the left and the player on the right. Following creators is a plain page.
+// picker on the left and the player on the right. Following creators and Make it yours are plain pages.
 export function isTheater(route: Route): boolean {
-  return route.page === 'viewer' && !(route.mode === 'people' && route.filter === 'follow');
+  return route.page === 'viewer' && route.mode !== 'people';
 }

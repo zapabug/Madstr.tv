@@ -1,11 +1,11 @@
 // The service worker's source, put together at build time by the plugin in vite.config.ts (spec
 // feat-pwa-zapstore §P1). `routeJs` is lib/swRoute.ts with its types stripped; `files` is the app shell of
-// this build, under `base` ('/', or '/madstr/' on pleb.world). The cache name carries the build's id, so a new deploy installs fresh files and the old cache
+// this build, under `base` ('/', or '/jukestr/' on pleb.world). The cache name carries the build's id, so a new deploy installs fresh files and the old cache
 // is dropped once the new version takes over.
 
 export function swSource(cacheName: string, files: readonly string[], routeJs: string, base = '/'): string {
   const page = JSON.stringify(`${base}index.html`);
-  return `// Mad⚡tr.tv service worker, generated at build time (see src/pwa/swSource.ts). Do not edit.
+  return `// Juke⚡tr service worker, generated at build time (see src/pwa/swSource.ts). Do not edit.
 ${routeJs}
 const CACHE = ${JSON.stringify(cacheName)};
 const FILES = ${JSON.stringify(files)};
@@ -18,7 +18,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('madstr-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && (k.startsWith('jukestr-') || k.startsWith('madstr-'))).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

@@ -38,9 +38,13 @@ export function useAutoHide(enabled: boolean): boolean {
     wake();
     // Touches and presses on the picture (`data-tap-zone`) do not wake by themselves: the picture decides once it
     // knows a single tap from a double tap, and sends WAKE_EVENT for a single one (spec feat-taste-cache §T6).
+    // Touching the picture arrows (`data-no-wake`) changes the picture without bringing the panel back
+    // (zapa, feat-phone-inline §P13); a remote's keys and a mouse still wake.
     const onInput = (event: Event) => {
-      const inZone = event.target instanceof Element && event.target.closest('[data-tap-zone]') !== null;
-      if (inZone && (event.type !== 'pointermove' || (event as PointerEvent).pointerType === 'touch')) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const touchLike = event.type !== 'pointermove' || (event as PointerEvent).pointerType === 'touch';
+      if (target?.closest('[data-tap-zone]') && touchLike) return;
+      if (target?.closest('[data-no-wake]') && touchLike && event.type !== 'keydown') return;
       wake();
     };
     const events = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;

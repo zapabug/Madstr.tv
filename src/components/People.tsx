@@ -2,7 +2,7 @@ import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { PersonIcon } from './icons.tsx';
 import { CATEGORIES, type Category } from '../lib/creators.ts';
-import { hasExtension, loginWithBunker, loginWithExtension, logout, startQrLogin, type QrLogin } from '../lib/accounts.ts';
+import { loginWithBunker, loginWithSigner, logout, signerAvailable, startQrLogin, type QrLogin } from '../lib/accounts.ts';
 import { isHttpUrl } from '../lib/media.ts';
 import { follow, shortName, unfollow, useAccount, useCreatorSuggestions, useProfile } from '../data/people.ts';
 
@@ -67,8 +67,8 @@ export function LoginPanel() {
       <h2>Log in to follow people</h2>
       <p className="own-note">Optional. Without a login the board shows what the people the TV account follows post.</p>
       <div className="own-add">
-        <button type="button" className="chip-btn solid" data-nav disabled={busy || !hasExtension()} onClick={() => { void attempt(loginWithExtension); }}>
-          {hasExtension() ? 'Use browser extension' : 'No browser extension found'}
+        <button type="button" className="chip-btn solid" data-nav disabled={busy || !signerAvailable()} onClick={() => { void attempt(loginWithSigner); }}>
+          {signerAvailable() ? 'Open signer' : 'No signer found'}
         </button>
       </div>
       {qr ? (

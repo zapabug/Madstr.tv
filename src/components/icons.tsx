@@ -13,6 +13,14 @@ function Svg({ size = 24, children }: IconProps & { children: ReactElement | Rea
   );
 }
 
+// A house, in place of the back arrow on the buttons that go back to the board (zapa, feat-phone-inline §P17).
+export const HouseIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M12 3 2 11.5h3V21h5.5v-6h3v6H19v-9.5h3z" /></Svg>
+);
+/** The house and the word Home; the link that holds it carries the name for screen readers. */
+export const HomeWord = () => (
+  <span className="home-word" aria-hidden="true"><HouseIcon size={16} />Home</span>
+);
 export const PrevIcon = (p: IconProps) => (
   <Svg {...p}><path d="M6 5h2v14H6zM20 5v14L9.5 12z" /></Svg>
 );

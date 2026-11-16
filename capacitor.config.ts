@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // one the first Madstr's Capacitor setup used.
 const config: CapacitorConfig = {
   appId: 'com.madstr.tvapp',
-  appName: 'Mad⚡tr.tv',
+  appName: 'Juke⚡tr',
   webDir: 'dist',
   plugins: {
     // Native HTTP for fetch: RSS feeds load directly, without the web build's /api/rss proxy (spec §P2).

@@ -1,21 +1,24 @@
 import { useSyncExternalStore } from 'react';
 import { ActionRunner } from 'applesauce-actions';
 import { retry } from 'rxjs';
-import { ExtensionSigner, NostrConnectSigner, PrivateKeySigner, type ISigner } from 'applesauce-signers';
+import { AmberClipboardSigner, ExtensionSigner, NostrConnectSigner, PrivateKeySigner, type ISigner } from 'applesauce-signers';
 import type { EventTemplate, NostrEvent } from 'applesauce-core/helpers';
 import { RELAYS, eventStore, pool } from './applesauce.ts';
+import { isNativeApp } from './platform.ts';
 import { publishToFirst } from './publishFirst.ts';
+import { RETURN_KEY, loginLink, readAnswer, safeReturn } from './signerCallback.ts';
 import { askForKeyUntilAnswered, reconnect, withTimeout } from './reconnect.ts';
 import { SIGNER_RELAYS } from './relays.ts';
 import { clearSession, loadSession, parseCredential, saveSession } from './session.ts';
 
-// Logging in, and the one thing a login is for here: following people. Ways in: a NIP-07 browser extension,
+// Logging in, and the one thing a login is for here: following people. Ways in: Open signer (a NIP-07
+// extension, the phone's signer app over NIP-55, or Amber's web link; feat-phone-inline §P21),
 // a NIP-46 `bunker://` link or `nbunksec` (Amber and other remote signers), or scanning a nostrconnect:// QR code.
 // The app never holds a private key. Built on the pattern that works in the Madeira Livre app
 // (madeira-app/src/lib/signer.ts + account.ts): the signer is built directly, the stored session is kept by
 // this app, and Amber's "already connected" reply on a reconnect is treated as success.
 
-export const APP_NAME = 'Mad⚡tr.tv';
+export const APP_NAME = 'Juke⚡tr';
 // The NIP-46 relays for the signer connection are SIGNER_RELAYS (relays.ts): never relay.nsec.app, which needs
 // NIP-42 auth, so a connect request there silently gets nothing.
 export const NIP46_RELAYS = [...SIGNER_RELAYS];
@@ -65,6 +68,73 @@ async function connectExtension(): Promise<Signer> {
   await signer.getPublicKey();
   saveSession({ type: 'extension' });
   return signer;
+}
+
+// --- Open signer: the phone's signer app, used directly (feat-phone-inline §P21) -------------------------
+// In the Android app: NIP-55 through Applesauce's AndroidNativeSigner (intents, no relay). In a phone's browser
+// or the PWA: NIP-55's web link; the login comes back on a callback address (signerCallback.ts), and later
+// signatures come back on the clipboard, so the page does not reload for each one. Only which app and the
+// public key are kept; no secret exists.
+
+const AMBER = 'com.greenart7c3.nostrsigner';
+
+/** Is there a signer to open on this device? (An app's signer is looked for when the button is pressed.) */
+export function signerAvailable(): boolean {
+  return hasExtension() || isNativeApp() || !!AmberClipboardSigner.SUPPORTED;
+}
+
+interface PlainSigner { getPublicKey(): Promise<string>; signEvent(_t: EventTemplate): Promise<NostrEvent> }
+function wrapPlain(signer: PlainSigner): Signer {
+  return { getPublicKey: () => signer.getPublicKey(), signEvent: t => signer.signEvent(t), close: async () => {} };
+}
+
+async function nativeSigner(packageName: string, pubkey?: string): Promise<PlainSigner> {
+  // Loaded only inside the app: it needs the Capacitor plugin, which the web build does not have.
+  const { AndroidNativeSigner } = await import('applesauce-signers/signers/android-native-signer');
+  const signer = new AndroidNativeSigner(packageName, pubkey);
+  signer.permissions = [{ type: 'get_public_key' }, ...SIGN_KINDS.map(kind => ({ type: 'sign_event' as const, kind }))];
+  return signer;
+}
+
+async function connectNative(): Promise<Signer> {
+  const { AndroidNativeSigner } = await import('applesauce-signers/signers/android-native-signer');
+  const apps = await AndroidNativeSigner.getSignerApps();
+  const app = apps.find(a => a.packageName === AMBER) ?? apps[0];
+  if (!app) throw new Error('No signer app found on this phone. Install Amber (or another NIP-55 signer), or use the QR code.');
+  const signer = await nativeSigner(app.packageName);
+  const pubkey = await signer.getPublicKey();
+  saveSession({ type: 'nip55', packageName: app.packageName, pubkey });
+  return wrapPlain(signer);
+}
+
+/** Leave for Amber; it comes back to this page with the public key (handled by takeSignerAnswer). If the page
+ *  is still in front after a few seconds, no signer app took the link. */
+function connectAmberWeb(): Promise<Signer> {
+  try { localStorage.setItem(RETURN_KEY, location.hash || '#/'); } catch { /* back to the board then */ }
+  window.location.href = loginLink(`${location.origin}${location.pathname}`);
+  return new Promise((_resolve, reject) => {
+    window.setTimeout(() => {
+      if (document.visibilityState === 'visible') reject(new Error('No signer app opened. Install Amber, or use the QR code.'));
+    }, 4000);
+  });
+}
+
+/** Coming back from Amber's login: keep the key it sent, tidy the address and go back to where the page was.
+ *  Runs before the first render, so the router reads the right place. */
+function takeSignerAnswer(): void {
+  const pubkey = readAnswer(location.search);
+  if (!pubkey) return;
+  saveSession({ type: 'amber-web', pubkey });
+  let back: string | null = null;
+  try { back = localStorage.getItem(RETURN_KEY); localStorage.removeItem(RETURN_KEY); } catch { /* fine */ }
+  history.replaceState(null, '', `${location.pathname}${safeReturn(back)}`);
+}
+
+async function connectSigner(): Promise<Signer> {
+  if (await waitForExtension(300)) return connectExtension();
+  if (isNativeApp()) return connectNative();
+  if (AmberClipboardSigner.SUPPORTED) return connectAmberWeb();
+  throw new Error('No signer found on this device. Use the QR code or a bunker link.');
 }
 
 // --- NIP-46 ------------------------------------------------------------------------------
@@ -166,6 +236,11 @@ export async function loginWithExtension(): Promise<void> {
   await complete(await connectExtension());
 }
 
+/** Open signer (§P21): window.nostr, else the phone's signer app, else Amber from the browser. */
+export async function loginWithSigner(): Promise<void> {
+  await complete(await connectSigner());
+}
+
 export async function loginWithBunker(credential: string): Promise<void> {
   await complete(await connectBunker(credential));
 }
@@ -183,6 +258,7 @@ let restoring: Promise<void> | null = null;
  *  (only Log out clears it), so the next launch tries again. */
 export function restoreAccounts(): Promise<void> {
   if (restoring) return restoring;
+  takeSignerAnswer();
   restoring = (async () => {
     try {
       // Logins saved by the earlier version of this app (a different format) cannot be restored.
@@ -192,6 +268,13 @@ export function restoreAccounts(): Promise<void> {
       if (session.type === 'extension') {
         if (!(await waitForExtension())) { set({ status: 'out' }); return; }
         await complete(wrapExtension(new ExtensionSigner()));
+      } else if (session.type === 'nip55') {
+        if (!isNativeApp()) { set({ status: 'out' }); return; }
+        await complete(wrapPlain(await nativeSigner(session.packageName, session.pubkey)));
+      } else if (session.type === 'amber-web') {
+        const signer = new AmberClipboardSigner();
+        signer.pubkey = session.pubkey;
+        await complete(wrapPlain(signer));
       } else {
         await complete(await connectBunker(session.nbunksec));
       }

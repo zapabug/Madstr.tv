@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Mad⚡tr.tv</string>
-    <string name="title_activity_main">Mad⚡tr.tv</string>
+    <string name="app_name">Juke⚡tr</string>
+    <string name="title_activity_main">Juke⚡tr</string>
     <string name="package_name">com.madstr.tvapp</string>
     <string name="custom_url_scheme">com.madstr.tvapp</string>
 </resources>
