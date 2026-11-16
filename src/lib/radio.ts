@@ -121,6 +121,11 @@ export function liveFromEvent(e: NostrEventLike, now: number): MediaItem | null 
   };
 }
 
+/** A radio station (kind 31237), not a live show: what Your stations keeps (feat-radio §RA4). */
+export function isStation(item: Pick<MediaItem, 'address'>): boolean {
+  return item.address?.startsWith(`${STATION_KIND}:`) ?? false;
+}
+
 /** Tagged music or radio (zap.stream also writes `internal:music`). */
 export function isMusicShow(item: MediaItem): boolean {
   return (item.hashtags ?? []).some(t => /^(internal:)?(music|radio)$/.test(t));

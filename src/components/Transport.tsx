@@ -6,6 +6,7 @@ import { shortName, useProfile } from '../data/people.ts';
 import { player, usePlayer } from '../lib/player.ts';
 import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
+import { isStation } from '../lib/radio.ts';
 import { Avatar } from './People.tsx';
 import { FilmIcon, FolderArt, NextIcon, NoteIcon, PauseIcon, PersonIcon, PlayIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
 
@@ -132,6 +133,7 @@ export function PanelControls() {
   const has = p.queue.length > 0;
   const item = p.queue[p.index];
   const live = !!item?.live;
+  const station = !!item && isStation(item);
   const noun = item?.kind === 'video' ? 'video' : live ? 'station' : 'song';
   const taste = useTaste();
   const profile = useProfile(item?.pubkey);
@@ -148,11 +150,11 @@ export function PanelControls() {
         <div className="pc-face">
           <NowCard item={item} playing={playing} />
           <button type="button" className={`taste-btn taste-up${up ? ' on' : ''}`} data-nav aria-pressed={up} aria-label="Up vote" disabled={!item}
-            title="Up vote (a public like when logged in)" onClick={() => { if (item) run(item.id, toggleUpVote(item)); }}>
+            title={station ? 'Up vote: save to Your stations (a public like when logged in)' : 'Up vote (a public like when logged in)'} onClick={() => { if (item) run(item.id, toggleUpVote(item)); }}>
             <ThumbUpIcon size={22} />
           </button>
           <button type="button" className="taste-btn taste-down" data-nav aria-label="Down vote" disabled={!item}
-            title="Down vote: hidden from your lists on this device" onClick={() => { if (item) run(item.id, downVote(item)); }}>
+            title={live ? 'Down vote: hide this station on this device' : 'Down vote: hidden from your lists on this device'} onClick={() => { if (item) run(item.id, downVote(item)); }}>
             <ThumbDownIcon size={22} />
           </button>
           {item?.pubkey && !live && (

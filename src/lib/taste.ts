@@ -14,7 +14,7 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const MAX_ID = 200;
 
 export interface UpVote { at: number; reaction?: string } // reaction: the id of the like published for it
-export interface Hidden { name: string; at: number }
+export interface Hidden { name: string; at: number; station?: true } // station: a down-voted radio station (feat-radio §RA4)
 
 export interface Taste {
   up: Record<string, UpVote>;
@@ -49,7 +49,7 @@ export function parseTaste(raw: unknown): Taste {
     if (!isRecord(value)) return out;
     for (const [k, v] of Object.entries(value)) {
       if (!key(k) || !isRecord(v) || !goodTime(v.at)) continue;
-      out[k] = { name: clip(typeof v.name === 'string' ? v.name : '') || 'Untitled', at: v.at };
+      out[k] = { name: clip(typeof v.name === 'string' ? v.name : '') || 'Untitled', at: v.at, ...(v.station === true ? { station: true as const } : {}) };
     }
     return out;
   };
@@ -73,9 +73,10 @@ export function withoutUpVote(taste: Taste, id: string): Taste {
 }
 
 // A down vote: the song is hidden, and an up vote it had is gone.
-export function withDownVote(taste: Taste, item: Pick<MediaItem, 'id' | 'title'>, at: number): Taste {
+export function withDownVote(taste: Taste, item: Pick<MediaItem, 'id' | 'title' | 'live'>, at: number): Taste {
   const { [item.id]: _gone, ...up } = taste.up;
-  return { ...taste, up, songs: newestEntries({ ...taste.songs, [item.id]: { name: clip(item.title) || 'Untitled', at } }, MAX_HIDDEN_SONGS, v => v.at) };
+  const hidden: Hidden = { name: clip(item.title) || 'Untitled', at, ...(item.live ? { station: true as const } : {}) };
+  return { ...taste, up, songs: newestEntries({ ...taste.songs, [item.id]: hidden }, MAX_HIDDEN_SONGS, v => v.at) };
 }
 
 export function withHiddenArtist(taste: Taste, pubkey: string, name: string, at: number): Taste {

@@ -2,6 +2,8 @@ import { eventStore } from '../lib/applesauce.ts';
 import { isLoggedIn, signAndPublish } from '../lib/accounts.ts';
 import type { MediaItem } from '../lib/media.ts';
 import { player } from '../lib/player.ts';
+import { isStation } from '../lib/radio.ts';
+import { saveStation, unsaveStation } from './radioStore.ts';
 import { eventIdOf, likeTemplate, unlikeTemplate } from '../lib/reaction.ts';
 import {
   getTaste, setTaste, withDownVote, withHiddenArtist, withUpVote, withoutUpVote,
@@ -18,6 +20,7 @@ export async function toggleUpVote(item: MediaItem): Promise<string | null> {
   const existing = taste.up[item.id];
   if (existing) {
     setTaste(t => withoutUpVote(t, item.id));
+    if (isStation(item)) unsaveStation(item.id); // feat-radio §RA4: a second press takes the save back too
     if (existing.reaction && isLoggedIn()) {
       try { await signAndPublish(unlikeTemplate(existing.reaction, now())); }
       catch (error) { return `The like stays on Nostr: ${error instanceof Error ? error.message : String(error)}`; }
@@ -25,6 +28,7 @@ export async function toggleUpVote(item: MediaItem): Promise<string | null> {
     return null;
   }
   setTaste(t => withUpVote(t, item.id, Date.now()));
+  if (isStation(item)) saveStation(item); // feat-radio §RA4: up saves the station to Your stations
   const id = eventIdOf(item.id);
   const event = id ? eventStore.getEvent(id) : undefined;
   if (!event || !isLoggedIn()) return null; // kept on this device only
@@ -53,6 +57,7 @@ export async function downVote(item: MediaItem): Promise<string | null> {
   const reaction = getTaste().up[item.id]?.reaction;
   moveOnFrom(item, q => q.id === item.id);
   setTaste(t => withDownVote(t, item, Date.now()));
+  if (isStation(item)) unsaveStation(item.id);
   if (reaction && isLoggedIn()) {
     try { await signAndPublish(unlikeTemplate(reaction, now())); }
     catch (error) { return `The like stays on Nostr: ${error instanceof Error ? error.message : String(error)}`; }

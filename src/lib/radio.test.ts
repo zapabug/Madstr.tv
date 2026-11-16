@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { NostrEventLike } from './media.ts';
 import {
-  DEFAULT_PREFS, countryCounts, countryFromLanguage, genreCounts, isHls, liveFromEvent, parsePrefs, parseSaved,
+  DEFAULT_PREFS, countryCounts, countryFromLanguage, genreCounts, isHls, isStation, liveFromEvent, parsePrefs, parseSaved,
   radioQueue, savedList, stationFromEvent,
 } from './radio.ts';
 
@@ -123,4 +123,10 @@ test('prefs and Your stations read back as untrusted', () => {
   });
   assert.deepEqual(Object.keys(saved), [s.id]);
   assert.deepEqual(savedList(saved), [s]);
+});
+
+test('a station is what Your stations keeps; a live show is not', () => {
+  assert.equal(isStation(stationFromEvent(byName('Omarchy Radio'))!), true);
+  assert.equal(isStation(liveFromEvent(byTitle('The Lot Radio'), NOW)!), false);
+  assert.equal(isStation({ address: undefined }), false);
 });
