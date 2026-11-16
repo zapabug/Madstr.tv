@@ -45,7 +45,7 @@ export function App() {
       <Sky />
       {!theater && (
         <header className="top">
-          <a className="logo" href="#/" aria-label="Madstr.tv home">Mad<span className="bolt-mark" aria-hidden="true">⚡</span>tr.tv</a>
+          <a className="logo" href="#/" aria-label="Jukestr home">Juke<span className="bolt-mark" aria-hidden="true">⚡</span>tr</a>
           <AccountChip />
         </header>
       )}

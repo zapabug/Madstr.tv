@@ -39,9 +39,9 @@ function serviceWorker(): Plugin {
       const path = join(dir, name)
       return statSync(path).isDirectory() ? publicFiles(path) : ['/' + relative('public', path).split('\\').join('/')]
     })
-  let base = '/' // the build's base path: '/' for the app, '/madstr/' for pleb.world (feat-plebworld-deploy §D1)
+  let base = '/' // the build's base path: '/' for the app, '/jukestr/' for pleb.world (feat-plebworld-deploy §D1)
   return {
-    name: 'madstr-service-worker',
+    name: 'jukestr-service-worker',
     apply: 'build',
     enforce: 'post', // after Vite has written index.html into the bundle, so the page is in the list
     configResolved(config) { base = config.base },
@@ -54,7 +54,7 @@ function serviceWorker(): Plugin {
       if (page && page.type === 'asset') hash.update(String(page.source))
       const route = await transformWithEsbuild(readFileSync('src/lib/swRoute.ts', 'utf8'), 'swRoute.ts', { loader: 'ts', format: 'esm' })
       const routeJs = route.code.replace(/^export /gm, '')
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source: swSource(`madstr-${hash.digest('hex').slice(0, 12)}`, files, routeJs, base) })
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: swSource(`jukestr-${hash.digest('hex').slice(0, 12)}`, files, routeJs, base) })
     },
   }
 }

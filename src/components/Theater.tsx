@@ -95,7 +95,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
         <div className="topline">
           <Clock />
           <Ticker text={tickerText} />
-          <span className="brand" aria-hidden="true">Mad<span className="bolt-mark">⚡</span>tr.tv</span>
+          <span className="brand" aria-hidden="true">Juke<span className="bolt-mark">⚡</span>tr</span>
         </div>
         <div className="bottomline">
           {author && <Avatar pubkey={author} />}

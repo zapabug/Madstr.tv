@@ -1,4 +1,4 @@
-// The permanent words on the screen: a ticker that comes out of the M of Mad⚡tr.tv (top right)
+// The permanent words on the screen: a ticker that comes out of the J of Juke⚡tr (top right)
 // and runs left, showing the first sentence of the post the current picture came from. Only the
 // words have a background (flat, as wide as the letters); it starts again whenever the picture
 // changes. With reduced motion it stands still instead of scrolling.

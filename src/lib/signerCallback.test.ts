@@ -6,13 +6,13 @@ const HEX = '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d';
 const NPUB = 'npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6';
 
 test('the login link asks for the public key and comes back to the page', () => {
-  const link = loginLink('https://pleb.world/madstr/');
+  const link = loginLink('https://pleb.world/jukestr/');
   assert.ok(link.startsWith('nostrsigner:?'));
   const query = new URLSearchParams(link.slice('nostrsigner:?'.length));
   assert.equal(query.get('type'), 'get_public_key');
   assert.equal(query.get('returnType'), 'signature');
   assert.equal(query.get('compressionType'), 'none');
-  assert.equal(query.get('callbackUrl'), `https://pleb.world/madstr/?${CALLBACK_PARAM}=`);
+  assert.equal(query.get('callbackUrl'), `https://pleb.world/jukestr/?${CALLBACK_PARAM}=`);
 });
 
 test('the answer: hex or npub becomes hex', () => {

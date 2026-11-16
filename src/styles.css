@@ -2158,7 +2158,7 @@ a.back[href="#/"] {
 
 /* --- on-screen words: the 20 s track name and the permanent ticker ------------------------------------- */
 /* One thin flat bar across the top, a little taller than its letters: the system time on the left, the
-   ticker in the middle, the logo on the right. The ticker's area ends exactly at the M of Mad⚡tr.tv: the
+   ticker in the middle, the logo on the right. The ticker's area ends exactly at the J of Juke⚡tr: the
    words start there and run left until the clock. The picture's author sits bottom left. */
 .topline {
   position: absolute;
@@ -2603,7 +2603,7 @@ a.chip-btn {
     top: 3px;
     left: 7px;
   }
-  /* the post ticker on its own line under the clock and Mad⚡tr.tv (zapa, §P14) */
+  /* the post ticker on its own line under the clock and Juke⚡tr (zapa, §P14) */
   .topline {
     flex-wrap: wrap;
     height: auto;

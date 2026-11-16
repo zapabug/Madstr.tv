@@ -279,3 +279,18 @@ zapa, 2026-11-16: "the seek bar, can you make a Jetsons-looking thing like you d
 seek knob is a little ringed Saturn, as on the toy ray-gun mock-up: an orange planet with a cream ring outlined in
 black, 40 × 28 px, its shadow under it. The candy stripes end at its centre.
 
+
+## P28: The name is Juke⚡tr, and the web app moves to pleb.world/jukestr
+
+zapa, 2026-11-16: the app is called **JUKESTR** (spelled with an E), and "keep the lightning for the s": it is written
+**Juke⚡tr**, the bolt standing in for the S as it did in Mad⚡tr.tv. The ".tv" goes. Where the bolt does not fit (the
+home screen's short name, the logo's label for screen readers) it is **Jukestr**.
+- Everywhere the name shows: the header logo, the brand in the player's top line, the page title and preview,
+  the install name (web and Android), the name shown when a signer is asked to connect, and the zapstore listing.
+- zapa: "update our plebworld to serve the pleb.world/jukestr instead of madstr". The web app is built under
+  `/jukestr/` and copied into pleb.world's `public/jukestr/`; pleb.world's sticker says Juke⚡tr and opens
+  `/jukestr/`. The RSS proxy stays at `/api/rss`. zapa: "i assume no one is using it yet", so `/madstr/` is
+  removed, with no redirect.
+- Unchanged, so nobody loses anything: the Android app id (`com.madstr.tvapp`, so 1.x updates install over it), and
+  every saved setting and login on the device (their keys keep the `madstr` prefix). The web app's offline cache
+  is renamed `jukestr-…` and clears the old `madstr-…` ones.

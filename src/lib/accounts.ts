@@ -18,7 +18,7 @@ import { clearSession, loadSession, parseCredential, saveSession } from './sessi
 // (madeira-app/src/lib/signer.ts + account.ts): the signer is built directly, the stored session is kept by
 // this app, and Amber's "already connected" reply on a reconnect is treated as success.
 
-export const APP_NAME = 'Mad⚡tr.tv';
+export const APP_NAME = 'Juke⚡tr';
 // The NIP-46 relays for the signer connection are SIGNER_RELAYS (relays.ts): never relay.nsec.app, which needs
 // NIP-42 auth, so a connect request there silently gets nothing.
 export const NIP46_RELAYS = [...SIGNER_RELAYS];
