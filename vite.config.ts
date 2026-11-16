@@ -69,6 +69,16 @@ export default defineConfig({
       onwarn(warning, warn) {
         if (warning.code === 'EVAL') return
         warn(warning)
+      },
+      output: {
+        // The libraries change less often than the app: in their own files they stay cached across deploys, and
+        // no single file passes 500 kB. Same bytes in total.
+        manualChunks(id) {
+          if (!id.includes('/node_modules/')) return undefined
+          if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react'
+          if (/\/node_modules\/(applesauce-[^/]+|rxjs|tslib|nostr-tools|@noble\/[^/]+|@scure\/[^/]+|light-bolt11-decoder|idb)\//.test(id)) return 'nostr'
+          return undefined
+        }
       }
     }
   }

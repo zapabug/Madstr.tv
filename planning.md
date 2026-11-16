@@ -110,13 +110,16 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   - A station's error text stays until the next one plays; when all fail, the player stops with it.
   - Up vote on a live show likes it but does not save it (Your stations keeps stations only).
   - hls.js is a separate 600 kB file (187 kB gzipped) loaded only for HLS where the browser cannot play it; the
-    service worker still pre-caches it with the app.
+    service worker still pre-caches it with the app. It is the one file over Vite's 500 kB warning. The light build
+    (376 kB) was tried and dropped: 4 of 8 live shows carry their sound as a separate audio track and were silent.
+- Cleanup (2026-11-16, zapa: "keep or delete?"): the old NDK / Cursor-era files are deleted (`.cursorrules`,
+  `.cursor/`, `cursor-tools.config.json`, `.cursor-tools.env.example`, `NIP46_QR_FLOW.md`, `madstr-tv.npk`, an
+  April 2025 build of the old app); git history keeps them. `.cursor-tools.env` stays in `.gitignore` as a guard.
+  The build splits the libraries into `react` and `nostr` files (no file over 500 kB but hls.js).
 
 ## Open questions
 
-- **Legacy files still tracked:** `.cursorrules`, `.cursor/`, `cursor-tools.config.json`,
-  `NIP46_QR_FLOW.md`, `madstr-tv.npk`. Keep or delete?
-- **Cleanup:** the stray `*/` in `styles.css`; the 655 kB chunk.
+- (none open)
 
 ## Change log
 
