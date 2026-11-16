@@ -95,6 +95,7 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   kept (one per follow list); "reached the start" lasts one visit.
 - Relays added: relay.wavlake.com, theforest.nostr1.com, nostr.bitcoiner.social, relay.nostr.net.
 - Now-playing card (§T2): disc 84 px / 60 px under 1000 px tall / 56 px on phones; title 2 lines, 1 when small; card 150 / 130 / 118 px wide; swap animation 450 ms out, 550 ms in, disc spins 270°.
+- Phone controls (feat-phone-inline): disc 46 px in a small card; buttons 34 / 42 px (play), thumbs 32 px, Hide artist 22 px; tile row gap 10 px on phones; the playlist header's "N in the playlist" count is left out on phones (to keep the header on one line).
 
 ## Open questions
 

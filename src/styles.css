@@ -2474,8 +2474,8 @@ a.chip-btn {
 }
 
 /* --- phones: the bottom panel stacks (zapa, 2026-11-15) ---------------------------------------------------
-   Picker on top, the controls under it in two compact rows: author + seek bar, then previous / play /
-   next with -10s / +30s / speed. The panel takes more of the height so the playlist still has room. */
+   Picker on top, the controls under it in two compact rows (feat-phone-inline §P1). The panel takes more of
+   the height so the playlist still has room. */
 @media (max-width: 640px) {
   :root {
     --split-h: max(58vh, 380px);
@@ -2493,39 +2493,125 @@ a.chip-btn {
     overflow: visible;
     padding: 8px 10px;
   }
+  .tiles {
+    gap: 10px 12px;
+  }
+  /* the playlist header on one line: Board, the title (cut short), Shuffle; the count is left out */
+  .panel-head {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .panel-head .count {
+    display: none;
+  }
+  .panel-head .head-title {
+    flex: 1 1 0;
+    font-size: 0.95rem;
+  }
+  /* zapa (feat-phone-inline §P1): two compact rows beside the disc card, so the playlist keeps two rows of
+     tiles. Left: the disc card over both rows, Hide artist on its corner. Right: the seek bar (SPEED tucked
+     onto its right end), then previous / play / next and the thumbs. */
+  .player-panel {
+    padding: 5px 12px 5px 10px;
+  }
   .pc {
-    gap: 6px;
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto auto;
+    grid-template-areas:
+      "disc seek seek seek seek  seek"
+      "disc main .    up   down  speed";
+    align-items: center;
+    gap: 4px 3px;
+  }
+  .pc-top,
+  .pc-face {
+    display: contents;
   }
   .pc .now-card {
-    --now-from: 0 -70px;
-    width: 118px;
-    gap: 4px;
-    padding: 9px 6px 6px;
+    grid-area: disc;
+    width: auto;
+    margin: 0 5px 0 2px;
+    padding: 5px;
+    gap: 0;
+    border-width: 2px;
+    border-radius: 12px;
+    box-shadow: 2px 2px 0 #000;
+    rotate: -3deg;
+  }
+  .pc .now-in {
+    animation: none;
+  }
+  .pc .now-out,
+  .pc .now-title,
+  .pc .now-n {
+    display: none;
   }
   .pc .now-disc {
-    /* phones: 56 px and one line of title, so the panel still fits (feat-taste-cache §T2) */
-    width: 56px;
-    height: 56px;
+    width: 46px;
+    height: 46px;
+    border-width: 2px;
   }
-  .pc .now-title {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
+  .pc-face .postit-hide {
+    grid-area: disc;
+    position: relative;
+    align-self: end;
+    justify-self: end;
+    right: auto;
+    bottom: auto;
+    width: 22px;
+    height: 22px;
+    margin: 0 0 -8px 0;
   }
-  /* smaller thumbs that only overlap the face's edges */
-  .pc-face .taste-btn {
-    width: 36px;
-    height: 36px;
-    top: calc(50% - 18px);
-  }
-  .taste-up {
-    left: -40px;
-  }
-  .taste-down {
-    right: -40px;
+  .pc-seek {
+    grid-area: seek;
+    min-width: 0;
   }
   .pc-main {
+    grid-area: main;
     flex-wrap: nowrap;
-    gap: 10px;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .pc .dock-play {
+    width: 42px;
+    height: 42px;
+  }
+  .pc-main .dock-btn:not(.dock-play) {
+    width: 34px;
+    height: 34px;
+  }
+  .pc-face .taste-btn {
+    position: static;
+    width: 32px;
+    height: 32px;
+  }
+  .taste-up {
+    grid-area: up;
+  }
+  .taste-down {
+    grid-area: down;
+  }
+  .pc-seek {
+    display: contents;
+  }
+  .pc .dock-seek {
+    grid-area: seek;
+  }
+  .pc .postit-speed {
+    grid-area: speed;
+    margin: 0 0 0 2px;
+    padding: 1px 5px 2px 4px;
+    gap: 3px;
+    rotate: -5deg;
+  }
+  .pc .postit-speed span {
+    font-size: 0.7rem;
+  }
+  .pc .postit-speed b {
+    font-size: 0.75rem;
+  }
+  .pc .pc-taste-note {
+    grid-column: 1 / -1;
   }
 }
 
@@ -2562,6 +2648,7 @@ a.chip-btn {
     overflow: visible;
   }
   :root[data-native] .theater .pc {
+    display: flex;
     flex-direction: row;
     gap: 14px;
   }
