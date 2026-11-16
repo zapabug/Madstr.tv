@@ -38,6 +38,9 @@ importers:
       capacitor-plugin-nostr-signer:
         specifier: 0.2.0
         version: 0.2.0(@capacitor/core@8.6.0)
+      hls.js:
+        specifier: 1.7.4
+        version: 1.7.4
       idb:
         specifier: 8.0.4
         version: 8.0.4
@@ -1127,6 +1130,9 @@ packages:
 
   hash-sum@2.0.0:
     resolution: {integrity: sha512-WdZTbAByD+pHfl/g9QSsBIIwy8IT+EsPiKDs0KNX+zSHhdDLFKdZu0BQHljvO+0QI/BasbMSUa8wYNCZTvhslg==}
+
+  hls.js@1.7.4:
+    resolution: {integrity: sha512-3GlxGdPvT2YHvQYOt+yOzT/DEior/qJVNIylHA77kgeoBTdQQqi70GwefNEUmHQeNGyjC8U62+bruqW/Tpm+tg==}
 
   idb@8.0.4:
     resolution: {integrity: sha512-jd0ITCrN+Zah4J7R/Z2jnR3W7A4BXDAjmo62MwWuSjxCiueUAf7X5rbodEdidWzeknwXHmLpdZkoiiCppNi30Q==}
@@ -2886,6 +2892,8 @@ snapshots:
   has-flag@4.0.0: {}
 
   hash-sum@2.0.0: {}
+
+  hls.js@1.7.4: {}
 
   idb@8.0.4: {}
 

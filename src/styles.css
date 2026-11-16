@@ -3055,3 +3055,44 @@ a.chip-btn {
   }
 }
 
+
+/* --- Radio (feat-radio) ------------------------------------------------------------------------------------- */
+/* RA3: a live station has no seek bar and no speed; a LIVE sticker and the listening time sit in their place */
+.live-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.pc-live {
+  align-items: center;
+  padding-block: 6px 2px;
+}
+.live-sticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  font: italic 800 0.95rem/1 var(--display);
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: #d61f1f;
+  border: 2px solid #000;
+  border-radius: 2px 2px 7px 2px;
+  box-shadow: 1px 2px 0 #000;
+  rotate: -5deg;
+}
+.live-sticker::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .live-sticker::before {
+    animation: live-blink 1.6s ease-in-out infinite;
+  }
+}
+@keyframes live-blink {
+  50% { opacity: 0.25; }
+}

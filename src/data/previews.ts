@@ -22,9 +22,7 @@ function useRadioNext(): MediaItem[] {
   const saved = useSavedStations();
   return useMemo(() => {
     const s = player.getSnapshot();
-    return key ? s.queue.slice(s.index + 1) : saved;
-    // key stands for the player's Radio queue
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return key ? s.queue.slice(s.index + 1) : saved; // `key` stands for the player's Radio queue
   }, [key, saved]);
 }
 

@@ -11,7 +11,7 @@ const item = (over: Partial<MediaItem> = {}): MediaItem => ({
   id: 'a', kind: 'audio', origin: 'nostr', url: 'https://x/a.mp3', title: 'Song', createdAt: 1, ...over,
 } as MediaItem);
 const state = (over: Partial<PlayerState> = {}): PlayerState => ({
-  queue: [item()], index: 0, label: 'Music', status: 'playing', position: 0, duration: 200, rate: 1, shuffle: false, error: null, ...over,
+  queue: [item()], index: 0, label: 'Music', status: 'playing', position: 0, duration: 200, rate: 1, shuffle: false, error: null, liveSince: null, ...over,
 });
 
 function rig() {
@@ -117,4 +117,11 @@ test('nothing to end when nothing was shown', () => {
   bridge.update(state({ status: 'idle' }));
   assert.equal(timers.size, 0);
   assert.equal(ends(), 0);
+});
+
+test('a live station shows no position or length on the system controls', () => {
+  const now = nowPlayingFrom(state({ queue: [item({ live: true, title: 'Omarchy Radio', subtitle: 'Live now' })], position: 81234, duration: Infinity }));
+  assert.equal(now?.position, 0);
+  assert.equal(now?.duration, 0);
+  assert.equal(now?.subtitle, 'Live now');
 });

@@ -54,7 +54,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
     },
     onDouble: tap => {
       const box = zone.current?.getBoundingClientRect();
-      if (!box || live.current.none) return;
+      if (!box || live.current.none || player.current?.live) return; // nothing to seek on a live station
       const seconds = seekForSide(tap.x, box.left, box.width);
       player.seekBy(seconds);
       setSign(s => ({ seconds, n: (s?.n ?? 0) + 1 }));

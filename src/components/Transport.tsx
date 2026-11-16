@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { MediaItem } from '../lib/media.ts';
 import { useTaste } from '../lib/taste.ts';
 import { downVote, hideArtist, toggleUpVote } from '../data/votes.ts';
@@ -48,9 +48,31 @@ export function SeekBar() {
 export function ExtraButtons() {
   const p = usePlayer();
   const has = p.queue.length > 0;
+  if (p.queue[p.index]?.live) return <LiveSticker since={p.liveSince} />;
   return (
     <div className="dock-extra" role="group" aria-label="Speed">
       <button type="button" className="chip-btn" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>{p.rate}×</button>
+    </div>
+  );
+}
+
+// A live station or show (feat-radio §RA3): no seek bar and no speed; a LIVE sticker and how long you have been
+// listening take their place.
+function listened(since: number | null, now: number): string {
+  return since ? formatTime(Math.max(0, (now - since) / 1000)) : '--:--';
+}
+export function LiveSticker({ since }: { since: number | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!since) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [since]);
+  return (
+    <div className="live-row" role="group" aria-label="Live">
+      <span className="live-sticker">LIVE</span>
+      <span className="dock-time" title="Listening for">{listened(since, now)}</span>
     </div>
   );
 }
@@ -109,7 +131,8 @@ export function PanelControls() {
   const playing = p.status === 'playing' || p.status === 'loading';
   const has = p.queue.length > 0;
   const item = p.queue[p.index];
-  const noun = item?.kind === 'video' ? 'video' : 'song';
+  const live = !!item?.live;
+  const noun = item?.kind === 'video' ? 'video' : live ? 'station' : 'song';
   const taste = useTaste();
   const profile = useProfile(item?.pubkey);
   const [note, setNote] = useState<{ id: string; text: string } | null>(null);
@@ -132,7 +155,7 @@ export function PanelControls() {
             title="Down vote: hidden from your lists on this device" onClick={() => { if (item) run(item.id, downVote(item)); }}>
             <ThumbDownIcon size={22} />
           </button>
-          {item?.pubkey && (
+          {item?.pubkey && !live && (
             <button type="button" className="postit postit-hide" data-nav aria-label={`Hide artist ${artist}`}
               title={`Hide everything by ${artist} on this device`} onClick={() => hideArtist(item, artist)}>
               <PersonIcon size={14} />
@@ -147,13 +170,18 @@ export function PanelControls() {
         </button>
         <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
       </div>
-      <div className="pc-seek">
-        <button type="button" className="postit postit-speed" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>
-          <span>speed</span> <b>×{p.rate}</b>
-        </button>
-        <SeekBar />
-      </div>
+      {live ? (
+        <div className="pc-seek pc-live"><LiveSticker since={p.liveSince} /></div>
+      ) : (
+        <div className="pc-seek">
+          <button type="button" className="postit postit-speed" data-nav disabled={!has} onClick={player.cycleRate} aria-label={`Speed ${p.rate}x`}>
+            <span>speed</span> <b>×{p.rate}</b>
+          </button>
+          <SeekBar />
+        </div>
+      )}
       {item && note?.id === item.id && <p className="own-note bad pc-taste-note" role="status">{note.text}</p>}
+      {live && p.error && <p className="own-note bad pc-taste-note" role="status">{p.error}</p>}
     </div>
   );
 }
