@@ -3,7 +3,8 @@
 Status: **PROPOSED** (2026-11-16), waiting for zapa's go. Not built.
 From zapa: "yes radio would be really cool"; asked how to find stations: **genre stickers** and **country**;
 thumbs: **up saves, down hides**; screen: **the picture show**, the station's logo as the disc; sources: "what
-would a Nostr-first approach be".
+would a Nostr-first approach be" (answered below: stations from Nostr). 2026-11-16: "the exact stickers genre
+picker by user" (you pick which genres are your stickers); "yes zap.stream" (live shows are in this feat).
 
 ## Nostr first: where the stations come from
 
@@ -34,8 +35,10 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
 
 ## RA2: Finding stations
 
-- **Genre stickers**: the commonest genres among stations with an https stream, as little coloured stickers
-  (like the People category chips). Picking one asks the relays for that genre (`#c`).
+- **Genre stickers, picked by you** (zapa): a **+ genres** sticker opens a genre picker (the genres the stations
+  carry, commonest first, with a search box); the genres you pick become your stickers, in your order, kept on
+  this device. Until you pick any, the picker opens by itself the first time Radio opens. Pressing a sticker
+  asks the relays for that genre (`#c`). Stickers are little coloured stickers like the People category chips.
 - **Country**: a country picker (yours first, from the device's language setting). Stations are filtered by
   their `countryCode` in the app.
 - Stations posted by **people you follow** come first, whatever the genre or country.
@@ -54,6 +57,17 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
 - Double tap on the picture does nothing on a live station (there is nothing to seek).
 - Android app: the same, with the lock-screen and notification controls (play / pause, next, previous).
 
+## RA3b: Live shows from zap.stream (Nostr live events)
+
+- Probed 2026-11-16: **28** NIP-53 live events (kind 30311, `status` live) on the relays, many tagged `music` or
+  `radio` (Noderunners Radio, NoGood Radio, The Lot Radio, ZapClub, MIRA Business FM, The Road to ZamRock).
+- Radio's first row is **Live now**: live events from people you follow, then those tagged `music` or `radio`.
+  They play like a station (LIVE sticker, picture show, skip when silent); the event's `image` is the disc and
+  its `title` the name. An event that is no longer `live` leaves the row.
+- Their streams are **HLS** (`.m3u8`). The Android app plays HLS natively. Desktop Chromium did not play them
+  in a probe, so the web app needs **hls.js** (a new dependency: **needs zapa's OK**), loaded only when an HLS
+  stream starts. Without it, Live now is shown in the Android app only.
+
 ## RA4: Thumbs on a station
 
 - **Up vote saves** the station to Your stations on this device. Nostr first: logged in, it is also a public
@@ -63,13 +77,12 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
 
 ## Open (decide during build)
 
-- Which genres are the stickers: the commonest few, cleaned of words that say nothing ("music", "radio",
-  "fm", "estación"). The count and the list go to planning.md.
+- The genre picker leaves out words that say nothing ("music", "radio", "fm", "estación"); the list goes to
+  planning.md.
 - How many stations one genre ask brings back (a page, more as you scroll).
 
 ## Later, not in this feat
 
-- Live shows on Nostr (NIP-53 live events, e.g. zap.stream) with audio-only streams, as a **Live now** row.
 - Making your own station event (kind 31237) from Madstr.
 
 ## Milestones
@@ -77,4 +90,5 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
 - [ ] RA1 Radio card on the board
 - [ ] RA2 genre stickers, country, follows first, Your stations
 - [ ] RA3 playing a live station (LIVE sticker, no seek, skip when silent, picture show)
+- [ ] RA3b Live now: zap.stream live events (HLS; hls.js on the web if zapa agrees)
 - [ ] RA4 up saves (+ like when logged in), down hides
