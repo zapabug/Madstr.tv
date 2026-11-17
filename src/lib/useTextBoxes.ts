@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { cursorOn } from './cursorState.ts';
 import { lockAct } from './textLock.ts';
 
 // Text boxes wait for OK (spec feat-tv-remote TV4); the rules are in textLock.ts. A locked box is read-only and
@@ -57,7 +58,7 @@ export function useTextBoxes(): void {
 
     const onKey = (event: KeyboardEvent) => {
       const box = textBox(document.activeElement);
-      if (!box || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (!box || cursorOn() || event.altKey || event.ctrlKey || event.metaKey) return;
       const act = lockAct({ kind: 'key', key: event.key, locked: box.hasAttribute(LOCKED) });
       if (act === 'open') {
         // OK opens the box: no submit, nothing else sees this key.

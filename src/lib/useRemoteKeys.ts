@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { clickAt } from './cursorClick.ts';
+import { cursorAt, cursorOn } from './cursorState.ts';
 import { OK_HOLD_MS, OK_IDLE, okStep, type OkState } from './okKey.ts';
 import { player } from './player.ts';
 
@@ -30,7 +32,8 @@ export function useRemoteKeys(): void {
 
     const act = (out: ReturnType<typeof okStep>) => {
       ok = out.state;
-      if (out.act === 'press') target?.click();
+      // While the D-pad pointer is on (TV7), OK clicks what is under it instead of the focused control.
+      if (out.act === 'press') { if (cursorOn()) clickAt(cursorAt()); else target?.click(); }
       else if (out.act === 'hold') window.dispatchEvent(new CustomEvent(OK_HOLD_EVENT, { detail: { target } }));
       if (ok.downAt === null) { target = null; window.clearTimeout(timer); }
     };
@@ -39,7 +42,7 @@ export function useRemoteKeys(): void {
       if (event.altKey || event.ctrlKey || event.metaKey) return;
       if (event.key === 'Enter') {
         // Already handled by this press (a repeat), or a field that keeps Enter.
-        if (ok.downAt === null && keepsEnter(document.activeElement)) return;
+        if (ok.downAt === null && !cursorOn() && keepsEnter(document.activeElement)) return;
         event.preventDefault(); // no click on the way down, and none for the repeats
         if (ok.downAt === null) {
           target = document.activeElement as HTMLElement;

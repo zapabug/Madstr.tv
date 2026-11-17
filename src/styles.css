@@ -3441,3 +3441,13 @@ html:has(.dock) {
 .qr-pop-wait {
   color: var(--muted, #b9b3c9);
 }
+
+/* feat-tv-remote TV7: the D-pad pointer (its tip is the point) */
+.dpad-cursor {
+  position: fixed;
+  left: -4px;
+  top: -3px;
+  z-index: 1000;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px #000a);
+}

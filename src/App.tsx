@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Board } from './components/Board.tsx';
+import { Cursor } from './components/Cursor.tsx';
 import { Dock } from './components/Dock.tsx';
 import { Engine } from './components/Engine.tsx';
 import { LeavePrompt } from './components/LeavePrompt.tsx';
@@ -61,6 +62,7 @@ export function App() {
       <Engine />
       <LeavePrompt />
       <QrLoginPopup />
+      <Cursor />
     </>
   );
 }
