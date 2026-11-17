@@ -613,8 +613,8 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 | TV2 | Front door + memory | built + machine-verified; awaiting zapa on the TV |
 | TV3 | Remote keys + leave on Back | built + machine-verified (page); native not run on a device |
 | TV4 | Text boxes wait for OK | built + machine-verified; the TV keyboard not yet seen |
-| TV5 | TV layout | NEXT — build |
-| TV6 | QR login pop-up | planned |
+| TV5 | TV layout | built + machine-verified; 1280 runs on zapa's TV; zapa to pick 1280 or 1920 |
+| TV6 | QR login pop-up | NEXT — build |
 | TV7 | Hold OK for a cursor | planned |
 
 ## TV1 — Focus never lost [built + machine-verified, awaiting zapa on the TV]
@@ -685,3 +685,23 @@ Spec: feat-tv-remote.md TV4-1 … TV4-3
   picker opens on its locked search box, Down leaves it, OK opens it. All pass; TV1 and TV3 checks re-run. 243/243.
 - Seen for TV5: the lower hashtag boxes sit under the player bar; scrolling them "into view" leaves them behind it.
 - ⚠ 3 undiscussed decisions, see planning.md.
+
+## TV5 — TV layout [built + machine-verified; 1280 checked on zapa's TV; scale pick pending]
+Commit: 4e88c5f
+Spec: feat-tv-remote.md TV5-1 … TV5-6
+
+- Scale: `MainActivity` turns on the wide viewport on a TV only; `src/native/tv.ts` sets the viewport to
+  `tvWidth()` (`src/lib/tvWidth.ts`, 1 test): 1280, or 1920 in a `VITE_TV_WIDTH=1920` build. On zapa's TV (DevTools,
+  no screenshots): 1280×720, `data-tv` set, focus on the first Listen sticker (TV1 on a device).
+  Test APKs (debug-signed): `android/app/build/outputs/apk/debug/juketr-tv1280-debug.apk` (installed on the TV) and
+  `juketr-tv1920-debug.apk` (checked: it passes 1920).
+- Pictures (TV): whole, centred on black, at most 2× their own size (`Slideshow.tsx` notes the size; CSS caps it);
+  theatre video `contain`. Focus ring (TV): 4 px white framed in black. People: each card is a focus stop, OK follows.
+  Everywhere: the tile tooltip hides with the panels; scroll-padding keeps focused controls above the player bar.
+- Headless (`check-tv5.mjs` in TV mode at 1280×720 1.5× and 1920×1080; `check-tv5-ec6.mjs`): a 1366 px picture fits
+  whole (0.44×), a 376 px one stops at 2×; Watch tiles and titles fit the playlist (Podcasts / Radio had no tiles in
+  the test profile); 4 px white ring; tooltip shows on focus and goes with the panels; all 30 People cards reachable,
+  each fully above the bar (once the list holds still); desktop (cover) and phone (contain) unchanged, no TV ring.
+  244/244 tests, lint, build.
+- Found, not fixed: People grows and re-sorts while relays answer, which moves cards under the remote.
+- ⚠ 5 undiscussed decisions, see planning.md.

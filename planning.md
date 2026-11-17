@@ -244,6 +244,37 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **What I did:** the picker focuses its search box (marked `data-nav-start`), locked, and a screen's start point no longer overrides focus that a pop-up placed itself (`focusStart` in `useFocusNav.ts`).
 - **Status:** awaiting lfg
 
+### 2026-11-17 · TV5 · How the TV page width is set, and 1280 until zapa picks
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV5-1 (OPEN: zapa picks 1280 or 1920 from two test builds)
+- **What I did:** on a TV only, the app turns on the WebView's wide viewport (`MainActivity`), and the page sets its viewport tag to `width=1280` (`src/native/tv.ts`, `src/lib/tvWidth.ts`); a build with `VITE_TV_WIDTH=1920` lays it out 1920. Checked on zapa's TV over DevTools: the page is 1280×720 (it was 960×540). Two test APKs: `android/app/build/outputs/apk/debug/juketr-tv1280-debug.apk` and `juketr-tv1920-debug.apk` (debug-signed; the TV has the 1280 one).
+- **Status:** awaiting zapa's pick on the TV
+
+### 2026-11-17 · TV5 · Picture limit, focus ring, video fit
+- **Type:** guess
+- **Spec ref:** TV5-2, TV5-4 (PROPOSED numbers)
+- **What I did:** pictures at most 2× their own size (the slideshow notes each picture's size; `styles.css` caps it), videos `contain` on black, focus ring 4 px white with a black frame (2 px inside, 2 px outside). All TV only.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · Two fixes that apply everywhere
+- **Type:** fix
+- **Spec ref:** TV5-5, TV5-6
+- **What I did:** the tile tooltip hides whenever the theatre's panels hide (it was drawn outside the panel, so it stayed); a control scrolled into view is kept above the player bar (`scroll-padding-bottom` while the bar shows). Neither changes how anything looks; both apply on phones and desktop too.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · People cards as focus stops
+- **Type:** guess
+- **Spec ref:** TV5-6 (OK on a card follows: PROPOSED)
+- **What I did:** each card is one arrow stop (everywhere); OK on it follows / unfollows; a tap or click on the card does nothing, only its Follow button does (so phones behave as before). The Follow button is no longer an arrow stop.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · Found, not fixed: People keeps re-sorting while you browse
+- **Type:** spec-gap
+- **Spec ref:** none: spec silent
+- **What I saw:** while relays answer, People's cards grow (pictures arrive) and change order, so Down can land on another card than the one below, and a focused card can be pushed under the bar. Once the list holds still, all 30 cards are reachable and stay in view (checked at 1280 and 1920).
+- **Alternatives:** freeze the order once the person starts moving through it; keep the focused card in view when the layout shifts.
+- **Status:** awaiting lfg (a candidate for a later milestone)
+
 ## Open questions
 
 - (none open)
