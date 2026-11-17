@@ -7,7 +7,7 @@ last-worked: 2026-11-17
 ## Where to look
 - build.md: what was built per milestone, with commits and known gaps
 - planning.md: locked decisions, why, undiscussed decisions waiting for review
-- feat-*.md: the specs (feat-applesauce-revamp is the base; docs/ holds notes from the old NDK app)
+- feat-*.md: the spec of the feat being built; finished specs are in archive/ (feat-applesauce-revamp is the base; docs/ holds notes from the old NDK app)
 - CHANGELOG.md: the release notes zapstore shows
 - AGENTS.md: rules and verify commands
 
