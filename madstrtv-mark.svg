@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1121.0 1121.0">
+  <title>Madstr.tv brand mark v2 (sticker-shadow)</title>
+  <clipPath id="tri"><path d="M 471.0,266.0 154.0,148.0 161.0,514.0 Z"/><path d="M 1037.0,476.0 531.0,288.0 416.0,447.0 689.0,459.0 174.0,928.0 170.0,974.0 Z"/><path d="M 390.0,550.0 162.0,571.0 169.0,890.0 Z"/></clipPath>
+  <g transform="translate(26.9 33.6)"><path d="M 471.0,266.0 154.0,148.0 161.0,514.0 Z" fill="#050505"/><path d="M 1037.0,476.0 531.0,288.0 416.0,447.0 689.0,459.0 174.0,928.0 170.0,974.0 Z" fill="#050505"/><path d="M 390.0,550.0 162.0,571.0 169.0,890.0 Z" fill="#050505"/><path d="M 645.0,128.0 84.0,576.0 391.0,550.0 102.0,993.0 688.0,459.0 415.0,447.0 Z" fill="#050505"/></g>
+  <path d="M 471.0,266.0 154.0,148.0 161.0,514.0 Z" fill="#DC01C0" stroke="#141414" stroke-width="19.1" stroke-linejoin="round"/>  <path d="M 1037.0,476.0 531.0,288.0 416.0,447.0 689.0,459.0 174.0,928.0 170.0,974.0 Z" fill="#DC01C0" stroke="#141414" stroke-width="19.1" stroke-linejoin="round"/>  <path d="M 390.0,550.0 162.0,571.0 169.0,890.0 Z" fill="#DC01C0" stroke="#141414" stroke-width="19.1" stroke-linejoin="round"/>  <g clip-path="url(#tri)"><g transform="translate(26.9 33.6)"><path d="M 645.0,128.0 84.0,576.0 391.0,550.0 102.0,993.0 688.0,459.0 415.0,447.0 Z" fill="#630056"/></g></g>
+  <path d="M 645.0,128.0 84.0,576.0 391.0,550.0 102.0,993.0 688.0,459.0 415.0,447.0 Z" fill="#FCFA9A" stroke="#141414" stroke-width="19.1" stroke-linejoin="round"/>
+</svg>
