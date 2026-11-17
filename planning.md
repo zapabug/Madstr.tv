@@ -223,6 +223,27 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **What I did:** the native parts (⏪ / ⏩ in `MediaHub.actionForKey`, the Tv plugin, Back on the board) compile (`gradlew compileDebugJavaWithJavac`) but were not run on the TV or the phone (zapa: no screenshots, he tests later). The page side of every TV3 check passes headless.
 - **Status:** awaiting zapa's test on the TV and the phone
 
+### 2026-11-17 · TV4 · Locked means read-only; a tap opens at once; typing opens too
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV4-1, TV4-2
+- **What the spec said:** focus by an arrow shows focus without the keyboard; OK opens it.
+- **What I did:** any focus that is not a tap / click on the box (within 1 s, `POINTER_FOCUS_MS`) locks it by making it read-only (`src/lib/useTextBoxes.ts`). OK unlocks it, re-focuses it inside the key press and calls the VirtualKeyboard API where the WebView has it. A tap or click opens it at once (phones, mouse); typing a character on a locked box opens it and keeps the key (computer keyboards).
+- **Why:** read-only is the one way that keeps the Android keyboard shut on focus everywhere; the tap and typing rules keep phones and computers as they were.
+- **Alternatives:** `inputmode="none"` until OK; only on a TV (`data-tv`).
+- **Status:** awaiting lfg; whether the keyboard comes up on OK is only known on the TV
+
+### 2026-11-17 · TV4 · Back with the keyboard up
+- **Type:** spec-gap
+- **Spec ref:** TV4-2 ("Back ... closes the keyboard and leaves focus on the box")
+- **What I did:** nothing extra: on Android the keyboard takes Back for itself and closes; the box stays open (editable) and the arrows Up / Down leave it as before (R8). It locks again when focus leaves it.
+- **Status:** awaiting zapa's test on the TV
+
+### 2026-11-17 · TV4 · Radio's picker opens on the search box (TV1 deviation closed)
+- **Type:** fix
+- **Spec ref:** TV1-1
+- **What I did:** the picker focuses its search box (marked `data-nav-start`), locked, and a screen's start point no longer overrides focus that a pop-up placed itself (`focusStart` in `useFocusNav.ts`).
+- **Status:** awaiting lfg
+
 ## Open questions
 
 - (none open)

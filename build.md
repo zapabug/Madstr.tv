@@ -612,8 +612,8 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 | TV1 | Focus never lost | built + machine-verified; awaiting zapa on the TV |
 | TV2 | Front door + memory | built + machine-verified; awaiting zapa on the TV |
 | TV3 | Remote keys + leave on Back | built + machine-verified (page); native not run on a device |
-| TV4 | Text boxes wait for OK | NEXT — build |
-| TV5 | TV layout | planned |
+| TV4 | Text boxes wait for OK | built + machine-verified; the TV keyboard not yet seen |
+| TV5 | TV layout | NEXT — build |
 | TV6 | QR login pop-up | planned |
 | TV7 | Hold OK for a cursor | planned |
 
@@ -669,3 +669,19 @@ Spec: feat-tv-remote.md TV3-1 … TV3-5
   second Back and Esc answer Stay, focus returns. All pass. 238/238 tests, lint, build, Java compiles.
 - Not run on a device: ⏪ / ⏩ in the app, the Tv plugin, Back on the TV and on the phone.
 - ⚠ 4 undiscussed decisions, see planning.md.
+
+## TV4 — Text boxes wait for OK [built + machine-verified; whether the TV keyboard opens on OK is for zapa's test]
+Commit: 2b2c5f3
+Spec: feat-tv-remote.md TV4-1 … TV4-3
+
+- `src/lib/textLock.ts` (pure, 5 tests): focus not by a tap locks a box; OK opens it; typing opens it and keeps the
+  key; Enter in an open box locks it again after it did its job.
+- `src/lib/useTextBoxes.ts`: locked = read-only + `data-nav-locked`; `useFocusNav` treats a locked box like any
+  control (every arrow moves on). OK re-focuses the box inside the key press and asks the VirtualKeyboard API to
+  show. Radio's genre picker opens on its search box (TV1-1); a start point no longer overrides a pop-up's own focus.
+- Headless (`check-tv4.mjs`, 960×540 2×): Down through Make it yours stops on 3 kinds of text box, always locked, and
+  reaches the last control; Up leaves it; OK opens the feed box, typing works, Enter locks it again with focus
+  staying, Down moves on; typing on a locked box opens it (computer keyboard); a click opens a box at once; the
+  picker opens on its locked search box, Down leaves it, OK opens it. All pass; TV1 and TV3 checks re-run. 243/243.
+- Seen for TV5: the lower hashtag boxes sit under the player bar; scrolling them "into view" leaves them behind it.
+- ⚠ 3 undiscussed decisions, see planning.md.
