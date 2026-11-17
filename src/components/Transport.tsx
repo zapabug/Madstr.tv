@@ -103,7 +103,7 @@ function Card({ item, leaving, playing, onGone }: { item: MediaItem; leaving?: b
       onAnimationEnd={e => { if (leaving && e.target === e.currentTarget) onGone?.(); }}>
       <Disc item={item} />
       <span className="now-title">{item.title}</span>
-      <span className="now-n" aria-hidden="true">{playing ? '▶' : '❚❚'}</span>
+      <span className="now-n" aria-hidden="true">{playing ? <MarkIcon size={18} /> : '❚❚'}</span>
     </div>
   );
 }
