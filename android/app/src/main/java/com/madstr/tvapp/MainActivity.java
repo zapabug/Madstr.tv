@@ -17,6 +17,12 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(TvPlugin.class); // TV or not, and leaving (feat-tv-remote TV3-4)
         super.onCreate(savedInstanceState);
         bridge.setWebViewClient(new LocalFilesWebViewClient(bridge)); // serves /_madstr_local/ (§N2)
+        if (TvPlugin.isTv(this)) {
+            // On a TV the page sets its own width in the viewport tag (feat-tv-remote TV5-1); the WebView honours it
+            // only with a wide viewport, fitted to the screen.
+            bridge.getWebView().getSettings().setUseWideViewPort(true);
+            bridge.getWebView().getSettings().setLoadWithOverviewMode(true);
+        }
         hideSystemBars();
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override

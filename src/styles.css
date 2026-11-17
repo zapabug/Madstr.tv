@@ -3364,3 +3364,38 @@ a.chip-btn {
   justify-content: center;
   gap: 14px;
 }
+
+/* --- feat-tv-remote TV5: the TV layout (only on a TV: <html data-tv>, set by the Android app) ----------------- */
+/* TV5-2: a picture shows whole, centred on black, as large as fits but never past 2× its own size (--nw / --nh are
+   its own size, noted by the slideshow when it loads). */
+[data-tv] .slide {
+  inset: 0;
+  margin: auto;
+  width: min(100%, calc(var(--nw, 100000) * 2px));
+  height: min(100%, calc(var(--nh, 100000) * 2px));
+  object-fit: contain;
+}
+[data-tv] .media video {
+  object-fit: contain;
+  background: #000;
+}
+/* TV5-4: a focus ring seen from the couch: white, framed in black, on every sticker colour and on pictures */
+[data-tv] [data-nav]:focus-visible {
+  outline: 4px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #000, 0 0 0 8px #000;
+}
+/* TV5-6: a People card is a focus stop */
+.own .creators > .creator-card:focus-visible {
+  outline: 3px solid var(--ink, #000);
+  outline-offset: 3px;
+}
+
+/* TV5-5: a tile's name tooltip never stays when the panels hide (everywhere: it was drawn outside the panel) */
+body:has(.theater[data-hidden]) .tile-tip {
+  display: none;
+}
+/* TV5-6: a control scrolled into view is never left under the player bar (everywhere the bar shows) */
+html:has(.dock) {
+  scroll-padding-bottom: calc(var(--dock-h) + 16px);
+}

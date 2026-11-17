@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
 import type { MediaItem } from '../lib/media.ts';
 import { ensureAhead, pickNext, step, usePictureMix, type History } from '../lib/pictureMix.ts';
 import { createSessionSet } from '../lib/sessionSet.ts';
@@ -98,9 +98,16 @@ export function Slideshow({ mine, others, intervalMs = 9000, onCurrent, command 
   return (
     <div className="slides" aria-hidden="true">
       {previous.current && previous.current !== current && !bad.current.has(previous.current) && (
-        <img key={`p:${previous.current}`} className="slide" src={previous.current} alt="" referrerPolicy="no-referrer" />
+        <img key={`p:${previous.current}`} className="slide" src={previous.current} alt="" referrerPolicy="no-referrer" onLoad={noteSize} />
       )}
-      <img key={`c:${current}`} className="slide slide-in" src={current} alt="" referrerPolicy="no-referrer" onError={() => drop(current)} />
+      <img key={`c:${current}`} className="slide slide-in" src={current} alt="" referrerPolicy="no-referrer" onLoad={noteSize} onError={() => drop(current)} />
     </div>
   );
+}
+
+// A picture's own size, so a TV never enlarges it past 2× (feat-tv-remote TV5-2; the cap is in styles.css).
+function noteSize(event: SyntheticEvent<HTMLImageElement>): void {
+  const img = event.currentTarget;
+  img.style.setProperty('--nw', String(img.naturalWidth));
+  img.style.setProperty('--nh', String(img.naturalHeight));
 }

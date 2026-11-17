@@ -1,6 +1,7 @@
 // The Android app on a TV (spec feat-tv-remote TVR-R4): the Tv plugin says whether the device is a TV, and
 // closes the app when "Leave Juke⚡tr?" is answered Leave (TV3-4). Loaded only in the app.
 import { registerPlugin } from '@capacitor/core';
+import { tvWidth } from '../lib/tvWidth.ts';
 
 interface TvPlugin {
   info(): Promise<{ tv?: boolean }>;
@@ -9,11 +10,14 @@ interface TvPlugin {
 
 const Tv = registerPlugin<TvPlugin>('Tv');
 
-// Marks the page <html data-tv> on a TV, for the TV-only parts (layout, pop-ups).
+// Marks the page <html data-tv> on a TV, for the TV-only parts (layout, pop-ups), and lays it out at tvWidth().
+// The app turns on the WebView's wide viewport on a TV only, so the viewport tag's width counts there.
 export async function startTv(): Promise<void> {
   try {
     const { tv } = await Tv.info();
-    if (tv === true) document.documentElement.dataset.tv = '';
+    if (tv !== true) return;
+    document.documentElement.dataset.tv = '';
+    document.querySelector('meta[name="viewport"]')?.setAttribute('content', `width=${tvWidth(import.meta.env.VITE_TV_WIDTH)}, viewport-fit=cover`);
   } catch (error) {
     console.error('[tv]', error);
   }

@@ -132,7 +132,10 @@ export function FollowView() {
           {creators.map(c => {
             const isFollowing = following?.has(c.pubkey) ?? false;
             return (
-              <li key={c.pubkey} className="creator-card">
+              // The card is one focus stop (feat-tv-remote TV5-6); OK on it follows / unfollows. A tap on the card does
+              // nothing (detail > 0): only the button follows by touch or mouse, as before.
+              <li key={c.pubkey} className="creator-card" data-nav tabIndex={0}
+                onClick={e => { if (e.detail === 0 && e.target === e.currentTarget && account && !pending.includes(c.pubkey)) void run(c.pubkey, isFollowing); }}>
                 {c.mutual > 0 && <span className="note">{c.mutual} of your follows</span>}
                 <Avatar pubkey={c.pubkey} />
                 <h3 className="card-name"><PersonName pubkey={c.pubkey} /></h3>
@@ -141,7 +144,7 @@ export function FollowView() {
                 </p>
                 <p className="card-sub">{c.latest}</p>
                 <div className="card-actions">
-                  <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
+                  <button type="button" className="chip-btn solid" tabIndex={-1} disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
                     onClick={() => { void run(c.pubkey, isFollowing); }}>
                     {pending.includes(c.pubkey) ? '…' : isFollowing ? 'Unfollow' : 'Follow'}
                   </button>
