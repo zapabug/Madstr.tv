@@ -9,7 +9,7 @@ export function Dock() {
   const item = p.queue[p.index];
   const status = p.error ?? (p.status === 'loading' ? 'Loading…' : item?.subtitle ?? p.label);
   return (
-    <section className="dock" aria-label="Player">
+    <section className="dock" aria-label="Player" data-nav-bar>
       <div className="dock-bar">
         <TransportButtons />
         <div className="dock-now">

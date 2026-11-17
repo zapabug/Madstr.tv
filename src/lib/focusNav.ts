@@ -122,3 +122,30 @@ export function handOver(candidates: Candidate[], was: Box, prefer: readonly num
   const allowed = (i: number) => i >= 0 && i < candidates.length && !candidates[i].noFallback;
   return nearest(prefer.filter(allowed)) ?? nearest(candidates.map((_, i) => i).filter(allowed));
 }
+
+// --- crossing into another area (feat-tv-remote TV2) ------------------------------------------------
+// When nothing in the pressed direction lines up with the control (a playlist tile is not level with any
+// button in the player panel), the area that lies that way is still the place to go: the nearest area whose
+// box is ahead of the control and overlaps it across. Index into `areas`, or null.
+export function pickArea(areas: Box[], from: Box, direction: Direction): number | null {
+  const o = center(from);
+  const vertical = direction === 'up' || direction === 'down';
+  let best: { index: number; gap: number; across: number } | null = null;
+  areas.forEach((a, index) => {
+    // how far the area's near edge is ahead of the control's centre
+    const gap = direction === 'right' ? a.left - o.x
+      : direction === 'left' ? o.x - (a.left + a.width)
+      : direction === 'down' ? a.top - o.y
+      : o.y - (a.top + a.height);
+    if (gap < 0) return;
+    // the area must overlap the control across the direction of travel
+    const overlap = vertical
+      ? Math.min(a.left + a.width, from.left + from.width) - Math.max(a.left, from.left)
+      : Math.min(a.top + a.height, from.top + from.height) - Math.max(a.top, from.top);
+    if (overlap <= 0) return;
+    const c = center(a);
+    const across = vertical ? Math.abs(c.x - o.x) : Math.abs(c.y - o.y);
+    if (!best || gap < best.gap || (gap === best.gap && across < best.across)) best = { index, gap, across };
+  });
+  return best === null ? null : (best as { index: number }).index;
+}

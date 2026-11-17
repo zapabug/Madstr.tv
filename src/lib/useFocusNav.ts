@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { arrowLeavesField, directionForKey, handOver, pickNext, startIndex, type Box, type Candidate, type Field } from './focusNav.ts';
+import { arrowLeavesField, directionForKey, handOver, pickArea, pickNext, startIndex, type Box, type Candidate, type Field } from './focusNav.ts';
 
 const NAV = '[data-nav]';
 const GROUP = '[data-nav-group]';
+const DOOR = '[data-nav-default]';
+const BAR = '[data-nav-bar]';
 // How long a new screen may take to show its start point (data arrives after the first render) before focus
 // falls back to the screen's first control (feat-tv-remote TV1-1; number logged in planning.md).
 const START_WAIT_MS = 1500;
@@ -63,6 +65,19 @@ function focusOn(el: HTMLElement): void {
 
 // Where focus was last, so it can be handed over when that control vanishes (TV1-2).
 let last: { el: HTMLElement; box: Box; group: Element | null } | null = null;
+
+// Each area's last focused control, for coming back to it (TV2-2). Forgotten on a new screen.
+let areaMemory = new WeakMap<Element, HTMLElement>();
+
+// Where arrowing into an area lands (TV2-1, TV2-2): an area with a front door (data-nav-default: the player
+// panel's Play/Pause) is always entered there; any other area at the control you were on in it, if that is still
+// there; else null (the geometric pick stands). Door before memory: see planning.md (TV2, spec conflict).
+function entryOf(area: Element, targets: HTMLElement[]): HTMLElement | null {
+  const door = area.querySelector<HTMLElement>(DOOR);
+  if (door && targets.includes(door)) return door;
+  const remembered = areaMemory.get(area);
+  return remembered && targets.includes(remembered) ? remembered : null;
+}
 
 function remember(el: HTMLElement): void {
   last = { el, box: boxOf(el), group: el.closest(GROUP) };
@@ -156,13 +171,40 @@ export function useFocusNav(): void {
         const local = pickNext(inGroup.map(i => boxOf(targets[i])), inGroup.indexOf(current), direction);
         if (local !== null) next = inGroup[local];
       }
+      // A bar fixed over the page (the player bar, data-nav-bar) is reached only when nothing else lies that way,
+      // so Down from a sticker goes to the next row of stickers (feat-tv-remote TV2-4).
+      if (next === null && !targets[current].closest(BAR)) {
+        const notBar = targets.flatMap((el, i) => (i === current || !el.closest(BAR) ? [i] : []));
+        const pick = pickNext(notBar.map(i => boxOf(targets[i])), notBar.indexOf(current), direction);
+        if (pick !== null) next = notBar[pick];
+      }
       if (next === null) next = pickNext(targets.map(boxOf), current, direction);
+      // Nothing lines up that way, but another area lies there (a low playlist tile, the player panel to its
+      // right): go into that area (TV2-1).
+      let area: Element | null = null;
+      if (next === null && group) {
+        const areas = [...new Set(targets.map(el => el.closest(GROUP)).filter((g): g is Element => g !== null && g !== group))];
+        const a = pickArea(areas.map(boxOf), boxOf(targets[current]), direction);
+        if (a !== null) area = areas[a];
+      }
+      if (next !== null) {
+        const into = targets[next].closest(GROUP);
+        if (into && into !== group) area = into;
+      }
+      const entry = area ? entryOf(area, targets) : null;
+      if (entry) {
+        focusOn(entry);
+        return;
+      }
       if (next === null) return;
       focusOn(targets[next]);
     };
 
     const onFocusIn = (event: FocusEvent) => {
-      if (event.target instanceof HTMLElement && event.target.matches(NAV)) remember(event.target);
+      if (!(event.target instanceof HTMLElement) || !event.target.matches(NAV)) return;
+      remember(event.target);
+      const area = event.target.closest(GROUP);
+      if (area) areaMemory.set(area, event.target);
     };
 
     // The focused control vanished or was disabled (a card after Follow, a chip that re-rendered): hand focus
@@ -181,6 +223,7 @@ export function useFocusNav(): void {
     const onScreen = () => {
       stopStart();
       last = null;
+      areaMemory = new WeakMap();
       stopStart = focusStart();
     };
 
