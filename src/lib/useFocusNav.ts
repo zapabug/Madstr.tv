@@ -44,6 +44,8 @@ function candidateOf(el: HTMLElement): Candidate {
 // What kind of form field the key came from, for arrowLeavesField (spec R8).
 function fieldOf(target: EventTarget | null): Field {
   if (!(target instanceof HTMLElement)) return { kind: 'none' };
+  // A text box locked until OK (feat-tv-remote TV4) is like any control: every arrow moves on.
+  if (target.hasAttribute('data-nav-locked')) return { kind: 'none' };
   if (target instanceof HTMLInputElement) {
     if (target.type === 'range') return { kind: 'range' };
     if (TEXT_TYPES.has(target.type)) {
@@ -115,9 +117,13 @@ function recover(): boolean {
 // first render, so wait for it up to START_WAIT_MS, then take the first control a fallback may choose.
 function focusStart(): () => void {
   const began = Date.now();
+  const before = document.activeElement;
   let timer = 0;
   const tryStart = () => {
     const targets = visibleTargets();
+    // Something on the new screen already put focus on a control (a pop-up opening on its own field): leave it.
+    const active = document.activeElement;
+    if (active !== before && active instanceof HTMLElement && targets.includes(active)) return;
     const candidates = targets.map(candidateOf);
     const marked = candidates.some(c => c.start !== null);
     const waited = Date.now() - began >= START_WAIT_MS;

@@ -10,6 +10,7 @@ import { MarkIcon } from './components/icons.tsx';
 import { BOARD, isTheater, toHash } from './lib/route.ts';
 import { useFocusNav } from './lib/useFocusNav.ts';
 import { useRemoteKeys } from './lib/useRemoteKeys.ts';
+import { useTextBoxes } from './lib/useTextBoxes.ts';
 import { useRoute } from './lib/useRoute.ts';
 
 function isTyping(target: EventTarget | null): boolean {
@@ -20,6 +21,7 @@ export function App() {
   const { route, go } = useRoute();
   useFocusNav();
   useRemoteKeys();
+  useTextBoxes();
 
   // Esc / Backspace walk back to the board, like the Back key on a remote.
   useEffect(() => {
