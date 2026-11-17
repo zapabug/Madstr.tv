@@ -32,6 +32,27 @@ notes are in `docs/Planning.md` (NDK era, may describe code that is gone).
 - **2026-11-15, remote pass last.** Remote navigation (inputs and sliders `data-nav`) is the final
   stage before deploy, not a blocker for feature work.
 
+## feat-tv-remote (spec `feat-tv-remote.md`, 2026-11-17)
+
+Decided by zapa in the `/vibe-therapist` and `/vibe-feat` sessions, after watching the app on his TV (Vestel
+Cosmos, Android TV 11; the page is 960×540 at 2×):
+
+| Area | Decision |
+| --- | --- |
+| Order | Remote first: TV1 focus never lost, TV2 front door + memory, TV3 keys + leave, TV4 text boxes, TV5 layout, TV6 QR, TV7 cursor |
+| Arrows | Keep moving focus everywhere, also in the player (not seek keys) |
+| Cursor | Hold OK 0.6 s turns on a page-drawn pointer; pointer remotes work as a mouse |
+| ⏪ / ⏩ | Previous / next item in every mode (the remote's prev / next buttons send these keys) |
+| Channel Up / Down | Next / previous picture (the edge arrows); Up = next |
+| Back | TV app only: "Leave Juke⚡tr?" on the board, Stay first; Leave closes the app and the music. Phones unchanged |
+| Pictures on a TV | Whole, on black, at most 2× (number PROPOSED) |
+| Scale on a TV | 1280×720 or 1920×1080: zapa picks on the TV from two test builds |
+| Dependencies | None new; Norigin / mrowser are learned from |
+
+Why: the remote got lost (focus fell to Log out and logged the TV out), the playlist could not reach Play/Pause,
+text boxes opened the keyboard on focus, a held OK repeated the button, and the QR login was half hidden. The
+pointer covers whatever the arrows still cannot reach.
+
 ## Undiscussed decisions (needs lfg review)
 
 Found in the code by the audit of 2026-11-15; none was agreed in the spec. Keep (move into the
@@ -80,7 +101,8 @@ Android play (feat-android-play, 2026-11-15), written into the spec by the agent
 Android native (feat-android-native, 2026-11-15), numbers the agent wrote into the spec:
 - Controls stay 10 minutes while paused; an empty player ends them after 3 s; position resent past 2 s drift.
 - Notification picture: http(s) only, at most 2 MB, scaled to 512 px; texts clipped to 80 characters.
-- Remote fast-forward / rewind use the on-screen steps (+30 s / −10 s).
+- Remote fast-forward / rewind use the on-screen steps (+30 s / −10 s). **Superseded 2026-11-17** (zapa, feat-tv-remote TV3-2):
+  the remote's ⏪ / ⏩ are previous / next.
 - Music mix: default none, at most 8 in 10 tracks, evenly spread, fixed order; when one side runs out the
   rest is the other. Music floor: a track of unknown length stays until measured.
 
@@ -123,6 +145,8 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - (none open)
 
 ## Change log
+
+- 2026-11-17: feat-tv-remote spec (TV1-TV7) written from the session on zapa's TV; finished specs moved to `archive/`.
 
 - 2026-11-15: audit (`audits/audit-2026-11-15.md`); zapa's answers recorded in the spec
   (§Decided after the audit) and AGENTS.md; RSS and R8 milestones added; this file, `build.md`

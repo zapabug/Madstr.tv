@@ -604,3 +604,15 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
   pushed. Madstr.tv main pushed to GitHub.
 - Re-running make-icons.sh rewrites PNGs whose pixels did not change (ImageMagick dates them); the web icons were
   checked (0 pixels differ) and left out of the commit.
+
+# feat-tv-remote (spec: feat-tv-remote.md)
+
+| Milestone | Title | Status |
+| --- | --- | --- |
+| TV1 | Focus never lost | NEXT — build |
+| TV2 | Front door + memory | planned |
+| TV3 | Remote keys + leave on Back | planned |
+| TV4 | Text boxes wait for OK | planned |
+| TV5 | TV layout | planned |
+| TV6 | QR login pop-up | planned |
+| TV7 | Hold OK for a cursor | planned |
