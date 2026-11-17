@@ -196,6 +196,33 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **Why:** Previous has to stay reachable; jumping over it would make it unreachable from the left.
 - **Status:** awaiting lfg
 
+### 2026-11-17 · TV3 · Channel Up / Down and ⏪ / ⏩ act once per press
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV3-2, TV3-3 (silent on holding)
+- **What I did:** a held channel or ⏪ / ⏩ key acts once until it is let go (`src/lib/useRemoteKeys.ts` heldKeys). In the app the native media keys already act once (`MainActivity`: repeatCount 0 only).
+- **Why:** the TV repeats held keys; flicking through ten pictures or tracks by accident is worse than pressing again.
+- **Alternatives:** let a held key keep going.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · The leave pop-up's words and the music note
+- **Type:** guess
+- **Spec ref:** TV3-4 (title and buttons given)
+- **What I did:** "Leave Juke⚡tr?" with the line "The music stops when you leave.", Stay (focused) and Leave, styled like Radio's genre picker (`src/components/LeavePrompt.tsx`). Leave pauses the player before closing the app. If the page cannot show the pop-up, Back keeps the old behaviour (`MainActivity.goBack`).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · Fields keep Enter
+- **Type:** guess
+- **Spec ref:** TV3-1
+- **What I did:** OK acting on release applies to buttons and links; text boxes, selects and other fields keep Enter as it was (a text box submits on Enter).
+- **Why:** a text box's Enter is the keyboard's "go", not a press.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · Not run on a device
+- **Type:** fix (verification gap)
+- **Spec ref:** TV3-EC2, TV3-EC4, TV3-EC5
+- **What I did:** the native parts (⏪ / ⏩ in `MediaHub.actionForKey`, the Tv plugin, Back on the board) compile (`gradlew compileDebugJavaWithJavac`) but were not run on the TV or the phone (zapa: no screenshots, he tests later). The page side of every TV3 check passes headless.
+- **Status:** awaiting zapa's test on the TV and the phone
+
 ## Open questions
 
 - (none open)

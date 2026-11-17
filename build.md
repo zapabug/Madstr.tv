@@ -611,8 +611,8 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 | --- | --- | --- |
 | TV1 | Focus never lost | built + machine-verified; awaiting zapa on the TV |
 | TV2 | Front door + memory | built + machine-verified; awaiting zapa on the TV |
-| TV3 | Remote keys + leave on Back | NEXT — build |
-| TV4 | Text boxes wait for OK | planned |
+| TV3 | Remote keys + leave on Back | built + machine-verified (page); native not run on a device |
+| TV4 | Text boxes wait for OK | NEXT — build |
 | TV5 | TV layout | planned |
 | TV6 | QR login pop-up | planned |
 | TV7 | Hold OK for a cursor | planned |
@@ -648,3 +648,24 @@ Spec: feat-tv-remote.md TV2-1 … TV2-4
   rows lands on Pause; Left, Left (via Previous) returns to that tile; coming back after leaving from Next lands on
   Pause; board Down goes sticker → sticker (desktop: the bar comes after the last row). All pass. TV1 checks re-run.
 - ⚠ 3 undiscussed decisions, see planning.md.
+
+## TV3 — Remote keys + leave on Back [built + machine-verified (page side); native part compiled, not run on a device]
+Commit: 1e91ad1
+Spec: feat-tv-remote.md TV3-1 … TV3-5
+
+- `src/lib/okKey.ts` (pure, 6 tests): a tap of OK presses once on release; a hold of 0.6 s (`OK_HOLD_MS`) is a hold,
+  never a press; the TV's repeated key-downs never press again. `src/lib/useRemoteKeys.ts` feeds it and announces a
+  hold as `juke:ok-hold` (for TV7). Fields keep Enter.
+- Channel Up / Down click the picture's edge arrows (next / previous picture, or video) and no longer scroll.
+- ⏪ / ⏩: `MediaHub.actionForKey` maps `KEYCODE_MEDIA_REWIND` / `FAST_FORWARD` to previous / next; in a browser the
+  page maps `MediaRewind` / `MediaFastForward` the same. Lock-screen / Bluetooth seek actions unchanged.
+- Leave on Back: `TvPlugin.java` (`info` → is the UI mode television, `leave` → finish the activity, which ends the
+  music in `onDestroy`); `src/native/tv.ts` marks `<html data-tv>`; `MainActivity.goBack` on a TV calls
+  `window.jukeAskLeave()` instead of backgrounding; `LeavePrompt.tsx` shows "Leave Juke⚡tr?" with Stay focused.
+  Phones keep backgrounding with the music on.
+- Headless (`check-tv3.mjs`, 960×540 2×): OK opens a sticker; OK held 2 s on Next with 50 ms repeats presses
+  nothing, a tap presses once; ⏩ / ⏪ in the page go next / back; Channel Up changes the picture (checked over four
+  presses), Channel Down does not scroll; the pop-up opens on Stay, Right reaches Leave, arrows stay inside, a
+  second Back and Esc answer Stay, focus returns. All pass. 238/238 tests, lint, build, Java compiles.
+- Not run on a device: ⏪ / ⏩ in the app, the Tv plugin, Back on the TV and on the phone.
+- ⚠ 4 undiscussed decisions, see planning.md.
