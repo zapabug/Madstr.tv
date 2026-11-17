@@ -69,4 +69,25 @@ for f in "$RES"/drawable*/splash.png; do
   sticker $(( short * 30 / 100 )) "$TMP/sp.png"
   magick -size "${w}x${h}" "xc:$DARK" "$TMP/sp.png" -gravity center -composite "$f"
 done
-echo "Icons written: public/icons, public/favicon.svg, $RES/mipmap-*, $RES/drawable*/splash.png"
+# Android TV banner (the tile on the TV's home row, 320 x 180): the sticker mark on the purple sky, and the wordmark
+# Juke<mark>tr in the app's own font, drawn by headless Chromium so the fonts are the real ones.
+sticker 300 "$TMP/banner-mark.png"
+FONTS="$PWD/public/fonts"
+cat > "$TMP/banner.html" <<HTML
+<!doctype html><meta charset="utf-8"><style>
+@font-face { font-family: Unbounded; src: url("file://$FONTS/unbounded-latin-wght-normal.woff2"); font-weight: 200 900; }
+@font-face { font-family: Figtree; src: url("file://$FONTS/figtree-latin-wght-normal.woff2"); font-weight: 300 900; }
+html, body { margin: 0; width: 320px; height: 180px; overflow: hidden; }
+body { display: flex; align-items: center; gap: 10px; padding: 0 18px; box-sizing: border-box;
+  background: radial-gradient(circle at 30% 40%, #56106E 0%, $PURPLE 75%); color: #f4efff; }
+.sticker { width: 104px; height: 104px; flex: none; }
+.word { font: 700 34px/1 Unbounded, sans-serif; letter-spacing: -0.04em; display: flex; align-items: center; }
+.word svg { width: 1.5em; height: 1.5em; margin: -0.3em -0.05em; }
+.sub { font: 600 13px/1 Figtree, sans-serif; color: #e8dcff; margin-top: 10px; letter-spacing: 0.02em; }
+</style><body><img class="sticker" src="file://$TMP/banner-mark.png"><div><div class="word">Juke$(tr -d '\n' < "$MARK")tr</div>
+<div class="sub">your nostr jukebox</div></div></body>
+HTML
+chromium --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files --user-data-dir="$TMP/chrome" \
+  --window-size=320,180 --screenshot="$TMP/banner.png" "file://$TMP/banner.html" >/dev/null 2>&1
+magick "$TMP/banner.png" -crop 320x180+0+0 +repage "$RES/drawable-xhdpi/banner.png"
+echo "Icons written: public/icons, public/favicon.svg, $RES/mipmap-*, $RES/drawable*/splash.png, $RES/drawable-xhdpi/banner.png"

@@ -310,7 +310,8 @@ makes every size from them.
 - The browser tab's icon (`favicon.svg`) is the mark. The S of the Juke⚡tr wordmark (the header and the player
   screen's top line) is the brand mark (triangle and bolt, the SVG), not the ⚡ emoji (zapa: "the lighting bolt on jukestr top scren etc use the
   brand mark aswell"). The Android start screen shows the mark in place of the old
-  orange bolt, on the app's dark background.
+  orange bolt, on the app's dark background. Android TV's banner (the tile on the TV's home row) is the sticker
+  mark with the Juke⚡tr wordmark and "your nostr jukebox" on the purple sky (it still said Madstr).
 - **Play**: the big play button shows the mark instead of a plain triangle, **oversized** (zapa: "the play icon
   should be over sized as its the logo"): 135 % of the dome in every layout, reaching out past its edge. While something plays the
   button is the **bolt alone**, as big, without the triangle (press it to pause); zapa: "cool if wile playing the
