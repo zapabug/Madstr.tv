@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 
 // Plain SVG glyphs, drawn on a 24 grid with currentColor so they follow the theme.
 interface IconProps {
@@ -27,9 +27,22 @@ export const PrevIcon = (p: IconProps) => (
 export const NextIcon = (p: IconProps) => (
   <Svg {...p}><path d="M16 5h2v14h-2zM4 5v14l10.5-7z" /></Svg>
 );
-export const PlayIcon = (p: IconProps) => (
-  <Svg {...p}><path d="M8 5v14l11-7z" /></Svg>
-);
+// The logo (assets/brand/mark.svg, feat-phone-inline §P29): the magenta play triangle with the lemon bolt, thick dark
+// outline and a hard shadow down-right. It is the big Play button. Its own colours, not currentColor.
+const MARK_TRI = ['M471 266 154 148 161 514Z', 'M1037 476 531 288 416 447 689 459 174 928 170 974Z', 'M390 550 162 571 169 890Z'];
+const MARK_BOLT = 'M645 128 84 576 391 550 102 993 688 459 415 447Z';
+export function MarkIcon({ size = 24 }: IconProps) {
+  const clip = `mark-${useId().replace(/:/g, '')}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 1121 1121" aria-hidden="true" focusable="false">
+      <clipPath id={clip}>{MARK_TRI.map(d => <path key={d} d={d} />)}</clipPath>
+      <g transform="translate(26.9 33.6)" fill="#050505">{[...MARK_TRI, MARK_BOLT].map(d => <path key={d} d={d} />)}</g>
+      {MARK_TRI.map(d => <path key={d} d={d} fill="#DC01C0" stroke="#141414" strokeWidth={19.1} strokeLinejoin="round" />)}
+      <g clipPath={`url(#${clip})`}><path d={MARK_BOLT} transform="translate(26.9 33.6)" fill="#630056" /></g>
+      <path d={MARK_BOLT} fill="#FCFA9A" stroke="#141414" strokeWidth={19.1} strokeLinejoin="round" />
+    </svg>
+  );
+}
 export const PauseIcon = (p: IconProps) => (
   <Svg {...p}><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></Svg>
 );

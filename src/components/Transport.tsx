@@ -8,7 +8,7 @@ import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
 import { isStation } from '../lib/radio.ts';
 import { Avatar } from './People.tsx';
-import { FilmIcon, FolderArt, NextIcon, NoteIcon, PauseIcon, PersonIcon, PlayIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
+import { FilmIcon, FolderArt, MarkIcon, NextIcon, NoteIcon, PauseIcon, PersonIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -21,7 +21,7 @@ export function TransportButtons() {
     <div className="dock-controls" role="group" aria-label="Playback">
       <button type="button" className="dock-btn" aria-label="Previous" data-nav disabled={!has} onClick={player.prev}><PrevIcon size={28} /></button>
       <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-        {playing ? <PauseIcon size={34} /> : <PlayIcon size={34} />}
+        {playing ? <PauseIcon size={34} /> : <MarkIcon size={40} />}
       </button>
       <button type="button" className="dock-btn" aria-label="Next" data-nav disabled={!has} onClick={player.next}><NextIcon size={28} /></button>
     </div>
@@ -168,7 +168,7 @@ export function PanelControls() {
       <div className="pc-main">
         <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
         <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-          {playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
+          {playing ? <PauseIcon size={32} /> : <MarkIcon size={38} />}
         </button>
         <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
       </div>
