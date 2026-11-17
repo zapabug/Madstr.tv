@@ -3,6 +3,7 @@ import { Board } from './components/Board.tsx';
 import { Dock } from './components/Dock.tsx';
 import { Engine } from './components/Engine.tsx';
 import { LeavePrompt } from './components/LeavePrompt.tsx';
+import { QrLoginPopup } from './components/QrLogin.tsx';
 import { AccountChip } from './components/People.tsx';
 import { Sky } from './components/Sky.tsx';
 import { Viewer } from './components/Viewer.tsx';
@@ -59,6 +60,7 @@ export function App() {
       {!theater && <Dock />}
       <Engine />
       <LeavePrompt />
+      <QrLoginPopup />
     </>
   );
 }

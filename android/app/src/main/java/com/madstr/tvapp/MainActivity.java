@@ -38,6 +38,13 @@ public class MainActivity extends BridgeActivity {
      *  is nothing to go back to. */
     private void goBack() {
         WebView web = bridge.getWebView();
+        // A pop-up that Back closes (the TV's QR login, feat-tv-remote TV6-1) goes first.
+        web.evaluateJavascript("(function(){return typeof window.jukeBack==='function'?window.jukeBack():'none';})()", popped -> {
+            if (!"\"closed\"".equals(popped)) goBackPage(web);
+        });
+    }
+
+    private void goBackPage(WebView web) {
         web.evaluateJavascript("(function(){var h=location.hash;return h===''||h==='#'||h==='#/';})()", onBoard -> {
             if ("true".equals(onBoard)) {
                 if (!TvPlugin.isTv(this)) {

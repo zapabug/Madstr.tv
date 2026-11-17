@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { PersonIcon } from './icons.tsx';
+import { isTv, qrPopup } from '../lib/qrPopup.ts';
 import { CATEGORIES, type Category } from '../lib/creators.ts';
 import { loginWithBunker, loginWithSigner, logout, signerAvailable, startQrLogin, type QrLogin } from '../lib/accounts.ts';
 import { isHttpUrl } from '../lib/media.ts';
@@ -23,13 +24,14 @@ export function PersonName({ pubkey }: { pubkey: string }) {
   return <>{shortName(pubkey, profile?.displayName)}</>;
 }
 
-// The small chip in the header: log out, or a way to log in.
+// The small chip in the header: log out, or a way to log in. On a TV, Log in opens the QR pop-up
+// (feat-tv-remote TV6); elsewhere it goes to People, where the login card is.
 export function AccountChip() {
   const account = useAccount();
   const profile = useProfile(account?.pubkey);
   return account
     ? <button type="button" className="chip-link" data-nav data-nav-nofallback title={`Logged in as ${shortName(account.pubkey, profile?.displayName)}`} onClick={() => { void logout(); }}>Log out</button>
-    : <a className="chip-link" href="#/people/follow" data-nav data-nav-nofallback>Log in</a>;
+    : <a className="chip-link" href="#/people/follow" data-nav data-nav-nofallback onClick={e => { if (isTv()) { e.preventDefault(); qrPopup.open(); } }}>Log in</a>;
 }
 
 export function LoginPanel() {

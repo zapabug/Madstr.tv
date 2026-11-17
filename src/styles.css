@@ -3399,3 +3399,45 @@ body:has(.theater[data-hidden]) .tile-tip {
 html:has(.dock) {
   scroll-padding-bottom: calc(var(--dock-h) + 16px);
 }
+
+/* feat-tv-remote TV6: log in with a QR pop-up on a TV, the code as large as fits (at least 60% of the height) */
+.qr-pop-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 3vh 4vw;
+  background: #0b0716f2;
+}
+.qr-pop {
+  display: flex;
+  align-items: center;
+  gap: 4vw;
+  max-width: 100%;
+  color: var(--text);
+}
+.qr-pop-code {
+  flex: none;
+  width: min(80vh, 55vw);
+  height: min(80vh, 55vw);
+  padding: 2.5vh;
+  background: #fff;
+  border: 3px solid #000;
+  border-radius: 18px;
+  box-shadow: 6px 8px 0 #000;
+}
+.qr-pop-side {
+  max-width: 34ch;
+}
+.qr-pop-side h2 {
+  margin: 0 0 10px;
+  font-size: 2rem;
+}
+.qr-pop-side p {
+  margin: 0 0 14px;
+  font-size: 1.15rem;
+}
+.qr-pop-wait {
+  color: var(--muted, #b9b3c9);
+}
