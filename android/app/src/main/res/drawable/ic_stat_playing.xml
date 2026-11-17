@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Status-bar icon for the background-play notification: a lightning bolt, white on transparent. -->
+<!-- Status-bar icon for the background-play notification: the logo's silhouette (feat-phone-inline §P29), the play triangle with the bolt cut out of it,
+     white on transparent (Android tints one-colour icons). From assets/brand/mark.svg, 1121 scaled to 24. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M13,2L4,14h7l-1,8 9,-12h-7z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M3.30,3.17 L22.20,10.19 L3.64,20.85 Z M13.81,2.74 L1.80,12.33 L8.37,11.78 L2.18,21.26 L14.73,9.83 L8.88,9.57 Z" />
 </vector>
