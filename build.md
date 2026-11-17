@@ -609,10 +609,28 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 
 | Milestone | Title | Status |
 | --- | --- | --- |
-| TV1 | Focus never lost | NEXT — build |
-| TV2 | Front door + memory | planned |
+| TV1 | Focus never lost | built + machine-verified; awaiting zapa on the TV |
+| TV2 | Front door + memory | NEXT — build |
 | TV3 | Remote keys + leave on Back | planned |
 | TV4 | Text boxes wait for OK | planned |
 | TV5 | TV layout | planned |
 | TV6 | QR login pop-up | planned |
 | TV7 | Hold OK for a cursor | planned |
+
+## TV1 — Focus never lost [built + machine-verified, awaiting zapa on the TV]
+Commit: dcc8b59
+Spec: feat-tv-remote.md TV1-1 … TV1-4
+
+- `src/lib/focusNav.ts`: pure `startIndex` (lowest `data-nav-start`, else the first control a fallback may take) and
+  `handOver` (nearest control, its own area first, never a `noFallback` one); 4 new tests (230/230 in all).
+- `src/lib/useFocusNav.ts`: on every screen change (hashchange) and at start-up focus goes to the start point; a
+  MutationObserver hands focus over when the focused control vanishes or is disabled; an arrow with focus lost
+  returns it instead of jumping to the first control.
+- Marks: Play/Pause `data-nav-start=1`, the first playlist tile `2`, People's Everything `1`; Log in / Log out
+  `data-nav-nofallback`.
+- Headless at 960×540 2× with real key events (`check-tv1*.mjs`, DOM only): start points on board, Music,
+  Podcasts, Radio, Watch, People, Make it yours, back to the board; blur then arrow returns; a played tile hands
+  focus to a neighbour (Watch); picking a genre keeps focus in the picker and Down ×25 stays inside; walks on four
+  screens never reach Log in / Log out. All pass.
+- Seen for TV5: at 960×540 the player bar covers People's category chips, so its Next sits level with Everything.
+- ⚠ 4 undiscussed decisions, see planning.md.

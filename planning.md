@@ -140,6 +140,38 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   April 2025 build of the old app); git history keeps them. `.cursor-tools.env` stays in `.gitignore` as a guard.
   The build splits the libraries into `react` and `nostr` files (no file over 500 kB but hls.js).
 
+### 2026-11-17 · TV1 · How long a new screen waits for its start point
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV1-1 (no number given)
+- **What the spec said:** on a screen change focus goes to the start point.
+- **What I did:** the start point is looked for every 100 ms for up to 1.5 s (the tiles and Play/Pause arrive after the first render); after that the first control a fallback may take (`src/lib/useFocusNav.ts` START_WAIT_MS, START_POLL_MS). A key press or a touch stops the wait.
+- **Why:** focusing the first control at once would land on the picture's edge arrows before Play/Pause exists.
+- **Alternatives:** wait longer (relays can be slow), or move focus again when the start point turns up later.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV1 · A fallback never lands in a text box
+- **Type:** guess
+- **Spec ref:** TV1-1, TV1-2 (spec names only Log in / Log out)
+- **What the spec said:** fallbacks never choose Log in / Log out.
+- **What I did:** text boxes are skipped by fallbacks too (`candidateOf` in `src/lib/useFocusNav.ts`).
+- **Why:** focusing a text box opens the keyboard on the TV (until TV4), which swallows the arrows.
+- **Alternatives:** allow them once TV4 keeps the keyboard shut.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV1 · Lost focus returns to where it was first
+- **Type:** guess
+- **Spec ref:** none: spec silent (TV1-2 covers a control that vanished)
+- **What I did:** when focus is lost but its control is still there (a click on empty space, a blur), the next arrow puts focus back on that control rather than moving from it (`recover`).
+- **Why:** the safest place is the one the person last saw.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV1 · Radio's genre picker still starts on Done
+- **Type:** deviation
+- **Spec ref:** TV1-1 (picker → its search box)
+- **What I did:** the picker keeps focusing Done when it opens (`src/components/Radio.tsx`).
+- **Why:** until TV4, focusing the search box opens the TV keyboard. Switch to the search box in TV4.
+- **Status:** awaiting lfg (to be done in TV4)
+
 ## Open questions
 
 - (none open)
