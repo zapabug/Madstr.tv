@@ -86,3 +86,66 @@ export function arrowLeavesField(direction: Direction, field: Field): boolean {
     }
   }
 }
+
+// --- where focus goes when it has nowhere to be (feat-tv-remote TV1) ---------------------------------
+// A remote has no mouse to click focus back into the page, so focus must never be lost (TVR-R3).
+export interface Candidate {
+  box: Box;
+  start: number | null; // the screen's start mark (data-nav-start), lowest number first; null when unmarked
+  noFallback: boolean; // never chosen by a fallback: Log in / Log out (TV1-3), text boxes
+}
+
+function distance(a: Box, b: Box): number {
+  const ca = center(a);
+  const cb = center(b);
+  return Math.hypot(ca.x - cb.x, ca.y - cb.y);
+}
+
+// A screen's start point (TV1-1): the marked start with the lowest number (page order breaks ties), else the
+// first control in page order that a fallback may choose.
+export function startIndex(candidates: Candidate[]): number | null {
+  let best: number | null = null;
+  candidates.forEach((c, i) => {
+    if (c.start === null) return;
+    if (best === null || c.start < (candidates[best].start as number)) best = i;
+  });
+  if (best !== null) return best;
+  const first = candidates.findIndex(c => !c.noFallback);
+  return first < 0 ? null : first;
+}
+
+// The focused control vanished (TV1-2): the control nearest where it was, those in `prefer` (its own area) first.
+// Never a control a fallback may not choose; null when there is none.
+export function handOver(candidates: Candidate[], was: Box, prefer: readonly number[]): number | null {
+  const nearest = (pool: number[]): number | null =>
+    pool.reduce<number | null>((best, i) => (best === null || distance(candidates[i].box, was) < distance(candidates[best].box, was) ? i : best), null);
+  const allowed = (i: number) => i >= 0 && i < candidates.length && !candidates[i].noFallback;
+  return nearest(prefer.filter(allowed)) ?? nearest(candidates.map((_, i) => i).filter(allowed));
+}
+
+// --- crossing into another area (feat-tv-remote TV2) ------------------------------------------------
+// When nothing in the pressed direction lines up with the control (a playlist tile is not level with any
+// button in the player panel), the area that lies that way is still the place to go: the nearest area whose
+// box is ahead of the control and overlaps it across. Index into `areas`, or null.
+export function pickArea(areas: Box[], from: Box, direction: Direction): number | null {
+  const o = center(from);
+  const vertical = direction === 'up' || direction === 'down';
+  let best: { index: number; gap: number; across: number } | null = null;
+  areas.forEach((a, index) => {
+    // how far the area's near edge is ahead of the control's centre
+    const gap = direction === 'right' ? a.left - o.x
+      : direction === 'left' ? o.x - (a.left + a.width)
+      : direction === 'down' ? a.top - o.y
+      : o.y - (a.top + a.height);
+    if (gap < 0) return;
+    // the area must overlap the control across the direction of travel
+    const overlap = vertical
+      ? Math.min(a.left + a.width, from.left + from.width) - Math.max(a.left, from.left)
+      : Math.min(a.top + a.height, from.top + from.height) - Math.max(a.top, from.top);
+    if (overlap <= 0) return;
+    const c = center(a);
+    const across = vertical ? Math.abs(c.x - o.x) : Math.abs(c.y - o.y);
+    if (!best || gap < best.gap || (gap === best.gap && across < best.across)) best = { index, gap, across };
+  });
+  return best === null ? null : (best as { index: number }).index;
+}

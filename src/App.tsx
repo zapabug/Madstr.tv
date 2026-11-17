@@ -1,13 +1,18 @@
 import { useEffect } from 'react';
 import { Board } from './components/Board.tsx';
+import { Cursor } from './components/Cursor.tsx';
 import { Dock } from './components/Dock.tsx';
 import { Engine } from './components/Engine.tsx';
+import { LeavePrompt } from './components/LeavePrompt.tsx';
+import { QrLoginPopup } from './components/QrLogin.tsx';
 import { AccountChip } from './components/People.tsx';
 import { Sky } from './components/Sky.tsx';
 import { Viewer } from './components/Viewer.tsx';
 import { MarkIcon } from './components/icons.tsx';
 import { BOARD, isTheater, toHash } from './lib/route.ts';
 import { useFocusNav } from './lib/useFocusNav.ts';
+import { useRemoteKeys } from './lib/useRemoteKeys.ts';
+import { useTextBoxes } from './lib/useTextBoxes.ts';
 import { useRoute } from './lib/useRoute.ts';
 
 function isTyping(target: EventTarget | null): boolean {
@@ -17,6 +22,8 @@ function isTyping(target: EventTarget | null): boolean {
 export function App() {
   const { route, go } = useRoute();
   useFocusNav();
+  useRemoteKeys();
+  useTextBoxes();
 
   // Esc / Backspace walk back to the board, like the Back key on a remote.
   useEffect(() => {
@@ -53,6 +60,9 @@ export function App() {
       {route.page === 'board' ? <Board /> : <Viewer key={`${route.mode}/${route.filter}`} route={route} />}
       {!theater && <Dock />}
       <Engine />
+      <LeavePrompt />
+      <QrLoginPopup />
+      <Cursor />
     </>
   );
 }

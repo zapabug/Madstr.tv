@@ -20,7 +20,10 @@ startEventCache();
 startDurationCache();
 void restoreAccounts();
 registerServiceWorker();
-if (isNativeApp()) void import('./native/nowPlayingNative.ts').then(m => { m.startNativeControls(); });
+if (isNativeApp()) {
+  void import('./native/nowPlayingNative.ts').then(m => { m.startNativeControls(); });
+  void import('./native/tv.ts').then(m => m.startTv());
+}
 else startWebMediaSession();
 
 createRoot(root).render(

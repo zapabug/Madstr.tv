@@ -102,7 +102,8 @@ function RadioPicker({ onClose }: { onClose: () => void }) {
     return (mine ? [mine, ...list.filter(c => c !== mine)] : list).filter(c => !prefs.countries.includes(c));
   }, [seen, mine, prefs.countries]);
 
-  useEffect(() => { box.current?.querySelector<HTMLElement>('[data-nav]')?.focus(); }, []);
+  // Opens on its search box (feat-tv-remote TV1-1); it stays shut until OK (TV4), so no keyboard pops up.
+  useEffect(() => { (box.current?.querySelector<HTMLElement>('input[data-nav]') ?? box.current?.querySelector<HTMLElement>('[data-nav]'))?.focus(); }, []);
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
   };
@@ -125,7 +126,7 @@ function RadioPicker({ onClose }: { onClose: () => void }) {
             </span>
           ))}
         </div>
-        <input className="radio-search" type="search" data-nav placeholder="Find a genre, or type any word (bitcoin, salsa…)" aria-label="Find a genre or type a word"
+        <input className="radio-search" type="search" data-nav data-nav-start="1" placeholder="Find a genre, or type any word (bitcoin, salsa…)" aria-label="Find a genre or type a word"
           value={query} maxLength={40} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(q); }} />
         <div className="radio-genres" role="group" aria-label="Genres, commonest first: press to add">
           {q && !genres.includes(q) && !prefs.genres.includes(q) && (

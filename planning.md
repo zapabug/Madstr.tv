@@ -32,6 +32,27 @@ notes are in `docs/Planning.md` (NDK era, may describe code that is gone).
 - **2026-11-15, remote pass last.** Remote navigation (inputs and sliders `data-nav`) is the final
   stage before deploy, not a blocker for feature work.
 
+## feat-tv-remote (spec `feat-tv-remote.md`, 2026-11-17)
+
+Decided by zapa in the `/vibe-therapist` and `/vibe-feat` sessions, after watching the app on his TV (Vestel
+Cosmos, Android TV 11; the page is 960×540 at 2×):
+
+| Area | Decision |
+| --- | --- |
+| Order | Remote first: TV1 focus never lost, TV2 front door + memory, TV3 keys + leave, TV4 text boxes, TV5 layout, TV6 QR, TV7 cursor |
+| Arrows | Keep moving focus everywhere, also in the player (not seek keys) |
+| Cursor | Hold OK 0.6 s turns on a page-drawn pointer; pointer remotes work as a mouse |
+| ⏪ / ⏩ | Previous / next item in every mode (the remote's prev / next buttons send these keys) |
+| Channel Up / Down | Next / previous picture (the edge arrows); Up = next |
+| Back | TV app only: "Leave Juke⚡tr?" on the board, Stay first; Leave closes the app and the music. Phones unchanged |
+| Pictures on a TV | Whole, on black, at most 2× (number PROPOSED) |
+| Scale on a TV | 1280×720 or 1920×1080: zapa picks on the TV from two test builds |
+| Dependencies | None new; Norigin / mrowser are learned from |
+
+Why: the remote got lost (focus fell to Log out and logged the TV out), the playlist could not reach Play/Pause,
+text boxes opened the keyboard on focus, a held OK repeated the button, and the QR login was half hidden. The
+pointer covers whatever the arrows still cannot reach.
+
 ## Undiscussed decisions (needs lfg review)
 
 Found in the code by the audit of 2026-11-15; none was agreed in the spec. Keep (move into the
@@ -80,7 +101,8 @@ Android play (feat-android-play, 2026-11-15), written into the spec by the agent
 Android native (feat-android-native, 2026-11-15), numbers the agent wrote into the spec:
 - Controls stay 10 minutes while paused; an empty player ends them after 3 s; position resent past 2 s drift.
 - Notification picture: http(s) only, at most 2 MB, scaled to 512 px; texts clipped to 80 characters.
-- Remote fast-forward / rewind use the on-screen steps (+30 s / −10 s).
+- Remote fast-forward / rewind use the on-screen steps (+30 s / −10 s). **Superseded 2026-11-17** (zapa, feat-tv-remote TV3-2):
+  the remote's ⏪ / ⏩ are previous / next.
 - Music mix: default none, at most 8 in 10 tracks, evenly spread, fixed order; when one side runs out the
   rest is the other. Music floor: a track of unknown length stays until measured.
 
@@ -118,11 +140,191 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   April 2025 build of the old app); git history keeps them. `.cursor-tools.env` stays in `.gitignore` as a guard.
   The build splits the libraries into `react` and `nostr` files (no file over 500 kB but hls.js).
 
+### 2026-11-17 · TV1 · How long a new screen waits for its start point
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV1-1 (no number given)
+- **What the spec said:** on a screen change focus goes to the start point.
+- **What I did:** the start point is looked for every 100 ms for up to 1.5 s (the tiles and Play/Pause arrive after the first render); after that the first control a fallback may take (`src/lib/useFocusNav.ts` START_WAIT_MS, START_POLL_MS). A key press or a touch stops the wait.
+- **Why:** focusing the first control at once would land on the picture's edge arrows before Play/Pause exists.
+- **Alternatives:** wait longer (relays can be slow), or move focus again when the start point turns up later.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV1 · A fallback never lands in a text box
+- **Type:** guess
+- **Spec ref:** TV1-1, TV1-2 (spec names only Log in / Log out)
+- **What the spec said:** fallbacks never choose Log in / Log out.
+- **What I did:** text boxes are skipped by fallbacks too (`candidateOf` in `src/lib/useFocusNav.ts`).
+- **Why:** focusing a text box opens the keyboard on the TV (until TV4), which swallows the arrows.
+- **Alternatives:** allow them once TV4 keeps the keyboard shut.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV1 · Lost focus returns to where it was first
+- **Type:** guess
+- **Spec ref:** none: spec silent (TV1-2 covers a control that vanished)
+- **What I did:** when focus is lost but its control is still there (a click on empty space, a blur), the next arrow puts focus back on that control rather than moving from it (`recover`).
+- **Why:** the safest place is the one the person last saw.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV1 · Radio's genre picker still starts on Done
+- **Type:** deviation
+- **Spec ref:** TV1-1 (picker → its search box)
+- **What I did:** the picker keeps focusing Done when it opens (`src/components/Radio.tsx`).
+- **Why:** until TV4, focusing the search box opens the TV keyboard. Switch to the search box in TV4.
+- **Status:** awaiting lfg (to be done in TV4)
+
+### 2026-11-17 · TV2 · Front door before memory
+- **Type:** spec-conflict
+- **Spec ref:** feat-tv-remote TV2-2 vs TV2-EC1
+- **What the spec said:** TV2-2: coming back into an area lands where you were; TV2-EC1: from any playlist tile, Right reaches Play/Pause in one press.
+- **What I did:** an area with a front door is always entered at the door; memory is for areas without one (`entryOf` in `src/lib/useFocusNav.ts`). So the player panel is always entered at Play/Pause, and the playlist returns you to your tile.
+- **Why:** with memory first, leaving the panel through Previous brought you back to Previous next time, which is the complaint this feat started from.
+- **Alternatives:** memory first everywhere (TV2-2 as written).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV2 · The board's rows: a "bar" rule instead of rows as areas
+- **Type:** deviation
+- **Spec ref:** TV2-4
+- **What the spec said:** the board's sticker rows and the player bar are areas, so Down from a sticker goes to the next sticker row.
+- **What I did:** the player bar is marked `data-nav-bar` and is reached only when no other control lies that way (`src/components/Dock.tsx`, `useFocusNav`); sticker rows are not areas.
+- **Why:** same result (Down goes row to row, the bar comes after the last row) without areas that would remember a sticker per row.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV2 · Left from Play/Pause goes to Previous first
+- **Type:** spec-gap
+- **Spec ref:** TV2-EC2 ("from Play/Pause, Left returns to the tile you came from")
+- **What I did:** Left from Play/Pause moves to Previous (it is in the same panel, to the left); the next Left leaves the panel and returns to the tile. Checked that way.
+- **Why:** Previous has to stay reachable; jumping over it would make it unreachable from the left.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · Channel Up / Down and ⏪ / ⏩ act once per press
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV3-2, TV3-3 (silent on holding)
+- **What I did:** a held channel or ⏪ / ⏩ key acts once until it is let go (`src/lib/useRemoteKeys.ts` heldKeys). In the app the native media keys already act once (`MainActivity`: repeatCount 0 only).
+- **Why:** the TV repeats held keys; flicking through ten pictures or tracks by accident is worse than pressing again.
+- **Alternatives:** let a held key keep going.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · The leave pop-up's words and the music note
+- **Type:** guess
+- **Spec ref:** TV3-4 (title and buttons given)
+- **What I did:** "Leave Juke⚡tr?" with the line "The music stops when you leave.", Stay (focused) and Leave, styled like Radio's genre picker (`src/components/LeavePrompt.tsx`). Leave pauses the player before closing the app. If the page cannot show the pop-up, Back keeps the old behaviour (`MainActivity.goBack`).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · Fields keep Enter
+- **Type:** guess
+- **Spec ref:** TV3-1
+- **What I did:** OK acting on release applies to buttons and links; text boxes, selects and other fields keep Enter as it was (a text box submits on Enter).
+- **Why:** a text box's Enter is the keyboard's "go", not a press.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV3 · Not run on a device
+- **Type:** fix (verification gap)
+- **Spec ref:** TV3-EC2, TV3-EC4, TV3-EC5
+- **What I did:** the native parts (⏪ / ⏩ in `MediaHub.actionForKey`, the Tv plugin, Back on the board) compile (`gradlew compileDebugJavaWithJavac`) but were not run on the TV or the phone (zapa: no screenshots, he tests later). The page side of every TV3 check passes headless.
+- **Status:** awaiting zapa's test on the TV and the phone
+
+### 2026-11-17 · TV4 · Locked means read-only; a tap opens at once; typing opens too
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV4-1, TV4-2
+- **What the spec said:** focus by an arrow shows focus without the keyboard; OK opens it.
+- **What I did:** any focus that is not a tap / click on the box (within 1 s, `POINTER_FOCUS_MS`) locks it by making it read-only (`src/lib/useTextBoxes.ts`). OK unlocks it, re-focuses it inside the key press and calls the VirtualKeyboard API where the WebView has it. A tap or click opens it at once (phones, mouse); typing a character on a locked box opens it and keeps the key (computer keyboards).
+- **Why:** read-only is the one way that keeps the Android keyboard shut on focus everywhere; the tap and typing rules keep phones and computers as they were.
+- **Alternatives:** `inputmode="none"` until OK; only on a TV (`data-tv`).
+- **Status:** awaiting lfg; whether the keyboard comes up on OK is only known on the TV
+
+### 2026-11-17 · TV4 · Back with the keyboard up
+- **Type:** spec-gap
+- **Spec ref:** TV4-2 ("Back ... closes the keyboard and leaves focus on the box")
+- **What I did:** nothing extra: on Android the keyboard takes Back for itself and closes; the box stays open (editable) and the arrows Up / Down leave it as before (R8). It locks again when focus leaves it.
+- **Status:** awaiting zapa's test on the TV
+
+### 2026-11-17 · TV4 · Radio's picker opens on the search box (TV1 deviation closed)
+- **Type:** fix
+- **Spec ref:** TV1-1
+- **What I did:** the picker focuses its search box (marked `data-nav-start`), locked, and a screen's start point no longer overrides focus that a pop-up placed itself (`focusStart` in `useFocusNav.ts`).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · How the TV page width is set, and 1280 until zapa picks
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV5-1 (OPEN: zapa picks 1280 or 1920 from two test builds)
+- **What I did:** on a TV only, the app turns on the WebView's wide viewport (`MainActivity`), and the page sets its viewport tag to `width=1280` (`src/native/tv.ts`, `src/lib/tvWidth.ts`); a build with `VITE_TV_WIDTH=1920` lays it out 1920. Checked on zapa's TV over DevTools: the page is 1280×720 (it was 960×540). Two test APKs: `android/app/build/outputs/apk/debug/juketr-tv1280-debug.apk` and `juketr-tv1920-debug.apk` (debug-signed; the TV has the 1280 one).
+- **Status:** awaiting zapa's pick on the TV
+
+### 2026-11-17 · TV5 · Picture limit, focus ring, video fit
+- **Type:** guess
+- **Spec ref:** TV5-2, TV5-4 (PROPOSED numbers)
+- **What I did:** pictures at most 2× their own size (the slideshow notes each picture's size; `styles.css` caps it), videos `contain` on black, focus ring 4 px white with a black frame (2 px inside, 2 px outside). All TV only.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · Two fixes that apply everywhere
+- **Type:** fix
+- **Spec ref:** TV5-5, TV5-6
+- **What I did:** the tile tooltip hides whenever the theatre's panels hide (it was drawn outside the panel, so it stayed); a control scrolled into view is kept above the player bar (`scroll-padding-bottom` while the bar shows). Neither changes how anything looks; both apply on phones and desktop too.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · People cards as focus stops
+- **Type:** guess
+- **Spec ref:** TV5-6 (OK on a card follows: PROPOSED)
+- **What I did:** each card is one arrow stop (everywhere); OK on it follows / unfollows; a tap or click on the card does nothing, only its Follow button does (so phones behave as before). The Follow button is no longer an arrow stop.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV5 · Found, not fixed: People keeps re-sorting while you browse
+- **Type:** spec-gap
+- **Spec ref:** none: spec silent
+- **What I saw:** while relays answer, People's cards grow (pictures arrive) and change order, so Down can land on another card than the one below, and a focused card can be pushed under the bar. Once the list holds still, all 30 cards are reachable and stay in view (checked at 1280 and 1920).
+- **Alternatives:** freeze the order once the person starts moving through it; keep the focused card in view when the layout shifts.
+- **Status:** awaiting lfg (a candidate for a later milestone)
+
+### 2026-11-17 · TV6 · The pop-up opens from the header's Log in; the People card stays as it is
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV6-1 ("Log in opens a full-screen pop-up")
+- **What I did:** on a TV the header chip "Log in" opens the pop-up instead of going to People (`AccountChip`, `src/components/QrLogin.tsx`); the login card on People (with its own QR button) is unchanged. The QR is `min(80vh, 55vw)` square (74 % of the height at 1280×720), with "Log in", a line to scan it with a signer app, "Waiting for it to answer…" and Close.
+- **Alternatives:** the People card's "Log in with a QR code" opens the pop-up on a TV too.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV6 · Back closes a pop-up first
+- **Type:** guess
+- **Spec ref:** TV6-1 ("Back closes it")
+- **What I did:** the app's Back first calls `window.jukeBack()` (`src/lib/backStack.ts`, 2 tests); a pop-up registered there closes and Back stops. Only the QR pop-up registers; the leave pop-up keeps its own Back (TV3-4) and Radio's genre picker keeps today's behaviour.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV6 · Not logged in for real
+- **Type:** fix (verification gap)
+- **Spec ref:** TV6-EC1, TV6-2
+- **What I did:** the pop-up, its size, focus and closing are checked headless; scanning it with zapa's signer and the pop-up closing after login need zapa on the TV.
+- **Status:** awaiting zapa's test
+
+### 2026-11-17 · TV7 · Two numbers the spec did not give
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV7-2, TV7-4
+- **What I did:** an arrow counts as held after 200 ms (then it moves on its own at the ramp's speed); the edge scrolls at 600 px/s (`CURSOR.holdDelayMs`, `CURSOR.scrollPxPerS` in `src/lib/cursor.ts`). The spec's own numbers (24 px, 300 → 1200 px/s over 1 s, 48 px) are as written and tested.
+- **Status:** awaiting lfg (tune on the TV)
+
+### 2026-11-17 · TV7 · Where the pointer starts, how it looks, what a click does
+- **Type:** guess
+- **Spec ref:** TV7-1, TV7-3; OPEN "after a cursor click, stay in cursor mode" (default: stay)
+- **What I did:** it starts on the middle of the focused control (else the middle of the screen); a white arrow with a black edge; a click sends pointer and mouse events at its tip, focuses what is focusable there, then clicks; after a click it stays on (the OPEN default).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV7 · Holding OK in an open text box does not start the pointer
+- **Type:** spec-gap
+- **Spec ref:** TV7-1, TV4
+- **What I did:** a text box keeps Enter for itself (TV3 / TV4), so holding OK while typing in one does not turn the pointer on. From a locked box (just arrived by the arrows) it does.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV7 · Holding OK now always means the pointer
+- **Type:** deviation (follows from the spec)
+- **Spec ref:** TV3-1, TV7-1
+- **What I did:** a hold of OK anywhere turns the pointer on (it used to repeat the button, before TV3). The TV3 check was updated to turn it off again with Esc.
+- **Status:** awaiting lfg
+
 ## Open questions
 
 - (none open)
 
 ## Change log
+
+- 2026-11-17: feat-tv-remote spec (TV1-TV7) written from the session on zapa's TV; finished specs moved to `archive/`.
 
 - 2026-11-15: audit (`audits/audit-2026-11-15.md`); zapa's answers recorded in the spec
   (§Decided after the audit) and AGENTS.md; RSS and R8 milestones added; this file, `build.md`

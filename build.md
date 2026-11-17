@@ -604,3 +604,149 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
   pushed. Madstr.tv main pushed to GitHub.
 - Re-running make-icons.sh rewrites PNGs whose pixels did not change (ImageMagick dates them); the web icons were
   checked (0 pixels differ) and left out of the commit.
+
+# feat-tv-remote (spec: feat-tv-remote.md)
+
+| Milestone | Title | Status |
+| --- | --- | --- |
+| TV1 | Focus never lost | [x] zapa: works on the TV (2026-11-17) |
+| TV2 | Front door + memory | [x] zapa: works on the TV (2026-11-17) |
+| TV3 | Remote keys + leave on Back | [x] zapa: works on the TV (2026-11-17) |
+| TV4 | Text boxes wait for OK | [x] zapa: works on the TV (2026-11-17) |
+| TV5 | TV layout | [x] zapa: works on the TV at 1280 (2026-11-17) |
+| TV6 | QR login pop-up | [x] zapa: logged in on the TV (2026-11-17) |
+| TV7 | Hold OK for a cursor | [x] zapa: works on the TV (2026-11-17) |
+
+## TV1 — Focus never lost [built + machine-verified, awaiting zapa on the TV]
+Commit: dcc8b59
+Spec: feat-tv-remote.md TV1-1 … TV1-4
+
+- `src/lib/focusNav.ts`: pure `startIndex` (lowest `data-nav-start`, else the first control a fallback may take) and
+  `handOver` (nearest control, its own area first, never a `noFallback` one); 4 new tests (230/230 in all).
+- `src/lib/useFocusNav.ts`: on every screen change (hashchange) and at start-up focus goes to the start point; a
+  MutationObserver hands focus over when the focused control vanishes or is disabled; an arrow with focus lost
+  returns it instead of jumping to the first control.
+- Marks: Play/Pause `data-nav-start=1`, the first playlist tile `2`, People's Everything `1`; Log in / Log out
+  `data-nav-nofallback`.
+- Headless at 960×540 2× with real key events (`check-tv1*.mjs`, DOM only): start points on board, Music,
+  Podcasts, Radio, Watch, People, Make it yours, back to the board; blur then arrow returns; a played tile hands
+  focus to a neighbour (Watch); picking a genre keeps focus in the picker and Down ×25 stays inside; walks on four
+  screens never reach Log in / Log out. All pass.
+- Seen for TV5: at 960×540 the player bar covers People's category chips, so its Next sits level with Everything.
+- ⚠ 4 undiscussed decisions, see planning.md.
+
+## TV2 — Front door + memory [built + machine-verified, awaiting zapa on the TV]
+Commit: 58cd12d
+Spec: feat-tv-remote.md TV2-1 … TV2-4
+
+- `src/lib/focusNav.ts`: pure `pickArea` (the nearest area ahead that overlaps across), 2 tests (232/232 in all).
+- `src/lib/useFocusNav.ts`: crossing into an area lands on its front door (`data-nav-default`), else where you were in
+  it; when nothing lines up that way, `pickArea` still finds the area to go into. The player bar
+  (`data-nav-bar`) is reached only when no other control lies that way.
+- Marks: Play/Pause in the player panel `data-nav-default`; the Dock `data-nav-bar`.
+- Headless with real keys (`check-tv2.mjs`), at 960×540 2× and at 1920×1080: Right from the last tile of three
+  rows lands on Pause; Left, Left (via Previous) returns to that tile; coming back after leaving from Next lands on
+  Pause; board Down goes sticker → sticker (desktop: the bar comes after the last row). All pass. TV1 checks re-run.
+- ⚠ 3 undiscussed decisions, see planning.md.
+
+## TV3 — Remote keys + leave on Back [built + machine-verified (page side); native part compiled, not run on a device]
+Commit: 1e91ad1
+Spec: feat-tv-remote.md TV3-1 … TV3-5
+
+- `src/lib/okKey.ts` (pure, 6 tests): a tap of OK presses once on release; a hold of 0.6 s (`OK_HOLD_MS`) is a hold,
+  never a press; the TV's repeated key-downs never press again. `src/lib/useRemoteKeys.ts` feeds it and announces a
+  hold as `juke:ok-hold` (for TV7). Fields keep Enter.
+- Channel Up / Down click the picture's edge arrows (next / previous picture, or video) and no longer scroll.
+- ⏪ / ⏩: `MediaHub.actionForKey` maps `KEYCODE_MEDIA_REWIND` / `FAST_FORWARD` to previous / next; in a browser the
+  page maps `MediaRewind` / `MediaFastForward` the same. Lock-screen / Bluetooth seek actions unchanged.
+- Leave on Back: `TvPlugin.java` (`info` → is the UI mode television, `leave` → finish the activity, which ends the
+  music in `onDestroy`); `src/native/tv.ts` marks `<html data-tv>`; `MainActivity.goBack` on a TV calls
+  `window.jukeAskLeave()` instead of backgrounding; `LeavePrompt.tsx` shows "Leave Juke⚡tr?" with Stay focused.
+  Phones keep backgrounding with the music on.
+- Headless (`check-tv3.mjs`, 960×540 2×): OK opens a sticker; OK held 2 s on Next with 50 ms repeats presses
+  nothing, a tap presses once; ⏩ / ⏪ in the page go next / back; Channel Up changes the picture (checked over four
+  presses), Channel Down does not scroll; the pop-up opens on Stay, Right reaches Leave, arrows stay inside, a
+  second Back and Esc answer Stay, focus returns. All pass. 238/238 tests, lint, build, Java compiles.
+- Not run on a device: ⏪ / ⏩ in the app, the Tv plugin, Back on the TV and on the phone.
+- ⚠ 4 undiscussed decisions, see planning.md.
+
+## TV4 — Text boxes wait for OK [built + machine-verified; whether the TV keyboard opens on OK is for zapa's test]
+Commit: 2b2c5f3
+Spec: feat-tv-remote.md TV4-1 … TV4-3
+
+- `src/lib/textLock.ts` (pure, 5 tests): focus not by a tap locks a box; OK opens it; typing opens it and keeps the
+  key; Enter in an open box locks it again after it did its job.
+- `src/lib/useTextBoxes.ts`: locked = read-only + `data-nav-locked`; `useFocusNav` treats a locked box like any
+  control (every arrow moves on). OK re-focuses the box inside the key press and asks the VirtualKeyboard API to
+  show. Radio's genre picker opens on its search box (TV1-1); a start point no longer overrides a pop-up's own focus.
+- Headless (`check-tv4.mjs`, 960×540 2×): Down through Make it yours stops on 3 kinds of text box, always locked, and
+  reaches the last control; Up leaves it; OK opens the feed box, typing works, Enter locks it again with focus
+  staying, Down moves on; typing on a locked box opens it (computer keyboard); a click opens a box at once; the
+  picker opens on its locked search box, Down leaves it, OK opens it. All pass; TV1 and TV3 checks re-run. 243/243.
+- Seen for TV5: the lower hashtag boxes sit under the player bar; scrolling them "into view" leaves them behind it.
+- ⚠ 3 undiscussed decisions, see planning.md.
+
+## TV5 — TV layout [built + machine-verified; 1280 checked on zapa's TV; scale pick pending]
+Commit: 4e88c5f
+Spec: feat-tv-remote.md TV5-1 … TV5-6
+
+- Scale: `MainActivity` turns on the wide viewport on a TV only; `src/native/tv.ts` sets the viewport to
+  `tvWidth()` (`src/lib/tvWidth.ts`, 1 test): 1280, or 1920 in a `VITE_TV_WIDTH=1920` build. On zapa's TV (DevTools,
+  no screenshots): 1280×720, `data-tv` set, focus on the first Listen sticker (TV1 on a device).
+  Test APKs (debug-signed): `android/app/build/outputs/apk/debug/juketr-tv1280-debug.apk` (installed on the TV) and
+  `juketr-tv1920-debug.apk` (checked: it passes 1920).
+- Pictures (TV): whole, centred on black, at most 2× their own size (`Slideshow.tsx` notes the size; CSS caps it);
+  theatre video `contain`. Focus ring (TV): 4 px white framed in black. People: each card is a focus stop, OK follows.
+  Everywhere: the tile tooltip hides with the panels; scroll-padding keeps focused controls above the player bar.
+- Headless (`check-tv5.mjs` in TV mode at 1280×720 1.5× and 1920×1080; `check-tv5-ec6.mjs`): a 1366 px picture fits
+  whole (0.44×), a 376 px one stops at 2×; Watch tiles and titles fit the playlist (Podcasts / Radio had no tiles in
+  the test profile); 4 px white ring; tooltip shows on focus and goes with the panels; all 30 People cards reachable,
+  each fully above the bar (once the list holds still); desktop (cover) and phone (contain) unchanged, no TV ring.
+  244/244 tests, lint, build.
+- Found, not fixed: People grows and re-sorts while relays answer, which moves cards under the remote.
+- ⚠ 5 undiscussed decisions, see planning.md.
+
+## TV6 — QR login pop-up [built + machine-verified; scanning and logging in for zapa's test]
+Commit: c65b984
+Spec: feat-tv-remote.md TV6-1 … TV6-3
+
+- `src/components/QrLogin.tsx`: on a TV the header's Log in opens a full-screen pop-up with the login QR
+  (`startQrLogin`, the same Nostr Connect login as the People card) as large as fits, a line to scan it, Close
+  focused first; it closes itself when the signer answers, and cancels the wait when closed.
+- `src/lib/backStack.ts` (2 tests): Back in the app calls `window.jukeBack()` first and stops when a pop-up closed
+  (`MainActivity.goBack` → `goBackPage`). `src/lib/qrPopup.ts`: the pop-up's state and `isTv()`.
+- Headless (`check-tv6.mjs`, TV mode at 1280×720): OK on Log in opens it, the whole QR 534 px of 720 (74 %), Close
+  focused, arrows stay inside, Back closes it and focus returns to Log in, Back with nothing open reports none, Esc
+  closes; not a TV: Log in goes to People. All pass; TV3 re-run. 246/246, lint, build, Java compiles.
+- ⚠ 3 undiscussed decisions, see planning.md.
+
+## TV7 — Hold OK for a cursor [built + machine-verified, awaiting zapa on the TV]
+Commit: f94ae4d
+Spec: feat-tv-remote.md TV7-1 … TV7-6
+
+- `src/lib/cursor.ts` (pure, 5 tests): 24 px a tap; held, 300 rising to 1200 px/s over 1 s; stays on screen; 48 px
+  edge zones. `src/lib/cursorState.ts`, `src/lib/cursorClick.ts`, `src/components/Cursor.tsx`: the pointer drawn by
+  the page; a hold of OK (`juke:ok-hold`) turns it on or off; while on, the arrows move it (not focus), OK clicks
+  under it (`useRemoteKeys`), it scrolls what scrolls at the edge, Back (`backStack`) or Esc turn it off and focus
+  goes to the control under it. Nothing in the app is hover-only (TV7-6; the tile tooltip also shows on focus).
+- Headless (`check-tv7.mjs`, TV mode 1280×720): hold OK → on without pressing the sticker; Right tap +24 px; held
+  1.2 s → 1085 px; focus unmoved; steered onto the Podcasts sticker, OK opened it; Down to the bottom edge scrolled
+  the board 0 → 834; hold again, Back, Esc each turn it off; arrows move focus again after. All pass. Every earlier
+  check re-run (TV3's updated: a hold now turns the pointer on). 251/251, lint, build.
+- ⚠ 4 undiscussed decisions, see planning.md.
+
+## feat-tv-remote — state at the end of the run (2026-11-17)
+- TV1-TV7 built and machine-checked; nothing confirmed by zapa yet. 26 undiscussed decisions in planning.md.
+- On zapa's TV (192.168.1.66): the debug build with everything, laid out 1280×720 (checked over DevTools: TV mode
+  on, focus on the first sticker). To try 1920 instead: `adb install -r
+  android/app/build/outputs/apk/debug/juketr-tv1920-debug.apk` (both are debug-signed; the zapstore release needs
+  an uninstall first).
+- Not run on a device: ⏪ / ⏩ and Back in the app, the leave pop-up closing the app, the TV keyboard on OK, a real
+  QR login, the pointer with the real remote; the phone's Back unchanged.
+- Headless checks live in the session scratchpad (`check-tv1*.mjs` … `check-tv7.mjs`, `drive.mjs`); they read the
+  DOM only, no screenshots.
+
+## Release 1.6 — the TV remote, on zapstore and pleb.world [2026-11-17]
+- zapa tried the debug build on his TV: "all work" (the QR login failure was his phone on the wrong network; the
+  relays refused the signer's reply as expired, nothing in the build). TV size stays 1280 (no 1920 pick asked for).
+- versionCode 7 / 1.6, CHANGELOG 1.6; feat/tv-remote merged into main.

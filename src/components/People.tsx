@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { PersonIcon } from './icons.tsx';
+import { isTv, qrPopup } from '../lib/qrPopup.ts';
 import { CATEGORIES, type Category } from '../lib/creators.ts';
 import { loginWithBunker, loginWithSigner, logout, signerAvailable, startQrLogin, type QrLogin } from '../lib/accounts.ts';
 import { isHttpUrl } from '../lib/media.ts';
@@ -23,13 +24,14 @@ export function PersonName({ pubkey }: { pubkey: string }) {
   return <>{shortName(pubkey, profile?.displayName)}</>;
 }
 
-// The small chip in the header: log out, or a way to log in.
+// The small chip in the header: log out, or a way to log in. On a TV, Log in opens the QR pop-up
+// (feat-tv-remote TV6); elsewhere it goes to People, where the login card is.
 export function AccountChip() {
   const account = useAccount();
   const profile = useProfile(account?.pubkey);
   return account
-    ? <button type="button" className="chip-link" data-nav title={`Logged in as ${shortName(account.pubkey, profile?.displayName)}`} onClick={() => { void logout(); }}>Log out</button>
-    : <a className="chip-link" href="#/people/follow" data-nav>Log in</a>;
+    ? <button type="button" className="chip-link" data-nav data-nav-nofallback title={`Logged in as ${shortName(account.pubkey, profile?.displayName)}`} onClick={() => { void logout(); }}>Log out</button>
+    : <a className="chip-link" href="#/people/follow" data-nav data-nav-nofallback onClick={e => { if (isTv()) { e.preventDefault(); qrPopup.open(); } }}>Log in</a>;
 }
 
 export function LoginPanel() {
@@ -121,7 +123,7 @@ export function FollowView() {
         <h2>Creators to follow</h2>
         <p className="own-note">People you do not follow yet, ranked by what they publish: friends of the people you follow first, then others.</p>
         <div className="chips creator-chips" role="group" aria-label="Rank by">
-          <button type="button" data-nav aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Everything</button>
+          <button type="button" data-nav data-nav-start="1" aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Everything</button>
           {CATEGORIES.map(c => (
             <button key={c.id} type="button" data-nav aria-pressed={category === c.id} title={c.hint} onClick={() => setCategory(c.id)}>{c.emoji} {c.label}</button>
           ))}
@@ -132,7 +134,10 @@ export function FollowView() {
           {creators.map(c => {
             const isFollowing = following?.has(c.pubkey) ?? false;
             return (
-              <li key={c.pubkey} className="creator-card">
+              // The card is one focus stop (feat-tv-remote TV5-6); OK on it follows / unfollows. A tap on the card does
+              // nothing (detail > 0): only the button follows by touch or mouse, as before.
+              <li key={c.pubkey} className="creator-card" data-nav tabIndex={0}
+                onClick={e => { if (e.detail === 0 && e.target === e.currentTarget && account && !pending.includes(c.pubkey)) void run(c.pubkey, isFollowing); }}>
                 {c.mutual > 0 && <span className="note">{c.mutual} of your follows</span>}
                 <Avatar pubkey={c.pubkey} />
                 <h3 className="card-name"><PersonName pubkey={c.pubkey} /></h3>
@@ -141,7 +146,7 @@ export function FollowView() {
                 </p>
                 <p className="card-sub">{c.latest}</p>
                 <div className="card-actions">
-                  <button type="button" className="chip-btn solid" data-nav disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
+                  <button type="button" className="chip-btn solid" tabIndex={-1} disabled={!account || pending.includes(c.pubkey)} title={account ? undefined : 'Log in to follow'}
                     onClick={() => { void run(c.pubkey, isFollowing); }}>
                     {pending.includes(c.pubkey) ? '…' : isFollowing ? 'Unfollow' : 'Follow'}
                   </button>

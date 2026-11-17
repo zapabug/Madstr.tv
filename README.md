@@ -75,6 +75,6 @@ assets/brand/   the logo sources
 scripts/        deploy, icons, release signing, relay probe
 ```
 
-Each feature has its spec in a `feat-*.md` file (the docs win over the code); `build.md` records what was built
+Each feature has its spec in a `feat-*.md` file, finished ones in `archive/` (the docs win over the code); `build.md` records what was built
 and checked, `planning.md` why, and `Status.md` where things stand. `docs/` holds notes from the first (NDK)
 version of the app.
