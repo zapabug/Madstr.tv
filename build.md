@@ -609,13 +609,13 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 
 | Milestone | Title | Status |
 | --- | --- | --- |
-| TV1 | Focus never lost | built + machine-verified; awaiting zapa on the TV |
-| TV2 | Front door + memory | built + machine-verified; awaiting zapa on the TV |
-| TV3 | Remote keys + leave on Back | built + machine-verified (page); native not run on a device |
-| TV4 | Text boxes wait for OK | built + machine-verified; the TV keyboard not yet seen |
-| TV5 | TV layout | built + machine-verified; 1280 runs on zapa's TV; zapa to pick 1280 or 1920 |
-| TV6 | QR login pop-up | built + machine-verified; login itself for zapa's test |
-| TV7 | Hold OK for a cursor | built + machine-verified; awaiting zapa on the TV |
+| TV1 | Focus never lost | [x] zapa: works on the TV (2026-11-17) |
+| TV2 | Front door + memory | [x] zapa: works on the TV (2026-11-17) |
+| TV3 | Remote keys + leave on Back | [x] zapa: works on the TV (2026-11-17) |
+| TV4 | Text boxes wait for OK | [x] zapa: works on the TV (2026-11-17) |
+| TV5 | TV layout | [x] zapa: works on the TV at 1280 (2026-11-17) |
+| TV6 | QR login pop-up | [x] zapa: logged in on the TV (2026-11-17) |
+| TV7 | Hold OK for a cursor | [x] zapa: works on the TV (2026-11-17) |
 
 ## TV1 — Focus never lost [built + machine-verified, awaiting zapa on the TV]
 Commit: dcc8b59
@@ -745,3 +745,8 @@ Spec: feat-tv-remote.md TV7-1 … TV7-6
   QR login, the pointer with the real remote; the phone's Back unchanged.
 - Headless checks live in the session scratchpad (`check-tv1*.mjs` … `check-tv7.mjs`, `drive.mjs`); they read the
   DOM only, no screenshots.
+
+## Release 1.6 — the TV remote, on zapstore and pleb.world [2026-11-17]
+- zapa tried the debug build on his TV: "all work" (the QR login failure was his phone on the wrong network; the
+  relays refused the signer's reply as expired, nothing in the build). TV size stays 1280 (no 1920 pick asked for).
+- versionCode 7 / 1.6, CHANGELOG 1.6; feat/tv-remote merged into main.

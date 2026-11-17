@@ -3,6 +3,22 @@
 Release notes for the Android app on zapstore (`zapstore.yaml` → `release_notes`). The web app at
 pleb.world/jukestr gets the same changes as they are deployed.
 
+## [1.6] - 2026-11-17
+
+Juke⚡tr on the TV, with the remote that came with it.
+
+- **The remote never gets lost**: every screen starts on a sensible button, and focus never lands on Log out by
+  itself.
+- **Playlist to Play/Pause in one press**, and Left brings you back to where you were.
+- **Hold OK for a pointer** the arrows move, for anything the arrows cannot reach. Holding OK no longer repeats
+  a button.
+- **The remote's keys**: prev / next skip tracks, Channel Up / Down change the picture.
+- **Text boxes wait for OK**, so the TV keyboard no longer pops up on its own.
+- **Back asks before leaving** on a TV, and leaving stops the music.
+- **A TV layout**: laid out for the TV instead of doubled up, pictures shown whole, a focus ring you can see from
+  the couch, People cards you can move between.
+- **Log in on a TV with a big QR code** to scan with your phone's signer.
+
 ## [1.5] - 2026-11-17
 
 The app is now called **Juke⚡tr**: your Nostr jukebox.
