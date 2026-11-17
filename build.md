@@ -584,7 +584,8 @@ Commit: fb46755
 Spec: feat-phone-inline.md P28, P29
 
 - Home headline "Your Nostr Jukebox" ("Nostr" in the gradient), zapa's pick from four suggestions.
-- The S of Juke⚡tr (header, player top line) is the logo's bolt (`MarkIcon boltOnly`), sized in em from the text.
+- The S of Juke⚡tr (header, player top line) is the full brand mark (`MarkIcon`, after zapa: "its not using the svg";
+  the bolt alone was tried first), 1.55 em, a little over the text.
 - README rewritten for the app as it is (Radio, the logo, phones, Make it yours, shipping, icons, layout).
 - `CHANGELOG.md`: release notes 1.0 to 1.5 (1.5 marked unreleased; give it its date when it ships);
   `zapstore.yaml` reads it (`release_notes`, as zsp documents), with a new summary, description and a radio tag.

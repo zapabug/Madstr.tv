@@ -308,7 +308,7 @@ makes every size from them.
   Android's adaptive and round icons), the mark alone sits inside the safe zone on the picture's deep purple
   (`#3D034E`), so its points are not cut off. Android's old square icon is the picture.
 - The browser tab's icon (`favicon.svg`) is the mark. The S of the Juke⚡tr wordmark (the header and the player
-  screen's top line) is the logo's bolt, not the ⚡ emoji (zapa: "the lighting bolt on jukestr top scren etc use the
+  screen's top line) is the brand mark (triangle and bolt, the SVG), not the ⚡ emoji (zapa: "the lighting bolt on jukestr top scren etc use the
   brand mark aswell"). The Android start screen shows the mark in place of the old
   orange bolt, on the app's dark background.
 - **Play**: the big play button shows the mark instead of a plain triangle, **oversized** (zapa: "the play icon
