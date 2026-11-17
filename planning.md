@@ -172,6 +172,30 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **Why:** until TV4, focusing the search box opens the TV keyboard. Switch to the search box in TV4.
 - **Status:** awaiting lfg (to be done in TV4)
 
+### 2026-11-17 · TV2 · Front door before memory
+- **Type:** spec-conflict
+- **Spec ref:** feat-tv-remote TV2-2 vs TV2-EC1
+- **What the spec said:** TV2-2: coming back into an area lands where you were; TV2-EC1: from any playlist tile, Right reaches Play/Pause in one press.
+- **What I did:** an area with a front door is always entered at the door; memory is for areas without one (`entryOf` in `src/lib/useFocusNav.ts`). So the player panel is always entered at Play/Pause, and the playlist returns you to your tile.
+- **Why:** with memory first, leaving the panel through Previous brought you back to Previous next time, which is the complaint this feat started from.
+- **Alternatives:** memory first everywhere (TV2-2 as written).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV2 · The board's rows: a "bar" rule instead of rows as areas
+- **Type:** deviation
+- **Spec ref:** TV2-4
+- **What the spec said:** the board's sticker rows and the player bar are areas, so Down from a sticker goes to the next sticker row.
+- **What I did:** the player bar is marked `data-nav-bar` and is reached only when no other control lies that way (`src/components/Dock.tsx`, `useFocusNav`); sticker rows are not areas.
+- **Why:** same result (Down goes row to row, the bar comes after the last row) without areas that would remember a sticker per row.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV2 · Left from Play/Pause goes to Previous first
+- **Type:** spec-gap
+- **Spec ref:** TV2-EC2 ("from Play/Pause, Left returns to the tile you came from")
+- **What I did:** Left from Play/Pause moves to Previous (it is in the same panel, to the left); the next Left leaves the panel and returns to the tile. Checked that way.
+- **Why:** Previous has to stay reachable; jumping over it would make it unreachable from the left.
+- **Status:** awaiting lfg
+
 ## Open questions
 
 - (none open)

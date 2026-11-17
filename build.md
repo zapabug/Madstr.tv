@@ -610,8 +610,8 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 | Milestone | Title | Status |
 | --- | --- | --- |
 | TV1 | Focus never lost | built + machine-verified; awaiting zapa on the TV |
-| TV2 | Front door + memory | NEXT — build |
-| TV3 | Remote keys + leave on Back | planned |
+| TV2 | Front door + memory | built + machine-verified; awaiting zapa on the TV |
+| TV3 | Remote keys + leave on Back | NEXT — build |
 | TV4 | Text boxes wait for OK | planned |
 | TV5 | TV layout | planned |
 | TV6 | QR login pop-up | planned |
@@ -634,3 +634,17 @@ Spec: feat-tv-remote.md TV1-1 … TV1-4
   screens never reach Log in / Log out. All pass.
 - Seen for TV5: at 960×540 the player bar covers People's category chips, so its Next sits level with Everything.
 - ⚠ 4 undiscussed decisions, see planning.md.
+
+## TV2 — Front door + memory [built + machine-verified, awaiting zapa on the TV]
+Commit: 58cd12d
+Spec: feat-tv-remote.md TV2-1 … TV2-4
+
+- `src/lib/focusNav.ts`: pure `pickArea` (the nearest area ahead that overlaps across), 2 tests (232/232 in all).
+- `src/lib/useFocusNav.ts`: crossing into an area lands on its front door (`data-nav-default`), else where you were in
+  it; when nothing lines up that way, `pickArea` still finds the area to go into. The player bar
+  (`data-nav-bar`) is reached only when no other control lies that way.
+- Marks: Play/Pause in the player panel `data-nav-default`; the Dock `data-nav-bar`.
+- Headless with real keys (`check-tv2.mjs`), at 960×540 2× and at 1920×1080: Right from the last tile of three
+  rows lands on Pause; Left, Left (via Previous) returns to that tile; coming back after leaving from Next lands on
+  Pause; board Down goes sticker → sticker (desktop: the bar comes after the last row). All pass. TV1 checks re-run.
+- ⚠ 3 undiscussed decisions, see planning.md.

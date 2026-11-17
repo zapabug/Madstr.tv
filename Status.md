@@ -13,7 +13,7 @@ last-worked: 2026-11-17
 
 ## Report
 Feat: TV remote and TV layout (being built on feat/tv-remote)
-State: Spec written with zapa after watching the app on his Android TV, and being built in order. Done so far: focus never gets lost and never falls onto Log out (built and machine-checked, waiting for zapa to try it on the TV). Still to come: the playlist reaching Play/Pause, the remote's keys and the leave pop-up, text boxes that wait for OK, the TV layout, the QR login pop-up, and holding OK for a pointer.
+State: Spec written with zapa after watching the app on his Android TV, and being built in order. Done so far, built and machine-checked, waiting for zapa to try them on the TV: focus never gets lost and never falls onto Log out, and the playlist reaches Play/Pause in one press with Left bringing you back. Still to come: the remote's keys and the leave pop-up, text boxes that wait for OK, the TV layout, the QR login pop-up, and holding OK for a pointer.
 ────────────────────────────────────────
 Feat: The name Juke⚡tr, the logo and "Your Nostr Jukebox"
 State: Live on pleb.world/jukestr and published as Android 1.5 on zapstore (2026-11-17; zapstore showed it as pending at first). The logo is on every app icon, the start screen, the notification and the Android TV banner; the Play button is the logo, oversized, and while something plays it shows the bolt alone; the S of Juke⚡tr is the brand mark; the home screen says "Your Nostr Jukebox". Needs zapa to install 1.5 on his phone and TV and say it works.
