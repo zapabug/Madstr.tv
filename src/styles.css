@@ -3312,3 +3312,18 @@ a.chip-btn {
   margin: 0;
   color: var(--muted);
 }
+
+/* Play is the logo, so it is bigger than its button and reaches out past the dome (zapa, feat-phone-inline §P29) */
+.dock-play .mark-play {
+  flex: none;
+  width: 135%;
+  height: 135%;
+  margin: -17.5%;
+  position: relative;
+  z-index: 1;
+  translate: 4% 0; /* the triangle points right: its weight sits left of the box's centre */
+  pointer-events: none;
+}
+.dock-play {
+  overflow: visible;
+}

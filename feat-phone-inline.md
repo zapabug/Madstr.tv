@@ -307,7 +307,9 @@ makes every size from them.
   (`#3D034E`), so its points are not cut off. Android's old square icon is the picture.
 - The browser tab's icon (`favicon.svg`) is the mark. The Android start screen shows the mark in place of the old
   orange bolt, on the app's dark background.
-- **Play**: the big play button shows the mark instead of a plain triangle; Pause stays two bars. zapa, 2026-11-17:
+- **Play**: the big play button shows the mark instead of a plain triangle, **oversized** (zapa: "the play icon
+  should be over sized as its the logo"): 135 % of the dome in every layout, reaching out past its edge. Pause stays
+  two bars. zapa, 2026-11-17:
   "make sure the play button goes everywhere it need one": the now-playing card's little "playing" sign is the mark
   too, and Android's notification / lock-screen Play and the status-bar icon are the mark's silhouette (one colour,
   as Android wants: the triangle with the bolt cut out). The sticker glyphs (Keep watching's resume and the rest)

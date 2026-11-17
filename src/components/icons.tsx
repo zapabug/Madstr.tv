@@ -31,10 +31,10 @@ export const NextIcon = (p: IconProps) => (
 // outline and a hard shadow down-right. It is the big Play button. Its own colours, not currentColor.
 const MARK_TRI = ['M471 266 154 148 161 514Z', 'M1037 476 531 288 416 447 689 459 174 928 170 974Z', 'M390 550 162 571 169 890Z'];
 const MARK_BOLT = 'M645 128 84 576 391 550 102 993 688 459 415 447Z';
-export function MarkIcon({ size = 24 }: IconProps) {
+export function MarkIcon({ size = 24, className }: IconProps & { className?: string }) {
   const clip = `mark-${useId().replace(/:/g, '')}`;
   return (
-    <svg width={size} height={size} viewBox="0 0 1121 1121" aria-hidden="true" focusable="false">
+    <svg className={className} width={size} height={size} viewBox="0 0 1121 1121" aria-hidden="true" focusable="false">
       <clipPath id={clip}>{MARK_TRI.map(d => <path key={d} d={d} />)}</clipPath>
       <g transform="translate(26.9 33.6)" fill="#050505">{[...MARK_TRI, MARK_BOLT].map(d => <path key={d} d={d} />)}</g>
       {MARK_TRI.map(d => <path key={d} d={d} fill="#DC01C0" stroke="#141414" strokeWidth={19.1} strokeLinejoin="round" />)}
