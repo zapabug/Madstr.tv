@@ -574,3 +574,6 @@ Spec: feat-phone-inline.md P29
 - `MarkIcon` (icons.tsx) is the big Play button on the player and the board's bar; Pause stays two bars.
 - Checked: a contact sheet of the icons (safe circle drawn over the adaptive one), the board and the player in headless
   Chromium (Play shows the mark when paused). Tests 226/226, lint, build. Not yet in an Android build.
+- Then ("make sure the play button goes everywhere it need one"): the now-playing card's playing sign is the mark;
+  Android's notification / lock-screen Play and the status-bar icon are the mark's silhouette (even-odd: triangle with
+  the bolt cut out). `gradlew :app:processDebugResources` passes. Sticker glyphs stay one-colour glyphs.
