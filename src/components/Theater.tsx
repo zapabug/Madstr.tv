@@ -7,7 +7,7 @@ import type { MediaItem } from '../lib/media.ts';
 import type { PictureSources } from '../data/pictures.ts';
 import { availableCount, usePictureMix } from '../lib/pictureMix.ts';
 import { useAutoHide, wakeControls } from '../lib/useAutoHide.ts';
-import { ImageIcon, NextChevron, PersonIcon, PrevChevron } from './icons.tsx';
+import { ImageIcon, MarkIcon, NextChevron, PersonIcon, PrevChevron } from './icons.tsx';
 import { PickerPanel } from './PickerPanel.tsx';
 import { PlayerPanel } from './PlayerPanel.tsx';
 import { Slideshow, type SlideCommand } from './Slideshow.tsx';
@@ -95,7 +95,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
         <div className="topline">
           <Clock />
           <Ticker text={tickerText} />
-          <span className="brand" aria-hidden="true">Juke<span className="bolt-mark">⚡</span>tr</span>
+          <span className="brand" aria-hidden="true">Juke<MarkIcon boltOnly className="bolt-mark" />tr</span>
         </div>
         <div className="bottomline">
           {author && <Avatar pubkey={author} />}

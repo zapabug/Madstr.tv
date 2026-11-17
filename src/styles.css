@@ -211,11 +211,14 @@ a {
   letter-spacing: -0.03em;
   text-decoration: none;
 }
+/* the S of Juke⚡tr is the logo's bolt (zapa, feat-phone-inline §P29), sized from the text around it; the bolt sits
+   in the left 60 % of the mark's square, so the right margin pulls the "tr" in */
 .bolt-mark {
-  color: var(--orange);
-  filter: drop-shadow(
-    0 0 10px color-mix(in oklch, var(--orange), transparent 45%)
-  );
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+  margin: -0.2em -0.5em -0.2em -0.14em;
+  vertical-align: -0.28em;
 }
 
 /* --- shared page frame --------------------------------------------------------------- */

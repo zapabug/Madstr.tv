@@ -5,6 +5,7 @@ import { Engine } from './components/Engine.tsx';
 import { AccountChip } from './components/People.tsx';
 import { Sky } from './components/Sky.tsx';
 import { Viewer } from './components/Viewer.tsx';
+import { MarkIcon } from './components/icons.tsx';
 import { BOARD, isTheater, toHash } from './lib/route.ts';
 import { useFocusNav } from './lib/useFocusNav.ts';
 import { useRoute } from './lib/useRoute.ts';
@@ -45,7 +46,7 @@ export function App() {
       <Sky />
       {!theater && (
         <header className="top">
-          <a className="logo" href="#/" aria-label="Jukestr home">Juke<span className="bolt-mark" aria-hidden="true">⚡</span>tr</a>
+          <a className="logo" href="#/" aria-label="Jukestr home">Juke<MarkIcon boltOnly className="bolt-mark" />tr</a>
           <AccountChip />
         </header>
       )}
