@@ -8,7 +8,7 @@ import { formatTime } from '../lib/queue.ts';
 import { authorSpot } from '../lib/author.ts';
 import { isStation } from '../lib/radio.ts';
 import { Avatar } from './People.tsx';
-import { FilmIcon, FolderArt, MarkIcon, NextIcon, NoteIcon, PauseIcon, PersonIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
+import { FilmIcon, FolderArt, MarkIcon, NextIcon, NoteIcon, PersonIcon, PrevIcon, ThumbDownIcon, ThumbUpIcon } from './icons.tsx';
 
 // The pieces of the player, shared by the right-hand player panel and the slim bar on
 // the board.
@@ -21,7 +21,7 @@ export function TransportButtons() {
     <div className="dock-controls" role="group" aria-label="Playback">
       <button type="button" className="dock-btn" aria-label="Previous" data-nav disabled={!has} onClick={player.prev}><PrevIcon size={28} /></button>
       <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-        {playing ? <PauseIcon size={34} /> : <MarkIcon size={40} className="mark-play" />}
+        <MarkIcon size={40} className="mark-play" boltOnly={playing} />
       </button>
       <button type="button" className="dock-btn" aria-label="Next" data-nav disabled={!has} onClick={player.next}><NextIcon size={28} /></button>
     </div>
@@ -103,7 +103,7 @@ function Card({ item, leaving, playing, onGone }: { item: MediaItem; leaving?: b
       onAnimationEnd={e => { if (leaving && e.target === e.currentTarget) onGone?.(); }}>
       <Disc item={item} />
       <span className="now-title">{item.title}</span>
-      <span className="now-n" aria-hidden="true">{playing ? <MarkIcon size={18} /> : '❚❚'}</span>
+      <span className="now-n" aria-hidden="true">{playing ? <MarkIcon size={26} /> : '❚❚'}</span>
     </div>
   );
 }
@@ -168,7 +168,7 @@ export function PanelControls() {
       <div className="pc-main">
         <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
         <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
-          {playing ? <PauseIcon size={32} /> : <MarkIcon size={38} className="mark-play" />}
+          <MarkIcon size={38} className="mark-play" boltOnly={playing} />
         </button>
         <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
       </div>

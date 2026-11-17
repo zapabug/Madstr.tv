@@ -31,21 +31,19 @@ export const NextIcon = (p: IconProps) => (
 // outline and a hard shadow down-right. It is the big Play button. Its own colours, not currentColor.
 const MARK_TRI = ['M471 266 154 148 161 514Z', 'M1037 476 531 288 416 447 689 459 174 928 170 974Z', 'M390 550 162 571 169 890Z'];
 const MARK_BOLT = 'M645 128 84 576 391 550 102 993 688 459 415 447Z';
-export function MarkIcon({ size = 24, className }: IconProps & { className?: string }) {
+// `boltOnly`: the bolt without its triangle, the big button while something plays (press it to pause; zapa, 2026-11-17).
+export function MarkIcon({ size = 24, className, boltOnly = false }: IconProps & { className?: string; boltOnly?: boolean }) {
   const clip = `mark-${useId().replace(/:/g, '')}`;
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 1121 1121" aria-hidden="true" focusable="false">
       <clipPath id={clip}>{MARK_TRI.map(d => <path key={d} d={d} />)}</clipPath>
-      <g transform="translate(26.9 33.6)" fill="#050505">{[...MARK_TRI, MARK_BOLT].map(d => <path key={d} d={d} />)}</g>
-      {MARK_TRI.map(d => <path key={d} d={d} fill="#DC01C0" stroke="#141414" strokeWidth={19.1} strokeLinejoin="round" />)}
-      <g clipPath={`url(#${clip})`}><path d={MARK_BOLT} transform="translate(26.9 33.6)" fill="#630056" /></g>
+      <g transform="translate(26.9 33.6)" fill="#050505">{(boltOnly ? [MARK_BOLT] : [...MARK_TRI, MARK_BOLT]).map(d => <path key={d} d={d} />)}</g>
+      {!boltOnly && MARK_TRI.map(d => <path key={d} d={d} fill="#DC01C0" stroke="#141414" strokeWidth={19.1} strokeLinejoin="round" />)}
+      {!boltOnly && <g clipPath={`url(#${clip})`}><path d={MARK_BOLT} transform="translate(26.9 33.6)" fill="#630056" /></g>}
       <path d={MARK_BOLT} fill="#FCFA9A" stroke="#141414" strokeWidth={19.1} strokeLinejoin="round" />
     </svg>
   );
 }
-export const PauseIcon = (p: IconProps) => (
-  <Svg {...p}><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></Svg>
-);
 export const ShuffleIcon = (p: IconProps) => (
   <Svg {...p}><path d="M16 4l4 3.5-4 3.5V8.5h-1.6l-3 3.5 3 3.5H16V13l4 3.5-4 3.5v-2.5h-2.5L10 13.5 6.5 17.5H3v-2h2.6l3.1-3.5L5.6 8.5H3v-2h3.5L10 10.5 13.5 6.5H16z" /></Svg>
 );
