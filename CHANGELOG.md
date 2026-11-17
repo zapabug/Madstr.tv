@@ -3,7 +3,7 @@
 Release notes for the Android app on zapstore (`zapstore.yaml` → `release_notes`). The web app at
 pleb.world/jukestr gets the same changes as they are deployed.
 
-## [1.5] - unreleased
+## [1.5] - 2026-11-17
 
 The app is now called **Juke⚡tr**: your Nostr jukebox.
 
