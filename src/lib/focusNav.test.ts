@@ -127,3 +127,40 @@ test('a slider keeps Left / Right for its value; Up / Down move on', () => {
 test('textareas and selects keep their arrows', () => {
   assert.equal(arrowLeavesField('down', { kind: 'other' }), false);
 });
+
+// --- feat-tv-remote TV1: focus is never lost -------------------------------------------------------
+import { handOver, startIndex, type Candidate } from './focusNav.ts';
+
+const at = (left: number, top: number, extra: Partial<Candidate> = {}): Candidate => ({
+  box: { left, top, width: 80, height: 40 }, start: null, noFallback: false, ...extra,
+});
+
+test('start point: the lowest start mark wins, wherever it sits on the page', () => {
+  const screen = [at(0, 0, { noFallback: true }), at(0, 100), at(500, 400, { start: 2 }), at(600, 400, { start: 1 })];
+  assert.equal(startIndex(screen), 3, 'Play/Pause (1) before the first tile (2)');
+  const tied = [at(0, 0), at(0, 100, { start: 1 }), at(0, 200, { start: 1 })];
+  assert.equal(startIndex(tied), 1, 'a tie goes to the first in page order');
+});
+
+test('start point without marks: the first control a fallback may take, never Log out', () => {
+  const board = [at(800, 10, { noFallback: true }), at(20, 300), at(300, 300)];
+  assert.equal(startIndex(board), 1, 'Log out comes first on the page but is skipped');
+  assert.equal(startIndex([at(0, 0, { noFallback: true })]), null, 'nothing allowed: no start');
+  assert.equal(startIndex([]), null);
+});
+
+test('hand over: the nearest control in the same area first, then anywhere', () => {
+  // A row of Follow buttons; the middle one (was at 300,500) vanished after Follow.
+  const screen = [at(800, 10, { noFallback: true }), at(100, 500), at(500, 500), at(320, 900), at(300, 200)];
+  const was = { left: 300, top: 500, width: 80, height: 40 };
+  assert.equal(handOver(screen, was, [3]), 3, 'its own area wins even when a control elsewhere is nearer');
+  assert.equal(handOver(screen, was, [2, 3]), 2, 'nearest inside the area');
+  assert.equal(handOver(screen, was, []), 1, 'no area: nearest anywhere (a tie goes to page order)');
+});
+
+test('hand over never lands on Log out, even when it is nearest', () => {
+  const screen = [at(800, 10, { noFallback: true }), at(100, 500)];
+  assert.equal(handOver(screen, { left: 790, top: 20, width: 80, height: 40 }, [0]), 1);
+  assert.equal(handOver([at(0, 0, { noFallback: true })], { left: 0, top: 0, width: 1, height: 1 }, []), null);
+  assert.equal(handOver(screen, { left: 0, top: 0, width: 1, height: 1 }, [7, -1]), 1, 'bad indices are ignored');
+});

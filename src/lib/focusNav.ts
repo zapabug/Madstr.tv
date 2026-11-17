@@ -86,3 +86,39 @@ export function arrowLeavesField(direction: Direction, field: Field): boolean {
     }
   }
 }
+
+// --- where focus goes when it has nowhere to be (feat-tv-remote TV1) ---------------------------------
+// A remote has no mouse to click focus back into the page, so focus must never be lost (TVR-R3).
+export interface Candidate {
+  box: Box;
+  start: number | null; // the screen's start mark (data-nav-start), lowest number first; null when unmarked
+  noFallback: boolean; // never chosen by a fallback: Log in / Log out (TV1-3), text boxes
+}
+
+function distance(a: Box, b: Box): number {
+  const ca = center(a);
+  const cb = center(b);
+  return Math.hypot(ca.x - cb.x, ca.y - cb.y);
+}
+
+// A screen's start point (TV1-1): the marked start with the lowest number (page order breaks ties), else the
+// first control in page order that a fallback may choose.
+export function startIndex(candidates: Candidate[]): number | null {
+  let best: number | null = null;
+  candidates.forEach((c, i) => {
+    if (c.start === null) return;
+    if (best === null || c.start < (candidates[best].start as number)) best = i;
+  });
+  if (best !== null) return best;
+  const first = candidates.findIndex(c => !c.noFallback);
+  return first < 0 ? null : first;
+}
+
+// The focused control vanished (TV1-2): the control nearest where it was, those in `prefer` (its own area) first.
+// Never a control a fallback may not choose; null when there is none.
+export function handOver(candidates: Candidate[], was: Box, prefer: readonly number[]): number | null {
+  const nearest = (pool: number[]): number | null =>
+    pool.reduce<number | null>((best, i) => (best === null || distance(candidates[i].box, was) < distance(candidates[best].box, was) ? i : best), null);
+  const allowed = (i: number) => i >= 0 && i < candidates.length && !candidates[i].noFallback;
+  return nearest(prefer.filter(allowed)) ?? nearest(candidates.map((_, i) => i).filter(allowed));
+}

@@ -28,8 +28,8 @@ export function AccountChip() {
   const account = useAccount();
   const profile = useProfile(account?.pubkey);
   return account
-    ? <button type="button" className="chip-link" data-nav title={`Logged in as ${shortName(account.pubkey, profile?.displayName)}`} onClick={() => { void logout(); }}>Log out</button>
-    : <a className="chip-link" href="#/people/follow" data-nav>Log in</a>;
+    ? <button type="button" className="chip-link" data-nav data-nav-nofallback title={`Logged in as ${shortName(account.pubkey, profile?.displayName)}`} onClick={() => { void logout(); }}>Log out</button>
+    : <a className="chip-link" href="#/people/follow" data-nav data-nav-nofallback>Log in</a>;
 }
 
 export function LoginPanel() {
@@ -121,7 +121,7 @@ export function FollowView() {
         <h2>Creators to follow</h2>
         <p className="own-note">People you do not follow yet, ranked by what they publish: friends of the people you follow first, then others.</p>
         <div className="chips creator-chips" role="group" aria-label="Rank by">
-          <button type="button" data-nav aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Everything</button>
+          <button type="button" data-nav data-nav-start="1" aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Everything</button>
           {CATEGORIES.map(c => (
             <button key={c.id} type="button" data-nav aria-pressed={category === c.id} title={c.hint} onClick={() => setCategory(c.id)}>{c.emoji} {c.label}</button>
           ))}

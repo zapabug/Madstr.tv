@@ -40,6 +40,8 @@ export function Playlist({ label, emptyText, waiting, more }: { label: string; e
   let next = -1;
   for (let i = p.index + 1; i < Math.min(p.queue.length, limit); i++) if (!gone(p.queue[i].id, i)) { next = i; break; }
   const left = p.queue.slice(0, limit).filter((row, i) => !gone(row.id, i)).length;
+  // The first tile shown is the screen's start point when nothing plays (feat-tv-remote TV1-1; Play/Pause is 1).
+  const firstShown = p.queue.slice(0, limit).findIndex((row, i) => !gone(row.id, i));
 
   const showTip = (el: HTMLElement, text: string) => {
     const r = el.getBoundingClientRect();
@@ -55,6 +57,7 @@ export function Playlist({ label, emptyText, waiting, more }: { label: string; e
               type="button"
               className="tile"
               data-nav
+              data-nav-start={i === firstShown ? 2 : undefined}
               aria-label={row.title}
               ref={i === next ? current : undefined}
               onClick={() => player.jump(i)}

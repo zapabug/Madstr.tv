@@ -167,7 +167,7 @@ export function PanelControls() {
       </div>
       <div className="pc-main">
         <button type="button" className="dock-btn" aria-label={`Previous ${noun}`} data-nav disabled={!has} onClick={player.prev}><PrevIcon size={26} /></button>
-        <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav disabled={!has} onClick={player.toggle}>
+        <button type="button" className="dock-btn dock-play" aria-label={playing ? 'Pause' : 'Play'} data-nav data-nav-start="1" disabled={!has} onClick={player.toggle}>
           <MarkIcon size={38} className="mark-play" boltOnly={playing} />
         </button>
         <button type="button" className="dock-btn" aria-label={`Next ${noun}`} data-nav disabled={!has} onClick={player.next}><NextIcon size={26} /></button>
