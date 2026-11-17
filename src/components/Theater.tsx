@@ -111,7 +111,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
         {modeLabel && modeHref && <a className="mode-chip" href={modeHref} data-nav>{modeLabel}</a>}
       </div>
       <div className="split">
-        <PickerPanel label={data.label} emptyText={data.emptyText} waiting={data.waiting} extra={pickerExtra} />
+        <PickerPanel label={data.label} emptyText={data.emptyText} waiting={data.waiting} extra={pickerExtra} more={data.more} />
         <PlayerPanel />
       </div>
     </main>

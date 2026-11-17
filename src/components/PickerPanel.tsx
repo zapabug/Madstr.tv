@@ -8,7 +8,7 @@ import { Playlist } from './Playlist.tsx';
 // board. The header holds the Back button, what is playing and the Shuffle toggle; the rest is only the things
 // you can pick, as tiles.
 // `extra`: a row under the header that belongs to the view (Radio's stickers, feat-radio §RA2).
-export function PickerPanel({ label, emptyText, waiting, extra }: { label: string; emptyText: string; waiting: boolean; extra?: ReactNode }) {
+export function PickerPanel({ label, emptyText, waiting, extra, more }: { label: string; emptyText: string; waiting: boolean; extra?: ReactNode; more?: { left: number; load: () => void } }) {
   const p = usePlayer();
   const mine = p.label === label; // the player holds this view's playlist (not one left playing from before)
   const item = mine ? p.queue[p.index] : undefined;
@@ -21,10 +21,9 @@ export function PickerPanel({ label, emptyText, waiting, extra }: { label: strin
           title={p.shuffle ? 'Shuffle is on: back to the normal order' : 'Shuffle the playlist'} onClick={player.toggleShuffle}>
           <ShuffleIcon size={18} /><span className="shuffle-word"> Shuffle</span>
         </button>
-        <span className="count">{item ? `${label} · ` : ''}{mine && p.queue.length > 0 ? `${p.queue.length} in the playlist` : ''}</span>
       </header>
       {extra}
-      <div className="picker-list"><Playlist label={label} emptyText={emptyText} waiting={waiting} /></div>
+      <div className="picker-list"><Playlist label={label} emptyText={emptyText} waiting={waiting} more={more} /></div>
     </aside>
   );
 }

@@ -115,6 +115,32 @@ So Radio needs no directory outside Nostr: no Radio Browser, no SomaFM.
   the sticker works before any relay answers.
 - More than one page per genre ("more as you scroll") is left for later; one ask brings up to 500.
 
+## RA5: Genre first, pick one or many, 30 at a time (zapa, 2026-11-17)
+
+zapa: "radio stations is working wrong … they are selected by genre first never prefilled genre and coutry or similar
+tags like bitcoin lets try to keep it under 300 station load another 30 or w,e only shuffle on the current 30", and
+"the genre card and countrys make them either select all select one etc other wise is hard to browse". This replaces
+RA2's one-sticker-at-a-time and the Live now / follows rows at the top (RA3b's order).
+
+- **Nothing is prefilled.** Radio opens with nothing selected and nothing playing; the picker opens by itself until
+  you have genres. The list says "Pick a genre, a word like bitcoin, or Your stations."
+- **Genres are stickers you select, one or many.** The bar holds **Your stations**, **All genres**, your genre
+  stickers, **+ genres**, then **All countries**, your country stickers, **+ countries**. Pressing a sticker turns it
+  on or off; several can be on at once. All genres turns every genre on (and the single ones off); All countries
+  is on when no single country is. The picker has the same choices, plus **Clear**, and a ✕ beside each sticker
+  takes it off the bar. The sticker row scrolls sideways with a little slider under it (its scroll bar cannot be
+  reached on a phone or with a remote); the playlist header no longer says "Radio · N in the playlist" (zapa, everywhere).
+- **A genre can be any word** (bitcoin, jazz, salsa): Radio asks the station relay for it as a genre (`#c`) and as a
+  text search of names and descriptions (NIP-50, only on relay.wavefunc.live, which answers it). Probed 2026-11-17:
+  "bitcoin" is the genre of 1 station and in the text of 3 (Good Morning Bitcoin, Roger Radio, Valencianismo).
+- **Live shows** join a list when they are tagged with one of the words on (Noderunners Radio is tagged bitcoin),
+  or, with All genres, when they are music or radio shows. They come first in it; the country does not apply to them.
+- **Countries** filter the stations (by their `countryCode`), one or many; none = every country.
+- **Under 300.** One selection loads at most **300** stations (each word asks for its share: 300 split between the
+  words, at least 30 each). Stations posted by people you follow come first within it.
+- **30 at a time.** The playlist holds the first **30**; when the last of them plays, or you press **+30 more**, the
+  next 30 join. **Shuffle** mixes only what is in the playlist; the next 30 join after it, shuffled among themselves.
+
 ## Milestones
 
 Built and machine-verified on 2026-11-16, awaiting zapa's test (the final [x] is his):
@@ -123,3 +149,4 @@ Built and machine-verified on 2026-11-16, awaiting zapa's test (the final [x] is
 - [ ] RA3 playing a live station (LIVE sticker, no seek, skip when silent, picture show) (built: 8120aef)
 - [ ] RA3b Live now: zap.stream live events (HLS; hls.js 1.7.4, zapa OK'd) (built: 8120aef)
 - [ ] RA4 up saves (+ like when logged in), down hides (built: 594a9f7)
+- [ ] RA5 genre first, many genres and countries at once, under 300, 30 at a time (zapa, 2026-11-17)

@@ -26,9 +26,8 @@ export function Viewer({ route }: { route: ViewerRoute }) {
     if (data.items.length === 0) return;
     const snap = player.getSnapshot();
     const otherList = opened.current !== data.listKey;
-    if (otherList && data.startAt === -1 && snap.label === data.label) return; // its stations are on their way
     opened.current = data.listKey;
-    if (snap.label !== data.label || snap.queue.length === 0 || otherList) player.setQueue(data.items, Math.max(0, data.startAt ?? 0), data.label, true);
+    if (snap.label !== data.label || snap.queue.length === 0 || otherList) player.setQueue(data.items, 0, data.label, true);
     else player.updateQueue(data.items, data.label);
     // `sig` stands for the content of data.items
     // eslint-disable-next-line react-hooks/exhaustive-deps

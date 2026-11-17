@@ -93,6 +93,11 @@ line, so the panel never scrolls; on phones disc **56 px** with one line.
   one walk per follow list (the last **4**), so the TV's list before a login lands does not overwrite yours.
   "Reached the start" lasts one visit: an empty answer may have been a slow relay, so the next visit asks again.
 - Exit: playing through a list (or hiding from it) brings older items in; the next visit continues further back.
+- Podcasts (zapa, 2026-11-17: "make sure fetch older applies to podcasts on nostr im missing abunch of old podcasts
+  only find most recent ones"): the music the Podcasts list leaves out counts as dropped (as "podcasts longer" says;
+  the code had only done it for Music), and while it has fewer than **30** episodes it keeps reaching back, one
+  batch at a time (at most 50 a visit), until the relays have nothing older or the cache is full. Lengths are
+  measured down the whole open list, not only its newest 40, so older posts can be found to be podcasts.
 
 ## T5: More relays
 

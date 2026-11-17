@@ -14,7 +14,8 @@ const MORE = 120;
 // is gone (zapa, spec feat-taste-cache §T2).
 // `label` is the view's own playlist name: until the player holds that playlist, the view shows its own
 // waiting / empty text, and what is still playing from before (spec §Design pass fixes).
-export function Playlist({ label, emptyText, waiting }: { label: string; emptyText: string; waiting: boolean }) {
+// `more`: the view holds more than the playlist (Radio, 30 at a time): a tile brings the next ones in.
+export function Playlist({ label, emptyText, waiting, more }: { label: string; emptyText: string; waiting: boolean; more?: { left: number; load: () => void } }) {
   const p = usePlayer();
   const [limit, setLimit] = useState(FIRST);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -71,7 +72,10 @@ export function Playlist({ label, emptyText, waiting }: { label: string; emptyTe
             </button>
           </li>
         ))}
-        {left === 0 && p.queue.length <= limit && <li className="tiles-empty">Nothing else in this playlist.</li>}
+        {left === 0 && p.queue.length <= limit && !more && <li className="tiles-empty">Nothing else in this playlist.</li>}
+        {more && p.queue.length <= limit && (
+          <li><button type="button" className="tile tile-more" data-nav onClick={more.load}>+{more.left} more</button></li>
+        )}
         {p.queue.length > limit && (
           <li><button type="button" className="tile tile-more" data-nav onClick={() => setLimit(l => l + MORE)}>+{p.queue.length - limit} more</button></li>
         )}
