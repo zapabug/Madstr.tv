@@ -275,6 +275,25 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **Alternatives:** freeze the order once the person starts moving through it; keep the focused card in view when the layout shifts.
 - **Status:** awaiting lfg (a candidate for a later milestone)
 
+### 2026-11-17 · TV6 · The pop-up opens from the header's Log in; the People card stays as it is
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV6-1 ("Log in opens a full-screen pop-up")
+- **What I did:** on a TV the header chip "Log in" opens the pop-up instead of going to People (`AccountChip`, `src/components/QrLogin.tsx`); the login card on People (with its own QR button) is unchanged. The QR is `min(80vh, 55vw)` square (74 % of the height at 1280×720), with "Log in", a line to scan it with a signer app, "Waiting for it to answer…" and Close.
+- **Alternatives:** the People card's "Log in with a QR code" opens the pop-up on a TV too.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV6 · Back closes a pop-up first
+- **Type:** guess
+- **Spec ref:** TV6-1 ("Back closes it")
+- **What I did:** the app's Back first calls `window.jukeBack()` (`src/lib/backStack.ts`, 2 tests); a pop-up registered there closes and Back stops. Only the QR pop-up registers; the leave pop-up keeps its own Back (TV3-4) and Radio's genre picker keeps today's behaviour.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV6 · Not logged in for real
+- **Type:** fix (verification gap)
+- **Spec ref:** TV6-EC1, TV6-2
+- **What I did:** the pop-up, its size, focus and closing are checked headless; scanning it with zapa's signer and the pop-up closing after login need zapa on the TV.
+- **Status:** awaiting zapa's test
+
 ## Open questions
 
 - (none open)

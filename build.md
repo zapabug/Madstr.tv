@@ -614,8 +614,8 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 | TV3 | Remote keys + leave on Back | built + machine-verified (page); native not run on a device |
 | TV4 | Text boxes wait for OK | built + machine-verified; the TV keyboard not yet seen |
 | TV5 | TV layout | built + machine-verified; 1280 runs on zapa's TV; zapa to pick 1280 or 1920 |
-| TV6 | QR login pop-up | NEXT — build |
-| TV7 | Hold OK for a cursor | planned |
+| TV6 | QR login pop-up | built + machine-verified; login itself for zapa's test |
+| TV7 | Hold OK for a cursor | NEXT — build |
 
 ## TV1 — Focus never lost [built + machine-verified, awaiting zapa on the TV]
 Commit: dcc8b59
@@ -705,3 +705,17 @@ Spec: feat-tv-remote.md TV5-1 … TV5-6
   244/244 tests, lint, build.
 - Found, not fixed: People grows and re-sorts while relays answer, which moves cards under the remote.
 - ⚠ 5 undiscussed decisions, see planning.md.
+
+## TV6 — QR login pop-up [built + machine-verified; scanning and logging in for zapa's test]
+Commit: c65b984
+Spec: feat-tv-remote.md TV6-1 … TV6-3
+
+- `src/components/QrLogin.tsx`: on a TV the header's Log in opens a full-screen pop-up with the login QR
+  (`startQrLogin`, the same Nostr Connect login as the People card) as large as fits, a line to scan it, Close
+  focused first; it closes itself when the signer answers, and cancels the wait when closed.
+- `src/lib/backStack.ts` (2 tests): Back in the app calls `window.jukeBack()` first and stops when a pop-up closed
+  (`MainActivity.goBack` → `goBackPage`). `src/lib/qrPopup.ts`: the pop-up's state and `isTv()`.
+- Headless (`check-tv6.mjs`, TV mode at 1280×720): OK on Log in opens it, the whole QR 534 px of 720 (74 %), Close
+  focused, arrows stay inside, Back closes it and focus returns to Log in, Back with nothing open reports none, Esc
+  closes; not a TV: Log in goes to People. All pass; TV3 re-run. 246/246, lint, build, Java compiles.
+- ⚠ 3 undiscussed decisions, see planning.md.
