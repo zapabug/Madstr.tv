@@ -294,6 +294,30 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **What I did:** the pop-up, its size, focus and closing are checked headless; scanning it with zapa's signer and the pop-up closing after login need zapa on the TV.
 - **Status:** awaiting zapa's test
 
+### 2026-11-17 · TV7 · Two numbers the spec did not give
+- **Type:** guess
+- **Spec ref:** feat-tv-remote TV7-2, TV7-4
+- **What I did:** an arrow counts as held after 200 ms (then it moves on its own at the ramp's speed); the edge scrolls at 600 px/s (`CURSOR.holdDelayMs`, `CURSOR.scrollPxPerS` in `src/lib/cursor.ts`). The spec's own numbers (24 px, 300 → 1200 px/s over 1 s, 48 px) are as written and tested.
+- **Status:** awaiting lfg (tune on the TV)
+
+### 2026-11-17 · TV7 · Where the pointer starts, how it looks, what a click does
+- **Type:** guess
+- **Spec ref:** TV7-1, TV7-3; OPEN "after a cursor click, stay in cursor mode" (default: stay)
+- **What I did:** it starts on the middle of the focused control (else the middle of the screen); a white arrow with a black edge; a click sends pointer and mouse events at its tip, focuses what is focusable there, then clicks; after a click it stays on (the OPEN default).
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV7 · Holding OK in an open text box does not start the pointer
+- **Type:** spec-gap
+- **Spec ref:** TV7-1, TV4
+- **What I did:** a text box keeps Enter for itself (TV3 / TV4), so holding OK while typing in one does not turn the pointer on. From a locked box (just arrived by the arrows) it does.
+- **Status:** awaiting lfg
+
+### 2026-11-17 · TV7 · Holding OK now always means the pointer
+- **Type:** deviation (follows from the spec)
+- **Spec ref:** TV3-1, TV7-1
+- **What I did:** a hold of OK anywhere turns the pointer on (it used to repeat the button, before TV3). The TV3 check was updated to turn it off again with Esc.
+- **Status:** awaiting lfg
+
 ## Open questions
 
 - (none open)

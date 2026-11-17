@@ -615,7 +615,7 @@ Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Androi
 | TV4 | Text boxes wait for OK | built + machine-verified; the TV keyboard not yet seen |
 | TV5 | TV layout | built + machine-verified; 1280 runs on zapa's TV; zapa to pick 1280 or 1920 |
 | TV6 | QR login pop-up | built + machine-verified; login itself for zapa's test |
-| TV7 | Hold OK for a cursor | NEXT — build |
+| TV7 | Hold OK for a cursor | built + machine-verified; awaiting zapa on the TV |
 
 ## TV1 — Focus never lost [built + machine-verified, awaiting zapa on the TV]
 Commit: dcc8b59
@@ -719,3 +719,29 @@ Spec: feat-tv-remote.md TV6-1 … TV6-3
   focused, arrows stay inside, Back closes it and focus returns to Log in, Back with nothing open reports none, Esc
   closes; not a TV: Log in goes to People. All pass; TV3 re-run. 246/246, lint, build, Java compiles.
 - ⚠ 3 undiscussed decisions, see planning.md.
+
+## TV7 — Hold OK for a cursor [built + machine-verified, awaiting zapa on the TV]
+Commit: f94ae4d
+Spec: feat-tv-remote.md TV7-1 … TV7-6
+
+- `src/lib/cursor.ts` (pure, 5 tests): 24 px a tap; held, 300 rising to 1200 px/s over 1 s; stays on screen; 48 px
+  edge zones. `src/lib/cursorState.ts`, `src/lib/cursorClick.ts`, `src/components/Cursor.tsx`: the pointer drawn by
+  the page; a hold of OK (`juke:ok-hold`) turns it on or off; while on, the arrows move it (not focus), OK clicks
+  under it (`useRemoteKeys`), it scrolls what scrolls at the edge, Back (`backStack`) or Esc turn it off and focus
+  goes to the control under it. Nothing in the app is hover-only (TV7-6; the tile tooltip also shows on focus).
+- Headless (`check-tv7.mjs`, TV mode 1280×720): hold OK → on without pressing the sticker; Right tap +24 px; held
+  1.2 s → 1085 px; focus unmoved; steered onto the Podcasts sticker, OK opened it; Down to the bottom edge scrolled
+  the board 0 → 834; hold again, Back, Esc each turn it off; arrows move focus again after. All pass. Every earlier
+  check re-run (TV3's updated: a hold now turns the pointer on). 251/251, lint, build.
+- ⚠ 4 undiscussed decisions, see planning.md.
+
+## feat-tv-remote — state at the end of the run (2026-11-17)
+- TV1-TV7 built and machine-checked; nothing confirmed by zapa yet. 26 undiscussed decisions in planning.md.
+- On zapa's TV (192.168.1.66): the debug build with everything, laid out 1280×720 (checked over DevTools: TV mode
+  on, focus on the first sticker). To try 1920 instead: `adb install -r
+  android/app/build/outputs/apk/debug/juketr-tv1920-debug.apk` (both are debug-signed; the zapstore release needs
+  an uninstall first).
+- Not run on a device: ⏪ / ⏩ and Back in the app, the leave pop-up closing the app, the TV keyboard on OK, a real
+  QR login, the pointer with the real remote; the phone's Back unchanged.
+- Headless checks live in the session scratchpad (`check-tv1*.mjs` … `check-tv7.mjs`, `drive.mjs`); they read the
+  DOM only, no screenshots.
