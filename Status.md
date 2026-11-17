@@ -18,7 +18,7 @@ Feat: Phone controls in two compact rows; sideways shows the TV layout
 State: Live on pleb.world/madstr and in Android 1.4 on zapstore. Being replaced by the phone layouts above.
 ────────────────────────────────────────
 Feat: Radio, Nostr first
-State: Built and machine-verified, not yet on the live site or in the app. Radio is a third Listen card: live shows from zap.stream first, then stations from people you follow, then your genre stickers (picked from the stations' own genres, or typed in) filtered by country; a station plays with a LIVE sticker and no seek bar, a silent one is skipped after 10 seconds, up saves it to Your stations and down hides it. Needs zapa to try it, to check it plays in the Android app, and to look at ten small choices the spec left open.
+State: Built, live on pleb.world/jukestr in its first form, and reworked today on zapa's word (not yet deployed): Radio opens empty and plays nothing until you turn on genres (any word, like bitcoin) and countries, one or many or all; it loads at most 300 stations and plays them 30 at a time, shuffle staying within those. Podcasts on Nostr now reach back for older episodes. Needs zapa to try it and to talk about how the sticker strip should sit in the bezel.
 ────────────────────────────────────────
 Feat: Web app moves to pleb.world/madstr, Android 1.3
 State: Live. The web app (the TV and desktop version) is at www.pleb.world/madstr with its RSS proxy, and the pleb.world sticker links there; Android 1.3 with everything below is published on zapstore. Needs zapa to delete the old madstr-tv project in the Vercel dashboard, to install 1.3 and try the sideways view on a phone, and to say whether to push this repo to GitHub.

@@ -15,6 +15,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | R7 | Local media on the web | built; folder picker untested in a real browser |
 | RSS | Feed parser and proxy tests | built + machine-verified (faa4288); awaiting zapa |
 | RA1-RA4 | Radio, Nostr first: stations, Live now, genre stickers, votes | built + machine-verified on feat/radio; awaiting zapa |
+| RA5 + podcasts | Radio genre first, many at once, 30 at a time; older podcasts on Nostr | built + machine-verified (ec7f783); look of the sticker strip to be discussed |
 | R8 | Remote pass (final stage before deploy) | built + machine-verified; awaiting zapa's remote test |
 | A1 | Android app picks files (feat-android-play) | built + machine-verified; awaiting zapa on a device |
 | A2 | Android app keeps playing in the background (1.1) | zapa: works (2026-11-15) |
@@ -537,3 +538,24 @@ Spec: planning.md open questions (from audits/audit-2026-11-15.md)
   500 kB: its light build failed 4 of 8 live shows (separate audio tracks), checked against the full build, which
   played all 8. The `@scure/base` annotation note is from that library and predates this.
 - Tests 224/224, lint clean, build passes.
+
+## RA5 — Radio genre first, 30 at a time; older podcasts [built + machine-verified, awaiting zapa]
+Commit: ec7f783
+Spec: feat-radio.md §RA5, feat-taste-cache.md §T4
+
+- Radio starts with nothing selected (the picker opens); genres are any words, asked as `#c` and as a NIP-50 search
+  on relay.wavefunc.live (probe: "bitcoin" is 1 station's genre, 3 stations' text); words take turns at the top
+  (`takeTurns`); countries one or many; All genres / All countries / Clear; ✕ takes a sticker off.
+- At most 300 stations (each word asks for its share, at least 30); the playlist holds 30, the next 30 join when
+  the player is on the last one (its own order, so it works shuffled) or with +30 more; shuffle mixes only what is
+  loaded and the next 30 join after it (checked: the 30 kept their places, the new ones only after).
+- The sticker row scrolls with a little slider (scroll bar hidden). "Radio · N in the playlist" is gone everywhere.
+- Checked headless: opens empty; bitcoin + jazz → Noderunners, Good Morning Bitcoin, Radio Sahar, Valencianismo …;
+  jazz in DE + US → only DE / US; All genres → 30 with +30 more. Bugs found and fixed on the way: the new order
+  deduped twice (no stations), one end loaded 60 instead of 30, bitcoin was buried under jazz.
+- Podcasts: three gaps, all fixed. (1) the Podcasts list never counted the music it leaves out as dropped (T4 says
+  it should); (2) lengths were only measured for the newest 40 posts, so older posts never became podcasts; (3) audio
+  is rare among notes, so a batch often brought none: under 30 episodes the walk now keeps going (≤ 50 batches).
+  On the TV account the walk now reached 2020 and the start in a minute (it has only 38 audio posts in all).
+- The look of the sticker strip (inset into the bezel) is waiting for zapa; left as it is for now (his call).
+- Tests 226/226, lint clean, build passes.
