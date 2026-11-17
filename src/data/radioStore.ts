@@ -35,17 +35,40 @@ const saved = makeStore<Record<string, SavedStation>>(SAVED_KEY, parseSaved, {})
 export const useRadioPrefs = prefs.use;
 export const getRadioPrefs = prefs.get;
 
-export function openSticker(sticker: string): void {
-  prefs.set(p => ({ ...p, sticker: sticker === 'yours' || p.genres.includes(sticker) ? sticker : 'yours' }));
+// Selecting (spec RA5): a sticker turns on or off, several at once; All genres turns every genre on and the single
+// ones off; All countries is on when no single country is.
+const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
+
+export function toggleOn(genre: string): void {
+  prefs.set(p => parsePrefs({ ...p, allGenres: false, on: toggle(p.on, genre) }));
 }
-export function setCountry(country: string): void {
-  prefs.set(p => parsePrefs({ ...p, country }));
+export function toggleAllGenres(): void {
+  prefs.set(p => parsePrefs({ ...p, allGenres: !p.allGenres, on: [] }));
 }
-/** Add a genre to your stickers (at the end) or take it away. */
+export function clearGenres(): void {
+  prefs.set(p => parsePrefs({ ...p, allGenres: false, on: [], yours: false }));
+}
+export function toggleYours(): void {
+  prefs.set(p => parsePrefs({ ...p, yours: !p.yours }));
+}
+/** Add a word to your genre stickers (turned on), or take it away. */
 export function toggleGenre(genre: string): void {
   prefs.set(p => {
     const has = p.genres.includes(genre);
-    return parsePrefs({ ...p, genres: has ? p.genres.filter(g => g !== genre) : [...p.genres, genre], sticker: has && p.sticker === genre ? 'yours' : p.sticker });
+    return parsePrefs({ ...p, genres: toggle(p.genres, genre), on: has ? p.on.filter(g => g !== genre) : [...p.on, genre], allGenres: has ? p.allGenres : false });
+  });
+}
+export function toggleCountryOn(country: string): void {
+  prefs.set(p => parsePrefs({ ...p, countriesOn: toggle(p.countriesOn, country) }));
+}
+export function allCountries(): void {
+  prefs.set(p => parsePrefs({ ...p, countriesOn: [] }));
+}
+/** Add a country to your country stickers (turned on), or take it away. */
+export function toggleCountry(country: string): void {
+  prefs.set(p => {
+    const has = p.countries.includes(country);
+    return parsePrefs({ ...p, countries: toggle(p.countries, country), countriesOn: has ? p.countriesOn.filter(c => c !== country) : [...p.countriesOn, country] });
   });
 }
 

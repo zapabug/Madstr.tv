@@ -66,7 +66,8 @@ Numbers:
 - Text: MAX_TEXT 160, ticker max 140, ticker duration max(14, len × 0.2 + 10) s.
 - Relay limits: 300 per chunk, 200 notes, 100 authors per filter; creator filters 300/200/200/200;
   friends-of-follows cap 400, 30 creators; 300 pictures; playlist pages of 120; 12 tags.
-- Probing: 40 probes, 3 at a time, 8 s each. Local scan depth 6.
+- Probing: 40 probes, 3 at a time, 8 s each; while Music or Podcasts is open it keeps going down the whole list, 40
+  waiting at a time (2026-11-17, old podcasts were never measured, so never found); the board measures the first 40. Local scan depth 6.
 - Signer: QR 240 s, sign 90 s, connect 20 s, key re-ask 5 s, publish 8 s, subscription retry 3 s,
   extension wait 1.5 s. Clock refresh 10 s. The relay lists in `relays.ts`.
 

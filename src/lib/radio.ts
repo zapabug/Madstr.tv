@@ -152,16 +152,42 @@ export function countryFromLanguage(lang: string | undefined): string | undefine
   return region && COUNTRY.test(region) ? region : undefined;
 }
 
-export interface RadioParts {
-  live: readonly MediaItem[];
-  stations: readonly MediaItem[]; // the sticker's stations (a genre, or Your stations)
-  followed: readonly MediaItem[]; // stations posted by people you follow
-  follows: ReadonlySet<string>;
-  country?: string; // '' or undefined: every country
+export const MAX_LOADED = 300; // feat-radio §RA5: one selection loads at most 300 stations
+export const PAGE_SHOWN = 30; // and plays them 30 at a time
+const MIN_PER_WORD = 30;
+
+/** How many stations each word asks for, so a selection stays under 300 (at least 30 each). */
+export function perWord(words: number): number {
+  return words <= 0 ? 0 : Math.max(MIN_PER_WORD, Math.floor(MAX_LOADED / words));
 }
 
-/** Radio's playlist (spec RA2, RA3b): Live now (follows first, then music / radio shows), then stations from people
- *  you follow, then the sticker's stations; stations filtered by country; each station once (by address, then url). */
+/** Each word's stations in turn (its genre answers, then its search answers), so every word that is on shows up
+ *  near the top, not only the one with the most stations. */
+export function takeTurns(perWordLists: readonly (readonly MediaItem[])[]): MediaItem[] {
+  const out: MediaItem[] = [];
+  const longest = Math.max(0, ...perWordLists.map(l => l.length));
+  for (let k = 0; k < longest; k++) for (const list of perWordLists) if (k < list.length) out.push(list[k]);
+  return out;
+}
+
+/** A live show belongs to a selection when it is tagged with one of its words (or its title says it); with All
+ *  genres, when it is a music or radio show. */
+export function liveMatches(item: MediaItem, words: readonly string[], allGenres: boolean): boolean {
+  if (allGenres) return isMusicShow(item);
+  const tags = new Set((item.hashtags ?? []).map(t => t.replace(/^internal:/, '')));
+  const title = item.title.toLowerCase();
+  return words.some(w => tags.has(w) || (w.length >= 3 && title.includes(w)));
+}
+
+export interface RadioParts {
+  live: readonly MediaItem[]; // live shows that match the selection
+  stations: readonly MediaItem[]; // the selection's stations, in the order they came
+  follows: ReadonlySet<string>;
+  countries: readonly string[]; // [] = every country
+}
+
+/** Radio's list (spec RA5): the matching live shows (follows' first, newest first), then the stations, those from
+ *  people you follow first, filtered by country; each station once (by address, then url); at most 300 stations. */
 export function radioQueue(parts: RadioParts): MediaItem[] {
   const seen = new Set<string>();
   const once = (item: MediaItem) => {
@@ -172,34 +198,62 @@ export function radioQueue(parts: RadioParts): MediaItem[] {
   };
   const newest = (a: MediaItem, b: MediaItem) => b.createdAt - a.createdAt || a.id.localeCompare(b.id);
   const fromFollow = (i: MediaItem) => i.pubkey !== undefined && parts.follows.has(i.pubkey);
-  const live = [...parts.live].sort(newest);
-  const inCountry = (s: MediaItem) => !parts.country || s.country === parts.country;
+  const live = [...parts.live].sort(newest).filter(once);
+  const countries = new Set(parts.countries);
+  const inCountry = (s: MediaItem) => countries.size === 0 || (s.country !== undefined && countries.has(s.country));
+  const stations = parts.stations.filter(inCountry).filter(once).slice(0, MAX_LOADED);
   return [
-    ...live.filter(fromFollow),
-    ...live.filter(i => !fromFollow(i) && isMusicShow(i)),
-    ...[...parts.followed].filter(fromFollow).filter(inCountry).sort(newest),
-    ...parts.stations.filter(inCountry),
-  ].filter(once);
+    ...live.filter(fromFollow), ...live.filter(i => !fromFollow(i)),
+    ...stations.filter(fromFollow), ...stations.filter(i => !fromFollow(i)),
+  ];
+}
+
+/** The playlist shows `pages` pages of 30; the next page joins when the last shown item plays. */
+export function shownCount(total: number, pages: number): number {
+  return Math.min(total, Math.max(1, pages) * PAGE_SHOWN);
 }
 
 // --- what is kept on this device --------------------------------------------------------------------------
 
 export interface RadioPrefs {
-  genres: string[]; // your genre stickers, in your order
-  country: string; // '' = every country
-  sticker: string; // 'yours' or one of the genres
+  genres: string[]; // your genre stickers (words), in your order
+  on: string[]; // the ones selected (one or many)
+  allGenres: boolean;
+  yours: boolean; // Your stations selected
+  countries: string[]; // your country stickers
+  countriesOn: string[]; // the ones selected; none = every country
 }
 export const RADIO_PREFS_KEY = 'madstr:radio';
-export const DEFAULT_PREFS: RadioPrefs = { genres: [], country: '', sticker: 'yours' };
+// Nothing selected: Radio starts empty until you pick (spec RA5).
+export const DEFAULT_PREFS: RadioPrefs = { genres: [], on: [], allGenres: false, yours: false, countries: [], countriesOn: [] };
 const MAX_PICKED = 40;
+
+const cleanCountry = (v: unknown) => (typeof v === 'string' && COUNTRY.test(v) ? v : '');
+const uniq = (list: unknown, clean: (_v: unknown) => string, max: number) =>
+  Array.isArray(list) ? [...new Set(list.map(clean).filter(Boolean))].slice(0, max) : [];
 
 export function parsePrefs(raw: unknown): RadioPrefs {
   if (!raw || typeof raw !== 'object') return DEFAULT_PREFS;
   const r = raw as Record<string, unknown>;
-  const genres = Array.isArray(r.genres) ? [...new Set(r.genres.map(cleanGenre).filter(Boolean))].slice(0, MAX_PICKED) : [];
-  const country = typeof r.country === 'string' && COUNTRY.test(r.country) ? r.country : '';
-  const sticker = typeof r.sticker === 'string' && (r.sticker === 'yours' || genres.includes(r.sticker)) ? r.sticker : 'yours';
-  return { genres, country, sticker };
+  const genres = uniq(r.genres, cleanGenre, MAX_PICKED);
+  // The RA2 shape had one `country`; it becomes a country sticker that is on.
+  const oldCountry = cleanCountry(r.country);
+  const countries = uniq([...(Array.isArray(r.countries) ? r.countries : []), oldCountry], cleanCountry, MAX_PICKED);
+  const countriesOn = uniq([...(Array.isArray(r.countriesOn) ? r.countriesOn : []), oldCountry], cleanCountry, MAX_PICKED).filter(c => countries.includes(c));
+  const allGenres = r.allGenres === true;
+  return {
+    genres,
+    on: allGenres ? [] : uniq(r.on, cleanGenre, MAX_PICKED).filter(g => genres.includes(g)),
+    allGenres,
+    yours: r.yours === true,
+    countries,
+    countriesOn,
+  };
+}
+
+/** Whether anything is selected: without it Radio plays nothing (spec RA5). */
+export function hasSelection(p: RadioPrefs): boolean {
+  return p.allGenres || p.yours || p.on.length > 0;
 }
 
 export interface SavedStation {

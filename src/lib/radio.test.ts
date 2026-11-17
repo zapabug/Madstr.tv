@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { NostrEventLike } from './media.ts';
 import {
-  DEFAULT_PREFS, countryCounts, countryFromLanguage, genreCounts, isHls, isStation, liveFromEvent, parsePrefs, parseSaved,
-  radioQueue, savedList, stationFromEvent,
+  DEFAULT_PREFS, countryCounts, countryFromLanguage, genreCounts, hasSelection, isHls, isStation, liveFromEvent, liveMatches,
+  parsePrefs, parseSaved, perWord, radioQueue, savedList, shownCount, stationFromEvent, takeTurns,
 } from './radio.ts';
 
 // Real events from relay.wavefunc.live, relay.zap.stream and relay.primal.net (2026-11-16), as they came.
@@ -79,23 +79,35 @@ test('live shows: music and radio shows with an https stream, updated within the
   assert.equal(liveFromEvent(byTitle('The Lot Radio'), NOW + 2 * 3600), null); // not updated for two hours
 });
 
-test("Radio's order: follows' live shows, music / radio shows, follows' stations, then the sticker's", () => {
+test("Radio's order (RA5): matching live shows (follows' first), then stations (follows' first), by country", () => {
   const live = lives.map(e => liveFromEvent(e, NOW)).filter(x => x !== null);
   const all = stations.map(stationFromEvent).filter(x => x !== null);
-  const gaming = live.find(l => l.title.startsWith('New week'))!;
-  const omarchy = all.find(s => s.title === 'Omarchy Radio')!;
+  const noderunners = live.find(l => l.title === 'Noderunners Radio')!;
   const gmb = all.find(s => s.title === 'Good Morning Bitcoin')!;
-  const queue = radioQueue({ live, stations: all, followed: [gmb], follows: new Set([gaming.pubkey!, gmb.pubkey!]) });
-  assert.deepEqual(queue.slice(0, 5).map(i => i.title), [
-    'New week, new challenges... 🔞', // followed, so in although it is not music
-    'The Lot Radio: Bliss Point with Evita', 'NoGood Radio', 'Noderunners Radio', // newest first
-    'Good Morning Bitcoin',
-  ]);
-  assert.equal(queue.filter(i => i.title === 'Good Morning Bitcoin').length, 1);
-  assert.ok(queue.includes(omarchy));
-  // Without follows the gaming stream is not in; the country filter leaves the live shows alone.
-  const mx = radioQueue({ live, stations: all, followed: [], follows: new Set(), country: 'MX' });
-  assert.deepEqual(mx.map(i => i.title.slice(0, 12)), ['The Lot Radi', 'NoGood Radio', 'Noderunners ', 'Mega FM (Vil']);
+  const omarchy = all.find(s => s.title === 'Omarchy Radio')!;
+  // "bitcoin": Noderunners is tagged bitcoin; the other shows are not.
+  assert.deepEqual(live.filter(l => liveMatches(l, ['bitcoin'], false)).map(l => l.title), ['Noderunners Radio']);
+  assert.equal(live.filter(l => liveMatches(l, [], true)).length, 3); // All genres: the music / radio shows
+  const queue = radioQueue({ live: [noderunners], stations: [omarchy, gmb, gmb], follows: new Set([gmb.pubkey!]), countries: [] });
+  assert.deepEqual(queue.map(i => i.title), ['Noderunners Radio', 'Good Morning Bitcoin', 'Omarchy Radio']);
+  // Countries: one or many; the live show stays.
+  const us = radioQueue({ live: [noderunners], stations: all, follows: new Set(), countries: ['US'] });
+  assert.deepEqual(us.map(i => i.title), ['Noderunners Radio', 'Good Morning Bitcoin']);
+  const two = radioQueue({ live: [], stations: all, follows: new Set(), countries: ['US', 'MX'] });
+  assert.deepEqual(two.map(i => i.country), ['US', 'MX']);
+});
+
+test('under 300, 30 at a time', () => {
+  assert.equal(perWord(1), 300);
+  assert.equal(perWord(4), 75);
+  assert.equal(perWord(20), 30); // never under 30 a word
+  assert.equal(perWord(0), 0);
+  const many = Array.from({ length: 400 }, (_, k) => ({ ...stationFromEvent(byName('Omarchy Radio'))!, id: `s${k}`, address: `a${k}`, url: `https://s.test/${k}` }));
+  assert.equal(radioQueue({ live: [], stations: many, follows: new Set(), countries: [] }).length, 300);
+  assert.equal(shownCount(300, 1), 30);
+  assert.equal(shownCount(300, 2), 60);
+  assert.equal(shownCount(12, 1), 12);
+  assert.equal(shownCount(12, 0), 12);
 });
 
 test('genres commonest first without the dull words; countries; the device country', () => {
@@ -110,10 +122,15 @@ test('genres commonest first without the dull words; countries; the device count
   assert.equal(countryFromLanguage('zh-Hans-CN'), undefined); // a script, not a country, comes first
 });
 
-test('prefs and Your stations read back as untrusted', () => {
+test('prefs and Your stations read back as untrusted; nothing selected by default', () => {
   assert.deepEqual(parsePrefs(null), DEFAULT_PREFS);
-  assert.deepEqual(parsePrefs({ genres: ['Rock ', 'rock', 5, 'Jazz'], country: 'pt', sticker: 'jazz' }), { genres: ['rock', 'jazz'], country: '', sticker: 'jazz' });
-  assert.equal(parsePrefs({ genres: ['rock'], sticker: 'opera' }).sticker, 'yours');
+  assert.equal(hasSelection(DEFAULT_PREFS), false);
+  assert.deepEqual(parsePrefs({ genres: ['Rock ', 'rock', 5, 'Jazz'], on: ['jazz', 'opera'], countries: ['DE', 'pt'], countriesOn: ['DE', 'FR'] }),
+    { genres: ['rock', 'jazz'], on: ['jazz'], allGenres: false, yours: false, countries: ['DE'], countriesOn: ['DE'] });
+  assert.deepEqual(parsePrefs({ genres: ['rock'], on: ['rock'], allGenres: true }).on, []); // All genres turns the single ones off
+  // The RA2 shape: its sticker is not turned on (never prefilled); its country becomes a country that is on.
+  const old = parsePrefs({ genres: ['jazz'], country: 'DE', sticker: 'jazz' });
+  assert.deepEqual([old.on, old.countries, old.countriesOn, hasSelection(old)], [[], ['DE'], ['DE'], false]);
   const s = stationFromEvent(byName('Omarchy Radio'))!;
   const saved = parseSaved({
     [s.id]: { at: 2, item: s },
@@ -129,4 +146,12 @@ test('a station is what Your stations keeps; a live show is not', () => {
   assert.equal(isStation(stationFromEvent(byName('Omarchy Radio'))!), true);
   assert.equal(isStation(liveFromEvent(byTitle('The Lot Radio'), NOW)!), false);
   assert.equal(isStation({ address: undefined }), false);
+});
+
+test('words take turns, so a small word (bitcoin) is not buried under a big one (jazz)', () => {
+  const mk = (id: string) => ({ ...stationFromEvent(byName('Omarchy Radio'))!, id });
+  const jazz = Array.from({ length: 5 }, (_, k) => mk(`j${k}`));
+  const bitcoin = [mk('b0'), mk('b1')];
+  assert.deepEqual(takeTurns([jazz, bitcoin]).map(i => i.id), ['j0', 'b0', 'j1', 'b1', 'j2', 'j3', 'j4']);
+  assert.deepEqual(takeTurns([]), []);
 });

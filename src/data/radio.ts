@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { onlyEvents } from 'applesauce-relay';
 import { use$ } from 'applesauce-react/hooks';
 import type { Filter, NostrEvent } from 'applesauce-core/helpers';
-import { RELAYS, eventStore } from '../lib/applesauce.ts';
+import { RELAYS, eventStore, pool } from '../lib/applesauce.ts';
 import type { MediaItem } from '../lib/media.ts';
-import { chunk } from '../lib/mediaFilters.ts';
-import { LIVE_KIND, PAGE, RADIO_RELAY, STATION_KIND, liveFromEvent, stationFromEvent } from '../lib/radio.ts';
+import { LIVE_KIND, MAX_LOADED, PAGE, RADIO_RELAY, STATION_KIND, liveFromEvent, perWord, stationFromEvent, takeTurns } from '../lib/radio.ts';
 import { unlimited, useRelayFeed } from './nostr.ts';
 
 // Where Radio's stations and live shows come from (feat-radio §RA2, §RA3b). Nothing waits on a relay: the lists
@@ -12,7 +12,6 @@ import { unlimited, useRelayFeed } from './nostr.ts';
 
 export const STATION_RELAYS: readonly string[] = [...new Set([RADIO_RELAY, ...RELAYS])];
 export const LIVE_RELAYS: readonly string[] = [...new Set(['wss://relay.zap.stream', ...RELAYS])];
-const AUTHORS_PER_FILTER = 100;
 
 const stations = new WeakMap<NostrEvent, MediaItem | null>();
 function asStation(event: NostrEvent): MediaItem | null {
@@ -27,28 +26,54 @@ function useStationEvents(filters: Filter[], key: string): MediaItem[] {
   return useMemo(() => (events ?? []).map(asStation).filter((s): s is MediaItem => s !== null), [events]);
 }
 
-/** One genre's stations, newest first (one page of up to 500). */
-export function useGenreStations(genre: string | undefined): MediaItem[] {
-  const filters = useMemo<Filter[]>(() => (genre ? [{ kinds: [STATION_KIND], '#c': [genre], limit: PAGE }] : []), [genre]);
-  return useStationEvents(filters, `stations:genre:${genre ?? ''}`);
-}
-
-/** The newest stations (one page): where the genre picker's list comes from. */
-export function useRecentStations(enabled: boolean): MediaItem[] {
-  const filters = useMemo<Filter[]>(() => (enabled ? [{ kinds: [STATION_KIND], limit: PAGE }] : []), [enabled]);
-  return useStationEvents(filters, `stations:recent:${enabled}`);
-}
-
-/** Stations posted by people you follow. */
-export function useFollowedStations(follows: string[] | undefined): MediaItem[] {
-  const key = follows ? follows.join(',') : '';
-  const filters = useMemo<Filter[]>(
-    () => chunk(follows ?? [], AUTHORS_PER_FILTER).map(authors => ({ kinds: [STATION_KIND], authors, limit: PAGE })),
-    // follows is represented by key
+/** The stations for the words that are on (spec RA5): each word as a genre (`#c`, every station relay; the device
+ *  cache answers at once) and as a text search of names and descriptions (NIP-50, only the station relay). Each
+ *  word asks for its share of 300; the genre answers come first, then the search answers, at most 300 in all. */
+export function useWordStations(words: readonly string[]): MediaItem[] {
+  const key = words.join('|');
+  const per = perWord(words.length);
+  const genreFilters = useMemo<Filter[]>(() => words.map(w => ({ kinds: [STATION_KIND], '#c': [w], limit: per })),
+    // words is represented by key
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [key],
-  );
-  return useStationEvents(filters, `stations:follows:${key}`);
+    [key, per]);
+  const byGenre = useStationEvents(genreFilters, `stations:words:${key}`);
+
+  // The store cannot answer a text search, so what the relay sends back for each word is kept here.
+  const [found, setFound] = useState<{ key: string; byWord: Record<string, NostrEvent[]> }>({ key: '', byWord: {} });
+  useEffect(() => {
+    if (words.length === 0) return;
+    const got: Record<string, NostrEvent[]> = {};
+    const subs = words.map(w => pool.subscription([RADIO_RELAY], [{ kinds: [STATION_KIND], search: w, limit: per }]).pipe(onlyEvents()).subscribe({
+      next: event => {
+        eventStore.add(event);
+        (got[w] ??= []).push(event);
+        setFound({ key, byWord: { ...got } });
+      },
+      error: error => { console.error('[radio] search failed:', error); },
+    }));
+    return () => subs.forEach(s => s.unsubscribe());
+    // words is represented by key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, per]);
+
+  return useMemo(() => {
+    const searched = found.key === key ? found.byWord : {};
+    // Per word: its genre answers, then its search answers; the words take turns (radioQueue keeps 300).
+    const lists = words.map(w => [
+      ...byGenre.filter(s => s.genres?.includes(w)),
+      ...(searched[w] ?? []).map(asStation).filter((s): s is MediaItem => s !== null),
+    ]);
+    return takeTurns(lists).slice(0, MAX_LOADED * 2);
+    // words is represented by key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byGenre, found, key]);
+}
+
+/** The newest stations: where the genre picker's list comes from (one page of 500), and what All genres plays
+ *  (300, spec RA5). */
+export function useRecentStations(enabled: boolean, limit: number = PAGE): MediaItem[] {
+  const filters = useMemo<Filter[]>(() => (enabled ? [{ kinds: [STATION_KIND], limit }] : []), [enabled, limit]);
+  return useStationEvents(filters, `stations:recent:${enabled}:${limit}`);
 }
 
 // Live now changes with the clock (a show not updated for an hour has ended), so it is read again every minute.

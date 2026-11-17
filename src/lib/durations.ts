@@ -95,10 +95,14 @@ function request(urls: string[]): void {
   pump();
 }
 
-// The same items, with `duration` filled in where it was unknown and has since been read.
-export function useProbedDurations(items: MediaItem[]): MediaItem[] {
+// The same items, with `duration` filled in where it was unknown and has since been read. `deep` (an open Music or
+// Podcasts list): measuring keeps going down the whole list, 40 waiting at a time, so older posts are measured too
+// and old podcasts are found (zapa, 2026-11-17: "im missing a bunch of old podcasts only find most recent ones").
+// Without it (the board's previews) only the first 40 items are measured.
+export function useProbedDurations(items: MediaItem[], deep = false): MediaItem[] {
   const [version, setVersion] = useState(0);
-  const key = items.slice(0, MAX_PROBES).map(i => i.url).join('\n');
+  const unknown = (i: MediaItem) => i.kind === 'audio' && i.origin === 'nostr' && i.duration === undefined && !known.has(i.url);
+  const key = (deep ? items.filter(unknown) : items).slice(0, MAX_PROBES).map(i => i.url).join('\n');
 
   useEffect(() => {
     const onChange = () => setVersion(v => v + 1);
@@ -107,7 +111,8 @@ export function useProbedDurations(items: MediaItem[]): MediaItem[] {
   }, []);
 
   useEffect(() => {
-    request(items.filter(i => i.kind === 'audio' && i.origin === 'nostr' && i.duration === undefined).slice(0, MAX_PROBES).map(i => i.url));
+    if (deep) request(items.filter(unknown).slice(0, MAX_PROBES).map(i => i.url));
+    else request(items.slice(0, MAX_PROBES).filter(i => i.kind === 'audio' && i.origin === 'nostr' && i.duration === undefined).map(i => i.url));
     // the list is represented by its keyed urls
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);

@@ -546,10 +546,6 @@ h1 {
   font-size: clamp(1.6rem, 1.1rem + 2.2vw, 2.6rem);
   margin: 0;
 }
-.count {
-  font: 400 0.85rem var(--mono);
-  color: var(--muted);
-}
 .back {
   font: 800 0.95rem var(--body);
   text-decoration: none;
@@ -2635,9 +2631,6 @@ a.chip-btn {
     flex-wrap: nowrap;
     gap: 8px;
   }
-  .panel-head .count {
-    display: none;
-  }
   .panel-head .head-title {
     flex: 1 1 0;
     font-size: 0.95rem;
@@ -3096,14 +3089,97 @@ a.chip-btn {
 }
 
 /* RA2: Radio's stickers under the picker's header: little coloured stickers in one row that scrolls sideways */
-.radio-bar {
+/* RA5 (zapa: "make it look inserted into the bezel"): a strip of the bezel's orange plastic, recessed into the
+   window, with the stickers as keys set into it. It scrolls sideways under its own little slider. */
+.radio-dash {
   flex: none;
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 2px 4px 8px;
   margin-top: 6px;
-  scrollbar-width: thin;
+}
+.radio-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 8px;
+  border: 2.5px solid var(--ink);
+  border-radius: 14px 14px 8px 8px;
+  background: linear-gradient(180deg, #e2551b 0%, #ff7a3d 40%, #ffab73 100%);
+  box-shadow: inset 0 3px 6px #00000080, inset 0 -1px 0 #ffffff55;
+  scrollbar-width: none;
+}
+.radio-bar::-webkit-scrollbar {
+  display: none;
+}
+.radio-bar .radio-chip {
+  rotate: 0deg;
+  border-radius: 9px 9px 7px 7px;
+  min-height: 32px;
+  padding: 6px 11px;
+  box-shadow: 0 2px 0 #000, inset 0 -2px 3px #00000026;
+  background-image: linear-gradient(180deg, #ffffff8c 0%, #ffffff00 50%, #00000014 100%);
+}
+.radio-bar .radio-chip[aria-pressed="true"] {
+  outline: none;
+  translate: 0 2px;
+  box-shadow: 0 0 0 #000, inset 0 2px 5px #00000066;
+  background-image: none;
+}
+.radio-bar .radio-chip:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+.radio-bar .radio-add {
+  border-style: dashed;
+  border-color: var(--ink);
+  color: var(--ink);
+  background: #ffffff66;
+  box-shadow: none;
+}
+.radio-bar .radio-gap {
+  align-self: stretch;
+  background: #00000040;
+}
+/* the little slider under the strip: the same plastic as the seek bar's track, a small round knob */
+.radio-slider {
+  display: block;
+  width: calc(100% - 24px);
+  height: 18px;
+  margin: 4px auto 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+.radio-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #00000066;
+  box-shadow: inset 0 1px 2px #000;
+}
+.radio-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #00000066;
+}
+.radio-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 30px;
+  height: 14px;
+  margin-top: -4px;
+  border-radius: 7px;
+  border: 2px solid var(--ink);
+  background: radial-gradient(circle at 35% 28%, #fff 0%, #ffab73 40%, #e2551b 100%);
+}
+.radio-slider::-moz-range-thumb {
+  width: 30px;
+  height: 14px;
+  border-radius: 7px;
+  border: 2px solid var(--ink);
+  background: radial-gradient(circle at 35% 28%, #fff 0%, #ffab73 40%, #e2551b 100%);
+}
+.radio-slider:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 1px;
+  border-radius: 9px;
 }
 .radio-chip {
   flex: none;
@@ -3125,9 +3201,35 @@ a.chip-btn {
 .radio-chip:nth-child(even) {
   rotate: 1.2deg;
 }
-.radio-chip.c-butter,
-.radio-country {
+.radio-word {
   text-transform: none;
+}
+.radio-all {
+  background: var(--butter);
+}
+.radio-gap {
+  flex: none;
+  width: 2px;
+  margin-inline: 4px;
+  background: #ffffff40;
+}
+.radio-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.radio-x {
+  font: 800 0.8rem/1 var(--body);
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: 6px;
+  cursor: pointer;
+}
+/* off: plain paper; on: its colour with an orange ring (several can be on) */
+.radio-chip[aria-pressed="false"] {
+  background: #ffffffd9;
+  color: #555;
 }
 .radio-chip.c-mint { background: var(--mint); }
 .radio-chip.c-pink { background: var(--pinkp); }
