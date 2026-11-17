@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PlaybackPlugin.class); // media controls (spec feat-android-native §N1)
         registerPlugin(LocalFoldersPlugin.class); // remembered folders (§N2)
+        registerPlugin(TvPlugin.class); // TV or not, and leaving (feat-tv-remote TV3-4)
         super.onCreate(savedInstanceState);
         bridge.setWebViewClient(new LocalFilesWebViewClient(bridge)); // serves /_madstr_local/ (§N2)
         hideSystemBars();
@@ -26,12 +27,22 @@ public class MainActivity extends BridgeActivity {
     }
 
     /** Back (the swipe or the button) is the page's back, not an exit (zapa, feat-phone-inline §P12). On the board
-     *  it sends the app to the background, so the music keeps playing; anywhere else it goes back a page, or to the
-     *  board when there is nothing to go back to. */
+     *  a phone sends the app to the background, so the music keeps playing; a TV asks "Leave Juke⚡tr?" instead
+     *  (feat-tv-remote TV3-4; Back again answers Stay). Anywhere else it goes back a page, or to the board when there
+     *  is nothing to go back to. */
     private void goBack() {
         WebView web = bridge.getWebView();
         web.evaluateJavascript("(function(){var h=location.hash;return h===''||h==='#'||h==='#/';})()", onBoard -> {
-            if ("true".equals(onBoard)) moveTaskToBack(true);
+            if ("true".equals(onBoard)) {
+                if (!TvPlugin.isTv(this)) {
+                    moveTaskToBack(true);
+                    return;
+                }
+                // The page shows (or closes) the pop-up; if it cannot, keep the old behaviour rather than trap Back.
+                web.evaluateJavascript("(function(){return typeof window.jukeAskLeave==='function'?(window.jukeAskLeave(),'asked'):'no';})()", asked -> {
+                    if (!"\"asked\"".equals(asked)) moveTaskToBack(true);
+                });
+            }
             else if (web.canGoBack()) web.goBack();
             else web.evaluateJavascript("location.hash='#/'", null);
         });

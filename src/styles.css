@@ -3330,3 +3330,37 @@ a.chip-btn {
 .dock-play {
   overflow: visible;
 }
+
+/* feat-tv-remote TV3-4: "Leave Juke⚡tr?" on a TV, in the look of Radio's genre picker */
+.leave-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #0b0716cc;
+}
+.leave {
+  width: min(460px, 100%);
+  padding: 22px 24px 24px;
+  color: var(--text);
+  background: var(--space-2);
+  border: 3px solid #000;
+  border-radius: 22px 22px 10px 10px;
+  box-shadow: 6px 8px 0 #000;
+  text-align: center;
+}
+.leave h2 {
+  margin: 0 0 6px;
+  font: 800 1.6rem var(--display, inherit);
+}
+.leave p {
+  margin: 0 0 18px;
+  color: var(--muted, #b9b3c9);
+}
+.leave-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}

@@ -96,8 +96,9 @@ final class MediaHub {
             case KeyEvent.KEYCODE_HEADSETHOOK: return "toggle";
             case KeyEvent.KEYCODE_MEDIA_NEXT: return "next";
             case KeyEvent.KEYCODE_MEDIA_PREVIOUS: return "previous";
-            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: return "forward";
-            case KeyEvent.KEYCODE_MEDIA_REWIND: return "rewind";
+            // A TV remote's prev / next buttons send these (zapa's Vestel): previous / next item (feat-tv-remote TV3-2).
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: return "next";
+            case KeyEvent.KEYCODE_MEDIA_REWIND: return "previous";
             case KeyEvent.KEYCODE_MEDIA_STOP: return "stop";
             default: return null;
         }
