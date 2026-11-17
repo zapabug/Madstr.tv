@@ -749,4 +749,7 @@ Spec: feat-tv-remote.md TV7-1 … TV7-6
 ## Release 1.6 — the TV remote, on zapstore and pleb.world [2026-11-17]
 - zapa tried the debug build on his TV: "all work" (the QR login failure was his phone on the wrong network; the
   relays refused the signer's reply as expired, nothing in the build). TV size stays 1280 (no 1920 pick asked for).
-- versionCode 7 / 1.6, CHANGELOG 1.6; feat/tv-remote merged into main.
+- versionCode 7 / 1.6, CHANGELOG 1.6; feat/tv-remote merged into main (d35c97f) and pushed to GitHub.
+- APK: aapt2 com.madstr.tvapp 1.6 (7), release cert `92aca110…d8c7`; `zapstore check` ok; `zapstore publish` event
+  `7ecc484c…`, status pending (as 1.5 was).
+- Web: `deploy-pleb.sh`, plebworld 7bb4ada pushed; pleb.world/jukestr served the new build about 30 s later.
