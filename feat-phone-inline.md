@@ -294,3 +294,17 @@ home screen's short name, the logo's label for screen readers) it is **Jukestr**
 - Unchanged, so nobody loses anything: the Android app id (`com.madstr.tvapp`, so 1.x updates install over it), and
   every saved setting and login on the device (their keys keep the `madstr` prefix). The web app's offline cache
   is renamed `jukestr-…` and clears the old `madstr-…` ones.
+
+## P29: The logo, on every icon and on the Play button
+
+zapa, 2026-11-17: "this is the app logo for the build and install" (`appiconbrandmark.png`: the magenta play
+triangle with the lemon bolt, die-cut sticker style, on a deep purple sky), "theres also an svg on root for the play
+Button" (`madstrtv-mark.svg`, the same mark alone). Kept as the sources in `assets/brand/`; `scripts/make-icons.sh`
+makes every size from them.
+- The install icons: the web app's 192 / 512 and the Apple touch icon (180) are the picture as it is; zapstore's
+  listing uses the 512. Where a launcher crops the icon to a circle or squircle (the web app's maskable icon,
+  Android's adaptive and round icons), the mark alone sits inside the safe zone on the picture's deep purple
+  (`#3D034E`), so its points are not cut off. Android's old square icon is the picture.
+- The browser tab's icon (`favicon.svg`) is the mark. The Android start screen shows the mark in place of the old
+  orange bolt, on the app's dark background.
+- **Play**: the big play button shows the mark instead of a plain triangle; Pause stays two bars.

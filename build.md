@@ -34,6 +34,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | D4 | Vercel project madstr-tv removed | waiting on zapa (dashboard) |
 | D5 | Android 1.3 on zapstore | published 2026-11-15 |
 | P1 | Phone controls in two compact rows (feat-phone-inline) | built; released in 1.4 |
+| P29 | The logo on every icon, the start screen and the Play button | built (905ffb0); not released |
 | P2-P27 | Phone layouts, Open signer, Make it yours, Jukestr 3000 look | built + machine-verified; shaped live with zapa on his phone (test builds); not released |
 | P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; pleb.world committed, not pushed |
 
@@ -559,3 +560,17 @@ Spec: feat-radio.md §RA5, feat-taste-cache.md §T4
   On the TV account the walk now reached 2020 and the start in a minute (it has only 38 audio posts in all).
 - The look of the sticker strip (inset into the bezel) is waiting for zapa; left as it is for now (his call).
 - Tests 226/226, lint clean, build passes.
+
+## P29 — The logo on every icon, the start screen and the Play button [built, awaiting zapa]
+Commit: 905ffb0
+Spec: feat-phone-inline.md P29
+
+- Sources in `assets/brand/`: `app-icon.png` (zapa's appiconbrandmark, 1024) and `mark.svg` (madstrtv-mark.svg);
+  the old `assets/icon.png` (orange bolt) is gone. `scripts/make-icons.sh` (ImageMagick + rsvg-convert) writes:
+  web 192 / 512 / apple-touch 180 (the picture), maskable 512 (the mark at 68 % on the purple), `favicon.svg` (the
+  mark), Android `ic_launcher` (picture), `ic_launcher_round` (mark 72 % on purple, circle), adaptive foreground
+  (mark 54 %, inside the 66 dp safe zone; background colour `#3D034E`), and every `splash.png` (mark 30 % of the
+  short side on `#0B0716`). The mark gets the picture's die-cut border (cream `#FEFEDC`, dark edge).
+- `MarkIcon` (icons.tsx) is the big Play button on the player and the board's bar; Pause stays two bars.
+- Checked: a contact sheet of the icons (safe circle drawn over the adaptive one), the board and the player in headless
+  Chromium (Play shows the mark when paused). Tests 226/226, lint, build. Not yet in an Android build.
