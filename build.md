@@ -35,7 +35,8 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | D5 | Android 1.3 on zapstore | published 2026-11-15 |
 | P1 | Phone controls in two compact rows (feat-phone-inline) | built; released in 1.4 |
 | P29 | The logo on every icon, the start screen and the Play button | built (905ffb0); not released |
-| Final pass | Your Nostr Jukebox, bolt in the wordmark, README, zapstore notes | built (fb46755); not deployed |
+| Final pass | Your Nostr Jukebox, bolt in the wordmark, README, zapstore notes | built (fb46755); deployed 2026-11-17 |
+| Release 1.5 | Android 1.5 (versionCode 6) on zapstore; web on pleb.world/jukestr | published 2026-11-17 (event ba7b7198…, pending at zapstore) |
 | P2-P27 | Phone layouts, Open signer, Make it yours, Jukestr 3000 look | built + machine-verified; shaped live with zapa on his phone (test builds); not released |
 | P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; pleb.world committed, not pushed |
 
@@ -591,3 +592,15 @@ Spec: feat-phone-inline.md P28, P29
   `zapstore.yaml` reads it (`release_notes`, as zsp documents), with a new summary, description and a radio tag.
 - Page meta / og and manifest descriptions match; project AGENTS.md title; Status.md rewritten to the current state.
 - Checked: the wordmark on home, the player and a 412 px phone; tests 226/226, lint, build; zapstore.yaml parses.
+
+## Release 1.5 — Android on zapstore, web on pleb.world [published 2026-11-17]
+Commits: 3ef26ea (version 1.5 / versionCode 6, CHANGELOG dated), f3fbb3c (Android TV banner)
+
+- The Android TV banner still said "Madstr tv · nostr" with the orange bolt; `make-icons.sh` now draws it (sticker
+  mark + Juke⚡tr wordmark + "your nostr jukebox") in headless Chromium with the app's fonts.
+- APK: `aapt2` reports com.madstr.tvapp 1.5 (6), label Juke⚡tr; signed with the release key (cert `92aca110…d8c7`,
+  same as the C1 proof); `zsp check` ok, authorized; `zapstore publish` accepted, event `ba7b7198…`, status pending.
+- Web: `deploy-pleb.sh`, pleb.world sticker now "Your Nostr jukebox: …" with the mark as the S (plebworld 395eb3a),
+  pushed. Madstr.tv main pushed to GitHub.
+- Re-running make-icons.sh rewrites PNGs whose pixels did not change (ImageMagick dates them); the web icons were
+  checked (0 pixels differ) and left out of the commit.
