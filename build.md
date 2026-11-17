@@ -35,6 +35,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | D5 | Android 1.3 on zapstore | published 2026-11-15 |
 | P1 | Phone controls in two compact rows (feat-phone-inline) | built; released in 1.4 |
 | P29 | The logo on every icon, the start screen and the Play button | built (905ffb0); not released |
+| Final pass | Your Nostr Jukebox, bolt in the wordmark, README, zapstore notes | built (fb46755); not deployed |
 | P2-P27 | Phone layouts, Open signer, Make it yours, Jukestr 3000 look | built + machine-verified; shaped live with zapa on his phone (test builds); not released |
 | P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; pleb.world committed, not pushed |
 
@@ -577,3 +578,15 @@ Spec: feat-phone-inline.md P29
 - Then ("make sure the play button goes everywhere it need one"): the now-playing card's playing sign is the mark;
   Android's notification / lock-screen Play and the status-bar icon are the mark's silhouette (even-odd: triangle with
   the bolt cut out). `gradlew :app:processDebugResources` passes. Sticker glyphs stay one-colour glyphs.
+
+## Final pass — Your Nostr Jukebox, the wordmark's bolt, README, zapstore notes [built]
+Commit: fb46755
+Spec: feat-phone-inline.md P28, P29
+
+- Home headline "Your Nostr Jukebox" ("Nostr" in the gradient), zapa's pick from four suggestions.
+- The S of Juke⚡tr (header, player top line) is the logo's bolt (`MarkIcon boltOnly`), sized in em from the text.
+- README rewritten for the app as it is (Radio, the logo, phones, Make it yours, shipping, icons, layout).
+- `CHANGELOG.md`: release notes 1.0 to 1.5 (1.5 marked unreleased; give it its date when it ships);
+  `zapstore.yaml` reads it (`release_notes`, as zsp documents), with a new summary, description and a radio tag.
+- Page meta / og and manifest descriptions match; project AGENTS.md title; Status.md rewritten to the current state.
+- Checked: the wordmark on home, the player and a 412 px phone; tests 226/226, lint, build; zapstore.yaml parses.

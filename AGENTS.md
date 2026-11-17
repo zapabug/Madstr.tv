@@ -1,4 +1,4 @@
-# AGENTS.md: Mad⚡tr.tv
+# AGENTS.md: Juke⚡tr (repo Madstr.tv)
 
 Read `feat-applesauce-revamp.md` first: it is the spec and records what zapa decided. The
 `docs/` folder is notes from the first (NDK) version and may describe code that is gone.

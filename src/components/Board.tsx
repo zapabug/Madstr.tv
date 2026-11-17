@@ -148,7 +148,7 @@ export function Board() {
     <main className="board-page" ref={boardRef}>
       <section className="hero">
         <h1>
-          Mad <span className="grad">Player</span> Media
+          Your <span className="grad">Nostr</span> Jukebox
         </h1>
       </section>
 

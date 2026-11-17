@@ -291,6 +291,8 @@ home screen's short name, the logo's label for screen readers) it is **Jukestr**
   `/jukestr/` and copied into pleb.world's `public/jukestr/`; pleb.world's sticker says Juke⚡tr and opens
   `/jukestr/`. The RSS proxy stays at `/api/rss`. zapa: "i assume no one is using it yet", so `/madstr/` is
   removed, with no redirect.
+- The home screen's headline (zapa, 2026-11-17, picked from suggestions): **Your Nostr Jukebox**, "Nostr" in the
+  gradient (it was "Mad Player Media").
 - Unchanged, so nobody loses anything: the Android app id (`com.madstr.tvapp`, so 1.x updates install over it), and
   every saved setting and login on the device (their keys keep the `madstr` prefix). The web app's offline cache
   is renamed `jukestr-…` and clears the old `madstr-…` ones.
@@ -305,7 +307,9 @@ makes every size from them.
   listing uses the 512. Where a launcher crops the icon to a circle or squircle (the web app's maskable icon,
   Android's adaptive and round icons), the mark alone sits inside the safe zone on the picture's deep purple
   (`#3D034E`), so its points are not cut off. Android's old square icon is the picture.
-- The browser tab's icon (`favicon.svg`) is the mark. The Android start screen shows the mark in place of the old
+- The browser tab's icon (`favicon.svg`) is the mark. The S of the Juke⚡tr wordmark (the header and the player
+  screen's top line) is the logo's bolt, not the ⚡ emoji (zapa: "the lighting bolt on jukestr top scren etc use the
+  brand mark aswell"). The Android start screen shows the mark in place of the old
   orange bolt, on the app's dark background.
 - **Play**: the big play button shows the mark instead of a plain triangle, **oversized** (zapa: "the play icon
   should be over sized as its the logo"): 135 % of the dome in every layout, reaching out past its edge. While something plays the
