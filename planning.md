@@ -346,7 +346,8 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - 2026-11-18: feat-lava-lamp LL1-LL3 built on feat/lava-lamp: per-host CORS memory, the sound tap and the
   rhythm (7fa7933), the stable-fluids lamp behind the TV's slideshow (e27bf4d); LL4-1 machine-checked.
   On zapa's Vestel: no WebGL2 and no WebGL1 float textures (captureStream exists); Canvas 2D ~1 fps, so the
-  spec's black fallback shows there; direction fork (black vs byte-packed WebGL1 sim) is zapa's call.
+  spec's black fallback shows there. zapa decided: the feat ships for capable devices (no byte-packed WebGL1).
+  LL1's ask-retry-remember checked live headless against a CORS-yes and a CORS-no origin.
 - 2026-11-17: feat-tv-remote spec (TV1-TV7) written from the session on zapa's TV; finished specs moved to `archive/`.
 
 - 2026-11-15: audit (`audits/audit-2026-11-15.md`); zapa's answers recorded in the spec

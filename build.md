@@ -782,6 +782,13 @@ Spec: feat-lava-lamp.md LL1, LL2
 - Probed before writing LL1 (2026-11-18, real events): 47 of 49 answering radio streams allow reading;
   archive.org, audio.nostr.build, blossom.jumble.social, renaissancemachine.ai allow it, storage.googleapis.com
   (Wavlake) does not — recorded in the spec.
+- Checked live headless (2026-11-18, the app's real hidden `<audio>`, two localhost origins — one sends
+  `Access-Control-Allow-Origin: *`, one sends none): an unknown host is asked with `crossOrigin="anonymous"`;
+  the allowing one plays and is remembered true; the refusing one is loaded again at once without asking
+  (no skip, one item in the queue throughout) and remembered false; a second file on the refusing host is
+  never asked (no Origin header on the wire), on the allowing one it is. Gotcha on the way: headless media
+  loads stall when the page is "hidden" — `--window-size` + `Page.bringToFront` (snippet
+  `headless-chromium-media-load-deferred-hidden-page.md`).
 
 ## LL3 — The lamp [built + machine-verified, awaiting zapa on the TV]
 Commit: e27bf4d
@@ -822,8 +829,8 @@ Spec: feat-lava-lamp.md LL3, LL-R1 … LL-R5
   the app otherwise unchanged. Gotcha on the way: gradle does not copy the web build into the APK —
   `npx cap sync android` after `pnpm build`, or the APK ships the previous bundle (snippet
   `madstr-apk-stale-web-assets-cap-sync.md`).
-- Direction fork for zapa: per the spec the Vestel shows black (the lamp lives on float-GL devices only);
-  a byte-packed WebGL1 sim is the only GPU path left on the Vestel, and it is uncertain (8-bit pressure
-  solve, the slow drift quantizing away). Awaiting his call.
-- Still for zapa's LL4-2 check on the TV (playback unchanged): a Wavlake song still plays (no sprays);
-  radio plays; background play.
+- Direction decided (zapa, 2026-11-18): "continue with the feat, it will work great for other devices" —
+  the spec's black fallback stands on the Vestel; the byte-packed WebGL1 idea is dropped.
+- Still for zapa's LL4-2 check: the lamp beside a picture and spraying in time on a device that can draw it
+  (his TV cannot; the Vestel check is the black fallback + playback unchanged: a Wavlake song still plays,
+  radio plays, background play). LL1's live behavior is machine-checked (see LL1-LL2 above).
