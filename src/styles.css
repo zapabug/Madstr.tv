@@ -3451,3 +3451,18 @@ html:has(.dock) {
   pointer-events: none;
   filter: drop-shadow(0 2px 3px #000a);
 }
+
+/* --- feat-lava-lamp LL3: the lava lamp behind the TV's pictures ------------------------------------------------ */
+/* It fills the picture area under the slideshow; black until it draws (and stays black where WebGL2 cannot). The
+   slides lose their black only when the lamp is there, so a picture sits whole on the lamp. */
+.lava-lamp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+}
+.lava-lamp ~ .slides {
+  background: transparent;
+}

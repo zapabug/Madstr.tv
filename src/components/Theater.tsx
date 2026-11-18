@@ -13,6 +13,7 @@ import { PlayerPanel } from './PlayerPanel.tsx';
 import { Slideshow, type SlideCommand } from './Slideshow.tsx';
 import { Avatar } from './People.tsx';
 import { Clock } from './Clock.tsx';
+import { LavaLamp } from './LavaLamp.tsx';
 import { Ticker } from './Ticker.tsx';
 import { TrackToast } from './TrackToast.tsx';
 
@@ -78,6 +79,7 @@ export function Theater({ data, hasVideo, pictures, modeLabel, modeHref, emptySt
       <div className="media" data-nav-group>
         <div className="stage-full" ref={zone} data-tap-zone onPointerUp={onTap}>
           {hasVideo && <video ref={player.registerVideo} playsInline hidden={!showingVideo} />}
+          {!showingVideo && <LavaLamp />}
           {!showingVideo && <Slideshow mine={pictures.mine} others={pictures.others} onCurrent={setSlide} command={command} />}
           {!showingVideo && pictureCount === 0 && emptyStage && (
             <div className="stage-empty">
