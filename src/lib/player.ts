@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { isHttpUrl, stripNostrRefs, type MediaItem } from './media.ts';
 import { played } from './played.ts';
 import { START_TIMEOUT_MS, isHls } from './radio.ts';
+import { READABLE_KEY, askToRead, crossHost, parseMemory, remember, serializeMemory } from './readableHosts.ts';
 import { mergeShuffled, nextIndex, nextRate, prevAction, rateKey, resumeTime, shuffleAround, unshuffle, validRate } from './queue.ts';
 
 export type Status = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -88,6 +89,11 @@ export class PlayerStore {
   private loadedLive = false;
   private hls: { el: HTMLMediaElement; url: string; player: HlsLike } | null = null;
   private silentTimer: ReturnType<typeof setTimeout> | null = null; // a live item that does not start or stops
+  // feat-lava-lamp LL1: hosts that let the app read their sound; the url loaded asking to read it that has not
+  // played yet; the url loaded again without asking after that failed.
+  private readable = parseMemory(read(READABLE_KEY));
+  private asking: string | null = null;
+  private retried: string | null = null;
 
   subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
@@ -108,6 +114,11 @@ export class PlayerStore {
   private elementFor(item: MediaItem | null): HTMLMediaElement | null {
     if (!item) return null;
     return item.kind === 'video' ? this.videoEl ?? this.audioEl : this.audioEl;
+  }
+
+  // The hidden <audio>, for the lava lamp's sound tap (feat-lava-lamp LL2), which only listens to it.
+  get soundElement(): HTMLAudioElement | null {
+    return this.audioEl;
   }
 
   // --- elements ----------------------------------------------------------------
@@ -167,6 +178,7 @@ export class PlayerStore {
     });
     on('playing', () => {
       if (!mine()) return;
+      if (el === this.audioEl) this.noteReadable(el.getAttribute('src'));
       this.failures = 0;
       this.startedLoaded = true;
       this.quiet();
@@ -187,7 +199,20 @@ export class PlayerStore {
       if (this.current?.live) this.listenForSilence();
     });
     on('ended', () => { if (mine()) this.onEnded(); });
-    on('error', () => { if (mine() && !(this.hls && this.hls.el === el)) this.onError(); }); // hls.js reports its own
+    on('error', () => {
+      if (!mine() || (this.hls && this.hls.el === el)) return; // hls.js reports its own
+      // LL1-2: a file asked for with crossOrigin that never played is loaded again at once without it; not a failure.
+      const url = el.getAttribute('src');
+      if (el === this.audioEl && url && url === this.asking && !this.startedLoaded) {
+        this.asking = null;
+        this.retried = url;
+        el.crossOrigin = null;
+        el.src = url;
+        if (this.wantPlay) this.start(el);
+        return;
+      }
+      this.onError();
+    });
   }
 
   // --- queue -------------------------------------------------------------------------
@@ -262,8 +287,10 @@ export class PlayerStore {
       this.playHls(el, item, play);
       return;
     }
-    if (el.getAttribute('src') !== item.url) el.src = item.url;
-    else if (this.pendingSeek !== null && el.readyState >= 1) {
+    if (el.getAttribute('src') !== item.url) {
+      this.askToRead(el, item.url);
+      el.src = item.url;
+    } else if (this.pendingSeek !== null && el.readyState >= 1) {
       // Same file already loaded, so no new 'loadedmetadata': jump to the hand-over second now.
       el.currentTime = this.pendingSeek;
       this.pendingSeek = null;
@@ -272,6 +299,29 @@ export class PlayerStore {
     this.set({ status: play ? 'loading' : 'paused', position: 0, duration: 0, error: null });
     if (play && item.live) this.listenForSilence();
     if (play) this.start(el);
+  }
+
+  // --- reading the sound (feat-lava-lamp LL1) ---------------------------------------------------------------
+  // Only the hidden <audio>: ask to read another site's file unless its host is known to refuse.
+  private askToRead(el: HTMLMediaElement, url: string): void {
+    this.retried = null;
+    if (el !== this.audioEl) { this.asking = null; return; }
+    const ask = askToRead(url, typeof location === 'undefined' ? '' : location.origin, this.readable);
+    el.crossOrigin = ask ? 'anonymous' : null;
+    this.asking = ask ? url : null;
+  }
+
+  // It played: asked and played means the host allows reading; played only after the retry means it refuses.
+  private noteReadable(url: string | null): void {
+    const ok = url !== null && url === this.asking;
+    const refused = url !== null && url === this.retried;
+    this.asking = null;
+    this.retried = null;
+    if (!ok && !refused) return;
+    const host = crossHost(url, typeof location === 'undefined' ? '' : location.origin);
+    if (!host || this.readable.get(host) === ok) return;
+    this.readable = remember(this.readable, host, ok);
+    write(READABLE_KEY, serializeMemory(this.readable));
   }
 
   // --- live items (feat-radio §RA3) ------------------------------------------------------------

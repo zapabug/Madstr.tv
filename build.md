@@ -753,3 +753,103 @@ Spec: feat-tv-remote.md TV7-1 … TV7-6
 - APK: aapt2 com.madstr.tvapp 1.6 (7), release cert `92aca110…d8c7`; `zapstore check` ok; `zapstore publish` event
   `7ecc484c…`, status pending (as 1.5 was).
 - Web: `deploy-pleb.sh`, plebworld 7bb4ada pushed; pleb.world/jukestr served the new build about 30 s later.
+
+# feat-lava-lamp (spec: feat-lava-lamp.md)
+
+| Milestone | Title | Status |
+| --- | --- | --- |
+| LL1 | Reading the sound where the host allows it | built + machine-verified (7fa7933); live-checked headless |
+| LL2 | The rhythm: bands, beats, spray colour | built + machine-verified (7fa7933) |
+| LL3 | The lamp | built + machine-verified (e27bf4d, 7c19d07); zapa: working (dev) |
+| LL4 | On a device | machine check done (LL4-1); zapa confirmed the lamp working on dev (LL4-2); Vestel stays black |
+
+## LL1-LL2 — Read the sound where allowed, hear the rhythm [built]
+Commit: 7fa7933
+Spec: feat-lava-lamp.md LL1, LL2
+
+- `src/lib/readableHosts.ts` (pure, 4 tests): per-host memory in `madstr:readable-hosts` (300 hosts, oldest
+  dropped), who gets asked with `crossOrigin="anonymous"` (another site's http(s) only; same-origin, blob: and
+  data: never). `src/lib/player.ts`: the hidden `<audio>` asks unless the host is known to refuse; a failure
+  before it ever played loads it again at once without asking (never a skip); the answer is remembered on
+  `playing`. The viewer's `<video>` and hls.js are untouched.
+- `src/lib/soundTap.ts`: `captureStream()` (or moz) on the playing `<audio>` into an AnalyserNode (FFT 2048,
+  smoothing 0.55) whose output ends in a gain of 0 — playback untouched (LL-R2); re-captures on `playing`,
+  suspends while the page is hidden, wakes on the next key or tap.
+- `src/lib/rhythm.ts` (pure, 5 tests): bass 2–12 / mid 12–93 / treble 93–372 against each band's own recent peak
+  (decay 0.2 /s, floor 0.08); a beat is bass over its running average × 1.2 + 0.03, at most one per 0.28 s; the
+  spray colour follows the leading band (bass magenta/pink/orange, mids orange/lemon/lilac, treble sky/mint,
+  turn by turn). Jukestr 3000 palette in `LAMP_COLOURS`.
+- Probed before writing LL1 (2026-11-18, real events): 47 of 49 answering radio streams allow reading;
+  archive.org, audio.nostr.build, blossom.jumble.social, renaissancemachine.ai allow it, storage.googleapis.com
+  (Wavlake) does not — recorded in the spec.
+- Checked live headless (2026-11-18, the app's real hidden `<audio>`, two localhost origins — one sends
+  `Access-Control-Allow-Origin: *`, one sends none): an unknown host is asked with `crossOrigin="anonymous"`;
+  the allowing one plays and is remembered true; the refusing one is loaded again at once without asking
+  (no skip, one item in the queue throughout) and remembered false; a second file on the refusing host is
+  never asked (no Origin header on the wire), on the allowing one it is. Gotcha on the way: headless media
+  loads stall when the page is "hidden" — `--window-size` + `Page.bringToFront` (snippet
+  `headless-chromium-media-load-deferred-hidden-page.md`).
+
+## LL3 — The lamp [built + machine-verified, awaiting zapa on the TV]
+Commit: e27bf4d
+Spec: feat-lava-lamp.md LL3, LL-R1 … LL-R5
+
+- `src/lib/lavaLamp.ts` + `src/lib/lavaShaders.ts` (GLSL ES 3.00, WebGL2): our own stable-fluids sim (after Jos
+  Stam; the Powder Toy napplet was learned from, not used — LL-R1, no new dependency). Flow 160×90, wax 384×216
+  (colour premultiplied, heat in alpha), 20 pressure steps, drawn 576×324 and scaled up (LL3-1). Three heaters
+  puff warm wax on the lava's own clock (rate 0.55), warm wax rises, cools (0.1 /s, faster near the top), sinks,
+  is rewarmed at the bottom (LL3-2). On a beat a spray shoots in from the edge (left 40 %, right 40 %, top /
+  bottom 10 %, aimed inward ± 34°, 0.45 s, strength 0.4 + 0.9 × loudness, a big beat may add a second), pushes
+  the flow, mixes in and stays; the heaters then puff the last three spray colours (LL3-3). Wax fades 0.01 /s;
+  past the budget (a quarter of the screen) the oldest melts away faster in proportion (LL3-4). The look
+  (LL3-5): purple glow, thin wax a soft glow, thick wax a sticker with black outline, hard shadow down-right and
+  a warm light band, all muted 22 % toward the purple.
+- `src/components/LavaLamp.tsx`: on every device, never with `prefers-reduced-motion: reduce` (LL-R5, every-device
+  change 7c19d07); mounted in `Theater.tsx` only when no video shows (never behind a video). No float textures →
+  no canvas, black as today; the sound tap is closed with the lamp.
+- `styles.css`: the lamp fills the picture area; `.slides` loses its black only behind it, so a picture sits
+  whole on the lamp.
+- Machine check LL4-1 (`pnpm test` 260/260, `pnpm lint` clean, `pnpm build` passes; headless Chromium,
+  `#/listen/music`, DOM and `gl.readPixels` numbers only, no screenshots): lamp appears on the viewer with no
+  TV mark (576×324) and `.slides` goes transparent; the frame is not blank; a same-origin 120 bpm tone through
+  the real hidden `<audio>` played untouched while the tap heard 11 beats in 5 s; `prefers-reduced-motion:
+  reduce` removes the lamp and allowing motion brings it back. The side-strip brightness check (sprays colour
+  the edges) passed on an earlier run (+20.6 against −1.1 drift-only) but is flaky under SwiftShader (context
+  loss mid-run freezes the frame); it is not a gate — zapa confirmed the sprays on the dev server.
+- ⚠ 5 undiscussed decisions, see planning.md (the "watching data-tv" one is gone with the TV gate).
+
+## LL4 — On a device [zapa confirmed the lamp working on dev 2026-11-18; Vestel stays black]
+
+- Measured on zapa's Vestel (adb + CDP, Android 11, WebView Chrome 142.0.7444.174 — the limits are the TV's
+  GPU driver, not the WebView's age): **no WebGL2 at all; WebGL1 without any float-texture extension**
+  (half-float framebuffer incomplete). The fluid sim cannot run there in any WebGL form. `captureStream()` and
+  `AudioContext` DO exist. Canvas 2D fallback probes: 16 radial gradients ~1 fps, a hand-rolled Uint32
+  pixel buffer ~0.5 fps — a CPU lamp is not viable either. Snippet: `vestel-tv-webview-no-webgl2-slow-canvas.md`.
+- Debug APK with LL1-LL3 installed on the TV: `data-tv` set, lamp canvas 576×324 present, `.slides`
+  transparent, canvas black (no WebGL2 → `startLavaLamp` returns null) — exactly LL-R5's "black, as today";
+  the app otherwise unchanged. Gotcha on the way: gradle does not copy the web build into the APK —
+  `npx cap sync android` after `pnpm build`, or the APK ships the previous bundle (snippet
+  `madstr-apk-stale-web-assets-cap-sync.md`).
+- Direction decided (zapa, 2026-11-18): "continue with the feat, it will work great for other devices" —
+  the spec's black fallback stands on the Vestel; the byte-packed WebGL1 idea is dropped.
+- Still for zapa's LL4-2 check: the lamp beside a picture and spraying in time on a device that can draw it
+  (his TV cannot; the Vestel check is the black fallback + playback unchanged: a Wavlake song still plays,
+  radio plays, background play). LL1's live behavior is machine-checked (see LL1-LL2 above).
+
+## Every device, not TV-only [zapa: working]
+Commit: 7c19d07
+Spec: feat-lava-lamp.md LL-R5, LL3-1, LL4
+
+- zapa, 2026-11-18: "again why is it tv only its an everydevice app including tv", "i did say it would look
+  nice on other devices aswell". Spec first (LL-R5, "What it is", LL3-1, LL4), then the code: the `data-tv`
+  gate and its MutationObserver are gone from `LavaLamp.tsx`; reduced motion is the only off switch; a device
+  without WebGL2 float textures still shows black.
+- `lavaLamp.ts`: `startLavaLamp` also refuses a context that is already lost (`gl.isContextLost()`), and the
+  cleanup no longer calls `WEBGL_lose_context` — dev StrictMode simulates an unmount and the re-mount reuses
+  the same canvas, so killing the context there left the lamp dead. On a real unmount the canvas is
+  garbage-collected with its context.
+- Headless re-check on the final code: lamp on the viewer with no TV mark, 576×324, `.slides` transparent,
+  the frame draws (nonBlack=1.0), a same-origin tone plays untouched and the tap hears 11 beats in 5 s,
+  reduced motion off and on again. The spray-strip metric stayed flaky under SwiftShader (see LL3); zapa
+  confirmed the lamp working, sprays included, on the real dev server.
+- `pnpm test` 260/260, `pnpm lint` clean, `pnpm build` passes.

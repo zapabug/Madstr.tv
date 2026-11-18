@@ -318,12 +318,46 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
 - **What I did:** a hold of OK anywhere turns the pointer on (it used to repeat the button, before TV3). The TV3 check was updated to turn it off again with Esc.
 - **Status:** awaiting lfg
 
+### 2026-11-18 · feat-lava-lamp LL3 · what the spec left open in the lamp
+- **Type:** spec-gap
+- **Spec ref:** LL3-2 … LL3-5
+- **What I did:**
+  - "Loudness" and "a big beat" (LL3-3): strength is 0.4 + 0.9 × loudness with loudness = eased
+    0.6·bass + 0.4·mid; a beat over 0.9 has a 50 % chance of a second, slightly weaker spray.
+  - Flow forces the spec does not number: the spray's push ×240, a heater's lift ×30, buoyancy
+    26·heat − 11·wax, vorticity confinement k = 10, velocity damping 1.2 /s. Tuned on dev so a blob
+    crosses the lamp in a few seconds and a spray reaches the middle; zapa's TV check is the real review.
+  - The first frame: the spec says nothing about the lamp at start; it seeds 8 blobs of the base
+    colours, some warm, so it is alive before the first heater puff.
+  - The sticker look (LL3-5): thin wax glows 0.03–0.38 density, thick at 0.38, the shadow sits
+    (−0.00625, +0.0139) off, the warm band at (+0.007, −0.0153); tuned by eye on dev against the boards.
+  - Small caps: heaters rotate their colour every 14 s; at most 4 sprays alive at once; bass / mid
+    easing 30/6 and 8/2.5 per second.
+- **Status:** awaiting lfg
+
+### 2026-11-18 · feat-lava-lamp LL-R5 · every device, not TV-only
+- **Type:** decision (zapa)
+- **Spec ref:** LL-R5, LL3-1, LL4
+- **What I did:** zapa asked why the lamp is TV-only ("it would look nice on other devices aswell"). The
+  `data-tv` gate and its MutationObserver are gone; the lamp runs on every device the app runs on, TV
+  included, still never behind a video and never with reduced motion. A device without WebGL2 float
+  textures (the Vestel) still shows black. The cleanup no longer kills the WebGL context (dev StrictMode
+  reuses the canvas); `startLavaLamp` refuses a context that is already lost.
+- **Status:** decided by zapa; confirmed working on the dev server
+
 ## Open questions
 
 - (none open)
 
 ## Change log
 
+- 2026-11-18: feat-lava-lamp LL1-LL3 built on feat/lava-lamp: per-host CORS memory, the sound tap and the
+  rhythm (7fa7933), the stable-fluids lamp behind the TV's slideshow (e27bf4d); LL4-1 machine-checked.
+  On zapa's Vestel: no WebGL2 and no WebGL1 float textures (captureStream exists); Canvas 2D ~1 fps, so the
+  spec's black fallback shows there. zapa decided: the feat ships for capable devices (no byte-packed WebGL1).
+  LL1's ask-retry-remember checked live headless against a CORS-yes and a CORS-no origin.
+  Later the same day: zapa made the lamp every-device, not TV-only (7c19d07), and confirmed it working on
+  the dev server. Merged to main and shipped on pleb.world/jukestr and as Android 1.7.
 - 2026-11-17: feat-tv-remote spec (TV1-TV7) written from the session on zapa's TV; finished specs moved to `archive/`.
 
 - 2026-11-15: audit (`audits/audit-2026-11-15.md`); zapa's answers recorded in the spec
