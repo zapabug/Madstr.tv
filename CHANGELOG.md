@@ -3,6 +3,19 @@
 Release notes for the Android app on zapstore (`zapstore.yaml` → `release_notes`). The web app at
 pleb.world/jukestr gets the same changes as they are deployed.
 
+## [1.7] - 2026-11-18
+
+A lava lamp behind the pictures.
+
+- **The lava lamp**: the black space around a picture in the viewer is now a lava lamp — blobs of wax drift on
+  their own slow pace, and on every beat of what is playing a spray of colour shoots in from the edge, swirls
+  into the wax and stays, so the colours keep mixing and changing with the music. It runs on every device the
+  app runs on, TV included; a device that cannot draw it (no WebGL2 float textures) keeps the black stage, as
+  before.
+- **The music never breaks for the lamp**: the sound is read where the host allows it (CORS); a track whose
+  host does not allow it still plays as today, the lamp then just drifts with no sprays. Reduced motion turns
+  the lamp off.
+
 ## [1.6] - 2026-11-17
 
 Juke⚡tr on the TV, with the remote that came with it.

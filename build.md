@@ -38,7 +38,9 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | Final pass | Your Nostr Jukebox, bolt in the wordmark, README, zapstore notes | built (fb46755); deployed 2026-11-17 |
 | Release 1.5 | Android 1.5 (versionCode 6) on zapstore; web on pleb.world/jukestr | published 2026-11-17 (event ba7b7198…, pending at zapstore) |
 | P2-P27 | Phone layouts, Open signer, Make it yours, Jukestr 3000 look | built + machine-verified; shaped live with zapa on his phone (test builds); not released |
-| P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; pleb.world committed, not pushed |
+| P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; live |
+| LL1-LL4 | Lava lamp behind the viewer's pictures (feat-lava-lamp) | built + machine-verified; zapa: working on dev |
+| Release 1.7 | Android 1.7 (versionCode 8) on zapstore; web on pleb.world/jukestr | published 2026-11-18 (event ae756273…, pending at zapstore) |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -853,3 +855,12 @@ Spec: feat-lava-lamp.md LL-R5, LL3-1, LL4
   reduced motion off and on again. The spray-strip metric stayed flaky under SwiftShader (see LL3); zapa
   confirmed the lamp working, sprays included, on the real dev server.
 - `pnpm test` 260/260, `pnpm lint` clean, `pnpm build` passes.
+
+## Release 1.7 — the lava lamp, on zapstore and pleb.world [2026-11-18]
+- zapa confirmed the lamp working on the dev server; every-device (not TV-only) per his call. Feat/lava-lamp
+  merged into main (ffd4862) and pushed to GitHub; the feat branch deleted.
+- versionCode 8 / 1.7, CHANGELOG 1.7; `pnpm build && npx cap sync android` (the sync is mandatory — see the
+  LL4 gotcha), `./gradlew :app:assembleRelease`, `scripts/sign-release.sh`.
+- APK: com.madstr.tvapp 1.7 (8), release cert `92aca110…d8c7`; `zapstore check` ok, authorized; `zapstore
+  publish` event `ae756273…`, status pending (as 1.5 and 1.6 were).
+- Web: `deploy-pleb.sh`, plebworld f61074c pushed; pleb.world/jukestr serves the lamp.

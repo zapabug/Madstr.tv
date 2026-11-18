@@ -13,7 +13,7 @@ last-worked: 2026-11-18
 
 ## Report
 Feat: Lava lamp behind the viewer's pictures
-State: Built and confirmed by zapa ("working" on the dev server). The lamp runs on every device the app runs on, TV included — not TV-only. It sits behind the slideshow, never behind a video, and turns off with reduced motion. A device without WebGL2 float textures (zapa's Vestel TV) shows black, as before. CORS ask-retry-remember is machine-checked live. 5 choices made in code wait for zapa's review in planning.md.
+State: Live on pleb.world/jukestr and published as Android 1.7 on zapstore (2026-11-18; zapstore showed it as pending at first). zapa confirmed it working on the dev server. The lamp runs on every device the app runs on, TV included — not TV-only. It sits behind the slideshow, never behind a video, and turns off with reduced motion. A device without WebGL2 float textures (zapa's Vestel TV) shows black, as before. Needs zapa to try 1.7 on his phone (the lamp beside a picture, radio making it spray, a Wavlake song still playing, background play). 5 choices made in code wait for his review in planning.md.
 ────────────────────────────────────────
 Feat: TV remote and TV layout
 State: Done and confirmed by zapa on his TV ("all work"), shipped as Android 1.6 on zapstore and on pleb.world/jukestr: focus never gets lost, the playlist reaches Play/Pause in one press, holding OK brings up a pointer, the remote's prev/next and channel keys work, text boxes wait for OK, Back asks before leaving, a TV layout at 1280 wide, and a big QR code to log in. 26 choices made in code still wait for zapa's review in planning.md.
@@ -36,8 +36,8 @@ State: Built and live. Feeds are read by the app's own small XML reader (the sam
 Feat: Web app on pleb.world/jukestr
 State: Live with its RSS proxy; the old pleb.world/madstr address is gone. Needs zapa to delete the old madstr-tv project in the Vercel dashboard.
 ────────────────────────────────────────
-Feat: Android app on zapstore (1.0 to 1.5)
-State: Published under zapa; 1.5 is the first named Juke⚡tr. zapa confirmed background play (1.1). Lock-screen controls, remembered folders and the sideways view are not yet confirmed on a device. Needs zapa to back up the release signing key.
+Feat: Android app on zapstore (1.0 to 1.7)
+State: Published under zapa; 1.5 is the first named Juke⚡tr, 1.6 the TV remote, 1.7 the lava lamp. zapa confirmed background play (1.1) and the TV remote (1.6, "all work"). Lock-screen controls, remembered folders and the sideways view are not yet confirmed on a device. Needs zapa to back up the release signing key.
 ────────────────────────────────────────
 Feat: Votes, hiding, the device cache, double tap to seek, played items hidden, shuffle, the remote pass, the Applesauce base
 State: Built, machine-verified and live; none confirmed by zapa yet. A list of choices made in code is waiting for his review in planning.md.
