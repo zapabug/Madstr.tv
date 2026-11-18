@@ -809,5 +809,21 @@ Spec: feat-lava-lamp.md LL3, LL-R1 … LL-R5
   only sprays enter) gained +20.6 brightness with the tone against −1.1 drift-only; `prefers-reduced-motion:
   reduce` removes the lamp and allowing motion brings it back.
 - ⚠ 6 undiscussed decisions, see planning.md.
-- OPEN for zapa's TV (LL4-2): WebGL2 float textures and 60 fps on the Vestel WebView; `captureStream()` there;
-  the lamp beside a picture; radio spraying in time; a Wavlake song still playing (no sprays); background play.
+
+## LL4 — On the TV [OPEN items answered 2026-11-18; zapa's check pending]
+
+- Measured on zapa's Vestel (adb + CDP, Android 11, WebView Chrome 142.0.7444.174 — the limits are the TV's
+  GPU driver, not the WebView's age): **no WebGL2 at all; WebGL1 without any float-texture extension**
+  (half-float framebuffer incomplete). The fluid sim cannot run there in any WebGL form. `captureStream()` and
+  `AudioContext` DO exist. Canvas 2D fallback probes: 16 radial gradients ~1 fps, a hand-rolled Uint32
+  pixel buffer ~0.5 fps — a CPU lamp is not viable either. Snippet: `vestel-tv-webview-no-webgl2-slow-canvas.md`.
+- Debug APK with LL1-LL3 installed on the TV: `data-tv` set, lamp canvas 576×324 present, `.slides`
+  transparent, canvas black (no WebGL2 → `startLavaLamp` returns null) — exactly LL-R5's "black, as today";
+  the app otherwise unchanged. Gotcha on the way: gradle does not copy the web build into the APK —
+  `npx cap sync android` after `pnpm build`, or the APK ships the previous bundle (snippet
+  `madstr-apk-stale-web-assets-cap-sync.md`).
+- Direction fork for zapa: per the spec the Vestel shows black (the lamp lives on float-GL devices only);
+  a byte-packed WebGL1 sim is the only GPU path left on the Vestel, and it is uncertain (8-bit pressure
+  solve, the slow drift quantizing away). Awaiting his call.
+- Still for zapa's LL4-2 check on the TV (playback unchanged): a Wavlake song still plays (no sprays);
+  radio plays; background play.

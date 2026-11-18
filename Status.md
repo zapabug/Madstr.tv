@@ -13,7 +13,7 @@ last-worked: 2026-11-18
 
 ## Report
 Feat: Lava lamp behind the TV's pictures
-State: Being built on feat/lava-lamp. Reading the sound where hosts allow it, the rhythm, and the lamp itself are built and machine-checked (tests, lint, build; headless Chromium on a fake TV: the lamp draws, a tone gives beats and edge sprays, reduced motion turns it off). Needs zapa's check on his TV (LL4-2): the lamp beside a picture, radio spraying in time, a Wavlake song playing without sprays, background play. 6 choices made in code wait for his review in planning.md.
+State: LL1-LL3 built and machine-checked on feat/lava-lamp. On his Vestel TV the WebView has no WebGL2 and no float textures, so the spec shows black there (the new debug build is installed and does exactly that; captureStream exists, but there is nothing to draw with). Waiting on zapa's call: accept black on his TV, or try a byte-packed WebGL1 sim (uncertain). Then his LL4-2 check: a Wavlake song still plays, radio plays, background play. 6 choices made in code wait for his review in planning.md.
 ────────────────────────────────────────
 Feat: TV remote and TV layout
 State: Done and confirmed by zapa on his TV ("all work"), shipped as Android 1.6 on zapstore and on pleb.world/jukestr: focus never gets lost, the playlist reaches Play/Pause in one press, holding OK brings up a pointer, the remote's prev/next and channel keys work, text boxes wait for OK, Back asks before leaving, a TV layout at 1280 wide, and a big QR code to log in. 26 choices made in code still wait for zapa's review in planning.md.
