@@ -2,7 +2,7 @@
 project: Juke⚡tr (repo Madstr.tv)
 repo: /home/jester/Projects/Madstr.tv
 owner: zapa
-last-worked: 2026-11-17
+last-worked: 2026-11-18
 
 ## Where to look
 - build.md: what was built per milestone, with commits and known gaps
@@ -12,6 +12,9 @@ last-worked: 2026-11-17
 - AGENTS.md: rules and verify commands
 
 ## Report
+Feat: Lava lamp behind the TV's pictures
+State: Being built on feat/lava-lamp. Reading the sound where hosts allow it, the rhythm, and the lamp itself are built and machine-checked (tests, lint, build; headless Chromium on a fake TV: the lamp draws, a tone gives beats and edge sprays, reduced motion turns it off). Needs zapa's check on his TV (LL4-2): the lamp beside a picture, radio spraying in time, a Wavlake song playing without sprays, background play. 6 choices made in code wait for his review in planning.md.
+────────────────────────────────────────
 Feat: TV remote and TV layout
 State: Done and confirmed by zapa on his TV ("all work"), shipped as Android 1.6 on zapstore and on pleb.world/jukestr: focus never gets lost, the playlist reaches Play/Pause in one press, holding OK brings up a pointer, the remote's prev/next and channel keys work, text boxes wait for OK, Back asks before leaving, a TV layout at 1280 wide, and a big QR code to log in. 26 choices made in code still wait for zapa's review in planning.md.
 ────────────────────────────────────────

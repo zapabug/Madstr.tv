@@ -753,3 +753,61 @@ Spec: feat-tv-remote.md TV7-1 … TV7-6
 - APK: aapt2 com.madstr.tvapp 1.6 (7), release cert `92aca110…d8c7`; `zapstore check` ok; `zapstore publish` event
   `7ecc484c…`, status pending (as 1.5 was).
 - Web: `deploy-pleb.sh`, plebworld 7bb4ada pushed; pleb.world/jukestr served the new build about 30 s later.
+
+# feat-lava-lamp (spec: feat-lava-lamp.md)
+
+| Milestone | Title | Status |
+| --- | --- | --- |
+| LL1 | Reading the sound where the host allows it | built + machine-verified (7fa7933); awaiting zapa on the TV |
+| LL2 | The rhythm: bands, beats, spray colour | built + machine-verified (7fa7933); awaiting zapa on the TV |
+| LL3 | The lamp | built + machine-verified (e27bf4d); awaiting zapa on the TV |
+| LL4 | On the TV | machine check done (LL4-1); zapa's TV check pending (LL4-2) |
+
+## LL1-LL2 — Read the sound where allowed, hear the rhythm [built]
+Commit: 7fa7933
+Spec: feat-lava-lamp.md LL1, LL2
+
+- `src/lib/readableHosts.ts` (pure, 4 tests): per-host memory in `madstr:readable-hosts` (300 hosts, oldest
+  dropped), who gets asked with `crossOrigin="anonymous"` (another site's http(s) only; same-origin, blob: and
+  data: never). `src/lib/player.ts`: the hidden `<audio>` asks unless the host is known to refuse; a failure
+  before it ever played loads it again at once without asking (never a skip); the answer is remembered on
+  `playing`. The viewer's `<video>` and hls.js are untouched.
+- `src/lib/soundTap.ts`: `captureStream()` (or moz) on the playing `<audio>` into an AnalyserNode (FFT 2048,
+  smoothing 0.55) whose output ends in a gain of 0 — playback untouched (LL-R2); re-captures on `playing`,
+  suspends while the page is hidden, wakes on the next key or tap.
+- `src/lib/rhythm.ts` (pure, 5 tests): bass 2–12 / mid 12–93 / treble 93–372 against each band's own recent peak
+  (decay 0.2 /s, floor 0.08); a beat is bass over its running average × 1.2 + 0.03, at most one per 0.28 s; the
+  spray colour follows the leading band (bass magenta/pink/orange, mids orange/lemon/lilac, treble sky/mint,
+  turn by turn). Jukestr 3000 palette in `LAMP_COLOURS`.
+- Probed before writing LL1 (2026-11-18, real events): 47 of 49 answering radio streams allow reading;
+  archive.org, audio.nostr.build, blossom.jumble.social, renaissancemachine.ai allow it, storage.googleapis.com
+  (Wavlake) does not — recorded in the spec.
+
+## LL3 — The lamp [built + machine-verified, awaiting zapa on the TV]
+Commit: e27bf4d
+Spec: feat-lava-lamp.md LL3, LL-R1 … LL-R5
+
+- `src/lib/lavaLamp.ts` + `src/lib/lavaShaders.ts` (GLSL ES 3.00, WebGL2): our own stable-fluids sim (after Jos
+  Stam; the Powder Toy napplet was learned from, not used — LL-R1, no new dependency). Flow 160×90, wax 384×216
+  (colour premultiplied, heat in alpha), 20 pressure steps, drawn 576×324 and scaled up (LL3-1). Three heaters
+  puff warm wax on the lava's own clock (rate 0.55), warm wax rises, cools (0.1 /s, faster near the top), sinks,
+  is rewarmed at the bottom (LL3-2). On a beat a spray shoots in from the edge (left 40 %, right 40 %, top /
+  bottom 10 %, aimed inward ± 34°, 0.45 s, strength 0.4 + 0.9 × loudness, a big beat may add a second), pushes
+  the flow, mixes in and stays; the heaters then puff the last three spray colours (LL3-3). Wax fades 0.01 /s;
+  past the budget (a quarter of the screen) the oldest melts away faster in proportion (LL3-4). The look
+  (LL3-5): purple glow, thin wax a soft glow, thick wax a sticker with black outline, hard shadow down-right and
+  a warm light band, all muted 22 % toward the purple.
+- `src/components/LavaLamp.tsx`: only with `<html data-tv>` (watched, the app sets it late) and never with
+  `prefers-reduced-motion: reduce` (LL-R5); mounted in `Theater.tsx` only when no video shows (never behind a
+  video). No float textures → no canvas, black as today; the sound tap is closed with the lamp.
+- `styles.css`: the lamp fills the picture area; `.slides` loses its black only behind it, so a picture sits
+  whole on the lamp.
+- Machine check LL4-1 (`pnpm test` 260/260, `pnpm lint` clean, `pnpm build` passes; headless Chromium,
+  `#/listen/music`, DOM and `gl.readPixels` numbers only, no screenshots): no lamp without `data-tv`; lamp
+  appears with it (576×324) and `.slides` goes transparent; the frame is not blank; a same-origin 120 bpm tone
+  through the real hidden `<audio>` played untouched while the tap heard 10 beats in 5 s; the side strips (where
+  only sprays enter) gained +20.6 brightness with the tone against −1.1 drift-only; `prefers-reduced-motion:
+  reduce` removes the lamp and allowing motion brings it back.
+- ⚠ 6 undiscussed decisions, see planning.md.
+- OPEN for zapa's TV (LL4-2): WebGL2 float textures and 60 fps on the Vestel WebView; `captureStream()` there;
+  the lamp beside a picture; radio spraying in time; a Wavlake song still playing (no sprays); background play.
