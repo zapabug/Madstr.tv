@@ -758,10 +758,10 @@ Spec: feat-tv-remote.md TV7-1 … TV7-6
 
 | Milestone | Title | Status |
 | --- | --- | --- |
-| LL1 | Reading the sound where the host allows it | built + machine-verified (7fa7933); awaiting zapa on the TV |
-| LL2 | The rhythm: bands, beats, spray colour | built + machine-verified (7fa7933); awaiting zapa on the TV |
-| LL3 | The lamp | built + machine-verified (e27bf4d); awaiting zapa on the TV |
-| LL4 | On the TV | machine check done (LL4-1); zapa's TV check pending (LL4-2) |
+| LL1 | Reading the sound where the host allows it | built + machine-verified (7fa7933); live-checked headless |
+| LL2 | The rhythm: bands, beats, spray colour | built + machine-verified (7fa7933) |
+| LL3 | The lamp | built + machine-verified (e27bf4d, 7c19d07); zapa: working (dev) |
+| LL4 | On a device | machine check done (LL4-1); zapa confirmed the lamp working on dev (LL4-2); Vestel stays black |
 
 ## LL1-LL2 — Read the sound where allowed, hear the rhythm [built]
 Commit: 7fa7933
@@ -804,20 +804,21 @@ Spec: feat-lava-lamp.md LL3, LL-R1 … LL-R5
   past the budget (a quarter of the screen) the oldest melts away faster in proportion (LL3-4). The look
   (LL3-5): purple glow, thin wax a soft glow, thick wax a sticker with black outline, hard shadow down-right and
   a warm light band, all muted 22 % toward the purple.
-- `src/components/LavaLamp.tsx`: only with `<html data-tv>` (watched, the app sets it late) and never with
-  `prefers-reduced-motion: reduce` (LL-R5); mounted in `Theater.tsx` only when no video shows (never behind a
-  video). No float textures → no canvas, black as today; the sound tap is closed with the lamp.
+- `src/components/LavaLamp.tsx`: on every device, never with `prefers-reduced-motion: reduce` (LL-R5, every-device
+  change 7c19d07); mounted in `Theater.tsx` only when no video shows (never behind a video). No float textures →
+  no canvas, black as today; the sound tap is closed with the lamp.
 - `styles.css`: the lamp fills the picture area; `.slides` loses its black only behind it, so a picture sits
   whole on the lamp.
 - Machine check LL4-1 (`pnpm test` 260/260, `pnpm lint` clean, `pnpm build` passes; headless Chromium,
-  `#/listen/music`, DOM and `gl.readPixels` numbers only, no screenshots): no lamp without `data-tv`; lamp
-  appears with it (576×324) and `.slides` goes transparent; the frame is not blank; a same-origin 120 bpm tone
-  through the real hidden `<audio>` played untouched while the tap heard 10 beats in 5 s; the side strips (where
-  only sprays enter) gained +20.6 brightness with the tone against −1.1 drift-only; `prefers-reduced-motion:
-  reduce` removes the lamp and allowing motion brings it back.
-- ⚠ 6 undiscussed decisions, see planning.md.
+  `#/listen/music`, DOM and `gl.readPixels` numbers only, no screenshots): lamp appears on the viewer with no
+  TV mark (576×324) and `.slides` goes transparent; the frame is not blank; a same-origin 120 bpm tone through
+  the real hidden `<audio>` played untouched while the tap heard 11 beats in 5 s; `prefers-reduced-motion:
+  reduce` removes the lamp and allowing motion brings it back. The side-strip brightness check (sprays colour
+  the edges) passed on an earlier run (+20.6 against −1.1 drift-only) but is flaky under SwiftShader (context
+  loss mid-run freezes the frame); it is not a gate — zapa confirmed the sprays on the dev server.
+- ⚠ 5 undiscussed decisions, see planning.md (the "watching data-tv" one is gone with the TV gate).
 
-## LL4 — On the TV [OPEN items answered 2026-11-18; zapa's check pending]
+## LL4 — On a device [zapa confirmed the lamp working on dev 2026-11-18; Vestel stays black]
 
 - Measured on zapa's Vestel (adb + CDP, Android 11, WebView Chrome 142.0.7444.174 — the limits are the TV's
   GPU driver, not the WebView's age): **no WebGL2 at all; WebGL1 without any float-texture extension**
@@ -834,3 +835,21 @@ Spec: feat-lava-lamp.md LL3, LL-R1 … LL-R5
 - Still for zapa's LL4-2 check: the lamp beside a picture and spraying in time on a device that can draw it
   (his TV cannot; the Vestel check is the black fallback + playback unchanged: a Wavlake song still plays,
   radio plays, background play). LL1's live behavior is machine-checked (see LL1-LL2 above).
+
+## Every device, not TV-only [zapa: working]
+Commit: 7c19d07
+Spec: feat-lava-lamp.md LL-R5, LL3-1, LL4
+
+- zapa, 2026-11-18: "again why is it tv only its an everydevice app including tv", "i did say it would look
+  nice on other devices aswell". Spec first (LL-R5, "What it is", LL3-1, LL4), then the code: the `data-tv`
+  gate and its MutationObserver are gone from `LavaLamp.tsx`; reduced motion is the only off switch; a device
+  without WebGL2 float textures still shows black.
+- `lavaLamp.ts`: `startLavaLamp` also refuses a context that is already lost (`gl.isContextLost()`), and the
+  cleanup no longer calls `WEBGL_lose_context` — dev StrictMode simulates an unmount and the re-mount reuses
+  the same canvas, so killing the context there left the lamp dead. On a real unmount the canvas is
+  garbage-collected with its context.
+- Headless re-check on the final code: lamp on the viewer with no TV mark, 576×324, `.slides` transparent,
+  the frame draws (nonBlack=1.0), a same-origin tone plays untouched and the tap hears 11 beats in 5 s,
+  reduced motion off and on again. The spray-strip metric stayed flaky under SwiftShader (see LL3); zapa
+  confirmed the lamp working, sprays included, on the real dev server.
+- `pnpm test` 260/260, `pnpm lint` clean, `pnpm build` passes.

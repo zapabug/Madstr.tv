@@ -12,8 +12,8 @@ last-worked: 2026-11-18
 - AGENTS.md: rules and verify commands
 
 ## Report
-Feat: Lava lamp behind the TV's pictures
-State: LL1-LL3 built and machine-checked on feat/lava-lamp (tests, lint, build; headless: the lamp draws on a TV mark, beats land, sprays colour the edges, reduced motion turns it off; the player's CORS ask-retry-remember checked live). zapa decided 2026-11-18: the feat ships for devices that can draw it; his Vestel TV has no WebGL2 or float textures, so it shows black there, as specced. Needs his eyes (LL4-2): the lamp on a capable device, and on the TV that a Wavlake song still plays, radio plays, background play works. 6 choices made in code wait for his review in planning.md.
+Feat: Lava lamp behind the viewer's pictures
+State: Built and confirmed by zapa ("working" on the dev server). The lamp runs on every device the app runs on, TV included — not TV-only. It sits behind the slideshow, never behind a video, and turns off with reduced motion. A device without WebGL2 float textures (zapa's Vestel TV) shows black, as before. CORS ask-retry-remember is machine-checked live. 5 choices made in code wait for zapa's review in planning.md.
 ────────────────────────────────────────
 Feat: TV remote and TV layout
 State: Done and confirmed by zapa on his TV ("all work"), shipped as Android 1.6 on zapstore and on pleb.world/jukestr: focus never gets lost, the playlist reaches Play/Pause in one press, holding OK brings up a pointer, the remote's prev/next and channel keys work, text boxes wait for OK, Back asks before leaving, a TV layout at 1280 wide, and a big QR code to log in. 26 choices made in code still wait for zapa's review in planning.md.

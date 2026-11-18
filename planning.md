@@ -333,9 +333,17 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
     (−0.00625, +0.0139) off, the warm band at (+0.007, −0.0153); tuned by eye on dev against the boards.
   - Small caps: heaters rotate their colour every 14 s; at most 4 sprays alive at once; bass / mid
     easing 30/6 and 8/2.5 per second.
-  - Watching `data-tv`: `LavaLamp.tsx` sees the TV mark with a MutationObserver because the Android
-    app sets it a moment after the page loads.
 - **Status:** awaiting lfg
+
+### 2026-11-18 · feat-lava-lamp LL-R5 · every device, not TV-only
+- **Type:** decision (zapa)
+- **Spec ref:** LL-R5, LL3-1, LL4
+- **What I did:** zapa asked why the lamp is TV-only ("it would look nice on other devices aswell"). The
+  `data-tv` gate and its MutationObserver are gone; the lamp runs on every device the app runs on, TV
+  included, still never behind a video and never with reduced motion. A device without WebGL2 float
+  textures (the Vestel) still shows black. The cleanup no longer kills the WebGL context (dev StrictMode
+  reuses the canvas); `startLavaLamp` refuses a context that is already lost.
+- **Status:** decided by zapa; confirmed working on the dev server
 
 ## Open questions
 
@@ -348,6 +356,8 @@ Taste and cache (feat-taste-cache, 2026-11-15), numbers the agent wrote into the
   On zapa's Vestel: no WebGL2 and no WebGL1 float textures (captureStream exists); Canvas 2D ~1 fps, so the
   spec's black fallback shows there. zapa decided: the feat ships for capable devices (no byte-packed WebGL1).
   LL1's ask-retry-remember checked live headless against a CORS-yes and a CORS-no origin.
+  Later the same day: zapa made the lamp every-device, not TV-only (7c19d07), and confirmed it working on
+  the dev server. Merged to main and shipped on pleb.world/jukestr and as Android 1.7.
 - 2026-11-17: feat-tv-remote spec (TV1-TV7) written from the session on zapa's TV; finished specs moved to `archive/`.
 
 - 2026-11-15: audit (`audits/audit-2026-11-15.md`); zapa's answers recorded in the spec
