@@ -1,7 +1,7 @@
-# feat-lava-lamp: a lava lamp behind the TV's pictures that keeps the music's rhythm
+# feat-lava-lamp: a lava lamp behind the viewer's pictures that keeps the music's rhythm
 
-Status: **being built** on `feat/lava-lamp` (spec written 2026-11-18 from the design boards; zapa said "create a spec
-then implement").
+Status: **shipped** (spec written 2026-11-18 from the design boards; zapa said "create a spec then implement";
+zapa confirmed it working on the dev server 2026-11-18).
 
 From zapa, 2026-11-17/18, over the mock-up boards A–H (canvas "Lava & Neon"): the winamp idea came back for "the
 screen when pictures don't fill it"; "something that would match our app, low key"; "the lava does not react to
@@ -12,9 +12,9 @@ faded and kinda acted like a lava lamp with colors mixing and changing based on 
 
 ## What it is
 
-On the TV, the black space around a picture (TV5-2 shows pictures whole, centred) becomes a lava lamp: blobs of wax
-drift on their own slow pace, and on every beat of what is playing a spray of colour shoots in from the screen's
-edge, swirls into the wax and stays, so the lamp's colours keep mixing and changing with the music.
+In the viewer, the black space around a picture (pictures are shown whole, centred) becomes a lava lamp: blobs of
+wax drift on their own slow pace, and on every beat of what is playing a spray of colour shoots in from the
+screen's edge, swirls into the wax and stays, so the lamp's colours keep mixing and changing with the music.
 
 ## Rules
 
@@ -27,8 +27,10 @@ edge, swirls into the wax and stays, so the lamp's colours keep mixing and chang
 - **LL-R3** A web page may only read a sound from another site when that site allows it (CORS). A track whose host
   does not allow it still plays as today; the lamp then just drifts with no sprays.
 - **LL-R4** The lava's own movement never follows the music; only the sprays do.
-- **LL-R5** Only on a TV (`<html data-tv>`, TVR-R4), only behind the slideshow (never behind a video), and not
-  with `prefers-reduced-motion: reduce`. A device without WebGL2 float textures shows black, as today.
+- **LL-R5** On every device the app runs on — it is an every-device app, TV included (zapa, 2026-11-18: "again
+  why is it tv only … it would look nice on other devices aswell") — but only behind the slideshow (never
+  behind a video), and not with `prefers-reduced-motion: reduce`. A device without WebGL2 float textures
+  shows black, as today.
 
 ## LL1: reading the sound when the host allows it
 
@@ -58,8 +60,8 @@ edge, swirls into the wax and stays, so the lamp's colours keep mixing and chang
 
 ## LL3: the lamp
 
-- **LL3-1** A canvas fills the TV's picture area behind the slideshow (`.slides` is transparent on a TV), drawn at
-  576 × 324 and scaled up. The flow is 160 × 90 cells, the wax 384 × 216; 20 pressure steps a frame.
+- **LL3-1** A canvas fills the viewer's picture area behind the slideshow (`.slides` is transparent where the lamp
+  is), drawn at 576 × 324 and scaled up. The flow is 160 × 90 cells, the wax 384 × 216; 20 pressure steps a frame.
 - **LL3-2** The wax: three heaters at the bottom puff warm wax on the lava's own clock (slow, 0.55); warm wax rises,
   cools (0.1 /s, faster near the top), sinks and is warmed again at the bottom. With no music the heaters puff the
   lamp's base colours (orange, pink, mint, lilac).
@@ -74,14 +76,10 @@ edge, swirls into the wax and stays, so the lamp's colours keep mixing and chang
   purple (22 %) so the picture stays the star.
 - **LL3-6** No settings in this first version (PROPOSED: a switch in Make it yours later).
 
-## LL4: on the TV
+## LL4: on a device
 
-- **LL4-1** Machine check: `pnpm test && pnpm lint && pnpm build`; in headless Chromium with `data-tv` set, the
-  canvas draws (not blank) and a playing same-origin tone gives beats and sprays.
-- **LL4-2** zapa's check on the TV (debug build): the lamp shows beside a picture; radio makes it spray in time; a
-  Wavlake song still plays (no sprays); background play still works.
-
-## OPEN (decide during build)
-
-- Whether the Vestel's WebView has WebGL2 float textures (if not: black, as today) and keeps up at 60 fps.
-- Whether `captureStream()` is available in the TV's WebView (if not: no sprays, the lamp still drifts).
+- **LL4-1** Machine check: `pnpm test && pnpm lint && pnpm build`; in headless Chromium the canvas draws (not
+  blank) and a playing same-origin tone gives beats and sprays.
+- **LL4-2** zapa's check: the lamp shows beside a picture on the dev server; radio makes it spray in time; a
+  Wavlake song still plays (no sprays); background play still works. On the Vestel TV: black, as before (its
+  WebView has no WebGL2, measured 2026-11-18; `captureStream()` exists there).

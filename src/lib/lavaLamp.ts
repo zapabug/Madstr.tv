@@ -2,8 +2,8 @@ import { PASSES, PASS_HEAD, SHOW, VERTEX } from './lavaShaders.ts';
 import { BASE_COLOURS, LAMP_COLOURS, sprayColour, type LampColour } from './rhythm.ts';
 import type { SoundTap } from './soundTap.ts';
 
-// The lava lamp behind the TV's pictures (spec feat-lava-lamp LL3). Not pure (it drives WebGL2); its numbers are
-// the spec's. startLavaLamp returns a stop function, or null when the device cannot draw it (LL-R5: then black).
+// The lava lamp behind the viewer's pictures (spec feat-lava-lamp LL3). Not pure (it drives WebGL2); its numbers
+// are the spec's. startLavaLamp returns a stop function, or null when the device cannot draw it (LL-R5: then black).
 
 export const DRAW_W = 576; // LL3-1: drawn at this size and scaled up
 export const DRAW_H = 324;
@@ -34,7 +34,7 @@ export function startLavaLamp(canvas: HTMLCanvasElement, tap: SoundTap, random: 
   canvas.width = DRAW_W;
   canvas.height = DRAW_H;
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
-  if (!gl || !(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'))) return null;
+  if (!gl || gl.isContextLost() || !(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'))) return null;
 
   let P: Record<keyof typeof PASSES | 'show', Prog>;
   let vel: Pair, prs: Pair, wax: Pair, curlT: Tex, divT: Tex;
@@ -233,6 +233,7 @@ export function startLavaLamp(canvas: HTMLCanvasElement, tap: SoundTap, random: 
   return () => {
     cancelAnimationFrame(raf);
     canvas.removeEventListener('webglcontextlost', onLost);
-    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    // The context is never killed explicitly: in dev StrictMode simulates an unmount and the re-mount reuses
+    // this same canvas and context, and on a real unmount the canvas is garbage-collected, context with it.
   };
 }
