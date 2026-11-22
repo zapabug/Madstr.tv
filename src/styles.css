@@ -2894,17 +2894,37 @@ a.chip-btn {
     padding: 8px 10px;
   }
 }
-/* the board's bar: a framed unit just above the bottom edge, its bottom corners tighter (zapa, §P25) */
+/* the board's bar: a framed unit at the bottom edge, its bottom corners tighter (zapa, §P25). It runs off the
+   screen's sides and bottom on every screen, so no gap shows around it (feat-lava-lamp LL5-6); the padding keeps
+   the controls where they were. */
 .dock {
-  left: 8px;
-  right: 8px;
-  bottom: 2px;
+  left: -4px;
+  right: -4px;
+  bottom: -16px;
+  padding-inline: 4px;
   border-radius: 28px 28px 12px 12px;
   border-top: 6px solid transparent;
   backdrop-filter: none;
 }
+/* LL5-6: the player screen's body runs off the sides and bottom on TV and desktop too (phones have their own rule
+   above), its top edge where it was; the lamp reaches under its rounded top corners, so no black shows there. */
+@media (min-width: 641px) and (min-height: 501px), (min-width: 641px) and (orientation: portrait) {
+  .theater .split {
+    left: -4px;
+    right: -4px;
+    bottom: -16px;
+    height: calc(var(--split-h) + 22px);
+    padding: 6px 10px 22px;
+  }
+  .stage-full:has(> .lava-lamp) {
+    overflow: visible;
+  }
+  .theater .lava-lamp {
+    height: calc(100% + 28px);
+  }
+}
 .dock-bar {
-  padding-block: 4px calc(4px + env(safe-area-inset-bottom, 0px));
+  padding-block: 4px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 /* domed, matte buttons, lit from the top left (the jukebox's, not the toy's glossy ones); still round */

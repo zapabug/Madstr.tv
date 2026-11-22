@@ -97,6 +97,11 @@ screen's edge, swirls into the wax and stays, so the lamp's colours keep mixing 
   other menus has some stars/lights with movement … remove it"). The corner planet stays.
 - **LL5-5** A compact **Make it yours** chip sits beside Log in / Log out in the home header, so the Background
   card is one press from home (zapa, 2026-11-22). It is a focus-nav fallback only elsewhere, never a start point.
+- **LL5-6** No gaps around the bezel on large screens (zapa, 2026-11-22: "those annoying gaps on large screens"):
+  on every screen, not only phones, the player screen's orange body and the board's bar run off the screen's sides
+  (4 px) and bottom (16 px), their top edge where it was; the picture area's lamp reaches under the body's rounded
+  top corners, so no black shows around the plastic. This replaces "6 px in from the screen's edges" of
+  feat-phone-inline §P26 for TV and desktop.
 
 ## LL4: on a device
 
