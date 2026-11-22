@@ -3,6 +3,18 @@
 Release notes for the Android app on zapstore (`zapstore.yaml` → `release_notes`). The web app at
 pleb.world/jukestr gets the same changes as they are deployed.
 
+## [1.8] - 2026-11-22
+
+Two lava lamp looks, an off switch, and no gaps on big screens.
+
+- **Smoky or Focused**: Make it yours has a new Background card. Smoky (the new default) is a soft, toned-down
+  glow that drifts and breathes with the sound; Focused is the sharp sticker spray from 1.7.
+- **Turn the lamp off**: one switch stops the lamp and its sound reading entirely, for slower devices.
+- **Calmer menus**: the drifting stars and lights behind the other screens are gone; the corner planet stays.
+- **Make it yours from home**: a chip beside Log in / Log out on the home screen.
+- **No black gaps**: on TVs and big screens the orange frame at the bottom now runs to the screen's edges, as
+  on phones.
+
 ## [1.7] - 2026-11-18
 
 A lava lamp behind the pictures.

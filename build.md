@@ -42,6 +42,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | LL1-LL4 | Lava lamp behind the viewer's pictures (feat-lava-lamp) | built + machine-verified; zapa: working on dev |
 | Release 1.7 | Android 1.7 (versionCode 8) on zapstore; web on pleb.world/jukestr | published 2026-11-18 (event ae756273…, pending at zapstore) |
 | LL5 | Two lamp looks (Smoky / Focused), lamp off switch, no drifting stars | built + machine-verified (cef70ee); awaiting zapa |
+| Release 1.8 | Android 1.8 (versionCode 9) on zapstore; web on pleb.world/jukestr | published 2026-11-22 (event 93308fef…, pending at zapstore) |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -881,3 +882,11 @@ Spec: feat-lava-lamp.md LL3-1, LL3-3s, LL3-5s, LL5-1 … LL5-5
 - LL5-6 (0119d85): the player body and the board's bar run off the screen's sides and bottom on every size (zapa: gaps on
   large screens); the lamp reaches under the body's top corners. Checked in a headed Chromium at 1280×720 (TV flag),
   1920×1080, 2560×1440 and 390×844. The board bar's phone rule had been overridden by the base rule; fixed with it.
+
+## Release 1.8 — two lamp looks, off switch, no bezel gaps, on zapstore and pleb.world [2026-11-22]
+- zapa asked to "deploy everywhere". feat/lava-settings merged into main and the branch deleted.
+- versionCode 9 / 1.8, CHANGELOG 1.8; `pnpm build && pnpm exec cap sync android`, `./gradlew :app:assembleRelease`,
+  `scripts/sign-release.sh`; the APK's index.html points at the same bundle as dist/ (index-DyIdt_yB.js).
+- APK: com.madstr.tvapp 1.8 (9), release cert `92aca110…d8c7`; `zapstore check` ok, authorized; `zapstore publish`
+  event `93308fef…`, status pending (as before).
+- Web: `deploy-pleb.sh`, plebworld 07d7c35 pushed.
