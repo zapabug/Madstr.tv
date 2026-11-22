@@ -32,6 +32,21 @@ notes are in `docs/Planning.md` (NDK era, may describe code that is gone).
 - **2026-11-15, remote pass last.** Remote navigation (inputs and sliders `data-nav`) is the final
   stage before deploy, not a blocker for feature work.
 
+### 2026-11-22 · feat-lava-lamp LL5 · two looks and an off switch
+- **Type:** spec-gap (zapa asked for the toggles while looking at the dropped libs)
+- **Spec ref:** LL3-1, LL3-3s, LL3-5s, LL5-1 … LL5-5
+- **What I did:** kept zapa's dropped "smoky" implementation as `lavaLamp.ts` / `lavaShaders.ts` and the
+  earlier focused sticker lamp as `lavaLampFocused.ts` / `lavaShadersFocused.ts`; the component starts one
+  or the other on a fresh canvas. A saved `madstr:lava` record (pure parser plus `useSyncExternalStore`,
+  as in `pictureMix.ts`) drives both the lamp and the new Background card on Make it yours. Off removes
+  the canvas and closes the sound tap, so a slow device costs nothing. Reduced motion and video still win.
+  zapa also asked to remove the moving stars/lights behind the other menus: the two drifting `.stars` layers and
+  their CSS/keyframes are gone from `Sky.tsx`; the corner planet (and its profile picture) stays.
+  A text-only Make it yours chip was added beside the Log in/out chip in the home header only (wrapped in
+  `.top-actions` with slightly smaller chip-link padding so two chips fit on a phone; no icon, 0.86 rem words
+  after zapa asked for bigger text); the People pages already have their own link, so it is not repeated there.
+- **Status:** machine-verified (`pnpm test && pnpm lint && pnpm build`, 264 tests); awaiting zapa's look
+
 ## feat-tv-remote (spec `feat-tv-remote.md`, 2026-11-17)
 
 Decided by zapa in the `/vibe-therapist` and `/vibe-feat` sessions, after watching the app on his TV (Vestel
@@ -59,6 +74,10 @@ Found in the code by the audit of 2026-11-15; none was agreed in the spec. Keep 
 spec), change, or revert.
 
 Mechanics:
+- Lava lamp LL5 (2026-11-22): default On + Smoky, zapa's last look; the toggle sits on a new Background card
+  at the end of Make it yours, and the two implementations are kept as separate modules rather than one
+  parameterized shader. Off means no canvas at all (black), not a paused frame. Brightness was pulled down
+  after zapa said the white light was overwhelming (wax cap 0.68, 35 % toward the purple, halo 0.04).
 - Picture mix: "Only my pictures" plus a seldom / very often slider (`pictureMix.ts`).
 - Melting SVG clock (`Clock.tsx`, `clock.ts`).
 - Ticker with the first sentence of the picture's post (`Ticker.tsx`).

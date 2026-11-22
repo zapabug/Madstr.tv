@@ -61,20 +61,42 @@ screen's edge, swirls into the wax and stays, so the lamp's colours keep mixing 
 ## LL3: the lamp
 
 - **LL3-1** A canvas fills the viewer's picture area behind the slideshow (`.slides` is transparent where the lamp
-  is), drawn at 576 × 324 and scaled up. The flow is 160 × 90 cells, the wax 384 × 216; 20 pressure steps a frame.
+  is), drawn at 576 × 324 and scaled up. The flow is 160 × 90 cells, 20 pressure steps a frame. The wax is 384 × 216
+  in Focused and 256 × 144 (bigger, softer shapes) in Smoky.
 - **LL3-2** The wax: three heaters at the bottom puff warm wax on the lava's own clock (slow, 0.55); warm wax rises,
   cools (0.1 /s, faster near the top), sinks and is warmed again at the bottom. With no music the heaters puff the
   lamp's base colours (orange, pink, mint, lilac).
 - **LL3-3** The sprays: on every beat a spray shoots in from a random spot on the edge (left 40 %, right 40 %,
   top 10 %, bottom 10 %), aimed inward ± 34°, lasting 0.45 s, strength 0.4 + 0.9 × loudness; a big beat may add a
   second. A spray is warm wax of its colour: it pushes the flow, mixes into the wax it meets, and stays. The heaters
-  then puff the last three spray colours, so the lamp's colours move with the music.
+  then puff the last three spray colours, so the lamp's colours move with the music. This is **Focused**.
+- **LL3-3s** In **Smoky**, half the sprays still come from an edge (± 54° sway) and half start anywhere in the wax,
+  aimed any way. Four kinds roll their own life, width, push and ± 20 % variation: gust (0.7 s, width 0.0045,
+  push 90), puff (0.6 s, 0.0085, outward from a point, 115), whip (0.5 s, 0.0022, 150), shimmer (0.35 s, 0.0016,
+  70). A beat over 0.8 with bass over 0.5 blooms a puff, other beats gust; mids over 0.6 dart whips at least 0.3 s
+  apart, treble over 0.45 scatters one or two shimmers at least 0.14 s apart, bass over 0.6 stirs a gust or puff at
+  least 0.4 s apart. Each spray paints a core colour and a partner hue at its rim, so neighbours melt; the heaters
+  breathe with bass and mid (zapa's dropped libs, 2026-11-22).
 - **LL3-4** It never fills up: the wax fades very slowly (0.01 /s) until the lamp holds its budget (a quarter of the
   screen's worth of wax), then the oldest wax melts away faster in proportion to the excess.
-- **LL3-5** The look is the Jukestr 3000 sticker: thin wax glows softly, thick wax is a shape with a black outline,
-  a hard shadow down-right and a lighter band where it is warm, over the purple glow. Colours are muted toward the
+- **LL3-5** Focused: the Jukestr 3000 sticker — thin wax glows softly, thick wax is a shape with a black outline, a
+  hard shadow down-right and a lighter band where it is warm, over the purple glow. Colours are muted toward the
   purple (22 %) so the picture stays the star.
-- **LL3-6** No settings in this first version (PROPOSED: a switch in Make it yours later).
+- **LL3-5s** Smoky: the whole backdrop drifts and breathes with the sound, the wax is one soft blurred glow (no
+  outline, no shadow), hues stay mid-tone (capped at 0.68, 35 % toward the purple) so overlapping sprays never
+  wash out to white (zapa, 2026-11-22: "avoid light colors … feels overwhelming").
+
+## LL5: settings (zapa, 2026-11-22)
+
+- **LL5-1** Make it yours has two controls: **Background animation** On/Off, and **Spray style** Focused/Smoky.
+  Off stops the canvas, the audio tap and the animation entirely: the black stage, as before any lamp.
+- **LL5-2** Default is On + Smoky (the look zapa was viewing). The choice lives in localStorage `madstr:lava`;
+  pure validation lives in `src/lib/lavaSettings.ts` with tests, and unknown values fall back to the default.
+- **LL5-3** Reduced motion and video still win: no lamp with `prefers-reduced-motion: reduce`, never behind a video.
+- **LL5-4** The two drifting star/light layers behind the menus are gone (zapa, 2026-11-22: "the background from
+  other menus has some stars/lights with movement … remove it"). The corner planet stays.
+- **LL5-5** A compact **Make it yours** chip sits beside Log in / Log out in the home header, so the Background
+  card is one press from home (zapa, 2026-11-22). It is a focus-nav fallback only elsewhere, never a start point.
 
 ## LL4: on a device
 
