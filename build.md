@@ -878,3 +878,6 @@ Spec: feat-lava-lamp.md LL3-1, LL3-3s, LL3-5s, LL5-1 … LL5-5
   chip sits beside Log in/out on the home header.
 - `pnpm test` 264/264, `pnpm lint` clean, `pnpm build` passes.
 - 1 undiscussed decision group logged in planning.md (default, separate modules, Off = no canvas, brightness).
+- LL5-6 (0119d85): the player body and the board's bar run off the screen's sides and bottom on every size (zapa: gaps on
+  large screens); the lamp reaches under the body's top corners. Checked in a headed Chromium at 1280×720 (TV flag),
+  1920×1080, 2560×1440 and 390×844. The board bar's phone rule had been overridden by the base rule; fixed with it.
