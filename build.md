@@ -41,6 +41,7 @@ the why is in `planning.md`. Written 2026-11-15 from git history and the audit o
 | P28 | The name is Juke⚡tr; web app at pleb.world/jukestr | built + machine-verified; live |
 | LL1-LL4 | Lava lamp behind the viewer's pictures (feat-lava-lamp) | built + machine-verified; zapa: working on dev |
 | Release 1.7 | Android 1.7 (versionCode 8) on zapstore; web on pleb.world/jukestr | published 2026-11-18 (event ae756273…, pending at zapstore) |
+| LL5 | Two lamp looks (Smoky / Focused), lamp off switch, no drifting stars | built + machine-verified (cef70ee); awaiting zapa |
 
 Verify on 2026-11-15: `pnpm test` 93/93 (118/118 after the new tests), `pnpm lint` clean, `pnpm build` passes with two warnings
 (a stray `*/` in `src/styles.css`, a 655 kB chunk). Headless Chromium boot shows the board at once.
@@ -864,3 +865,19 @@ Spec: feat-lava-lamp.md LL-R5, LL3-1, LL4
 - APK: com.madstr.tvapp 1.7 (8), release cert `92aca110…d8c7`; `zapstore check` ok, authorized; `zapstore
   publish` event `ae756273…`, status pending (as 1.5 and 1.6 were).
 - Web: `deploy-pleb.sh`, plebworld f61074c pushed; pleb.world/jukestr serves the lamp.
+
+## LL5 — two looks and an off switch [built + machine-verified, awaiting zapa]
+Commit: cef70ee (branch feat/lava-settings)
+Spec: feat-lava-lamp.md LL3-1, LL3-3s, LL3-5s, LL5-1 … LL5-5
+
+- Smoky (zapa's dropped libs) is now `lavaLamp.ts` / `lavaShaders.ts`; the earlier sticker lamp is kept as
+  `lavaLampFocused.ts` / `lavaShadersFocused.ts`. `LavaLamp.tsx` starts one or the other on a fresh canvas.
+- `lavaSettings.ts` (+ test): the `madstr:lava` record, default On + Smoky, unknown values fall back.
+  `LavaControls.tsx` is the Background card on Make it yours; Off removes the canvas and the audio tap.
+- `Sky.tsx`: the two drifting star layers and their CSS are gone; the corner planet stays. A Make it yours
+  chip sits beside Log in/out on the home header.
+- `pnpm test` 264/264, `pnpm lint` clean, `pnpm build` passes.
+- 1 undiscussed decision group logged in planning.md (default, separate modules, Off = no canvas, brightness).
+- LL5-6 (0119d85): the player body and the board's bar run off the screen's sides and bottom on every size (zapa: gaps on
+  large screens); the lamp reaches under the body's top corners. Checked in a headed Chromium at 1280×720 (TV flag),
+  1920×1080, 2560×1440 and 390×844. The board bar's phone rule had been overridden by the base rule; fixed with it.

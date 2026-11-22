@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { startLavaLamp } from '../lib/lavaLamp.ts';
+import { startLavaLamp as startFocusedLavaLamp } from '../lib/lavaLampFocused.ts';
+import { useLava } from '../lib/lavaSettings.ts';
 import { player } from '../lib/player.ts';
 import { createSoundTap } from '../lib/soundTap.ts';
 
@@ -18,15 +20,18 @@ function useLampWanted(): boolean {
 }
 
 export function LavaLamp() {
-  const on = useLampWanted();
+  const lava = useLava();
+  const on = useLampWanted() && lava.on;
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = canvas.current;
     if (!on || !el) return;
     const tap = createSoundTap(player.soundElement);
-    const stop = startLavaLamp(el, tap);
+    const start = lava.style === 'focused' ? startFocusedLavaLamp : startLavaLamp;
+    const stop = start(el, tap);
     if (!stop) { tap.close(); return; } // no WebGL2 float textures: black, as before
     return () => { stop(); tap.close(); };
-  }, [on]);
-  return on ? <canvas ref={canvas} className="lava-lamp" aria-hidden="true" /> : null;
+  }, [on, lava.style]);
+  // A fresh canvas per style: the two lamps compile different shaders and should not share a live WebGL context.
+  return on ? <canvas key={lava.style} ref={canvas} className="lava-lamp" aria-hidden="true" /> : null;
 }

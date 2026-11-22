@@ -54,7 +54,10 @@ export function App() {
       {!theater && (
         <header className="top">
           <a className="logo" href="#/" aria-label="Jukestr home">Juke<MarkIcon className="bolt-mark" />tr</a>
-          <AccountChip />
+          <div className="top-actions">
+            {route.page === 'board' && <a className="chip-link" href="#/people/sources" data-nav data-nav-nofallback>Make it yours</a>}
+            <AccountChip />
+          </div>
         </header>
       )}
       {route.page === 'board' ? <Board /> : <Viewer key={`${route.mode}/${route.filter}`} route={route} />}
