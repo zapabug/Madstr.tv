@@ -1,4 +1,4 @@
-// The deep-space backdrop from pleb.world: two drifting star layers and a planet.
+// The corner planet from pleb.world (the drifting star layers are gone, zapa 2026-11-22).
 // Decorative only. When you are logged in, the planet wears your profile picture over the
 // plain orange ball; if the picture's URL is bad or the image fails to load, the ball stays
 // underneath so the planet never goes blank. Nothing here waits on a relay.
@@ -37,16 +37,10 @@ export function Sky() {
   }, [broken, attempt]);
 
   return (
-    <>
-      <div className="sky" aria-hidden="true">
-        <div className="stars s1" />
-        <div className="stars s2" />
-      </div>
-      <div className="planet" aria-hidden="true">
-        <div className="ball" />
-        {/* key: a retry mounts a fresh <img>, so the browser asks for the picture again */}
-        {face && !broken && <img key={attempt} className="planet-face" src={face} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => { setBroken(true); }} />}
-      </div>
-    </>
+    <div className="planet" aria-hidden="true">
+      <div className="ball" />
+      {/* key: a retry mounts a fresh <img>, so the browser asks for the picture again */}
+      {face && !broken && <img key={attempt} className="planet-face" src={face} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => { setBroken(true); }} />}
+    </div>
   );
 }

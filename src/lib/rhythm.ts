@@ -1,5 +1,5 @@
 // What the lava lamp hears (spec feat-lava-lamp LL2): three bands from the spectrum, each scaled to its own recent
-// peak, a beat when the bass jumps, and the colour a spray takes from the sound. Pure: it reads a spectrum, it never
+// peak, a beat when the bass jumps, and the colours a spray takes from the sound. Pure: it reads a spectrum, it never
 // touches audio itself.
 
 export const BASS: readonly [number, number] = [2, 12]; // FFT 2048 bins: about 47-280 Hz at 48 kHz
@@ -53,8 +53,8 @@ export const LAMP_COLOURS = {
   mint: [0.4, 0.851, 0.651],
   lilac: [0.663, 0.549, 0.941],
   magenta: [0.863, 0.004, 0.753],
-  lemon: [0.988, 0.98, 0.604],
-  sky: [0.749, 0.835, 1],
+  lemon: [0.83, 0.72, 0.38],
+  sky: [0.52, 0.62, 0.85],
 } as const satisfies Record<string, readonly [number, number, number]>;
 export type LampColour = keyof typeof LAMP_COLOURS;
 
@@ -65,10 +65,18 @@ const GROUPS: Record<'bass' | 'mid' | 'treble', readonly LampColour[]> = {
   treble: ['sky', 'mint'],
 };
 
-// LL2-3: the colour of the n-th spray: the group of the band that leads (treble a little favoured, it is quieter),
-// turn by turn within it.
-export function sprayColour(b: Bands, n: number): LampColour {
-  const lead = b.treble * 1.2 >= b.bass && b.treble * 1.2 >= b.mid * 0.9 ? 'treble' : b.bass >= b.mid * 0.9 ? 'bass' : 'mid';
+// LL2-3: a spray's ink is a pair: the band that leads (treble a little favoured, it is quieter) chooses the group,
+// turn by turn within it, and the spray takes that colour at its core with its neighbour in the group at the rim.
+// The pair is what makes the mixing: a single spray already paints a gradient, and where two sprays meet, core into
+// rim and rim into core, the hues walk through each other instead of sitting side by side.
+export function sprayInk(b: Bands, n: number, band?: 'bass' | 'mid' | 'treble'): { core: LampColour; rim: LampColour } {
+  const lead = band ?? (b.treble * 1.2 >= b.bass && b.treble * 1.2 >= b.mid * 0.9 ? 'treble' : b.bass >= b.mid * 0.9 ? 'bass' : 'mid');
   const group = GROUPS[lead];
-  return group[((n % group.length) + group.length) % group.length];
+  const i = ((n % group.length) + group.length) % group.length;
+  return { core: group[i], rim: group[(i + 1) % group.length] };
+}
+
+// Kept for callers that want a single colour (LL2-3): the core of the n-th spray's ink.
+export function sprayColour(b: Bands, n: number): LampColour {
+  return sprayInk(b, n).core;
 }

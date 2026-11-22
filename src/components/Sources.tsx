@@ -1,4 +1,5 @@
 import { HiddenControls } from './HiddenControls.tsx';
+import { LavaControls } from './LavaControls.tsx';
 import { OwnControls } from './OwnControls.tsx';
 import { TagControls } from './TagControls.tsx';
 
@@ -19,6 +20,7 @@ export function SourcesView() {
         <TagControls kind="video" />
         <TagControls kind="image" />
         <HiddenControls />
+        <LavaControls />
       </div>
     </section>
   );

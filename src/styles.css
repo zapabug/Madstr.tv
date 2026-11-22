@@ -108,38 +108,7 @@ a {
   display: none !important;
 }
 
-/* --- the sky ---------------------------------------------------------------------- */
-.sky {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-.stars {
-  position: absolute;
-  inset: -50%;
-  background-repeat: repeat;
-}
-.s1 {
-  background-image:
-    radial-gradient(1.4px 1.4px at 20px 30px, #fff9 50%, transparent 51%),
-    radial-gradient(1px 1px at 120px 80px, #fff7 50%, transparent 51%),
-    radial-gradient(1.6px 1.6px at 200px 150px, #fffb 50%, transparent 51%),
-    radial-gradient(1px 1px at 60px 190px, #fff6 50%, transparent 51%);
-  background-size: 240px 240px;
-}
-.s2 {
-  background-image:
-    radial-gradient(2px 2px at 40px 60px, var(--orange) 50%, transparent 51%),
-    radial-gradient(
-      1.6px 1.6px at 300px 210px,
-      var(--purple) 50%,
-      transparent 51%
-    ),
-    radial-gradient(1.2px 1.2px at 180px 320px, #fffa 50%, transparent 51%);
-  background-size: 380px 380px;
-  opacity: 0.8;
-}
+/* --- the corner planet ------------------------------------------------------------------------------ */
 .planet {
   --face: 400px; /* the profile picture's circle (§P23) */
   position: fixed;
@@ -838,6 +807,16 @@ a.back[href="#/"] {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.top-actions .chip-link {
+  font-size: 0.86rem;
+  padding: 7px 12px;
+  border-width: 2px;
 }
 .chip-btn svg {
   vertical-align: -3px;
@@ -2092,22 +2071,8 @@ a.back[href="#/"] {
 }
 /* --- motion ------------------------------------------------------------------------------------------ */
 @media (prefers-reduced-motion: no-preference) {
-  .s1 {
-    animation: drift 160s linear infinite;
-  }
-  .s2 {
-    animation: drift 260s linear infinite reverse;
-  }
   .note-hi {
     animation: wiggle 5s ease-in-out infinite;
-  }
-}
-@keyframes drift {
-  from {
-    translate: 0 0;
-  }
-  to {
-    translate: 240px 120px;
   }
 }
 @keyframes wiggle {
