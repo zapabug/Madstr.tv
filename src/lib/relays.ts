@@ -8,10 +8,9 @@
 /** Where pictures, videos, music and posts are read from. */
 export const CONTENT_RELAYS: readonly string[] = [
   'wss://relay.primal.net',
-  'wss://nos.lol',
+  'wss://relay.snort.social',
   'wss://nostr.wine',
   'wss://relay.olas.app',
-  'wss://relay.snort.social',
   // Added 2026-11-15 (feat-taste-cache §T5): each answered a probe and held music posts.
   'wss://relay.wavlake.com',
   'wss://theforest.nostr1.com',
@@ -31,9 +30,8 @@ export const LOOKUP_RELAYS: readonly string[] = [...new Set([...CONTENT_RELAYS, 
 export const SIGNER_RELAYS: readonly string[] = [
   'wss://relay.primal.net',
   'wss://relay.nip46.com',
-  'wss://nostr.mom',
+  'wss://relay.snort.social',
   'wss://theforest.nostr1.com',
-  'wss://nos.lol',
 ];
 
 /** Where a follow list is looked for: the index relays first, then the content relays. */
